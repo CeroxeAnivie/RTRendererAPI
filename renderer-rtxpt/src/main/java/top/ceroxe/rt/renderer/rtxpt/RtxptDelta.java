@@ -9,6 +9,11 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptJson.object;
 /** A model contains only new geometry and affected material/texture dependencies. */
 final class RtxptDelta {
     record Prepared(Path manifest,RtxptScene translated,Map<Long,Path> textureFiles,int meshes,int materials,int textures,boolean hasWork) { }
+    static boolean alphaEquivalent(TextureAsset a,TextureAsset b){
+        if(a==b)return true;if(a==null||b==null)return false;
+        if(a.width()!=b.width()||a.height()!=b.height()||a.addressU()!=b.addressU()||a.addressV()!=b.addressV())return false;
+        var x=a.rgba8();var y=b.rgba8();for(int i=3;i<x.remaining();i+=4)if(x.get(i)!=y.get(i))return false;return true;
+    }
     static Prepared prepare(Path directory,RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
                             List<RtxptScene.Item> items,Map<Long,Path> existingTextures)throws IOException {
         var textureFiles=new HashMap<>(existingTextures);
@@ -32,9 +37,7 @@ final class RtxptDelta {
                 float[] transform=new float[12];i.transform().elements().get(transform);
                 updates.add(object("name",i.name(),"mesh",key,"transform",transform));
             }
-            var ids=meshMaterials.computeIfAbsent(i.mesh(),ignored->{
-                var result=new LinkedHashSet<Long>();var buffer=mesh.triangleMaterialIds();while(buffer.hasRemaining())result.add(buffer.get());return result;
-            });
+            var ids=meshMaterials.computeIfAbsent(i.mesh(),ignored->scene.materialIds(mesh));
             for(long id:ids) {
                 var m=scene.materials.get(id);
                 boolean affected=geometry||!Objects.equals(m,old.materials.get(id));
@@ -49,11 +52,16 @@ final class RtxptDelta {
             for(long t:new long[]{m.baseColorTextureId(),m.normalTextureId(),m.metallicRoughnessTextureId(),m.emissiveTextureId()})
                 if(t>=0)translated.textures.put(t,scene.textures.get(t));
         }
+        var coverageChanged=new ArrayList<String>();
+        for(var v:variants.values()){
+            var a=old.materials.get(v.material());var b=scene.materials.get(v.material());
+            if(a==null||!alphaEquivalent(old.textures.get(a.baseColorTextureId()),scene.textures.get(b.baseColorTextureId())))coverageChanged.add(v.name());
+        }
         Path model=translated.exportModel(directory,meshItems,textureFiles,new ArrayList<>(variants.values()));
         var removed=previous.stream().map(RtxptScene.Item::name).filter(n->!names.contains(n)).toList();
         Path manifest=directory.resolve("delta.json");
         Files.writeString(manifest,RtxptJson.encode(object("model",model.toAbsolutePath().toString().replace('\\','/'),
-            "removeNodes",removed,"nodes",updates,"textures",changedTextures.size())));
+            "removeNodes",removed,"nodes",updates,"textures",changedTextures.size(),"coverageChangedMaterials",coverageChanged)));
         int writtenTextures=(int)translated.textures.keySet().stream().filter(changedTextures::contains).count();
         return new Prepared(manifest,translated,textureFiles,imported.size(),variants.size(),writtenTextures,
             !meshItems.isEmpty()||!variants.isEmpty()||!removed.isEmpty()||!updates.isEmpty());

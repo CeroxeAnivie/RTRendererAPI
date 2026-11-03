@@ -80,6 +80,28 @@ public interface RtxptAccess {
         long shadedReceivers,long selectedLights,long visitedTreeNodes,long shadowTests) { }
     enum RetainedUpdateMode { INITIAL_PUBLICATION, EXPLICIT_RESET, RESOURCE_DELTA, TRANSFORMS, LIGHTING, UNCHANGED, NATIVE_SCENE }
     default RetainedUpdateMode retainedUpdateMode(){return RetainedUpdateMode.UNCHANGED;}
+    /** Cumulative inclusive Java scopes and native CPU subscopes; native subscopes overlap the
+     * Java resource/lighting scopes. Fence waits and GPU queue intervals remain in retainedUpdateTimings. */
+    record SubmitStages(long validationNanos,long translationAndFileNanos,long nativeResourcesNanos,long nativeLightingNanos,
+        long retirementNanos,long importerNanos,long textureFinalizeNanos,long materialSyncNanos,long accelerationNanos,
+        long nativeRetirementNanos,long lightDeltaRecords,long lightTreeRefits,long pipelineUpdateNanos,long pipelineBuilds,long shaderTableBuilds,long maximumWindowPollIntervalNanos) { }
+    default SubmitStages submitStages(){return new SubmitStages(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);}
+    /** Actual executed reset flags at the path accumulation, reconstruction and NRD call sites;
+     * cache notifications count executed invalidation notifications, not GPU cache clears.
+     * Continuous updates count completed lighting uploads under the continuity policy. */
+    record HistoryActions(long pathAccumulationResets,long reconstructionResets,long denoiserResets,
+        long radianceCacheNotifications,long continuousLightingUploads) { }
+    default HistoryActions historyActions(){return new HistoryActions(0,0,0,0,0);}
+    enum HistoryCause { FIRST_FRAME, CAMERA, OUTPUT_EXTENT, RESOURCE, ENVIRONMENT, LIGHT, BACKGROUND, EXPLICIT, CONFIGURATION }
+    /** Input changes for this submission alongside actions actually executed during its render.
+     * Multiple causes can coexist. Counts are per scope; preserving reconstruction does not imply
+     * preserving path accumulation. A minimized native window can report rendered=false. */
+    record HistoryFrame(long sequence,boolean rendered,java.util.Set<HistoryCause> causes,
+        long pathAccumulationResets,long reconstructionResets,long denoiserResets,long radianceCacheNotifications) {
+        public HistoryFrame {causes=java.util.Set.copyOf(causes);}
+    }
+    default HistoryFrame historyFrame(){return new HistoryFrame(-1,false,java.util.Set.of(),0,0,0,0);}
+
     record BridgeTimings(long frames, long frameNanos, long sceneExports, long sceneExportNanos,
             long transformBatches, long transformNanos) { }
 }

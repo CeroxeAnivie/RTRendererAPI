@@ -30,6 +30,11 @@ final class RtxptLightingSelfTest {
         var moving=SceneTransaction.builder(4).upsert(SceneInstance.builder(1,1).mediumBoundary(scene.instances.get(1L).mediumBoundary().orElseThrow())
             .transform(new AffineTransform(new float[]{1,0,0,1,0,1,0,2,0,0,1,3})).build()).upsert(point).build();
         require(RtxptRenderer.geometryUnchanged(moving,scene),"Mixed light and transform batch stays incremental");
+        // Dependency caching must not hide missing materials or reuse the old mesh's IDs.
+        var cached=new RtxptScene();cached.retain(RtxptAdapterSelfTest.scene(1));
+        RtxptAdapterSelfTest.rejected(()->new RtxptScene(cached).retain(SceneTransaction.builder(2).removeMaterial(1).build()),"Cached mesh dependency still protects material removal");
+        var m=cached.meshes.get(1L);float[] positions=new float[m.positions().remaining()];m.positions().get(positions);int[] indices=new int[m.triangleIndices().remaining()];m.triangleIndices().get(indices);long[] ids=new long[indices.length/3];Arrays.fill(ids,999);
+        RtxptAdapterSelfTest.rejected(()->new RtxptScene(cached).retain(SceneTransaction.builder(2).upsert(MeshAsset.builder(1,positions,indices,ids).build()).build()),"Replacement mesh invalidates cached dependencies");
         values[32]=999;require(state.records()[32]==1,"Packing buffers cannot mutate a retained immutable snapshot");
     }
 }

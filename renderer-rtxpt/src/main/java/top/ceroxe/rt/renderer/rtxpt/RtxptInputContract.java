@@ -40,8 +40,7 @@ final class RtxptInputContract {
             throw new IllegalArgumentException("Frame-local LightmapState lookups belong to Vulkan; RTXPT uses native scene lighting");
         if (!frame.textureSampling().equals(TextureSamplingState.pixelStable()))
             throw new IllegalArgumentException("Frame-local texture-footprint overrides belong to Vulkan; RTXPT owns texture sampling");
-        if (!frame.temporalHistoryResets().isEmpty())
-            throw new IllegalArgumentException("Explicit per-frame temporal-history resets are not exposed by the RTXPT host");
+
     }
 
     static void requireAdvancingRevision(long requested, long current, boolean published) {

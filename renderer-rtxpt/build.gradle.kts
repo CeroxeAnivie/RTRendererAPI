@@ -65,6 +65,39 @@ tasks.register<JavaExec>("rtxptScalabilityBenchmark") {
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
     if (project.hasProperty("benchmarkCases")) args(project.property("benchmarkCases").toString().split(","))
 }
+tasks.register<JavaExec>("rtxptMixedBenchmark") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptMixedBenchmark")
+    val baseline = project.findProperty("benchmarkBaseline")?.toString()
+    classpath = if (baseline == null) sourceSets.test.get().runtimeClasspath else
+        files("${System.getProperty("user.home")}/.m2/repository/top/ceroxe/rt/renderer-api/$baseline/renderer-api-$baseline.jar",
+            "${System.getProperty("user.home")}/.m2/repository/top/ceroxe/rt/renderer-rtxpt/$baseline/renderer-rtxpt-$baseline.jar") + sourceSets.test.get().runtimeClasspath
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    if (project.hasProperty("mixedCases")) args(project.property("mixedCases").toString().split(","))
+    usesService(rootProject.gradle.sharedServices.registrations.named("rendererHardwareGateLock").get().service)
+}
+tasks.register<JavaExec>("rtxptContinuityNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptContinuityNativeSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "0")
+}
+tasks.register<JavaExec>("rtxptBackgroundNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptBackgroundNativeSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "1")
+}
+tasks.register<JavaExec>("rtxptCoverageNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptCoverageNativeSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+}
+
+
 tasks.register<JavaExec>("rtxptLightTreeNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath

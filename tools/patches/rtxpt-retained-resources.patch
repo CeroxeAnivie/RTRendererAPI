@@ -70,7 +70,7 @@
  
      void                            SceneReloaded();
 +    void HostImportMaterial(donut::engine::Material& material);
-+    void HostSyncMaterials(const std::shared_ptr<ExtendedScene>& scene);
++    bool HostSyncMaterials(const std::shared_ptr<ExtendedScene>& scene);
 +
  
      std::filesystem::path           GetMaterialStoragePath(PTMaterialBase& material);
@@ -114,7 +114,7 @@
          m_materialDataWasReset = false;
      }
  
-@@ -1372,4 +1379,32 @@
+@@ -1372,4 +1379,43 @@
              return m_materials[i];
  
      return nullptr;
@@ -128,26 +128,37 @@
 +    ImportFromDonut(material,*ex.PTMaterial);ex.PTMaterial->DonutCounterpart=&material;
 +    ex.PTMaterial->GPUDataDirty=true;material.dirty=true;
 +}
-+void MaterialsBaker::HostSyncMaterials(const std::shared_ptr<ExtendedScene>& scene) {
++bool MaterialsBaker::HostSyncMaterials(const std::shared_ptr<ExtendedScene>& scene) {
 +    std::vector<std::shared_ptr<PTMaterial>> next;
 +    std::vector<bool> used(m_materialsGPU.size(),false);
++    std::unordered_set<PTMaterial*> resident;
++    for(auto& pt:m_materials)resident.insert(pt.get());
++    bool permutationsChanged=false;
 +    for(auto& material:scene->GetSceneGraph()->GetMaterials()) {
 +        auto& ex=dynamic_cast<MaterialEx&>(*material);
 +        if(!ex.PTMaterial)HostImportMaterial(*material);
 +        auto pt=ex.PTMaterial;
-+        if(std::find(m_materials.begin(),m_materials.end(),pt)!=m_materials.end())used.at(pt->GPUDataIndex)=true;
++        if(resident.count(pt.get())!=0)used.at(pt->GPUDataIndex)=true;
 +        next.push_back(pt);
 +    }
-+    for(auto& pt:next)if(std::find(m_materials.begin(),m_materials.end(),pt)==m_materials.end()) {
++    for(auto& pt:next)if(resident.count(pt.get())==0) {
 +        auto free=std::find(used.begin(),used.end(),false);
 +        size_t index=size_t(free-used.begin());
 +        if(index>=RTXPT_MATERIAL_MAX_COUNT)throw std::runtime_error("Retained material capacity exceeded");
 +        if(index==used.size()){used.push_back(true);m_materialsGPU.push_back({});}else used[index]=true;
 +        pt->GPUDataIndex=uint(index);pt->GPUDataDirty=true;
 +    }
-+    m_materials=std::move(next);m_textures.clear();m_uniqueNames.clear();
-+    for(auto& pt:m_materials)InitializeUniqueDeterministicName(pt);
-+    BakeShaderPermutations();m_deferredTextureLoadInProgress=true;
++    permutationsChanged=next.size()!=m_materials.size();
++    for(auto& pt:next) {
++        if(!resident.count(pt.get()) || !pt->BakedShaderPermutation
++            || !(MaterialShaderPermutationKey(pt->ComputeShaderPermutation(m_relativeShaderSourcePath))==MaterialShaderPermutationKey(*pt->BakedShaderPermutation)))permutationsChanged=true;
++    }
++    m_materials=std::move(next);m_textures.clear();
++    if(permutationsChanged){
++        m_uniqueNames.clear();for(auto& pt:m_materials)InitializeUniqueDeterministicName(pt);
++        BakeShaderPermutations();
++    }
++    m_deferredTextureLoadInProgress=true;return permutationsChanged;
 +}
 --- a/Rtxpt/Sample.h
 +++ b/Rtxpt/Sample.h
@@ -160,6 +171,14 @@
      void                                    ReleaseBlases();
      void                                    CreateTlas(nvrhi::ICommandList* commandList);
      void                                    CreateAccelStructs(nvrhi::ICommandList* commandList);
+@@ -268,6 +268,7 @@
+     // descriptor created any later is described as 'not allocated' for that frame, which trips the bindless
+     // validation trap in Debug (see Rtxpt/Shaders/Bindless.hlsli) even though the descriptor itself is fine.
+     virtual void UpdateCustomResources() { }
++    virtual void HostHistoryAction(int, bool) { } // RTR actual executed history diagnostics
+     virtual void FilterReconstructionInput(nvrhi::ICommandList*, bool) { } // RTR pre-SR history hook
+ 
+     // Invalidates the binding set, forcing recreation on next frame
 --- a/Rtxpt/Sample.cpp
 +++ b/Rtxpt/Sample.cpp
 @@ -1387,7 +1387,7 @@
@@ -206,6 +225,30 @@
          bufferDesc.debugName = "Instances";
          bufferDesc.structStride = sizeof(SubInstanceData);
          bufferDesc.canHaveRawViews = false;
+@@ -2214,6 +2216,7 @@
+ {
+     ZoneScoped;
+ 
++    HostHistoryAction(0,m_ui.ResetAccumulation); // RTR actual accumulation action
+     resetAccum |= m_ui.ResetAccumulation;
+     resetAccum |= m_ui.RealtimeMode;
+ 
+@@ -3728,6 +3731,7 @@
+     PostProcess::ComputePassType mergePassType = nrdUseRelax ? PostProcess::ComputePassType::RELAXDenoiserFinalMerge : PostProcess::ComputePassType::REBLURDenoiserFinalMerge;
+ 
+     bool resetHistory = m_ui.ResetRealtimeCaches;
++    HostHistoryAction(2,resetHistory); // RTR actual NRD action
+ 
+     int maxPassCount = std::min(m_ui.ActualDenoisingLayersActiveCount(), (int)std::size(m_nrd));
+     bool initWithStableRadiance = true;
+@@ -3829,6 +3833,7 @@
+             slConstants.mvecScale = { 1.0f / m_renderSize.x , 1.0f / m_renderSize.y }; // This are scale factors used to normalize mvec (to -1,1) and donut has mvec in pixel space
+             slConstants.prevClipToClip = inverse(reprojectionMatrix);
+             slConstants.reset = reset;
++            HostHistoryAction(1,reset); // RTR actual SR/RR action
+             slConstants.motionVectors3D = false;
+             slConstants.motionVectorsInvalidValue = FLT_MIN;
+ 
 --- a/External/Donut/include/donut/app/DeviceManager_DX12.h
 +++ b/External/Donut/include/donut/app/DeviceManager_DX12.h
 @@ -52,6 +52,7 @@
@@ -306,16 +349,34 @@
  void ThreadPool::StaticThreadProc(ThreadPool* self)
 --- a/Rtxpt/SampleCommon/PTPipelineBaker.h
 +++ b/Rtxpt/SampleCommon/PTPipelineBaker.h
-@@ -135,6 +135,8 @@
+@@ -11,6 +11,7 @@
+ #pragma once
+ 
+ #include <mutex>
++#include <array>
+ #include <memory>
+ #include <functional>
+ #include <nvrhi/nvrhi.h>
+@@ -81,6 +82,7 @@
+ private:
+     void                                    CompileIfNeeded_Enqueue(std::filesystem::file_time_type lastModifiedSourceCode);
+     void                                    ResetPipeline();
++    void                                    HostRefreshShaderTable(); // RTR topology-only publication
+ 
+ private:
+ 
+@@ -135,6 +137,10 @@
      // pipelines whose hit groups differ - including in ray payload type.
      PTPipelineBaker(nvrhi::IDevice* device, std::shared_ptr<class MaterialsBaker> & materialsBaker, nvrhi::BindingLayoutHandle bindingLayout, nvrhi::BindingLayoutHandle bindlessLayout, std::function<void(std::vector<donut::engine::ShaderMacro> & macros)> globalMacrosGetter, nvrhi::BindingLayoutHandle bindlessHeapLayout = nullptr, std::vector<donut::engine::ShaderMacro> hitGroupMacros = {});
      ~PTPipelineBaker();
 +    void HostInvalidateScene() { m_hostSceneDirty = true; } // RTR retained SBT generation
 +
++    uint64_t m_hostPipelineBuilds=0,m_hostSbtBuilds=0,m_hostUpdateNs=0;
++    std::array<uint64_t,3> HostTelemetry()const{return {m_hostUpdateNs,m_hostPipelineBuilds,m_hostSbtBuilds};}
      size_t HostCompilerThreadCount() const {return m_threadPool.GetThreadCount();} // RTR pool readback
      
      void                                Update(const std::shared_ptr<class ExtendedScene> & scene, unsigned int subInstanceCount, bool forceShaderReload);
-@@ -174,6 +176,7 @@
+@@ -174,6 +180,7 @@
                                          GetFS()                             { return m_shadersFS; }
      std::mutex &                        GetMutex()                          { return m_mutex; }
  
@@ -323,7 +384,7 @@
      void                                EnqueueShaderPermutation(PTPipelineVariant::ShaderPermutation* perm);
  
      bool                                RegisterShortUniqueDebugID(const std::string & id);
-@@ -216,6 +219,7 @@
+@@ -216,6 +223,7 @@
  
      donut::engine::ThreadPool                       m_threadPool;
  
@@ -333,16 +394,105 @@
      std::mutex                                      m_mutex;    // for synchronizing work by variants
 --- a/Rtxpt/SampleCommon/PTPipelineBaker.cpp
 +++ b/Rtxpt/SampleCommon/PTPipelineBaker.cpp
-@@ -612,7 +612,7 @@
+@@ -423,7 +423,7 @@
+         if (baker->IsNVAPIShaderExtensionEnabled())
+             pipelineDesc.hlslExtensionsUAV = NV_SHADER_EXTN_SLOT_NUM;
+ 
+-        m_pipeline = baker->GetDevice()->createRayTracingPipeline(pipelineDesc);
++        m_pipeline = baker->GetDevice()->createRayTracingPipeline(pipelineDesc);++baker->m_hostPipelineBuilds;
+ 
+         // Left at a stale version: PTPipelineBaker::Update reports it like a compile error (Retry, or exit)
+         if (!m_pipeline)
+@@ -457,7 +457,7 @@
+                                    + (m_rayGenOnly ? 0u : (uint32_t)baker->GetPerSubInstanceHitGroup().size());
+         shaderTableDesc.debugName  = "PTShaderTable_" + m_shortUniqueDebugID;
+ 
+-        m_shaderTable = m_pipeline->createShaderTable(shaderTableDesc);
++        m_shaderTable = m_pipeline->createShaderTable(shaderTableDesc);++baker->m_hostSbtBuilds;
+ 
+         if (!m_shaderTable)
+             { m_us_lockedBaker = nullptr; return; }
+@@ -487,6 +487,41 @@
+     m_us_lockedBaker = nullptr;
+ }
+ 
++
++void PTPipelineVariant::HostRefreshShaderTable(){
++    auto baker=m_baker.lock();if(!baker||!m_pipeline)throw std::runtime_error("No retained pipeline for shader table");
++    std::string rayGenName="RayGen_"+m_shortUniqueDebugID,missName="Miss_"+m_shortUniqueDebugID;
++        nvrhi::rt::ShaderTableDesc shaderTableDesc;
++        shaderTableDesc.isCached   = true;
++        shaderTableDesc.maxEntries = 1u                                                                     // ray generation
++                                   + (m_exportMiss ? 1u : 0u)                                               // miss
++                                   + (m_rayGenOnly ? 0u : (uint32_t)baker->GetPerSubInstanceHitGroup().size());
++        shaderTableDesc.debugName  = "PTShaderTable_" + m_shortUniqueDebugID;
++
++        m_shaderTable = m_pipeline->createShaderTable(shaderTableDesc);++baker->m_hostSbtBuilds;
++
++        if (!m_shaderTable)
++            throw std::runtime_error("Retained shader table allocation failed");
++
++        m_shaderTable->setRayGenerationShader(rayGenName.c_str());
++
++        if (!m_rayGenOnly)
++        {
++            auto& perSubInstanceHitGroup = baker->GetPerSubInstanceHitGroup();
++            for (int i = 0; i < perSubInstanceHitGroup.size(); i++)
++                m_shaderTable->addHitGroup(perSubInstanceHitGroup[i].GetExportName().c_str());
++        }
++
++        if (m_exportMiss)
++            m_shaderTable->addMissShader(missName.c_str());
++
++        // The one failure mode of the cached path: if the entries ever outgrow maxEntries, nvrhi reports an error and
++        // returns from setRayTracingState WITHOUT committing the dispatch template, i.e. it dispatches rays against a
++        // stale one. Silent and extremely confusing, so catch the sizing drift here instead.
++        assert( m_shaderTable->getNumEntries() == shaderTableDesc.maxEntries && "cached shader table sized wrong - see maxEntries above" );
++
++
++}
+ 
+ PTPipelineBaker::PTPipelineBaker(nvrhi::IDevice* device, std::shared_ptr<MaterialsBaker>& materialsBaker, nvrhi::BindingLayoutHandle bindingLayout, nvrhi::BindingLayoutHandle bindlessLayout, std::function<void(std::vector<donut::engine::ShaderMacro> & macros)> globalMacrosGetter, nvrhi::BindingLayoutHandle bindlessHeapLayout, std::vector<donut::engine::ShaderMacro> hitGroupMacros)
+     : m_device(device)
+@@ -587,6 +622,8 @@
+ 
+ void PTPipelineBaker::Update(const std::shared_ptr<class ExtendedScene>& scene, unsigned int subInstanceCount, bool forceShaderReload)
+ {
++    struct ScopeTimer {uint64_t& total;std::chrono::steady_clock::time_point begin=std::chrono::steady_clock::now();~ScopeTimer(){total+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-begin).count();}} timer{m_hostUpdateNs};
++
+     assert(m_globalMacrosGetter); // supplied at construction
+     // Auto-reload: check for source file changes. No timer and no directory walk here any more - the monitor's worker
+     // does the walking and this is a mutex plus a fold over one cached value.
+@@ -612,7 +649,10 @@
          }
      }
  
 -    bool needsUpdate = m_uniqueHitGroups.size() == 0;
++    bool shaderChanges=forceShaderReload;
++    std::unordered_map<int,std::pair<std::string,bool>> previousExports;
++    for(auto& [index,info]:m_uniqueHitGroups)previousExports.emplace(index,std::make_pair(info.GetShaderPermutationName()+"\n"+MaterialShaderPermutationKey(*info.MaterialShaderPermutation).FullKey,info.HasAnyHitShader));
 +    bool needsUpdate = m_hostSceneDirty || m_perSubInstanceHitGroup.size()!=subInstanceCount; // RTR topology changes require a new SBT
  
      std::vector<donut::engine::ShaderMacro> newMacros;
      {
-@@ -639,7 +639,6 @@
+@@ -624,22 +664,20 @@
+     }
+     if (!std::equal(newMacros.begin(), newMacros.end(), m_macros.begin(), m_macros.end(), macrosEqual))
+     {
+-        needsUpdate = true;
++        needsUpdate = true;shaderChanges=true;
+         m_macros = newMacros;
+     }
+ 
+     // Per-variant runtime macro overrides. Cheap no-op for variants without a getter; for those that have one this is a
+     // compare against the cached set, so a recompile only happens when the produced macros actually change. Note '|=',
+     // not '||': every variant must be refreshed so its cache stays current.
+-    for (auto& variant : m_variants)
+-        needsUpdate |= variant->RefreshDynamicMacros();
++    for (auto& variant : m_variants){bool changed=variant->RefreshDynamicMacros();needsUpdate|=changed;shaderChanges|=changed;}
+ 
+     needsUpdate |= forceShaderReload;
+ 
      // no need to update these if already set up
      if (needsUpdate) // m_uniqueHitGroups.size() == 0)
      {
@@ -350,18 +500,40 @@
          // Note: these map 1-1 to m_subInstanceData, and are used to (see '->addHitGroup' below) build 1-1 mapped hit groups 
          m_perSubInstanceHitGroup.clear();
          m_perSubInstanceHitGroup.reserve(subInstanceCount);
-@@ -661,7 +660,7 @@
+@@ -661,9 +699,14 @@
              HitGroupInfo& unique = m_uniqueHitGroups.try_emplace(info.GetShaderPermutationIndex(), info).first->second;
              unique.HasAnyHitShader |= info.HasAnyHitShader;
          }
 -        needsUpdate = true;
+-    }
+-
 +        m_hostSceneDirty = false;
-     }
- 
++    }
++
++    if(needsUpdate && !shaderChanges && m_version>=0){
++        bool sameExports=previousExports.size()==m_uniqueHitGroups.size();
++        for(auto& [index,info]:m_uniqueHitGroups){auto old=previousExports.find(index);sameExports &= old!=previousExports.end() && old->second==std::make_pair(info.GetShaderPermutationName()+"\n"+MaterialShaderPermutationKey(*info.MaterialShaderPermutation).FullKey,info.HasAnyHitShader);}
++        if(sameExports){for(auto& variant:m_variants)variant->HostRefreshShaderTable();return;}
++    }
      if (needsUpdate)
+     {
+         m_version++;
 --- a/External/Donut/src/app/DeviceManager.cpp
 +++ b/External/Donut/src/app/DeviceManager.cpp
-@@ -718,7 +718,8 @@
+@@ -1,3 +1,4 @@
++#include "rtxpt_host_resources.h" // RTR actual owner-thread poll intervals
+ /*
+ * Copyright (c) 2014-2021, NVIDIA CORPORATION. All rights reserved.
+ *
+@@ -638,6 +639,7 @@
+ }
+ 
+ bool DeviceManager::HostFrame() {
++    RtrHostResources::NoteEventPoll();
+             if (m_PreviousFrameTimestamp == 0) m_PreviousFrameTimestamp = glfwGetTime();
+ #if DONUT_WITH_STREAMLINE
+             StreamlineIntegration::Get().SimStart(*this);
+@@ -718,7 +720,8 @@
          // while the local variable below becomes the render/present index, which will be different only if m_SkipRenderOnFirstFrame is set
          if (m_FrameIndex > 0 || !m_SkipRenderOnFirstFrame)
          {
@@ -545,3 +717,15 @@
      commandList->commitBarriers();
  
      ++m_TexturesFinalized;
+--- a/Rtxpt/Shaders/PathTracer/PathTracer.hlsli
++++ b/Rtxpt/Shaders/PathTracer/PathTracer.hlsli
+@@ -351,6 +351,9 @@
+         }
+ 
+         #endif // RTR old horizon and solar sky
++        // RTR independent primary background; secondary reflection/transmission keeps physical environment.
++        if(path.getVertexIndex()==1 && workingContext.PtConsts.RtrSceneAmbient.w!=0)
++            environmentEmission=ToLpRadiance(asfloat(workingContext.PtConsts.RtrDirectionalPadding));
+ #if RTXPT_FIREFLY_FILTER && PATH_TRACER_MODE!=PT_DENOISING_LAYERS_BUILD
+             float baseFFThreshold = workingContext.PtConsts.fireflyFilterThreshold;
+             if( baseFFThreshold != 0 )

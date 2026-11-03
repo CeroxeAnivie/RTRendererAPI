@@ -192,8 +192,7 @@ public final class RtxptAdapterSelfTest {
             "Authored lightmap cannot silently disappear");
         rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().textureSampling(TextureSamplingState.anisotropic(8)).build()),
             "Frame-local texture sampling cannot silently disappear");
-        rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().resetTemporalHistory(HistoryResetReason.EXPLICIT_RESET).build()),
-            "Unsupported explicit temporal reset cannot be accepted as executed");
+        RtxptInputContract.validateFrame(frame(0).toBuilder().resetTemporalHistory(HistoryResetReason.EXPLICIT_RESET).build());
         RtxptInputContract.requireAdvancingRevision(0,0,false);
         RtxptInputContract.requireAdvancingRevision(1,0,true);
         try { RtxptInputContract.requireAdvancingRevision(1,1,true);throw new AssertionError("Duplicate scene revision accepted"); }

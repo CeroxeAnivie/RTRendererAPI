@@ -45,7 +45,40 @@ class HostPathTracer final : public AdvancedPathTracer {
     uint64_t lightIndexBuilds=0,lightIndexBuildNs=0;
     double lightPowerNormalization=1;
     bool uploadSunOnly=false;
-    std::vector<uint32_t> sunTreePath;
+    std::vector<uint32_t> sunTreePath,treeParents,lightLeaves,dirtyLightIndices,dirtyTreeIndices;
+    std::unordered_map<int64_t,uint32_t> lightIndices;
+    std::vector<std::shared_ptr<donut::engine::Light>> managedLightObjects;
+    uint64_t lightDeltaRecords=0,lightTreeRefits=0;
+    int lightingContinuity=0;
+    bool continuousPending=false,independentBackground=false;
+    float3 primaryBackground={};
+    uint64_t executedAccumulationResets=0,executedReconstructionResets=0,executedDenoiserResets=0,cacheNotifications=0,continuousUploads=0;
+    void HostHistoryAction(int scope,bool reset) override {
+        if(!reset)return;
+        if(scope==0)++executedAccumulationResets;
+        else if(scope==1)++executedReconstructionResets;
+        else if(scope==2)++executedDenoiserResets;
+    }
+    static bool Abrupt(const SceneLight& old,const SceneLight& next) {
+        if(old.positionType.w!=next.positionType.w||old.coneShadow.z!=next.coneShadow.z)return true;
+        for(int a=0;a<4;a++)if(std::abs(next.colorIntensity[a]-old.colorIntensity[a])>std::max(.001f,std::max(next.colorIntensity[a],old.colorIntensity[a])*.1f))return true;
+        float distance=0;for(int a=0;a<3;a++){float d=next.positionType[a]-old.positionType[a];distance+=d*d;}
+        if(distance>std::pow(std::max(.02f,next.directionRange.w*.05f),2.f))return true;
+        if(next.positionType.w!=1 && dot(old.directionRange.xyz(),next.directionRange.xyz())<.995f)return true;
+        return std::abs(next.directionRange.w-old.directionRange.w)>std::max(.001f,std::max(next.directionRange.w,old.directionRange.w)*.1f)
+            || std::abs(next.coneShadow.x-old.coneShadow.x)>.05f || std::abs(next.coneShadow.y-old.coneShadow.y)>.05f;
+    }
+    void LightingHistory(bool abrupt) {
+        g_sampleUIData.ResetAccumulation=true;
+        const bool reset=lightingContinuity==0||abrupt;
+        if(reset){
+            g_sampleUIData.ResetRealtimeCaches=true;preSrHistoryReset=true;++lightingHistoryResets;
+            if(auto cache=GetSharc();cache&&g_sampleUIData.ActualRadianceCacheMode()!=0){cache->NotifySceneReloaded();++cacheNotifications;}
+        }
+        if(UsesBakedLighting())if(auto baker=GetLightsBaker())baker->SceneReloaded();
+        continuousPending=!reset;
+    }
+
     float4 sceneSky={};
     nvrhi::BufferHandle sceneLightBuffer;
     bool lightStatsEnabled=[] {const char* value=std::getenv("RTR_RTXPT_LIGHT_STATS");return value&&value[0]=='1';}();
@@ -172,14 +205,14 @@ public:
     void RebuildLightTree() {
         const auto begin=std::chrono::steady_clock::now();
         sceneLightTree=rtr::BuildLightTree(sceneLights,&lightPowerNormalization);++lightIndexBuilds;
-        sunTreePath.clear();std::vector<uint32_t> parents(sceneLightTree.size(),0);
-        uint32_t sunLeaf=0;
+        sunTreePath.clear();treeParents.assign(sceneLightTree.size(),0);lightLeaves.assign(sceneLights.size(),0);
         for(uint32_t i=0;i<sceneLightTree.size();i++){
             auto& node=sceneLightTree[i];
-            if(node.light<0){parents[uint32_t(node.left)]=i;parents[uint32_t(node.right)]=i;}
-            else if(node.light==0)sunLeaf=i;
+            if(node.light<0){treeParents[uint32_t(node.left)]=i;treeParents[uint32_t(node.right)]=i;}
+            else lightLeaves.at(uint32_t(node.light))=i;
         }
-        if(!sceneLightTree.empty()){for(uint32_t i=sunLeaf;;i=parents[i]){sunTreePath.push_back(i);if(i==0)break;}}
+        if(!sceneLightTree.empty())for(uint32_t i=lightLeaves[0];;i=treeParents[i]){sunTreePath.push_back(i);if(i==0)break;}
+        dirtyLightIndices.clear();dirtyTreeIndices.clear();
         lightIndexBuildNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-begin).count();
         uploadSunOnly=false;
     }
@@ -189,18 +222,19 @@ public:
         for(float value:sky)if(!std::isfinite(value)||value<0)throw std::invalid_argument("Invalid environment sky");
         if(sun[3]!=0||sun[8]<0||sun[9]<0||sun[10]<0||sun[11]<0||std::abs(sun[4]*sun[4]+sun[5]*sun[5]+sun[6]*sun[6]-1.f)>.003f)
             throw std::invalid_argument("Invalid environment sun values");
-        uploadSunOnly=!sceneLightsDirty;
+        SceneLight nextSun;std::memcpy(&nextSun,sun.data(),sizeof(SceneLight));bool abrupt=Abrupt(sceneLights[0],nextSun);
+        for(int a=0;a<4;a++)abrupt|=std::abs(sceneSky[a]-sky[a])>std::max(.001f,std::max(sceneSky[a],sky[a])*.1f);
+        if(!sceneLightsDirty)uploadSunOnly=true;
         std::memcpy(&sceneLights[0],sun.data(),sizeof(SceneLight));sceneSky=float4(sky[0],sky[1],sky[2],sky[3]);
-        auto* light=dynamic_cast<donut::engine::DirectionalLight*>(managedLightRoot->GetChild(0)->GetLeaf().get());
+        auto* light=dynamic_cast<donut::engine::DirectionalLight*>(managedLightObjects.at(0).get());
         if(!light)throw std::logic_error("Managed sun is missing");
         light->color=float3(sun[8],sun[9],sun[10]);light->irradiance=sun[11];light->SetDirection(double3(sun[4],sun[5],sun[6]));
         double power=double(sun[11])*(.2126*sun[8]+.7152*sun[9]+.0722*sun[10])/lightPowerNormalization;
         if(!std::isfinite(float(power))||power>1e25)RebuildLightTree();
-        else for(uint32_t index:sunTreePath){auto& node=sceneLightTree[index];node.power=node.light>=0?float(power):sceneLightTree[uint32_t(node.left)].power+sceneLightTree[uint32_t(node.right)].power;}
+        else {rtr::RefitLightTree(sceneLightTree,sceneLights,treeParents,lightLeaves[0],lightPowerNormalization,dirtyTreeIndices);dirtyLightIndices.push_back(0);++lightTreeRefits;}
         sceneLightsDirty=true;lightingCommitPending=true;ConfigureManagedBackground();
-        if(auto cache=GetSharc())cache->NotifySceneReloaded();if(auto baker=GetLightsBaker())baker->SceneReloaded();
-        g_sampleUIData.ResetAccumulation=true;g_sampleUIData.ResetRealtimeCaches=true;preSrHistoryReset=true;
-        directionalStrataLogged=false;++lightingBatchCount;++lightingHistoryResets;
+        LightingHistory(abrupt);
+        directionalStrataLogged=false;++lightingBatchCount;
     }
     void ApplyLighting(const std::vector<int64_t>& ids,const std::vector<float>& records,const std::array<float,4>& sky) {
         if(!GetScene() || !managedLighting)throw std::logic_error("Lighting batches require a retained API scene");
@@ -210,9 +244,11 @@ public:
         std::unordered_map<int64_t,bool> unique;
         for(float v:sky)if(!std::isfinite(v)||v<0)throw std::invalid_argument("Invalid lighting sky");
         std::vector<SceneLight> next(count);
+        std::vector<std::shared_ptr<donut::engine::Light>> nextObjects;nextObjects.reserve(count);
         auto candidate=std::make_shared<donut::engine::SceneGraph>();
         auto candidateRoot=std::make_shared<donut::engine::SceneGraphNode>();candidateRoot->SetName("RTRLighting");candidate->SetRootNode(candidateRoot);
         for(size_t i=0;i<count;i++) {
+            if(i%256==0)RtrHostResources::PumpEvents();
             const float* v=&records[i*16];
             for(size_t j=0;j<16;j++)if(!std::isfinite(v[j]))throw std::invalid_argument("Non-finite light record");
             if((i>0&&ids[i]<0)||!unique.emplace(ids[i],true).second)throw std::invalid_argument("Duplicate or invalid light id");
@@ -233,7 +269,7 @@ public:
                 l->innerAngle=degrees(std::acos(std::clamp(v[12],-1.f,1.f)));l->outerAngle=degrees(std::acos(std::clamp(v[13],-1.f,1.f)));light=l;
             }
             if(auto* metadata=dynamic_cast<LightExtension*>(light.get())){metadata->HostManaged=true;metadata->CastsShadow=v[14]!=0;}
-            light->color=float3(v[8],v[9],v[10]);
+            nextObjects.push_back(light);light->color=float3(v[8],v[9],v[10]);
             auto node=candidate->AttachLeafNode(candidateRoot,light);node->SetName(i==0?"Sun":"l"+std::to_string(ids[i]));
             light->SetPosition(double3(v[0],v[1],v[2]));if(type!=1)light->SetDirection(double3(v[4],v[5],v[6]));
         }
@@ -244,23 +280,59 @@ public:
         if(managedLightRoot)graph->Detach(managedLightRoot);
         else {
             auto previousLights=graph->GetLights();
-            for(auto& light:previousLights)if(light->GetLightType()!=LightType_Environment)
-                graph->Detach(light->GetNode()->shared_from_this());
+            size_t retiredLightCount=0;
+            for(auto& light:previousLights)if(light->GetLightType()!=LightType_Environment){
+                if(retiredLightCount++%256==0)RtrHostResources::PumpEvents();graph->Detach(light->GetNode()->shared_from_this());
+            }
         }
         managedLightRoot=graph->Attach(graph->GetRootNode(),candidateRoot);
         // Consume only the lighting structure flags before Java applies this frame's transforms.
         // Scene::Refresh must not interpret adding a light as changing mesh topology.
         graph->Refresh(GetFrameIndex());m_lights=graph->GetLights();
+        managedLightObjects=std::move(nextObjects);lightIndices.clear();for(uint32_t i=0;i<count;i++)lightIndices.emplace(ids[i],i);
         sceneLights=std::move(next);sceneSky=float4(sky[0],sky[1],sky[2],sky[3]);sceneLightsDirty=true;
         RebuildLightTree();
         lightingSceneDirty=true;lightingPolicyLogged=false;directionalStrataLogged=false;preSrHistoryReset=true;
         ConfigureManagedBackground();
-        if(auto* cache=GetSharc())cache->NotifySceneReloaded();
-        if(auto baker=GetLightsBaker())baker->SceneReloaded();
-        g_sampleUIData.ResetAccumulation=true;g_sampleUIData.ResetRealtimeCaches=true;
+        LightingHistory(true);
         const char* freezeNoise=std::getenv("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE");
         if(freezeNoise&&std::string(freezeNoise)=="1")g_sampleUIData.DbgFreezeRealtimeNoiseSeed=true;
-        ++lightingBatchCount;++lightingHistoryResets;lightingCommitPending=true;
+        ++lightingBatchCount;lightingCommitPending=true;
+    }
+    void SetLightingContinuity(int policy){
+        if(policy<0||policy>1)throw std::invalid_argument("Invalid lighting continuity");
+        if(policy==1&&!sceneLightingActive())throw std::invalid_argument("Continuous lighting requires SCENE_ANALYTIC without ReSTIR or radiance cache");
+        lightingContinuity=policy;
+    }
+    void SetBackground(bool independent,float3 color){
+        if(independentBackground!=independent || (independent&&any(primaryBackground!=color))){g_sampleUIData.ResetRealtimeCaches=true;preSrHistoryReset=true;}
+        independentBackground=independent;primaryBackground=color;
+    }
+    std::array<jlong,16> ExecutionTelemetry() {auto p=GetRTPipelineBaker()?GetRTPipelineBaker()->HostTelemetry():std::array<uint64_t,3>{};return {jlong(importerNs),jlong(textureFinalizeNs),jlong(materialSyncNs),jlong(accelerationNs),jlong(nativeRetirementNs),jlong(lightDeltaRecords),jlong(lightTreeRefits),jlong(executedAccumulationResets),jlong(executedReconstructionResets),jlong(executedDenoiserResets),jlong(cacheNotifications),jlong(continuousUploads),jlong(p[0]),jlong(p[1]),jlong(p[2]),jlong(RtrHostResources::maximumPollIntervalNanos)};}
+    void ApplyLightDelta(const std::vector<int64_t>& ids,const std::vector<float>& values){
+        if(values.size()!=ids.size()*16)throw std::invalid_argument("Invalid light delta");
+        std::vector<SceneLight> next(ids.size());std::unordered_map<int64_t,bool> seen;bool abrupt=false;
+        for(size_t i=0;i<ids.size();i++){
+            auto entry=lightIndices.find(ids[i]);if(entry==lightIndices.end()||ids[i]<0||!seen.emplace(ids[i],true).second)throw std::invalid_argument("Unknown or duplicate light delta ID");
+            const float* v=&values[i*16];for(int a=0;a<16;a++)if(!std::isfinite(v[a]))throw std::invalid_argument("Non-finite light delta");
+            auto& old=sceneLights[entry->second];if(v[3]!=old.positionType.w||v[7]<0||v[8]<0||v[9]<0||v[10]<0||v[11]<0||(v[14]!=0&&v[14]!=1)
+                ||(v[3]!=0&&v[7]<=0)||(v[3]!=1&&std::abs(v[4]*v[4]+v[5]*v[5]+v[6]*v[6]-1.f)>.003f)
+                ||(v[3]==2&&(v[12]<v[13]||v[12]>1||v[13]<-1)))throw std::invalid_argument("Invalid light delta values");
+            std::memcpy(&next[i],v,sizeof(SceneLight));abrupt|=Abrupt(old,next[i]);
+        }
+        if(!sceneLightsDirty)uploadSunOnly=true;
+        for(size_t i=0;i<ids.size();i++){
+            uint32_t index=lightIndices.at(ids[i]);sceneLights[index]=next[i];auto& l=managedLightObjects.at(index);const auto& v=next[i];
+            l->color=v.colorIntensity.xyz();l->SetPosition(double3(v.positionType.xyz()));
+            if(v.positionType.w==0){auto& d=static_cast<donut::engine::DirectionalLight&>(*l);d.irradiance=v.colorIntensity.w;l->SetDirection(double3(v.directionRange.xyz()));}
+            else if(v.positionType.w==1){auto& d=static_cast<PointLightEx&>(*l);d.intensity=v.colorIntensity.w;d.range=v.directionRange.w;}
+            else{auto& d=static_cast<SpotLightEx&>(*l);d.intensity=v.colorIntensity.w;d.range=v.directionRange.w;d.innerAngle=degrees(std::acos(std::clamp(v.coneShadow.x,-1.f,1.f)));d.outerAngle=degrees(std::acos(std::clamp(v.coneShadow.y,-1.f,1.f)));l->SetDirection(double3(v.directionRange.xyz()));}
+            if(auto* metadata=dynamic_cast<LightExtension*>(l.get()))metadata->CastsShadow=v.coneShadow.z!=0;
+            double power=double(v.colorIntensity.w)*(.2126*v.colorIntensity.x+.7152*v.colorIntensity.y+.0722*v.colorIntensity.z)/lightPowerNormalization;
+            if(!std::isfinite(float(power))||power>1e25)RebuildLightTree();
+            else{rtr::RefitLightTree(sceneLightTree,sceneLights,treeParents,lightLeaves.at(index),lightPowerNormalization,dirtyTreeIndices);dirtyLightIndices.push_back(index);++lightTreeRefits;}
+        }
+        lightDeltaRecords+=ids.size();sceneLightsDirty=true;lightingCommitPending=true;++lightingBatchCount;LightingHistory(abrupt);
     }
     void UpdateCustomResources() override {
         AdvancedPathTracer::UpdateCustomResources();
@@ -288,7 +360,7 @@ public:
                 retiredLighting.push_back(std::move(retired));
             }
             GetBindingCache().Clear();InvalidateBindingSet();
-            sceneLightBuffer=replacement;sceneLightsDirty=true;
+            sceneLightBuffer=replacement;sceneLightsDirty=true;uploadSunOnly=false;
         }
     }
     void AddCustomBindings(nvrhi::BindingSetDesc& desc) override {
@@ -317,22 +389,25 @@ public:
         AdvancedPathTracer::UpdateCustomConstants(constants,commandList);
         if(lightStatsEnabled)commandList->clearBufferUInt(lightStatsBuffer,0);
         auto& pt=constants.ptConsts;
-        pt.RtrSceneAmbient=float4(sceneSky.xyz()*sceneSky.w,0);
+        pt.RtrSceneAmbient=float4(sceneSky.xyz()*sceneSky.w,independentBackground?1.f:0.f);
         pt.RtrSceneSky=float4(sceneSky.xyz()*std::max(sceneSky.w,.05f),0);
+        std::memcpy(&pt.RtrDirectionalPadding,&primaryBackground,sizeof(float3)); // bit-exact RGB in reserved ABI words
         pt.RtrSceneLightCount=uint32_t(sceneLights.size());
         if(sceneLightsDirty && sceneLightBuffer) {
             const auto begin=std::chrono::steady_clock::now();
             if(uploadSunOnly){
-                commandList->writeBuffer(sceneLightBuffer,sceneLights.data(),sizeof(SceneLight));
-                for(uint32_t index:sunTreePath)commandList->writeBuffer(sceneLightBuffer,&sceneLightTree[index],sizeof(rtr::LightTreeNode),(sceneLights.size()+index)*sizeof(SceneLight));
+                std::sort(dirtyLightIndices.begin(),dirtyLightIndices.end());dirtyLightIndices.erase(std::unique(dirtyLightIndices.begin(),dirtyLightIndices.end()),dirtyLightIndices.end());
+                std::sort(dirtyTreeIndices.begin(),dirtyTreeIndices.end());dirtyTreeIndices.erase(std::unique(dirtyTreeIndices.begin(),dirtyTreeIndices.end()),dirtyTreeIndices.end());
+                for(uint32_t index:dirtyLightIndices)commandList->writeBuffer(sceneLightBuffer,&sceneLights[index],sizeof(SceneLight),index*sizeof(SceneLight));
+                for(uint32_t index:dirtyTreeIndices)commandList->writeBuffer(sceneLightBuffer,&sceneLightTree[index],sizeof(rtr::LightTreeNode),(sceneLights.size()+index)*sizeof(SceneLight));
             }else{
                 if(!sceneLights.empty())commandList->writeBuffer(sceneLightBuffer,sceneLights.data(),sceneLights.size()*sizeof(SceneLight));
                 if(!sceneLightTree.empty())commandList->writeBuffer(sceneLightBuffer,sceneLightTree.data(),sceneLightTree.size()*sizeof(rtr::LightTreeNode),sceneLights.size()*sizeof(SceneLight));
             }
-            uploadSunOnly=false;
+            uploadSunOnly=false;dirtyLightIndices.clear();dirtyTreeIndices.clear();
             sceneLightsDirty=false;
             if(lightingCommitPending) {
-                ++lightingUploadCount;lightingCommitPending=false;
+                ++lightingUploadCount;lightingCommitPending=false;if(continuousPending)++continuousUploads;continuousPending=false;
                 lightingUploadNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-begin).count();
                 const char* diagnostics=std::getenv("RTR_RTXPT_LIGHTING_DIAGNOSTICS");
                 if(diagnostics&&std::string(diagnostics)=="1")donut::log::info("RTXPT lighting executed loads=%llu batches=%llu uploads=%llu uploadRecordingNs=%llu historyResets=%llu lights=%zu",sceneLoadCount,lightingBatchCount,lightingUploadCount,lightingUploadNs,lightingHistoryResets,sceneLights.size());
@@ -695,13 +770,16 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         s->app->pathQuality=initialQuality;
         s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
         s->app->HostDeviceManager()->HostFixedWindowTitle=true;
+        RtrHostResources::lastPollNanos=RtrHostResources::maximumPollIntervalNanos=0;
+        RtrHostResources::eventPump=[] { RtrHostResources::NoteEventPoll();glfwPollEvents(); };
         auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
         if(RtrMemoryDiagnostics::Enabled() && status==SampleBaseApp::InitReturnCodes::Success)
             RtrMemoryDiagnostics::Checkpoint("create.initialized",static_cast<ID3D12Device*>(s->app->HostDeviceManager()->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)));
         if (status != SampleBaseApp::InitReturnCodes::Success)
             throw std::runtime_error("RTXPT initialization failed with status " + std::to_string(static_cast<int>(status)));
         s->initialized = true;
-        RtrHostResources::eventPump=[] { glfwPollEvents(); };
+        RtrHostResources::lastPollNanos=RtrHostResources::maximumPollIntervalNanos=0;
+        RtrHostResources::eventPump=[] { RtrHostResources::NoteEventPoll();glfwPollEvents(); };
         s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
         if(externalPresentation)glfwHideWindow(s->app->HostDeviceManager()->GetWindow());
         donut::app::StreamlineIntegration::Get().hostFrameGeneration={};
@@ -1047,6 +1125,24 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         e->GetFloatArrayRegion(sun,0,16,values.data());e->GetFloatArrayRegion(sky,0,4,background.data());if(e->ExceptionCheck())return;
         static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->ApplyEnvironment(values,background);
     }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingPolicy(JNIEnv* e,jclass,jlong h,jint policy){
+    try{static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->SetLightingContinuity(policy);}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_background(JNIEnv* e,jclass,jlong h,jfloatArray color){
+    try{std::array<float,3> v{};if(color){if(e->GetArrayLength(color)!=3)throw std::invalid_argument("Invalid background");e->GetFloatArrayRegion(color,0,3,v.data());if(e->ExceptionCheck())return;for(float c:v)if(!std::isfinite(c)||c<0)throw std::invalid_argument("Invalid background color");}
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->SetBackground(color!=nullptr,float3(v[0],v[1],v[2]));}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingDelta(JNIEnv* e,jclass,jlong h,jlongArray ids,jfloatArray records){
+    try{if(!ids||!records||e->GetArrayLength(records)!=e->GetArrayLength(ids)*16)throw std::invalid_argument("Invalid light delta arrays");
+        size_t count=e->GetArrayLength(ids);std::vector<int64_t> keys(count);std::vector<float> values(count*16);e->GetLongArrayRegion(ids,0,jsize(count),reinterpret_cast<jlong*>(keys.data()));e->GetFloatArrayRegion(records,0,jsize(values.size()),values.data());if(e->ExceptionCheck())return;
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->ApplyLightDelta(keys,values);}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resetWindowPollInterval(JNIEnv* e,jclass,jlong h){
+    try{session(h);RtrHostResources::maximumPollIntervalNanos=0;RtrHostResources::NoteEventPoll();RtrHostResources::maximumPollIntervalNanos=0;}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_executionTelemetry(JNIEnv* e,jclass,jlong h){
+    try{auto v=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->ExecutionTelemetry();auto out=e->NewLongArray(jsize(v.size()));if(out)e->SetLongArrayRegion(out,0,jsize(v.size()),v.data());return out;}catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resources(
     JNIEnv* e,jclass,jlong h,jstring manifest) {

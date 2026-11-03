@@ -8,7 +8,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** GPU traversal counters, large-set edits, and linear HDR estimator reference. */
 public final class RtxptLightTreeNativeSelfTest {
-    static final Path OUTPUT=Path.of("build/reports/rtxpt-light-tree-702").toAbsolutePath();
+    static final Path OUTPUT=Path.of("build/reports/rtxpt-light-tree-703").toAbsolutePath();
     static RendererConfig config(int limit){
         var base=RtxptScalabilityBenchmark.config();var p=base.pathTracing();
         var q=p.quality().withLighting(p.quality().lighting().withSamples(63,5).withExactPointLightLimit(limit));
@@ -32,10 +32,17 @@ public final class RtxptLightTreeNativeSelfTest {
         double[] values=new double[data.remaining()];for(int i=0;i<values.length;i++){values[i]=data.get();require(Double.isFinite(values[i]),"Finite HDR output");}
         return values;
     }
-    static double[] average(int limit)throws Exception {
+    static double[] average(int limit)throws Exception {return average(limit,false,false);}
+    static double[] average(int limit,boolean edited,boolean fresh)throws Exception {
         try(var renderer=Renderer.open("rtxpt",config(limit))){
             var r=(RtxptRenderer)renderer;var host=r.extension(RtxptAccess.class).orElseThrow();
-            r.apply(scene(32));r.submit(frame(0,1));for(int i=0;i<8;i++)host.renderFrame();
+            r.apply(scene(32));r.submit(frame(0,1));
+            if(edited){
+                r.apply(SceneTransaction.builder(2).upsert(SceneLight.point(31,4.5,3,1).color(.9f,.2f,.7f).intensity(4).range(15).castsShadow(false).build()).build());r.submit(frame(1,2));
+                require(host.retainedUpdateTimings().lightIndexBuilds()==1&&host.submitStages().lightDeltaRecords()==1,"Tree light edit refits without sorting");
+                if(fresh){var snap=r.sceneSnapshot();r.apply(SceneTransaction.builder(3).resetScene().upsertMaterials(snap.upserts().materials()).upsertMeshes(snap.upserts().meshes()).upsertInstances(snap.upserts().instances()).upsertLights(snap.upserts().lights()).build());r.submit(frame(2,3));}
+            }
+            for(int i=0;i<8;i++)host.renderFrame();
             double[] average=null;long start=System.nanoTime();
             for(int i=0;i<48;i++){
                 host.renderFrame();var path=OUTPUT.resolve("linear-"+limit+".pfm");r.captureLinear(path);var data=linear(path);
@@ -51,6 +58,12 @@ public final class RtxptLightTreeNativeSelfTest {
         double energy=Math.abs(b-a)/a,relativeRmse=Math.sqrt(error/norm);
         require(energy<.03&&relativeRmse<.10,"HDR energy/reference: energy="+energy+" relativeRMSE="+relativeRmse);
         System.out.println("RTXPT_TREE_REFERENCE PASS relativeEnergyError="+energy+" relativeRmse="+relativeRmse);
+    }
+    static void refit()throws Exception {
+        var exact=average(64,true,true);var sampled=average(4,true,false);double a=0,b=0,error=0,norm=0;
+        for(int i=0;i<exact.length;i++){a+=exact[i];b+=sampled[i];error+=Math.pow(exact[i]-sampled[i],2);norm+=exact[i]*exact[i];}
+        double energy=Math.abs(b-a)/a,rmse=Math.sqrt(error/norm);require(energy<.03&&rmse<.10,"Refit vs fresh exhaustive HDR reference: "+energy+" "+rmse);
+        System.out.println("RTXPT_TREE_REFIT PASS relativeEnergyError="+energy+" relativeRmse="+rmse);
     }
     static void large()throws Exception {
         try(var renderer=Renderer.open("rtxpt",config(4))){
@@ -77,5 +90,6 @@ public final class RtxptLightTreeNativeSelfTest {
         Files.createDirectories(OUTPUT);
         if(args.length==0||args[0].equals("large"))large();
         if(args.length==0||args[0].equals("reference"))reference();
+        if(args.length>0&&args[0].equals("refit"))refit();
     }
 }

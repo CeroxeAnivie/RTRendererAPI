@@ -16,6 +16,21 @@ struct LightTreeNode {
     float leaves, unused[3];
 };
 static_assert(sizeof(LightTreeNode)==64);
+template<class Light> void RefitLightTree(std::vector<LightTreeNode>& nodes,const std::vector<Light>& lights,
+    const std::vector<uint32_t>& parents,uint32_t leaf,double normalization,std::vector<uint32_t>& dirty) {
+    auto& node=nodes.at(leaf);const auto& light=lights.at(uint32_t(node.light));
+    for(int a=0;a<3;a++)node.minimum[a]=node.maximum[a]=light.positionType[a];
+    node.directional=light.positionType.w==0.f?1.f:0.f;node.range=light.directionRange.w;
+    node.power=float(double(light.colorIntensity.w)*(.2126*light.colorIntensity.x+.7152*light.colorIntensity.y+.0722*light.colorIntensity.z)/normalization);
+    dirty.push_back(leaf);
+    for(uint32_t index=leaf;index!=0;) {
+        index=parents.at(index);auto& parent=nodes.at(index);
+        const auto& left=nodes.at(uint32_t(parent.left));const auto& right=nodes.at(uint32_t(parent.right));
+        for(int a=0;a<3;a++){parent.minimum[a]=std::min(left.minimum[a],right.minimum[a]);parent.maximum[a]=std::max(left.maximum[a],right.maximum[a]);}
+        parent.power=left.power+right.power;parent.directional=std::max(left.directional,right.directional);parent.range=std::max(left.range,right.range);
+        dirty.push_back(index);
+    }
+}
 template<class Light> std::vector<LightTreeNode> BuildLightTree(const std::vector<Light>& lights,double* normalization=nullptr) {
     std::vector<LightTreeNode> nodes;
     if(lights.empty())return nodes;

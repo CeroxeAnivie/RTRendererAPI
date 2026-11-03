@@ -1,6 +1,7 @@
 // Included inside HostPathTracer. Imports use the resident scene's factory,
 // descriptor allocator and texture cache, never SetCurrentScene/SceneLoaded.
 uint64_t resourceBlases=0,resourceRetainedBlases=0,resourceTlas=0,resourceWaitNs=0,resourceRecordingNs=0;
+uint64_t importerNs=0,textureFinalizeNs=0,materialSyncNs=0,accelerationNs=0,nativeRetirementNs=0;
 uint64_t reusedTextureAllocations=0,resourceGpuSamples=0,resourceGpuIntervalNs=0;
 std::vector<nvrhi::TimerQueryHandle> resourceGpuQueries;
 size_t RepresentedLights() const { return sceneLights.size(); }
@@ -52,8 +53,11 @@ void ApplyResources(const std::filesystem::path& manifest) {
     if(!managedLighting||!m_scene)throw std::logic_error("Resource updates require a managed retained scene");
     Json::Value json;std::ifstream input(manifest);
     if(!input||!(input>>json))throw std::runtime_error("Could not read retained delta");
+    auto stageBegin=std::chrono::steady_clock::now();
     auto imported=m_scene->HostImport(std::filesystem::u8path(json["model"].asString()));
-    m_scene->HostFinalizeTextures(*GetCommonPasses());
+    importerNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-stageBegin).count();
+    stageBegin=std::chrono::steady_clock::now();m_scene->HostFinalizeTextures(*GetCommonPasses());
+    textureFinalizeNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-stageBegin).count();
     auto graph=m_scene->GetSceneGraph();
     std::unordered_map<std::string,std::shared_ptr<donut::engine::MeshInfo>> meshes;
     std::unordered_map<std::string,std::shared_ptr<donut::engine::Material>> materials;
@@ -87,12 +91,15 @@ void ApplyResources(const std::filesystem::path& manifest) {
     resourceWaitNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-waitBegin).count();
     const auto recordBegin=std::chrono::steady_clock::now();
     std::unordered_map<std::string,bool> invalidated;
+    std::unordered_map<std::string,bool> coverageChanged;
+    for(auto& name:json["coverageChangedMaterials"])coverageChanged[name.asString()]=true;
     for(auto& source:imported.materials) {
         auto found=materials.find(source->name);
         if(found==materials.end()){materials[source->name]=source;GetMaterialsBaker()->HostImportMaterial(*source);continue;}
         auto target=found->second;auto* pt=PTMaterial::SafeCast(target);
         bool before=pt&&(pt->EnableAlphaTesting||pt->ExcludeFromNEE);
-        bool alphaTextureChanged=target->baseOrDiffuseTexture!=source->baseOrDiffuseTexture;
+        bool alphaTextureChanged=coverageChanged[source->name];
+        bool alphaValuesChanged=target->alphaCutoff!=source->alphaCutoff || target->opacity!=source->opacity;
         auto from=textures(source),to=textures(target);
         for(size_t slot=0;slot<from.size();slot++)if(from[slot]&&to[slot]&&from[slot]!=to[slot]
             &&from[slot]->texture&&to[slot]->texture
@@ -115,7 +122,7 @@ void ApplyResources(const std::filesystem::path& manifest) {
         static_cast<donut::engine::Material&>(*target)=*source;target->materialConstants=constants;target->materialID=id;
         GetMaterialsBaker()->HostImportMaterial(*target);pt=PTMaterial::SafeCast(target);
         bool after=pt&&(pt->EnableAlphaTesting||pt->ExcludeFromNEE);
-        invalidated[source->name]=before!=after||domain!=target->domain||(before&&alphaTextureChanged);
+        invalidated[source->name]=before!=after||domain!=target->domain||(before&&(alphaTextureChanged||alphaValuesChanged));
     }
     for(auto& [name,mesh]:meshes)for(auto& geometry:mesh->geometries) {
         auto found=materials.find(geometry->material->name);
@@ -147,34 +154,41 @@ void ApplyResources(const std::filesystem::path& manifest) {
         node->SetTransform(&translation,&rotation,&scaling);
     }
     m_scene->HostReleaseModels();
-    // Cancel queued OMM jobs whose source generation may have been replaced.
-    if(m_ommBaker)m_ommBaker->SceneUnloading();
+    // Compatible RGB-only edits retain the OMM inputs and pending jobs as well as the AS.
+    bool ommChanged=topology;for(auto& [name,mesh]:meshes)ommChanged|=!mesh->accelStruct;
+    for(auto& entry:invalidated)ommChanged|=entry.second;
+    if(m_ommBaker&&ommChanged)m_ommBaker->SceneUnloading();
     auto command=GetDevice()->createCommandList();command->open();
     auto gpuQuery=GetDevice()->createTimerQuery();GetDevice()->resetTimerQuery(gpuQuery);command->beginTimerQuery(gpuQuery);
     for(auto& copy:textureCopies)for(uint32_t mip=0;mip<copy.first->getDesc().mipLevels;mip++)
         command->copyTexture(copy.first,nvrhi::TextureSlice().setMipLevel(mip),copy.second,nvrhi::TextureSlice().setMipLevel(mip));
     m_scene->Refresh(command,GetFrameIndex());
-    GetMaterialsBaker()->HostSyncMaterials(m_scene);
+    stageBegin=std::chrono::steady_clock::now();bool materialShadersChanged=GetMaterialsBaker()->HostSyncMaterials(m_scene);
+    materialSyncNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-stageBegin).count();
     ApplyDefaultTransmissionDenoisingGuides(graph.get(),true);
     uint64_t pending=0,retained=0;
     for(auto& mesh:graph->GetMeshes()) {
         if(!mesh->accelStruct)++pending;
         else if(originalBlases[mesh->name]==mesh->accelStruct.Get())++retained;
     }
+    stageBegin=std::chrono::steady_clock::now();
     if(pending){CreateBlases(command,true);resourceBlases+=pending;}
     resourceRetainedBlases+=retained;
     if(topology||pending){CreateTlas(command);m_tlasInstanceDataDirty=true;++resourceTlas;}
-    bool hitGroupsChanged=topology||pending;
+    accelerationNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-stageBegin).count();
+    bool hitGroupsChanged=topology||pending||materialShadersChanged;
     for(auto& entry:invalidated)hitGroupsChanged|=entry.second;
     if(hitGroupsChanged)GetRTPipelineBaker()->HostInvalidateScene();
     command->endTimerQuery(gpuQuery);command->close();GetDevice()->executeCommandList(command);
     resourceGpuQueries.push_back(gpuQuery);
     // Material-only edits keep geometry, BLAS, TLAS and their buffer identities.
     GetBindingCache().Clear();InvalidateBindingSet();
+    stageBegin=std::chrono::steady_clock::now();
     std::unordered_map<donut::engine::LoadedTexture*,bool> liveTextures;
     for(auto& material:graph->GetMaterials())for(auto& texture:textures(material))if(texture)liveTextures[texture.get()]=true;
     for(auto& texture:oldTextures)if(!liveTextures.count(texture.get()))m_scene->HostUnloadTexture(texture);
-    if(auto baker=GetLightsBaker())baker->SceneReloaded();
+    nativeRetirementNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-stageBegin).count();
+    if(UsesBakedLighting())if(auto baker=GetLightsBaker())baker->SceneReloaded();
     if(auto cache=GetSharc())cache->NotifySceneReloaded();
     g_sampleUIData.ResetAccumulation=true;g_sampleUIData.ResetRealtimeCaches=true;preSrHistoryReset=true;
     lightingSceneDirty=true;

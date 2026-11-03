@@ -1,0 +1,3058 @@
+{
+  "baseline": {
+    "initial": {
+      "count": 1,
+      "p50Ms": 41234.0171,
+      "p95Ms": 41234.0171,
+      "p99Ms": 41234.0171,
+      "maximumMs": 41234.0171,
+      "over50ms": 1,
+      "over100ms": 1,
+      "over1000ms": 1,
+      "applyP50Ms": 24.6082,
+      "raw": [
+        {
+          "phase": "initial",
+          "index": "0",
+          "applyMs": "24.6082",
+          "submitMs": "41234.0171",
+          "completedSequence": "0"
+        }
+      ]
+    },
+    "stable": {
+      "count": 16,
+      "p50Ms": 31.153750000000002,
+      "p95Ms": 32.6837,
+      "p99Ms": 32.6837,
+      "maximumMs": 32.6837,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 0.0002,
+      "raw": [
+        {
+          "phase": "stable",
+          "index": "0",
+          "applyMs": "2.0E-4",
+          "submitMs": "32.6837",
+          "completedSequence": "1"
+        },
+        {
+          "phase": "stable",
+          "index": "1",
+          "applyMs": "2.0E-4",
+          "submitMs": "31.1113",
+          "completedSequence": "2"
+        },
+        {
+          "phase": "stable",
+          "index": "2",
+          "applyMs": "4.0E-4",
+          "submitMs": "30.8898",
+          "completedSequence": "3"
+        },
+        {
+          "phase": "stable",
+          "index": "3",
+          "applyMs": "3.0E-4",
+          "submitMs": "31.7554",
+          "completedSequence": "4"
+        },
+        {
+          "phase": "stable",
+          "index": "4",
+          "applyMs": "2.0E-4",
+          "submitMs": "30.9377",
+          "completedSequence": "5"
+        },
+        {
+          "phase": "stable",
+          "index": "5",
+          "applyMs": "2.0E-4",
+          "submitMs": "29.9293",
+          "completedSequence": "6"
+        },
+        {
+          "phase": "stable",
+          "index": "6",
+          "applyMs": "3.0E-4",
+          "submitMs": "31.4853",
+          "completedSequence": "7"
+        },
+        {
+          "phase": "stable",
+          "index": "7",
+          "applyMs": "2.0E-4",
+          "submitMs": "31.692",
+          "completedSequence": "8"
+        },
+        {
+          "phase": "stable",
+          "index": "8",
+          "applyMs": "2.0E-4",
+          "submitMs": "15.6615",
+          "completedSequence": "9"
+        },
+        {
+          "phase": "stable",
+          "index": "9",
+          "applyMs": "2.0E-4",
+          "submitMs": "31.5354",
+          "completedSequence": "10"
+        },
+        {
+          "phase": "stable",
+          "index": "10",
+          "applyMs": "2.0E-4",
+          "submitMs": "31.2572",
+          "completedSequence": "11"
+        },
+        {
+          "phase": "stable",
+          "index": "11",
+          "applyMs": "3.0E-4",
+          "submitMs": "31.5178",
+          "completedSequence": "12"
+        },
+        {
+          "phase": "stable",
+          "index": "12",
+          "applyMs": "3.0E-4",
+          "submitMs": "30.528",
+          "completedSequence": "13"
+        },
+        {
+          "phase": "stable",
+          "index": "13",
+          "applyMs": "0.0039",
+          "submitMs": "30.8498",
+          "completedSequence": "14"
+        },
+        {
+          "phase": "stable",
+          "index": "14",
+          "applyMs": "3.0E-4",
+          "submitMs": "31.1962",
+          "completedSequence": "15"
+        },
+        {
+          "phase": "stable",
+          "index": "15",
+          "applyMs": "2.0E-4",
+          "submitMs": "31.0464",
+          "completedSequence": "16"
+        }
+      ]
+    },
+    "texture": {
+      "count": 16,
+      "p50Ms": 164.2373,
+      "p95Ms": 207.706,
+      "p99Ms": 207.706,
+      "maximumMs": 207.706,
+      "over50ms": 16,
+      "over100ms": 16,
+      "over1000ms": 0,
+      "applyP50Ms": 4.861599999999999,
+      "raw": [
+        {
+          "phase": "texture",
+          "index": "0",
+          "applyMs": "18.0224",
+          "submitMs": "177.2424",
+          "completedSequence": "17"
+        },
+        {
+          "phase": "texture",
+          "index": "1",
+          "applyMs": "7.5917",
+          "submitMs": "151.1563",
+          "completedSequence": "18"
+        },
+        {
+          "phase": "texture",
+          "index": "2",
+          "applyMs": "5.0519",
+          "submitMs": "152.8053",
+          "completedSequence": "19"
+        },
+        {
+          "phase": "texture",
+          "index": "3",
+          "applyMs": "6.4181",
+          "submitMs": "164.4802",
+          "completedSequence": "20"
+        },
+        {
+          "phase": "texture",
+          "index": "4",
+          "applyMs": "4.4975",
+          "submitMs": "134.794",
+          "completedSequence": "21"
+        },
+        {
+          "phase": "texture",
+          "index": "5",
+          "applyMs": "18.9301",
+          "submitMs": "207.706",
+          "completedSequence": "22"
+        },
+        {
+          "phase": "texture",
+          "index": "6",
+          "applyMs": "3.144",
+          "submitMs": "135.5129",
+          "completedSequence": "23"
+        },
+        {
+          "phase": "texture",
+          "index": "7",
+          "applyMs": "4.3887",
+          "submitMs": "183.8295",
+          "completedSequence": "24"
+        },
+        {
+          "phase": "texture",
+          "index": "8",
+          "applyMs": "4.2338",
+          "submitMs": "157.1556",
+          "completedSequence": "25"
+        },
+        {
+          "phase": "texture",
+          "index": "9",
+          "applyMs": "4.0339",
+          "submitMs": "162.2198",
+          "completedSequence": "26"
+        },
+        {
+          "phase": "texture",
+          "index": "10",
+          "applyMs": "4.6713",
+          "submitMs": "167.9669",
+          "completedSequence": "27"
+        },
+        {
+          "phase": "texture",
+          "index": "11",
+          "applyMs": "4.1657",
+          "submitMs": "159.8401",
+          "completedSequence": "28"
+        },
+        {
+          "phase": "texture",
+          "index": "12",
+          "applyMs": "5.6026",
+          "submitMs": "187.7014",
+          "completedSequence": "29"
+        },
+        {
+          "phase": "texture",
+          "index": "13",
+          "applyMs": "30.6629",
+          "submitMs": "177.9319",
+          "completedSequence": "30"
+        },
+        {
+          "phase": "texture",
+          "index": "14",
+          "applyMs": "3.9729",
+          "submitMs": "163.9944",
+          "completedSequence": "31"
+        },
+        {
+          "phase": "texture",
+          "index": "15",
+          "applyMs": "5.5292",
+          "submitMs": "194.4077",
+          "completedSequence": "32"
+        }
+      ]
+    },
+    "mesh": {
+      "count": 16,
+      "p50Ms": 649.3160499999999,
+      "p95Ms": 2344.0476,
+      "p99Ms": 2344.0476,
+      "maximumMs": 2344.0476,
+      "over50ms": 16,
+      "over100ms": 15,
+      "over1000ms": 1,
+      "applyP50Ms": 4.7478,
+      "raw": [
+        {
+          "phase": "mesh",
+          "index": "0",
+          "applyMs": "7.9997",
+          "submitMs": "50.7715",
+          "completedSequence": "33"
+        },
+        {
+          "phase": "mesh",
+          "index": "1",
+          "applyMs": "10.6242",
+          "submitMs": "646.8416",
+          "completedSequence": "34"
+        },
+        {
+          "phase": "mesh",
+          "index": "2",
+          "applyMs": "2.9281",
+          "submitMs": "641.6991",
+          "completedSequence": "35"
+        },
+        {
+          "phase": "mesh",
+          "index": "3",
+          "applyMs": "4.0272",
+          "submitMs": "682.22",
+          "completedSequence": "36"
+        },
+        {
+          "phase": "mesh",
+          "index": "4",
+          "applyMs": "4.7471",
+          "submitMs": "652.9574",
+          "completedSequence": "37"
+        },
+        {
+          "phase": "mesh",
+          "index": "5",
+          "applyMs": "4.207",
+          "submitMs": "708.0814",
+          "completedSequence": "38"
+        },
+        {
+          "phase": "mesh",
+          "index": "6",
+          "applyMs": "5.5809",
+          "submitMs": "2344.0476",
+          "completedSequence": "39"
+        },
+        {
+          "phase": "mesh",
+          "index": "7",
+          "applyMs": "4.6965",
+          "submitMs": "643.2432",
+          "completedSequence": "40"
+        },
+        {
+          "phase": "mesh",
+          "index": "8",
+          "applyMs": "4.6473",
+          "submitMs": "688.9712",
+          "completedSequence": "41"
+        },
+        {
+          "phase": "mesh",
+          "index": "9",
+          "applyMs": "5.3863",
+          "submitMs": "670.9438",
+          "completedSequence": "42"
+        },
+        {
+          "phase": "mesh",
+          "index": "10",
+          "applyMs": "6.4091",
+          "submitMs": "669.1981",
+          "completedSequence": "43"
+        },
+        {
+          "phase": "mesh",
+          "index": "11",
+          "applyMs": "4.2658",
+          "submitMs": "651.7905",
+          "completedSequence": "44"
+        },
+        {
+          "phase": "mesh",
+          "index": "12",
+          "applyMs": "5.2554",
+          "submitMs": "633.4263",
+          "completedSequence": "45"
+        },
+        {
+          "phase": "mesh",
+          "index": "13",
+          "applyMs": "4.932",
+          "submitMs": "624.2345",
+          "completedSequence": "46"
+        },
+        {
+          "phase": "mesh",
+          "index": "14",
+          "applyMs": "3.247",
+          "submitMs": "636.5615",
+          "completedSequence": "47"
+        },
+        {
+          "phase": "mesh",
+          "index": "15",
+          "applyMs": "4.7485",
+          "submitMs": "637.3912",
+          "completedSequence": "48"
+        }
+      ]
+    },
+    "instance": {
+      "count": 16,
+      "p50Ms": 660.75295,
+      "p95Ms": 2362.0551,
+      "p99Ms": 2362.0551,
+      "maximumMs": 2362.0551,
+      "over50ms": 16,
+      "over100ms": 16,
+      "over1000ms": 2,
+      "applyP50Ms": 4.2791,
+      "raw": [
+        {
+          "phase": "instance",
+          "index": "0",
+          "applyMs": "4.9227",
+          "submitMs": "2221.796",
+          "completedSequence": "49"
+        },
+        {
+          "phase": "instance",
+          "index": "1",
+          "applyMs": "4.5511",
+          "submitMs": "694.397",
+          "completedSequence": "50"
+        },
+        {
+          "phase": "instance",
+          "index": "2",
+          "applyMs": "80.4291",
+          "submitMs": "591.2595",
+          "completedSequence": "51"
+        },
+        {
+          "phase": "instance",
+          "index": "3",
+          "applyMs": "4.234",
+          "submitMs": "690.4348",
+          "completedSequence": "52"
+        },
+        {
+          "phase": "instance",
+          "index": "4",
+          "applyMs": "4.3242",
+          "submitMs": "646.127",
+          "completedSequence": "53"
+        },
+        {
+          "phase": "instance",
+          "index": "5",
+          "applyMs": "4.4048",
+          "submitMs": "648.6385",
+          "completedSequence": "54"
+        },
+        {
+          "phase": "instance",
+          "index": "6",
+          "applyMs": "4.0253",
+          "submitMs": "661.104",
+          "completedSequence": "55"
+        },
+        {
+          "phase": "instance",
+          "index": "7",
+          "applyMs": "4.2122",
+          "submitMs": "646.2813",
+          "completedSequence": "56"
+        },
+        {
+          "phase": "instance",
+          "index": "8",
+          "applyMs": "4.4879",
+          "submitMs": "619.7706",
+          "completedSequence": "57"
+        },
+        {
+          "phase": "instance",
+          "index": "9",
+          "applyMs": "4.1558",
+          "submitMs": "660.4019",
+          "completedSequence": "58"
+        },
+        {
+          "phase": "instance",
+          "index": "10",
+          "applyMs": "3.8157",
+          "submitMs": "651.2599",
+          "completedSequence": "59"
+        },
+        {
+          "phase": "instance",
+          "index": "11",
+          "applyMs": "4.1904",
+          "submitMs": "657.7895",
+          "completedSequence": "60"
+        },
+        {
+          "phase": "instance",
+          "index": "12",
+          "applyMs": "4.1796",
+          "submitMs": "674.0495",
+          "completedSequence": "61"
+        },
+        {
+          "phase": "instance",
+          "index": "13",
+          "applyMs": "5.127",
+          "submitMs": "684.4045",
+          "completedSequence": "62"
+        },
+        {
+          "phase": "instance",
+          "index": "14",
+          "applyMs": "4.1143",
+          "submitMs": "2362.0551",
+          "completedSequence": "63"
+        },
+        {
+          "phase": "instance",
+          "index": "15",
+          "applyMs": "47.334",
+          "submitMs": "678.5374",
+          "completedSequence": "64"
+        }
+      ]
+    },
+    "light": {
+      "count": 16,
+      "p50Ms": 15997.758699999998,
+      "p95Ms": 18418.8824,
+      "p99Ms": 18418.8824,
+      "maximumMs": 18418.8824,
+      "over50ms": 16,
+      "over100ms": 16,
+      "over1000ms": 16,
+      "applyP50Ms": 4.23405,
+      "raw": [
+        {
+          "phase": "light",
+          "index": "0",
+          "applyMs": "13.0528",
+          "submitMs": "18418.8824",
+          "completedSequence": "65"
+        },
+        {
+          "phase": "light",
+          "index": "1",
+          "applyMs": "3.967",
+          "submitMs": "11374.4382",
+          "completedSequence": "66"
+        },
+        {
+          "phase": "light",
+          "index": "2",
+          "applyMs": "5.4125",
+          "submitMs": "17720.2545",
+          "completedSequence": "67"
+        },
+        {
+          "phase": "light",
+          "index": "3",
+          "applyMs": "5.3141",
+          "submitMs": "17219.5849",
+          "completedSequence": "68"
+        },
+        {
+          "phase": "light",
+          "index": "4",
+          "applyMs": "4.4864",
+          "submitMs": "6677.5699",
+          "completedSequence": "69"
+        },
+        {
+          "phase": "light",
+          "index": "5",
+          "applyMs": "1.7867",
+          "submitMs": "8946.5635",
+          "completedSequence": "70"
+        },
+        {
+          "phase": "light",
+          "index": "6",
+          "applyMs": "4.1213",
+          "submitMs": "17842.0455",
+          "completedSequence": "71"
+        },
+        {
+          "phase": "light",
+          "index": "7",
+          "applyMs": "4.8343",
+          "submitMs": "15519.1588",
+          "completedSequence": "72"
+        },
+        {
+          "phase": "light",
+          "index": "8",
+          "applyMs": "3.8282",
+          "submitMs": "17562.6404",
+          "completedSequence": "73"
+        },
+        {
+          "phase": "light",
+          "index": "9",
+          "applyMs": "5.7849",
+          "submitMs": "17430.8762",
+          "completedSequence": "74"
+        },
+        {
+          "phase": "light",
+          "index": "10",
+          "applyMs": "3.8388",
+          "submitMs": "10393.9027",
+          "completedSequence": "75"
+        },
+        {
+          "phase": "light",
+          "index": "11",
+          "applyMs": "1.7442",
+          "submitMs": "5648.4733",
+          "completedSequence": "76"
+        },
+        {
+          "phase": "light",
+          "index": "12",
+          "applyMs": "4.4053",
+          "submitMs": "16476.3586",
+          "completedSequence": "77"
+        },
+        {
+          "phase": "light",
+          "index": "13",
+          "applyMs": "4.3468",
+          "submitMs": "17771.738",
+          "completedSequence": "78"
+        },
+        {
+          "phase": "light",
+          "index": "14",
+          "applyMs": "3.7505",
+          "submitMs": "12947.4003",
+          "completedSequence": "79"
+        },
+        {
+          "phase": "light",
+          "index": "15",
+          "applyMs": "1.8714",
+          "submitMs": "6082.2991",
+          "completedSequence": "80"
+        }
+      ]
+    },
+    "environment": {
+      "count": 16,
+      "p50Ms": 62.23665,
+      "p95Ms": 65.5775,
+      "p99Ms": 65.5775,
+      "maximumMs": 65.5775,
+      "over50ms": 14,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 0.00025,
+      "raw": [
+        {
+          "phase": "environment",
+          "index": "0",
+          "applyMs": "3.0E-4",
+          "submitMs": "27.5545",
+          "completedSequence": "81"
+        },
+        {
+          "phase": "environment",
+          "index": "1",
+          "applyMs": "2.0E-4",
+          "submitMs": "46.3882",
+          "completedSequence": "82"
+        },
+        {
+          "phase": "environment",
+          "index": "2",
+          "applyMs": "1.0E-4",
+          "submitMs": "62.1739",
+          "completedSequence": "83"
+        },
+        {
+          "phase": "environment",
+          "index": "3",
+          "applyMs": "2.0E-4",
+          "submitMs": "65.5775",
+          "completedSequence": "84"
+        },
+        {
+          "phase": "environment",
+          "index": "4",
+          "applyMs": "2.0E-4",
+          "submitMs": "59.5605",
+          "completedSequence": "85"
+        },
+        {
+          "phase": "environment",
+          "index": "5",
+          "applyMs": "3.0E-4",
+          "submitMs": "62.2994",
+          "completedSequence": "86"
+        },
+        {
+          "phase": "environment",
+          "index": "6",
+          "applyMs": "2.0E-4",
+          "submitMs": "64.8537",
+          "completedSequence": "87"
+        },
+        {
+          "phase": "environment",
+          "index": "7",
+          "applyMs": "2.0E-4",
+          "submitMs": "60.9699",
+          "completedSequence": "88"
+        },
+        {
+          "phase": "environment",
+          "index": "8",
+          "applyMs": "3.0E-4",
+          "submitMs": "60.4904",
+          "completedSequence": "89"
+        },
+        {
+          "phase": "environment",
+          "index": "9",
+          "applyMs": "1.0E-4",
+          "submitMs": "62.0837",
+          "completedSequence": "90"
+        },
+        {
+          "phase": "environment",
+          "index": "10",
+          "applyMs": "3.0E-4",
+          "submitMs": "62.8886",
+          "completedSequence": "91"
+        },
+        {
+          "phase": "environment",
+          "index": "11",
+          "applyMs": "3.0E-4",
+          "submitMs": "62.7827",
+          "completedSequence": "92"
+        },
+        {
+          "phase": "environment",
+          "index": "12",
+          "applyMs": "3.0E-4",
+          "submitMs": "60.6282",
+          "completedSequence": "93"
+        },
+        {
+          "phase": "environment",
+          "index": "13",
+          "applyMs": "3.0E-4",
+          "submitMs": "62.8354",
+          "completedSequence": "94"
+        },
+        {
+          "phase": "environment",
+          "index": "14",
+          "applyMs": "5.0E-4",
+          "submitMs": "62.9861",
+          "completedSequence": "95"
+        },
+        {
+          "phase": "environment",
+          "index": "15",
+          "applyMs": "2.0E-4",
+          "submitMs": "64.6201",
+          "completedSequence": "96"
+        }
+      ]
+    },
+    "mixed": {
+      "count": 16,
+      "p50Ms": 15934.72425,
+      "p95Ms": 18345.8487,
+      "p99Ms": 18345.8487,
+      "maximumMs": 18345.8487,
+      "over50ms": 16,
+      "over100ms": 16,
+      "over1000ms": 16,
+      "applyP50Ms": 4.102650000000001,
+      "raw": [
+        {
+          "phase": "mixed",
+          "index": "0",
+          "applyMs": "4.6195",
+          "submitMs": "16334.841",
+          "completedSequence": "97"
+        },
+        {
+          "phase": "mixed",
+          "index": "1",
+          "applyMs": "3.8487",
+          "submitMs": "17110.616",
+          "completedSequence": "98"
+        },
+        {
+          "phase": "mixed",
+          "index": "2",
+          "applyMs": "5.0015",
+          "submitMs": "18119.7978",
+          "completedSequence": "99"
+        },
+        {
+          "phase": "mixed",
+          "index": "3",
+          "applyMs": "4.6204",
+          "submitMs": "16907.8444",
+          "completedSequence": "100"
+        },
+        {
+          "phase": "mixed",
+          "index": "4",
+          "applyMs": "4.947",
+          "submitMs": "9323.2171",
+          "completedSequence": "101"
+        },
+        {
+          "phase": "mixed",
+          "index": "5",
+          "applyMs": "1.4255",
+          "submitMs": "5442.2991",
+          "completedSequence": "102"
+        },
+        {
+          "phase": "mixed",
+          "index": "6",
+          "applyMs": "1.6489",
+          "submitMs": "5534.1965",
+          "completedSequence": "103"
+        },
+        {
+          "phase": "mixed",
+          "index": "7",
+          "applyMs": "1.7916",
+          "submitMs": "5984.2955",
+          "completedSequence": "104"
+        },
+        {
+          "phase": "mixed",
+          "index": "8",
+          "applyMs": "4.1258",
+          "submitMs": "16316.8877",
+          "completedSequence": "105"
+        },
+        {
+          "phase": "mixed",
+          "index": "9",
+          "applyMs": "4.0795",
+          "submitMs": "15552.5608",
+          "completedSequence": "106"
+        },
+        {
+          "phase": "mixed",
+          "index": "10",
+          "applyMs": "4.144",
+          "submitMs": "18191.6503",
+          "completedSequence": "107"
+        },
+        {
+          "phase": "mixed",
+          "index": "11",
+          "applyMs": "7.0101",
+          "submitMs": "18345.8487",
+          "completedSequence": "108"
+        },
+        {
+          "phase": "mixed",
+          "index": "12",
+          "applyMs": "32.2593",
+          "submitMs": "18012.0518",
+          "completedSequence": "109"
+        },
+        {
+          "phase": "mixed",
+          "index": "13",
+          "applyMs": "1.8757",
+          "submitMs": "6091.6655",
+          "completedSequence": "110"
+        },
+        {
+          "phase": "mixed",
+          "index": "14",
+          "applyMs": "4.0617",
+          "submitMs": "15335.5849",
+          "completedSequence": "111"
+        },
+        {
+          "phase": "mixed",
+          "index": "15",
+          "applyMs": "2.3547",
+          "submitMs": "12822.9566",
+          "completedSequence": "112"
+        }
+      ]
+    }
+  },
+  "candidate": {
+    "initial": {
+      "count": 1,
+      "p50Ms": 28515.5474,
+      "p95Ms": 28515.5474,
+      "p99Ms": 28515.5474,
+      "maximumMs": 28515.5474,
+      "over50ms": 1,
+      "over100ms": 1,
+      "over1000ms": 1,
+      "applyP50Ms": 31.6858,
+      "raw": [
+        {
+          "phase": "initial",
+          "index": "0",
+          "applyMs": "31.6858",
+          "submitMs": "28515.5474",
+          "completedSequence": "0"
+        }
+      ]
+    },
+    "stable": {
+      "count": 16,
+      "p50Ms": 5.9296500000000005,
+      "p95Ms": 10.1865,
+      "p99Ms": 10.1865,
+      "maximumMs": 10.1865,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 0.0001,
+      "raw": [
+        {
+          "phase": "stable",
+          "index": "0",
+          "applyMs": "1.0E-4",
+          "submitMs": "7.6755",
+          "completedSequence": "1"
+        },
+        {
+          "phase": "stable",
+          "index": "1",
+          "applyMs": "1.0E-4",
+          "submitMs": "6.6546",
+          "completedSequence": "2"
+        },
+        {
+          "phase": "stable",
+          "index": "2",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.7046",
+          "completedSequence": "3"
+        },
+        {
+          "phase": "stable",
+          "index": "3",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.8742",
+          "completedSequence": "4"
+        },
+        {
+          "phase": "stable",
+          "index": "4",
+          "applyMs": "1.0E-4",
+          "submitMs": "6.5049",
+          "completedSequence": "5"
+        },
+        {
+          "phase": "stable",
+          "index": "5",
+          "applyMs": "1.0E-4",
+          "submitMs": "6.1986",
+          "completedSequence": "6"
+        },
+        {
+          "phase": "stable",
+          "index": "6",
+          "applyMs": "2.0E-4",
+          "submitMs": "5.7896",
+          "completedSequence": "7"
+        },
+        {
+          "phase": "stable",
+          "index": "7",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.9278",
+          "completedSequence": "8"
+        },
+        {
+          "phase": "stable",
+          "index": "8",
+          "applyMs": "0.0",
+          "submitMs": "5.9837",
+          "completedSequence": "9"
+        },
+        {
+          "phase": "stable",
+          "index": "9",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.9315",
+          "completedSequence": "10"
+        },
+        {
+          "phase": "stable",
+          "index": "10",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.8585",
+          "completedSequence": "11"
+        },
+        {
+          "phase": "stable",
+          "index": "11",
+          "applyMs": "1.0E-4",
+          "submitMs": "10.1865",
+          "completedSequence": "12"
+        },
+        {
+          "phase": "stable",
+          "index": "12",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.7787",
+          "completedSequence": "13"
+        },
+        {
+          "phase": "stable",
+          "index": "13",
+          "applyMs": "1.0E-4",
+          "submitMs": "7.6945",
+          "completedSequence": "14"
+        },
+        {
+          "phase": "stable",
+          "index": "14",
+          "applyMs": "0.0",
+          "submitMs": "5.7512",
+          "completedSequence": "15"
+        },
+        {
+          "phase": "stable",
+          "index": "15",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.9034",
+          "completedSequence": "16"
+        }
+      ]
+    },
+    "texture": {
+      "count": 16,
+      "p50Ms": 57.729,
+      "p95Ms": 81.3433,
+      "p99Ms": 81.3433,
+      "maximumMs": 81.3433,
+      "over50ms": 16,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 2.1536,
+      "raw": [
+        {
+          "phase": "texture",
+          "index": "0",
+          "applyMs": "7.4252",
+          "submitMs": "81.3433",
+          "completedSequence": "17"
+        },
+        {
+          "phase": "texture",
+          "index": "1",
+          "applyMs": "2.7221",
+          "submitMs": "63.2882",
+          "completedSequence": "18"
+        },
+        {
+          "phase": "texture",
+          "index": "2",
+          "applyMs": "4.7996",
+          "submitMs": "61.7612",
+          "completedSequence": "19"
+        },
+        {
+          "phase": "texture",
+          "index": "3",
+          "applyMs": "7.4373",
+          "submitMs": "60.8668",
+          "completedSequence": "20"
+        },
+        {
+          "phase": "texture",
+          "index": "4",
+          "applyMs": "1.7926",
+          "submitMs": "59.7484",
+          "completedSequence": "21"
+        },
+        {
+          "phase": "texture",
+          "index": "5",
+          "applyMs": "2.1271",
+          "submitMs": "56.9978",
+          "completedSequence": "22"
+        },
+        {
+          "phase": "texture",
+          "index": "6",
+          "applyMs": "1.8245",
+          "submitMs": "54.7298",
+          "completedSequence": "23"
+        },
+        {
+          "phase": "texture",
+          "index": "7",
+          "applyMs": "1.7578",
+          "submitMs": "54.6725",
+          "completedSequence": "24"
+        },
+        {
+          "phase": "texture",
+          "index": "8",
+          "applyMs": "1.8257",
+          "submitMs": "55.2575",
+          "completedSequence": "25"
+        },
+        {
+          "phase": "texture",
+          "index": "9",
+          "applyMs": "1.8561",
+          "submitMs": "54.3009",
+          "completedSequence": "26"
+        },
+        {
+          "phase": "texture",
+          "index": "10",
+          "applyMs": "12.3621",
+          "submitMs": "71.9795",
+          "completedSequence": "27"
+        },
+        {
+          "phase": "texture",
+          "index": "11",
+          "applyMs": "1.7974",
+          "submitMs": "58.4602",
+          "completedSequence": "28"
+        },
+        {
+          "phase": "texture",
+          "index": "12",
+          "applyMs": "1.7472",
+          "submitMs": "55.8878",
+          "completedSequence": "29"
+        },
+        {
+          "phase": "texture",
+          "index": "13",
+          "applyMs": "2.1989",
+          "submitMs": "64.7784",
+          "completedSequence": "30"
+        },
+        {
+          "phase": "texture",
+          "index": "14",
+          "applyMs": "2.1801",
+          "submitMs": "56.3059",
+          "completedSequence": "31"
+        },
+        {
+          "phase": "texture",
+          "index": "15",
+          "applyMs": "2.2826",
+          "submitMs": "54.3401",
+          "completedSequence": "32"
+        }
+      ]
+    },
+    "mesh": {
+      "count": 16,
+      "p50Ms": 39.126400000000004,
+      "p95Ms": 46.423,
+      "p99Ms": 46.423,
+      "maximumMs": 46.423,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 2.0227500000000003,
+      "raw": [
+        {
+          "phase": "mesh",
+          "index": "0",
+          "applyMs": "2.3421",
+          "submitMs": "10.1924",
+          "completedSequence": "33"
+        },
+        {
+          "phase": "mesh",
+          "index": "1",
+          "applyMs": "2.2955",
+          "submitMs": "39.3122",
+          "completedSequence": "34"
+        },
+        {
+          "phase": "mesh",
+          "index": "2",
+          "applyMs": "2.0229",
+          "submitMs": "44.8223",
+          "completedSequence": "35"
+        },
+        {
+          "phase": "mesh",
+          "index": "3",
+          "applyMs": "1.8628",
+          "submitMs": "46.423",
+          "completedSequence": "36"
+        },
+        {
+          "phase": "mesh",
+          "index": "4",
+          "applyMs": "2.2563",
+          "submitMs": "36.5112",
+          "completedSequence": "37"
+        },
+        {
+          "phase": "mesh",
+          "index": "5",
+          "applyMs": "2.169",
+          "submitMs": "38.6714",
+          "completedSequence": "38"
+        },
+        {
+          "phase": "mesh",
+          "index": "6",
+          "applyMs": "1.9221",
+          "submitMs": "36.6329",
+          "completedSequence": "39"
+        },
+        {
+          "phase": "mesh",
+          "index": "7",
+          "applyMs": "2.0226",
+          "submitMs": "39.1636",
+          "completedSequence": "40"
+        },
+        {
+          "phase": "mesh",
+          "index": "8",
+          "applyMs": "2.0517",
+          "submitMs": "38.6732",
+          "completedSequence": "41"
+        },
+        {
+          "phase": "mesh",
+          "index": "9",
+          "applyMs": "1.8855",
+          "submitMs": "43.4202",
+          "completedSequence": "42"
+        },
+        {
+          "phase": "mesh",
+          "index": "10",
+          "applyMs": "1.8347",
+          "submitMs": "38.4096",
+          "completedSequence": "43"
+        },
+        {
+          "phase": "mesh",
+          "index": "11",
+          "applyMs": "1.9251",
+          "submitMs": "39.8926",
+          "completedSequence": "44"
+        },
+        {
+          "phase": "mesh",
+          "index": "12",
+          "applyMs": "1.865",
+          "submitMs": "39.8996",
+          "completedSequence": "45"
+        },
+        {
+          "phase": "mesh",
+          "index": "13",
+          "applyMs": "2.0788",
+          "submitMs": "36.5031",
+          "completedSequence": "46"
+        },
+        {
+          "phase": "mesh",
+          "index": "14",
+          "applyMs": "2.1274",
+          "submitMs": "39.0892",
+          "completedSequence": "47"
+        },
+        {
+          "phase": "mesh",
+          "index": "15",
+          "applyMs": "1.9037",
+          "submitMs": "39.9913",
+          "completedSequence": "48"
+        }
+      ]
+    },
+    "instance": {
+      "count": 16,
+      "p50Ms": 38.61175,
+      "p95Ms": 45.0802,
+      "p99Ms": 45.0802,
+      "maximumMs": 45.0802,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 1.8315000000000001,
+      "raw": [
+        {
+          "phase": "instance",
+          "index": "0",
+          "applyMs": "1.9952",
+          "submitMs": "37.8348",
+          "completedSequence": "49"
+        },
+        {
+          "phase": "instance",
+          "index": "1",
+          "applyMs": "1.7662",
+          "submitMs": "41.8092",
+          "completedSequence": "50"
+        },
+        {
+          "phase": "instance",
+          "index": "2",
+          "applyMs": "1.7377",
+          "submitMs": "42.203",
+          "completedSequence": "51"
+        },
+        {
+          "phase": "instance",
+          "index": "3",
+          "applyMs": "1.8419",
+          "submitMs": "38.9307",
+          "completedSequence": "52"
+        },
+        {
+          "phase": "instance",
+          "index": "4",
+          "applyMs": "2.0553",
+          "submitMs": "38.7424",
+          "completedSequence": "53"
+        },
+        {
+          "phase": "instance",
+          "index": "5",
+          "applyMs": "2.1204",
+          "submitMs": "37.503",
+          "completedSequence": "54"
+        },
+        {
+          "phase": "instance",
+          "index": "6",
+          "applyMs": "1.8211",
+          "submitMs": "37.5186",
+          "completedSequence": "55"
+        },
+        {
+          "phase": "instance",
+          "index": "7",
+          "applyMs": "3.0026",
+          "submitMs": "43.7611",
+          "completedSequence": "56"
+        },
+        {
+          "phase": "instance",
+          "index": "8",
+          "applyMs": "1.684",
+          "submitMs": "34.8986",
+          "completedSequence": "57"
+        },
+        {
+          "phase": "instance",
+          "index": "9",
+          "applyMs": "1.6917",
+          "submitMs": "36.6698",
+          "completedSequence": "58"
+        },
+        {
+          "phase": "instance",
+          "index": "10",
+          "applyMs": "1.9045",
+          "submitMs": "37.619",
+          "completedSequence": "59"
+        },
+        {
+          "phase": "instance",
+          "index": "11",
+          "applyMs": "1.6274",
+          "submitMs": "38.4811",
+          "completedSequence": "60"
+        },
+        {
+          "phase": "instance",
+          "index": "12",
+          "applyMs": "1.7539",
+          "submitMs": "36.5176",
+          "completedSequence": "61"
+        },
+        {
+          "phase": "instance",
+          "index": "13",
+          "applyMs": "18.0183",
+          "submitMs": "39.1401",
+          "completedSequence": "62"
+        },
+        {
+          "phase": "instance",
+          "index": "14",
+          "applyMs": "6.8295",
+          "submitMs": "45.0802",
+          "completedSequence": "63"
+        },
+        {
+          "phase": "instance",
+          "index": "15",
+          "applyMs": "1.7007",
+          "submitMs": "41.6135",
+          "completedSequence": "64"
+        }
+      ]
+    },
+    "light": {
+      "count": 16,
+      "p50Ms": 26.6715,
+      "p95Ms": 31.4761,
+      "p99Ms": 31.4761,
+      "maximumMs": 31.4761,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 1.7534999999999998,
+      "raw": [
+        {
+          "phase": "light",
+          "index": "0",
+          "applyMs": "1.7155",
+          "submitMs": "31.4761",
+          "completedSequence": "65"
+        },
+        {
+          "phase": "light",
+          "index": "1",
+          "applyMs": "1.7509",
+          "submitMs": "30.152",
+          "completedSequence": "66"
+        },
+        {
+          "phase": "light",
+          "index": "2",
+          "applyMs": "1.9283",
+          "submitMs": "27.0983",
+          "completedSequence": "67"
+        },
+        {
+          "phase": "light",
+          "index": "3",
+          "applyMs": "11.9158",
+          "submitMs": "27.2169",
+          "completedSequence": "68"
+        },
+        {
+          "phase": "light",
+          "index": "4",
+          "applyMs": "1.8435",
+          "submitMs": "24.1443",
+          "completedSequence": "69"
+        },
+        {
+          "phase": "light",
+          "index": "5",
+          "applyMs": "1.6496",
+          "submitMs": "26.4701",
+          "completedSequence": "70"
+        },
+        {
+          "phase": "light",
+          "index": "6",
+          "applyMs": "1.6344",
+          "submitMs": "25.8786",
+          "completedSequence": "71"
+        },
+        {
+          "phase": "light",
+          "index": "7",
+          "applyMs": "1.7561",
+          "submitMs": "24.3016",
+          "completedSequence": "72"
+        },
+        {
+          "phase": "light",
+          "index": "8",
+          "applyMs": "1.6354",
+          "submitMs": "26.1211",
+          "completedSequence": "73"
+        },
+        {
+          "phase": "light",
+          "index": "9",
+          "applyMs": "1.7652",
+          "submitMs": "29.8396",
+          "completedSequence": "74"
+        },
+        {
+          "phase": "light",
+          "index": "10",
+          "applyMs": "1.7321",
+          "submitMs": "25.9706",
+          "completedSequence": "75"
+        },
+        {
+          "phase": "light",
+          "index": "11",
+          "applyMs": "1.6191",
+          "submitMs": "26.7939",
+          "completedSequence": "76"
+        },
+        {
+          "phase": "light",
+          "index": "12",
+          "applyMs": "1.8728",
+          "submitMs": "27.5549",
+          "completedSequence": "77"
+        },
+        {
+          "phase": "light",
+          "index": "13",
+          "applyMs": "1.6896",
+          "submitMs": "28.7915",
+          "completedSequence": "78"
+        },
+        {
+          "phase": "light",
+          "index": "14",
+          "applyMs": "1.7987",
+          "submitMs": "26.5491",
+          "completedSequence": "79"
+        },
+        {
+          "phase": "light",
+          "index": "15",
+          "applyMs": "14.7098",
+          "submitMs": "25.2375",
+          "completedSequence": "80"
+        }
+      ]
+    },
+    "environment": {
+      "count": 16,
+      "p50Ms": 25.14745,
+      "p95Ms": 27.052,
+      "p99Ms": 27.052,
+      "maximumMs": 27.052,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 5e-05,
+      "raw": [
+        {
+          "phase": "environment",
+          "index": "0",
+          "applyMs": "1.0E-4",
+          "submitMs": "24.1844",
+          "completedSequence": "81"
+        },
+        {
+          "phase": "environment",
+          "index": "1",
+          "applyMs": "1.0E-4",
+          "submitMs": "26.0175",
+          "completedSequence": "82"
+        },
+        {
+          "phase": "environment",
+          "index": "2",
+          "applyMs": "0.0",
+          "submitMs": "27.052",
+          "completedSequence": "83"
+        },
+        {
+          "phase": "environment",
+          "index": "3",
+          "applyMs": "0.0",
+          "submitMs": "23.9356",
+          "completedSequence": "84"
+        },
+        {
+          "phase": "environment",
+          "index": "4",
+          "applyMs": "0.0",
+          "submitMs": "24.6699",
+          "completedSequence": "85"
+        },
+        {
+          "phase": "environment",
+          "index": "5",
+          "applyMs": "1.0E-4",
+          "submitMs": "25.1696",
+          "completedSequence": "86"
+        },
+        {
+          "phase": "environment",
+          "index": "6",
+          "applyMs": "0.0",
+          "submitMs": "25.3917",
+          "completedSequence": "87"
+        },
+        {
+          "phase": "environment",
+          "index": "7",
+          "applyMs": "0.0",
+          "submitMs": "24.8248",
+          "completedSequence": "88"
+        },
+        {
+          "phase": "environment",
+          "index": "8",
+          "applyMs": "1.0E-4",
+          "submitMs": "24.4177",
+          "completedSequence": "89"
+        },
+        {
+          "phase": "environment",
+          "index": "9",
+          "applyMs": "1.0E-4",
+          "submitMs": "25.0159",
+          "completedSequence": "90"
+        },
+        {
+          "phase": "environment",
+          "index": "10",
+          "applyMs": "1.0E-4",
+          "submitMs": "24.8319",
+          "completedSequence": "91"
+        },
+        {
+          "phase": "environment",
+          "index": "11",
+          "applyMs": "1.0E-4",
+          "submitMs": "26.8063",
+          "completedSequence": "92"
+        },
+        {
+          "phase": "environment",
+          "index": "12",
+          "applyMs": "4.0E-4",
+          "submitMs": "26.3566",
+          "completedSequence": "93"
+        },
+        {
+          "phase": "environment",
+          "index": "13",
+          "applyMs": "0.0",
+          "submitMs": "25.5174",
+          "completedSequence": "94"
+        },
+        {
+          "phase": "environment",
+          "index": "14",
+          "applyMs": "0.0",
+          "submitMs": "25.5918",
+          "completedSequence": "95"
+        },
+        {
+          "phase": "environment",
+          "index": "15",
+          "applyMs": "0.0",
+          "submitMs": "25.1253",
+          "completedSequence": "96"
+        }
+      ]
+    },
+    "mixed": {
+      "count": 16,
+      "p50Ms": 109.65440000000001,
+      "p95Ms": 120.1811,
+      "p99Ms": 120.1811,
+      "maximumMs": 120.1811,
+      "over50ms": 16,
+      "over100ms": 15,
+      "over1000ms": 0,
+      "applyP50Ms": 1.7945,
+      "raw": [
+        {
+          "phase": "mixed",
+          "index": "0",
+          "applyMs": "6.3527",
+          "submitMs": "112.5321",
+          "completedSequence": "97"
+        },
+        {
+          "phase": "mixed",
+          "index": "1",
+          "applyMs": "1.6698",
+          "submitMs": "110.3395",
+          "completedSequence": "98"
+        },
+        {
+          "phase": "mixed",
+          "index": "2",
+          "applyMs": "1.7185",
+          "submitMs": "110.3788",
+          "completedSequence": "99"
+        },
+        {
+          "phase": "mixed",
+          "index": "3",
+          "applyMs": "1.7508",
+          "submitMs": "104.3866",
+          "completedSequence": "100"
+        },
+        {
+          "phase": "mixed",
+          "index": "4",
+          "applyMs": "1.6943",
+          "submitMs": "104.4471",
+          "completedSequence": "101"
+        },
+        {
+          "phase": "mixed",
+          "index": "5",
+          "applyMs": "13.2289",
+          "submitMs": "110.9376",
+          "completedSequence": "102"
+        },
+        {
+          "phase": "mixed",
+          "index": "6",
+          "applyMs": "1.7623",
+          "submitMs": "104.7081",
+          "completedSequence": "103"
+        },
+        {
+          "phase": "mixed",
+          "index": "7",
+          "applyMs": "2.018",
+          "submitMs": "103.1493",
+          "completedSequence": "104"
+        },
+        {
+          "phase": "mixed",
+          "index": "8",
+          "applyMs": "1.8074",
+          "submitMs": "113.5946",
+          "completedSequence": "105"
+        },
+        {
+          "phase": "mixed",
+          "index": "9",
+          "applyMs": "1.7781",
+          "submitMs": "120.1811",
+          "completedSequence": "106"
+        },
+        {
+          "phase": "mixed",
+          "index": "10",
+          "applyMs": "1.7816",
+          "submitMs": "97.55",
+          "completedSequence": "107"
+        },
+        {
+          "phase": "mixed",
+          "index": "11",
+          "applyMs": "9.9155",
+          "submitMs": "106.5225",
+          "completedSequence": "108"
+        },
+        {
+          "phase": "mixed",
+          "index": "12",
+          "applyMs": "7.3331",
+          "submitMs": "108.9693",
+          "completedSequence": "109"
+        },
+        {
+          "phase": "mixed",
+          "index": "13",
+          "applyMs": "1.937",
+          "submitMs": "110.3537",
+          "completedSequence": "110"
+        },
+        {
+          "phase": "mixed",
+          "index": "14",
+          "applyMs": "2.1839",
+          "submitMs": "107.8582",
+          "completedSequence": "111"
+        },
+        {
+          "phase": "mixed",
+          "index": "15",
+          "applyMs": "1.7345",
+          "submitMs": "112.5999",
+          "completedSequence": "112"
+        }
+      ]
+    }
+  },
+  "comparison": {
+    "instance": {
+      "p50SpeedRatio": 17.112742882671725,
+      "p50ReductionPercent": 94.15640142053093
+    },
+    "texture": {
+      "p50SpeedRatio": 2.8449704654506403,
+      "p50ReductionPercent": 64.85025021721619
+    },
+    "environment": {
+      "p50SpeedRatio": 2.4748692213325802,
+      "p50ReductionPercent": 59.59382453907786
+    },
+    "light": {
+      "p50SpeedRatio": 599.8072361884407,
+      "p50ReductionPercent": 99.83327977062186
+    },
+    "initial": {
+      "p50SpeedRatio": 1.4460187813192742,
+      "p50ReductionPercent": 30.844604999690894
+    },
+    "mesh": {
+      "p50SpeedRatio": 16.595343553201925,
+      "p50ReductionPercent": 93.97421332800876
+    },
+    "mixed": {
+      "p50SpeedRatio": 145.3176913101526,
+      "p50ReductionPercent": 99.31185254115708
+    },
+    "stable": {
+      "p50SpeedRatio": 5.2538935687603825,
+      "p50ReductionPercent": 80.96649681017534
+    }
+  },
+  "largerCandidate": {
+    "initial": {
+      "count": 1,
+      "p50Ms": 22282.1492,
+      "p95Ms": 22282.1492,
+      "p99Ms": 22282.1492,
+      "maximumMs": 22282.1492,
+      "over50ms": 1,
+      "over100ms": 1,
+      "over1000ms": 1,
+      "applyP50Ms": 34.0156,
+      "raw": [
+        {
+          "phase": "initial",
+          "index": "0",
+          "applyMs": "34.0156",
+          "submitMs": "22282.1492",
+          "completedSequence": "0"
+        }
+      ]
+    },
+    "stable": {
+      "count": 16,
+      "p50Ms": 6.22405,
+      "p95Ms": 8.8839,
+      "p99Ms": 8.8839,
+      "maximumMs": 8.8839,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 0.0001,
+      "raw": [
+        {
+          "phase": "stable",
+          "index": "0",
+          "applyMs": "1.0E-4",
+          "submitMs": "8.8839",
+          "completedSequence": "1"
+        },
+        {
+          "phase": "stable",
+          "index": "1",
+          "applyMs": "2.0E-4",
+          "submitMs": "7.4118",
+          "completedSequence": "2"
+        },
+        {
+          "phase": "stable",
+          "index": "2",
+          "applyMs": "1.0E-4",
+          "submitMs": "6.7404",
+          "completedSequence": "3"
+        },
+        {
+          "phase": "stable",
+          "index": "3",
+          "applyMs": "2.0E-4",
+          "submitMs": "6.2169",
+          "completedSequence": "4"
+        },
+        {
+          "phase": "stable",
+          "index": "4",
+          "applyMs": "1.0E-4",
+          "submitMs": "6.191",
+          "completedSequence": "5"
+        },
+        {
+          "phase": "stable",
+          "index": "5",
+          "applyMs": "1.0E-4",
+          "submitMs": "6.2312",
+          "completedSequence": "6"
+        },
+        {
+          "phase": "stable",
+          "index": "6",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.8245",
+          "completedSequence": "7"
+        },
+        {
+          "phase": "stable",
+          "index": "7",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.9748",
+          "completedSequence": "8"
+        },
+        {
+          "phase": "stable",
+          "index": "8",
+          "applyMs": "2.0E-4",
+          "submitMs": "6.3472",
+          "completedSequence": "9"
+        },
+        {
+          "phase": "stable",
+          "index": "9",
+          "applyMs": "0.0",
+          "submitMs": "6.3016",
+          "completedSequence": "10"
+        },
+        {
+          "phase": "stable",
+          "index": "10",
+          "applyMs": "1.0E-4",
+          "submitMs": "6.159",
+          "completedSequence": "11"
+        },
+        {
+          "phase": "stable",
+          "index": "11",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.9102",
+          "completedSequence": "12"
+        },
+        {
+          "phase": "stable",
+          "index": "12",
+          "applyMs": "2.0E-4",
+          "submitMs": "6.2333",
+          "completedSequence": "13"
+        },
+        {
+          "phase": "stable",
+          "index": "13",
+          "applyMs": "1.0E-4",
+          "submitMs": "6.0228",
+          "completedSequence": "14"
+        },
+        {
+          "phase": "stable",
+          "index": "14",
+          "applyMs": "1.0E-4",
+          "submitMs": "7.5403",
+          "completedSequence": "15"
+        },
+        {
+          "phase": "stable",
+          "index": "15",
+          "applyMs": "1.0E-4",
+          "submitMs": "5.9806",
+          "completedSequence": "16"
+        }
+      ]
+    },
+    "texture": {
+      "count": 16,
+      "p50Ms": 68.59155,
+      "p95Ms": 87.3873,
+      "p99Ms": 87.3873,
+      "maximumMs": 87.3873,
+      "over50ms": 16,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 2.21985,
+      "raw": [
+        {
+          "phase": "texture",
+          "index": "0",
+          "applyMs": "5.9611",
+          "submitMs": "71.8872",
+          "completedSequence": "17"
+        },
+        {
+          "phase": "texture",
+          "index": "1",
+          "applyMs": "12.4005",
+          "submitMs": "69.462",
+          "completedSequence": "18"
+        },
+        {
+          "phase": "texture",
+          "index": "2",
+          "applyMs": "11.3855",
+          "submitMs": "87.3873",
+          "completedSequence": "19"
+        },
+        {
+          "phase": "texture",
+          "index": "3",
+          "applyMs": "14.7562",
+          "submitMs": "80.8711",
+          "completedSequence": "20"
+        },
+        {
+          "phase": "texture",
+          "index": "4",
+          "applyMs": "2.2429",
+          "submitMs": "68.6249",
+          "completedSequence": "21"
+        },
+        {
+          "phase": "texture",
+          "index": "5",
+          "applyMs": "2.414",
+          "submitMs": "71.3605",
+          "completedSequence": "22"
+        },
+        {
+          "phase": "texture",
+          "index": "6",
+          "applyMs": "2.9774",
+          "submitMs": "68.5582",
+          "completedSequence": "23"
+        },
+        {
+          "phase": "texture",
+          "index": "7",
+          "applyMs": "2.2572",
+          "submitMs": "61.5922",
+          "completedSequence": "24"
+        },
+        {
+          "phase": "texture",
+          "index": "8",
+          "applyMs": "2.1677",
+          "submitMs": "60.7853",
+          "completedSequence": "25"
+        },
+        {
+          "phase": "texture",
+          "index": "9",
+          "applyMs": "2.1264",
+          "submitMs": "58.2483",
+          "completedSequence": "26"
+        },
+        {
+          "phase": "texture",
+          "index": "10",
+          "applyMs": "2.1445",
+          "submitMs": "54.7737",
+          "completedSequence": "27"
+        },
+        {
+          "phase": "texture",
+          "index": "11",
+          "applyMs": "2.1968",
+          "submitMs": "57.161",
+          "completedSequence": "28"
+        },
+        {
+          "phase": "texture",
+          "index": "12",
+          "applyMs": "2.0244",
+          "submitMs": "62.0418",
+          "completedSequence": "29"
+        },
+        {
+          "phase": "texture",
+          "index": "13",
+          "applyMs": "2.0858",
+          "submitMs": "79.0577",
+          "completedSequence": "30"
+        },
+        {
+          "phase": "texture",
+          "index": "14",
+          "applyMs": "1.9837",
+          "submitMs": "71.6672",
+          "completedSequence": "31"
+        },
+        {
+          "phase": "texture",
+          "index": "15",
+          "applyMs": "1.9136",
+          "submitMs": "68.4075",
+          "completedSequence": "32"
+        }
+      ]
+    },
+    "mesh": {
+      "count": 16,
+      "p50Ms": 45.004400000000004,
+      "p95Ms": 52.8471,
+      "p99Ms": 52.8471,
+      "maximumMs": 52.8471,
+      "over50ms": 3,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 2.0507,
+      "raw": [
+        {
+          "phase": "mesh",
+          "index": "0",
+          "applyMs": "2.0628",
+          "submitMs": "10.1783",
+          "completedSequence": "33"
+        },
+        {
+          "phase": "mesh",
+          "index": "1",
+          "applyMs": "2.0119",
+          "submitMs": "38.7723",
+          "completedSequence": "34"
+        },
+        {
+          "phase": "mesh",
+          "index": "2",
+          "applyMs": "1.9402",
+          "submitMs": "46.0951",
+          "completedSequence": "35"
+        },
+        {
+          "phase": "mesh",
+          "index": "3",
+          "applyMs": "2.1278",
+          "submitMs": "44.8217",
+          "completedSequence": "36"
+        },
+        {
+          "phase": "mesh",
+          "index": "4",
+          "applyMs": "1.9102",
+          "submitMs": "39.8291",
+          "completedSequence": "37"
+        },
+        {
+          "phase": "mesh",
+          "index": "5",
+          "applyMs": "15.0642",
+          "submitMs": "42.5585",
+          "completedSequence": "38"
+        },
+        {
+          "phase": "mesh",
+          "index": "6",
+          "applyMs": "6.6154",
+          "submitMs": "47.1721",
+          "completedSequence": "39"
+        },
+        {
+          "phase": "mesh",
+          "index": "7",
+          "applyMs": "1.9203",
+          "submitMs": "45.1871",
+          "completedSequence": "40"
+        },
+        {
+          "phase": "mesh",
+          "index": "8",
+          "applyMs": "2.012",
+          "submitMs": "42.5844",
+          "completedSequence": "41"
+        },
+        {
+          "phase": "mesh",
+          "index": "9",
+          "applyMs": "1.9137",
+          "submitMs": "43.7314",
+          "completedSequence": "42"
+        },
+        {
+          "phase": "mesh",
+          "index": "10",
+          "applyMs": "8.9617",
+          "submitMs": "42.7096",
+          "completedSequence": "43"
+        },
+        {
+          "phase": "mesh",
+          "index": "11",
+          "applyMs": "2.0009",
+          "submitMs": "46.8168",
+          "completedSequence": "44"
+        },
+        {
+          "phase": "mesh",
+          "index": "12",
+          "applyMs": "2.1552",
+          "submitMs": "52.8471",
+          "completedSequence": "45"
+        },
+        {
+          "phase": "mesh",
+          "index": "13",
+          "applyMs": "2.152",
+          "submitMs": "52.1591",
+          "completedSequence": "46"
+        },
+        {
+          "phase": "mesh",
+          "index": "14",
+          "applyMs": "2.6596",
+          "submitMs": "47.4098",
+          "completedSequence": "47"
+        },
+        {
+          "phase": "mesh",
+          "index": "15",
+          "applyMs": "2.0386",
+          "submitMs": "52.8462",
+          "completedSequence": "48"
+        }
+      ]
+    },
+    "instance": {
+      "count": 16,
+      "p50Ms": 47.06205,
+      "p95Ms": 61.4219,
+      "p99Ms": 61.4219,
+      "maximumMs": 61.4219,
+      "over50ms": 5,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 2.0138,
+      "raw": [
+        {
+          "phase": "instance",
+          "index": "0",
+          "applyMs": "2.3424",
+          "submitMs": "48.475",
+          "completedSequence": "49"
+        },
+        {
+          "phase": "instance",
+          "index": "1",
+          "applyMs": "3.5659",
+          "submitMs": "53.2225",
+          "completedSequence": "50"
+        },
+        {
+          "phase": "instance",
+          "index": "2",
+          "applyMs": "2.0448",
+          "submitMs": "45.1168",
+          "completedSequence": "51"
+        },
+        {
+          "phase": "instance",
+          "index": "3",
+          "applyMs": "16.3466",
+          "submitMs": "50.4923",
+          "completedSequence": "52"
+        },
+        {
+          "phase": "instance",
+          "index": "4",
+          "applyMs": "7.4786",
+          "submitMs": "55.8142",
+          "completedSequence": "53"
+        },
+        {
+          "phase": "instance",
+          "index": "5",
+          "applyMs": "1.9414",
+          "submitMs": "61.4219",
+          "completedSequence": "54"
+        },
+        {
+          "phase": "instance",
+          "index": "6",
+          "applyMs": "2.0751",
+          "submitMs": "45.9529",
+          "completedSequence": "55"
+        },
+        {
+          "phase": "instance",
+          "index": "7",
+          "applyMs": "2.0029",
+          "submitMs": "46.8861",
+          "completedSequence": "56"
+        },
+        {
+          "phase": "instance",
+          "index": "8",
+          "applyMs": "2.0247",
+          "submitMs": "47.238",
+          "completedSequence": "57"
+        },
+        {
+          "phase": "instance",
+          "index": "9",
+          "applyMs": "1.955",
+          "submitMs": "46.2121",
+          "completedSequence": "58"
+        },
+        {
+          "phase": "instance",
+          "index": "10",
+          "applyMs": "1.7677",
+          "submitMs": "56.2673",
+          "completedSequence": "59"
+        },
+        {
+          "phase": "instance",
+          "index": "11",
+          "applyMs": "1.9117",
+          "submitMs": "46.3306",
+          "completedSequence": "60"
+        },
+        {
+          "phase": "instance",
+          "index": "12",
+          "applyMs": "2.2628",
+          "submitMs": "46.6156",
+          "completedSequence": "61"
+        },
+        {
+          "phase": "instance",
+          "index": "13",
+          "applyMs": "1.827",
+          "submitMs": "43.4194",
+          "completedSequence": "62"
+        },
+        {
+          "phase": "instance",
+          "index": "14",
+          "applyMs": "1.8004",
+          "submitMs": "40.4718",
+          "completedSequence": "63"
+        },
+        {
+          "phase": "instance",
+          "index": "15",
+          "applyMs": "1.937",
+          "submitMs": "49.3041",
+          "completedSequence": "64"
+        }
+      ]
+    },
+    "light": {
+      "count": 16,
+      "p50Ms": 35.79005,
+      "p95Ms": 43.5758,
+      "p99Ms": 43.5758,
+      "maximumMs": 43.5758,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 1.9729999999999999,
+      "raw": [
+        {
+          "phase": "light",
+          "index": "0",
+          "applyMs": "3.7451",
+          "submitMs": "43.5758",
+          "completedSequence": "65"
+        },
+        {
+          "phase": "light",
+          "index": "1",
+          "applyMs": "1.9483",
+          "submitMs": "38.3342",
+          "completedSequence": "66"
+        },
+        {
+          "phase": "light",
+          "index": "2",
+          "applyMs": "3.1644",
+          "submitMs": "37.6599",
+          "completedSequence": "67"
+        },
+        {
+          "phase": "light",
+          "index": "3",
+          "applyMs": "17.4421",
+          "submitMs": "39.3284",
+          "completedSequence": "68"
+        },
+        {
+          "phase": "light",
+          "index": "4",
+          "applyMs": "1.9977",
+          "submitMs": "32.6235",
+          "completedSequence": "69"
+        },
+        {
+          "phase": "light",
+          "index": "5",
+          "applyMs": "1.8536",
+          "submitMs": "30.5465",
+          "completedSequence": "70"
+        },
+        {
+          "phase": "light",
+          "index": "6",
+          "applyMs": "2.209",
+          "submitMs": "37.8372",
+          "completedSequence": "71"
+        },
+        {
+          "phase": "light",
+          "index": "7",
+          "applyMs": "1.8568",
+          "submitMs": "38.0023",
+          "completedSequence": "72"
+        },
+        {
+          "phase": "light",
+          "index": "8",
+          "applyMs": "1.8598",
+          "submitMs": "33.1636",
+          "completedSequence": "73"
+        },
+        {
+          "phase": "light",
+          "index": "9",
+          "applyMs": "11.7464",
+          "submitMs": "34.8641",
+          "completedSequence": "74"
+        },
+        {
+          "phase": "light",
+          "index": "10",
+          "applyMs": "3.0232",
+          "submitMs": "36.0782",
+          "completedSequence": "75"
+        },
+        {
+          "phase": "light",
+          "index": "11",
+          "applyMs": "1.8249",
+          "submitMs": "41.8318",
+          "completedSequence": "76"
+        },
+        {
+          "phase": "light",
+          "index": "12",
+          "applyMs": "2.5232",
+          "submitMs": "35.5019",
+          "completedSequence": "77"
+        },
+        {
+          "phase": "light",
+          "index": "13",
+          "applyMs": "1.7643",
+          "submitMs": "34.1746",
+          "completedSequence": "78"
+        },
+        {
+          "phase": "light",
+          "index": "14",
+          "applyMs": "1.7965",
+          "submitMs": "34.5058",
+          "completedSequence": "79"
+        },
+        {
+          "phase": "light",
+          "index": "15",
+          "applyMs": "1.7667",
+          "submitMs": "34.1716",
+          "completedSequence": "80"
+        }
+      ]
+    },
+    "environment": {
+      "count": 16,
+      "p50Ms": 31.6026,
+      "p95Ms": 33.6111,
+      "p99Ms": 33.6111,
+      "maximumMs": 33.6111,
+      "over50ms": 0,
+      "over100ms": 0,
+      "over1000ms": 0,
+      "applyP50Ms": 0.0001,
+      "raw": [
+        {
+          "phase": "environment",
+          "index": "0",
+          "applyMs": "1.0E-4",
+          "submitMs": "31.0782",
+          "completedSequence": "81"
+        },
+        {
+          "phase": "environment",
+          "index": "1",
+          "applyMs": "0.0",
+          "submitMs": "30.8586",
+          "completedSequence": "82"
+        },
+        {
+          "phase": "environment",
+          "index": "2",
+          "applyMs": "1.0E-4",
+          "submitMs": "31.3973",
+          "completedSequence": "83"
+        },
+        {
+          "phase": "environment",
+          "index": "3",
+          "applyMs": "0.0",
+          "submitMs": "31.4662",
+          "completedSequence": "84"
+        },
+        {
+          "phase": "environment",
+          "index": "4",
+          "applyMs": "1.0E-4",
+          "submitMs": "31.1614",
+          "completedSequence": "85"
+        },
+        {
+          "phase": "environment",
+          "index": "5",
+          "applyMs": "1.0E-4",
+          "submitMs": "31.5431",
+          "completedSequence": "86"
+        },
+        {
+          "phase": "environment",
+          "index": "6",
+          "applyMs": "1.0E-4",
+          "submitMs": "31.4972",
+          "completedSequence": "87"
+        },
+        {
+          "phase": "environment",
+          "index": "7",
+          "applyMs": "1.0E-4",
+          "submitMs": "32.1737",
+          "completedSequence": "88"
+        },
+        {
+          "phase": "environment",
+          "index": "8",
+          "applyMs": "0.0",
+          "submitMs": "31.6621",
+          "completedSequence": "89"
+        },
+        {
+          "phase": "environment",
+          "index": "9",
+          "applyMs": "0.0",
+          "submitMs": "32.8403",
+          "completedSequence": "90"
+        },
+        {
+          "phase": "environment",
+          "index": "10",
+          "applyMs": "1.0E-4",
+          "submitMs": "33.6111",
+          "completedSequence": "91"
+        },
+        {
+          "phase": "environment",
+          "index": "11",
+          "applyMs": "2.0E-4",
+          "submitMs": "29.136",
+          "completedSequence": "92"
+        },
+        {
+          "phase": "environment",
+          "index": "12",
+          "applyMs": "1.0E-4",
+          "submitMs": "31.8225",
+          "completedSequence": "93"
+        },
+        {
+          "phase": "environment",
+          "index": "13",
+          "applyMs": "1.0E-4",
+          "submitMs": "32.0039",
+          "completedSequence": "94"
+        },
+        {
+          "phase": "environment",
+          "index": "14",
+          "applyMs": "1.0E-4",
+          "submitMs": "32.3891",
+          "completedSequence": "95"
+        },
+        {
+          "phase": "environment",
+          "index": "15",
+          "applyMs": "2.0E-4",
+          "submitMs": "32.8075",
+          "completedSequence": "96"
+        }
+      ]
+    },
+    "mixed": {
+      "count": 16,
+      "p50Ms": 128.83015,
+      "p95Ms": 151.1764,
+      "p99Ms": 151.1764,
+      "maximumMs": 151.1764,
+      "over50ms": 16,
+      "over100ms": 16,
+      "over1000ms": 0,
+      "applyP50Ms": 1.99105,
+      "raw": [
+        {
+          "phase": "mixed",
+          "index": "0",
+          "applyMs": "2.1007",
+          "submitMs": "146.2375",
+          "completedSequence": "97"
+        },
+        {
+          "phase": "mixed",
+          "index": "1",
+          "applyMs": "16.2465",
+          "submitMs": "151.1764",
+          "completedSequence": "98"
+        },
+        {
+          "phase": "mixed",
+          "index": "2",
+          "applyMs": "1.9526",
+          "submitMs": "143.7415",
+          "completedSequence": "99"
+        },
+        {
+          "phase": "mixed",
+          "index": "3",
+          "applyMs": "2.0493",
+          "submitMs": "141.057",
+          "completedSequence": "100"
+        },
+        {
+          "phase": "mixed",
+          "index": "4",
+          "applyMs": "2.2601",
+          "submitMs": "132.6177",
+          "completedSequence": "101"
+        },
+        {
+          "phase": "mixed",
+          "index": "5",
+          "applyMs": "7.2976",
+          "submitMs": "123.9044",
+          "completedSequence": "102"
+        },
+        {
+          "phase": "mixed",
+          "index": "6",
+          "applyMs": "1.9172",
+          "submitMs": "125.2816",
+          "completedSequence": "103"
+        },
+        {
+          "phase": "mixed",
+          "index": "7",
+          "applyMs": "1.9351",
+          "submitMs": "123.486",
+          "completedSequence": "104"
+        },
+        {
+          "phase": "mixed",
+          "index": "8",
+          "applyMs": "1.8258",
+          "submitMs": "127.0071",
+          "completedSequence": "105"
+        },
+        {
+          "phase": "mixed",
+          "index": "9",
+          "applyMs": "1.932",
+          "submitMs": "130.8644",
+          "completedSequence": "106"
+        },
+        {
+          "phase": "mixed",
+          "index": "10",
+          "applyMs": "1.7774",
+          "submitMs": "129.8362",
+          "completedSequence": "107"
+        },
+        {
+          "phase": "mixed",
+          "index": "11",
+          "applyMs": "1.8463",
+          "submitMs": "124.0482",
+          "completedSequence": "108"
+        },
+        {
+          "phase": "mixed",
+          "index": "12",
+          "applyMs": "1.8665",
+          "submitMs": "127.8241",
+          "completedSequence": "109"
+        },
+        {
+          "phase": "mixed",
+          "index": "13",
+          "applyMs": "15.8754",
+          "submitMs": "142.051",
+          "completedSequence": "110"
+        },
+        {
+          "phase": "mixed",
+          "index": "14",
+          "applyMs": "2.0295",
+          "submitMs": "120.585",
+          "completedSequence": "111"
+        },
+        {
+          "phase": "mixed",
+          "index": "15",
+          "applyMs": "2.0684",
+          "submitMs": "123.7816",
+          "completedSequence": "112"
+        }
+      ]
+    }
+  },
+  "environment": {
+    "date": "2026-11-03",
+    "cpu": "Intel Core Ultra 9 275HX",
+    "gpu": "NVIDIA GeForce RTX 5080 Laptop GPU",
+    "driver": "616.92",
+    "java": 25,
+    "output": [
+      640,
+      360
+    ],
+    "internal": [
+      640,
+      360
+    ],
+    "reconstruction": "NONE",
+    "spp": 1,
+    "pathDepth": 1,
+    "diffuseDepth": 0,
+    "lightSamples": 1,
+    "meshes": 256,
+    "materials": 256,
+    "texture": [
+      32,
+      32
+    ],
+    "applicationLights": 100000,
+    "warmupFrames": 16,
+    "samplesPerPhase": 16,
+    "metric": "submit CPU wall-clock ms; no awaitIdle/readback inside timed loop",
+    "p50": "median",
+    "p95": "nearest rank; equals maximum for n=16",
+    "baselineCommit": "532940d8435c063f6fa6c997c3a1551fdba20b9c",
+    "baselineRtxptJarSha256": "e38c35a78a4244e9bb29836ec58fd29d9261cc9a41098f1ba0638fcef4437e4d",
+    "baselineDllSha256": "2815e8374abb016bb47ff5cffe603f8add51b349892c3a0a34000620c5c44e0c",
+    "gpuStartSnapshots": "timestamp, name, driver_version, utilization.gpu [%], temperature.gpu, power.draw [W]\n2026/11/03 10:14:07.637, NVIDIA GeForce RTX 5080 Laptop GPU, 616.92, 0 %, 63, 8.30 W\ntimestamp, name, driver_version, utilization.gpu [%], temperature.gpu, power.draw [W]\n2026/11/03 10:14:42.100, NVIDIA GeForce RTX 5080 Laptop GPU, 616.92, 5 %, 64, 15.15 W\n",
+    "limitations": [
+      "baseline has no saved independent GPU start snapshot",
+      "final candidate overlapped CPU/core release checks",
+      "one run per artifact, no randomized interleaving",
+      "cold initial samples include shader/PSO/cache effects",
+      "not a host-game FPS benchmark"
+    ]
+  },
+  "finalStages": {
+    "100000": {
+      "stable": {
+        "validationNanos": 34548100,
+        "translationAndFileNanos": 407270200,
+        "nativeResourcesNanos": 0,
+        "nativeLightingNanos": 8637149700,
+        "retirementNanos": 2209900,
+        "importerNanos": 0,
+        "textureFinalizeNanos": 0,
+        "materialSyncNanos": 0,
+        "accelerationNanos": 0,
+        "nativeRetirementNanos": 0,
+        "lightDeltaRecords": 0,
+        "lightTreeRefits": 0,
+        "pipelineUpdateNanos": 10589519900,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 6,
+        "maximumWindowPollIntervalNanos": 31631100
+      },
+      "texture": {
+        "validationNanos": 36108100,
+        "translationAndFileNanos": 510686700,
+        "nativeResourcesNanos": 647114600,
+        "nativeLightingNanos": 8637149700,
+        "retirementNanos": 36346800,
+        "importerNanos": 17063900,
+        "textureFinalizeNanos": 23855600,
+        "materialSyncNanos": 10922800,
+        "accelerationNanos": 900,
+        "nativeRetirementNanos": 511000,
+        "lightDeltaRecords": 0,
+        "lightTreeRefits": 0,
+        "pipelineUpdateNanos": 10590080800,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 6,
+        "maximumWindowPollIntervalNanos": 48419900
+      },
+      "mesh": {
+        "validationNanos": 37190000,
+        "translationAndFileNanos": 552226600,
+        "nativeResourcesNanos": 1012542900,
+        "nativeLightingNanos": 8637149700,
+        "retirementNanos": 63285900,
+        "importerNanos": 19934300,
+        "textureFinalizeNanos": 23862800,
+        "materialSyncNanos": 20319700,
+        "accelerationNanos": 42089900,
+        "nativeRetirementNanos": 636000,
+        "lightDeltaRecords": 0,
+        "lightTreeRefits": 0,
+        "pipelineUpdateNanos": 10638569500,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 96,
+        "maximumWindowPollIntervalNanos": 48419900
+      },
+      "instance": {
+        "validationNanos": 38742400,
+        "translationAndFileNanos": 599080800,
+        "nativeResourcesNanos": 1354868100,
+        "nativeLightingNanos": 8637149700,
+        "retirementNanos": 85881200,
+        "importerNanos": 23280100,
+        "textureFinalizeNanos": 23875800,
+        "materialSyncNanos": 44481200,
+        "accelerationNanos": 74768500,
+        "nativeRetirementNanos": 816100,
+        "lightDeltaRecords": 0,
+        "lightTreeRefits": 0,
+        "pipelineUpdateNanos": 10684643900,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 192,
+        "maximumWindowPollIntervalNanos": 59989000
+      },
+      "light": {
+        "validationNanos": 69665300,
+        "translationAndFileNanos": 599582100,
+        "nativeResourcesNanos": 1354868100,
+        "nativeLightingNanos": 8639590600,
+        "retirementNanos": 85881200,
+        "importerNanos": 23280100,
+        "textureFinalizeNanos": 23875800,
+        "materialSyncNanos": 44481200,
+        "accelerationNanos": 74768500,
+        "nativeRetirementNanos": 816100,
+        "lightDeltaRecords": 16,
+        "lightTreeRefits": 16,
+        "pipelineUpdateNanos": 10685330300,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 192,
+        "maximumWindowPollIntervalNanos": 59989000
+      },
+      "environment": {
+        "validationNanos": 71215700,
+        "translationAndFileNanos": 600057500,
+        "nativeResourcesNanos": 1354868100,
+        "nativeLightingNanos": 8639782500,
+        "retirementNanos": 85881200,
+        "importerNanos": 23280100,
+        "textureFinalizeNanos": 23875800,
+        "materialSyncNanos": 44481200,
+        "accelerationNanos": 74768500,
+        "nativeRetirementNanos": 816100,
+        "lightDeltaRecords": 16,
+        "lightTreeRefits": 31,
+        "pipelineUpdateNanos": 10685878600,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 192,
+        "maximumWindowPollIntervalNanos": 59989000
+      },
+      "mixed": {
+        "validationNanos": 99477900,
+        "translationAndFileNanos": 687898900,
+        "nativeResourcesNanos": 2454391000,
+        "nativeLightingNanos": 8641027000,
+        "retirementNanos": 116442100,
+        "importerNanos": 42442800,
+        "textureFinalizeNanos": 65981200,
+        "materialSyncNanos": 56828200,
+        "accelerationNanos": 137833800,
+        "nativeRetirementNanos": 1390600,
+        "lightDeltaRecords": 32,
+        "lightTreeRefits": 63,
+        "pipelineUpdateNanos": 10735221900,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 288,
+        "maximumWindowPollIntervalNanos": 64450500
+      }
+    },
+    "138457": {
+      "stable": {
+        "validationNanos": 32772500,
+        "translationAndFileNanos": 520933000,
+        "nativeResourcesNanos": 0,
+        "nativeLightingNanos": 12304874200,
+        "retirementNanos": 3193200,
+        "importerNanos": 0,
+        "textureFinalizeNanos": 0,
+        "materialSyncNanos": 0,
+        "accelerationNanos": 0,
+        "nativeRetirementNanos": 0,
+        "lightDeltaRecords": 0,
+        "lightTreeRefits": 0,
+        "pipelineUpdateNanos": 328302000,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 6,
+        "maximumWindowPollIntervalNanos": 35073600
+      },
+      "texture": {
+        "validationNanos": 34230000,
+        "translationAndFileNanos": 624446300,
+        "nativeResourcesNanos": 806478800,
+        "nativeLightingNanos": 12304874200,
+        "retirementNanos": 36137700,
+        "importerNanos": 14974100,
+        "textureFinalizeNanos": 19194700,
+        "materialSyncNanos": 15584600,
+        "accelerationNanos": 500,
+        "nativeRetirementNanos": 670800,
+        "lightDeltaRecords": 0,
+        "lightTreeRefits": 0,
+        "pipelineUpdateNanos": 329017300,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 6,
+        "maximumWindowPollIntervalNanos": 94172200
+      },
+      "mesh": {
+        "validationNanos": 35609500,
+        "translationAndFileNanos": 673374500,
+        "nativeResourcesNanos": 1256784600,
+        "nativeLightingNanos": 12304874200,
+        "retirementNanos": 59925700,
+        "importerNanos": 19269100,
+        "textureFinalizeNanos": 19204500,
+        "materialSyncNanos": 27486300,
+        "accelerationNanos": 35073700,
+        "nativeRetirementNanos": 825200,
+        "lightDeltaRecords": 0,
+        "lightTreeRefits": 0,
+        "pipelineUpdateNanos": 368251200,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 96,
+        "maximumWindowPollIntervalNanos": 94172200
+      },
+      "instance": {
+        "validationNanos": 47582900,
+        "translationAndFileNanos": 720092800,
+        "nativeResourcesNanos": 1738932400,
+        "nativeLightingNanos": 12304874200,
+        "retirementNanos": 86246700,
+        "importerNanos": 22781300,
+        "textureFinalizeNanos": 19218300,
+        "materialSyncNanos": 55532200,
+        "accelerationNanos": 70300700,
+        "nativeRetirementNanos": 1014300,
+        "lightDeltaRecords": 0,
+        "lightTreeRefits": 0,
+        "pipelineUpdateNanos": 414868900,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 192,
+        "maximumWindowPollIntervalNanos": 94172200
+      },
+      "light": {
+        "validationNanos": 103297300,
+        "translationAndFileNanos": 720550200,
+        "nativeResourcesNanos": 1738932400,
+        "nativeLightingNanos": 12307360300,
+        "retirementNanos": 86246700,
+        "importerNanos": 22781300,
+        "textureFinalizeNanos": 19218300,
+        "materialSyncNanos": 55532200,
+        "accelerationNanos": 70300700,
+        "nativeRetirementNanos": 1014300,
+        "lightDeltaRecords": 16,
+        "lightTreeRefits": 16,
+        "pipelineUpdateNanos": 415428500,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 192,
+        "maximumWindowPollIntervalNanos": 94172200
+      },
+      "environment": {
+        "validationNanos": 104528700,
+        "translationAndFileNanos": 720875200,
+        "nativeResourcesNanos": 1738932400,
+        "nativeLightingNanos": 12307535600,
+        "retirementNanos": 86246700,
+        "importerNanos": 22781300,
+        "textureFinalizeNanos": 19218300,
+        "materialSyncNanos": 55532200,
+        "accelerationNanos": 70300700,
+        "nativeRetirementNanos": 1014300,
+        "lightDeltaRecords": 16,
+        "lightTreeRefits": 31,
+        "pipelineUpdateNanos": 415930900,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 192,
+        "maximumWindowPollIntervalNanos": 94172200
+      },
+      "mixed": {
+        "validationNanos": 158956700,
+        "translationAndFileNanos": 799469000,
+        "nativeResourcesNanos": 3086801100,
+        "nativeLightingNanos": 12308840900,
+        "retirementNanos": 112205100,
+        "importerNanos": 37878100,
+        "textureFinalizeNanos": 60554300,
+        "materialSyncNanos": 67186100,
+        "accelerationNanos": 126468700,
+        "nativeRetirementNanos": 1613600,
+        "lightDeltaRecords": 32,
+        "lightTreeRefits": 63,
+        "pipelineUpdateNanos": 465675600,
+        "pipelineBuilds": 6,
+        "shaderTableBuilds": 288,
+        "maximumWindowPollIntervalNanos": 94172200
+      }
+    }
+  },
+  "artifacts": {
+    "build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll": {
+      "size": 8161280,
+      "sha256": "7cf0e664bf8e73f06ce32d5fc58ff924e308ebe2130b0944e0c2914e1f987a46"
+    },
+    "renderer-api/build/libs/renderer-api-7.0.3.jar": {
+      "size": 716338,
+      "sha256": "9a7a927644ee3731f2038b9915647dd48a4b9508d57a3a7d552df4275a9d52bd"
+    },
+    "renderer-core/build/libs/renderer-core-7.0.3.jar": {
+      "size": 14556009,
+      "sha256": "3a884fdc8d45759a248df6ede3d2e05588c11c532995f90e380e2b11c6cd9660"
+    },
+    "renderer-nvidia/build/libs/renderer-nvidia-7.0.3.jar": {
+      "size": 62644788,
+      "sha256": "d312ff29208f5fc86be46d88b1c838783850646572a1480dbfd4bf399552d757"
+    },
+    "renderer-rtxpt/build/libs/renderer-rtxpt-7.0.3.jar": {
+      "size": 510238497,
+      "sha256": "4cce2c84dd304c5991b3ea8086b3396514e009029804ad3ed612d1aba7d5c84f"
+    }
+  },
+  "runtimeZipSha256": "5dcc07c36e16a5ee5c1fb5ed122a1a5a6af1a8939532875629fb59bd607f10b1",
+  "validation": {
+    "nativeRegression": "PASS; 19 tasks, 8m8s",
+    "background": "PASS analytic/raw, surface absolute error=0",
+    "treeRefit": "PASS relativeEnergyError=0.00048180837288554527 relativeRmse=0.0141822094050093",
+    "packaged": "PASS; 17 presets, fallback forbidden, 802 binaries unchanged; ordinary native smoke; 25 tasks, 1m49s",
+    "releaseGates": "PASS version, major contract, neutrality, license; 28 tasks, 46s"
+  }
+}
