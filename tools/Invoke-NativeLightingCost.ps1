@@ -4,9 +4,10 @@ param(
     [string]$ClassPath='',
     [string]$RuntimeDirectory='build/rtxpt-sdk/bin',
     [string]$ComparisonRoundId='',
+    [string]$ExpectedPstate='',
     [int]$Width=1280,[int]$Height=800,[int]$Frames=120,[int]$Sources=64,
     [string]$Java='java.exe',[string]$JavaCompiler='javac.exe',
-    [switch]$Packaged,[switch]$CompileOnly,[switch]$FixtureOnly,[switch]$CheckPaths
+    [switch]$Packaged,[switch]$CompileOnly,[switch]$FixtureOnly,[switch]$CheckPaths,[switch]$RequireIdle
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -25,6 +26,8 @@ if($LASTEXITCODE){throw "E12 benchmark compile failed: $LASTEXITCODE"}
 if($CompileOnly){Write-Host 'RTXPT_710_E12_COMPILE PASS noGpu=true';return}
 if(!$ComparisonRoundId){$ComparisonRoundId=[Guid]::NewGuid().ToString('N')}
 if(!$FixtureOnly){
+    $deadline=[DateTime]::UtcNow.AddSeconds(30)
+    do {
     $baseline=@();$hardware=$null
     $smi=Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
     if($smi){
@@ -39,6 +42,11 @@ if(!$FixtureOnly){
             if($i -lt 2){[Threading.Thread]::Sleep(200)}
         }
     }
+    $idle=$baseline.Count -eq 3 -and ($baseline|Measure-Object -Maximum).Maximum -le 10 -and
+        (!$ExpectedPstate -or $hardware.pstate -ceq $ExpectedPstate)
+    if($RequireIdle -and !$idle){[Threading.Thread]::Sleep(500)}
+    } while($RequireIdle -and !$idle -and [DateTime]::UtcNow -lt $deadline)
+    if($RequireIdle -and !$idle){throw 'Native GPU did not settle to the requested idle/power state; no clean comparison was run'}
     $environment=[ordered]@{format='rtr-e12-environment';formatVersion=1;comparisonRoundId=$ComparisonRoundId;timestampUtc=[DateTime]::UtcNow.ToString('o');hardware=$hardware;
         gpuBaselinePercent=$baseline;baselineKnown=($baseline.Count -eq 3);baselineMaximumPercent=if($baseline.Count -eq 3){($baseline|Measure-Object -Maximum).Maximum}else{$null};
         effectiveFrameCap='NONE';vsync=$false;hostVisible=$false;jobMemoryLimitGiB=10;scenario='static';minimumDynamicSeconds=0;fullDynamicAcceptance=$false;windowsPowerScheme=(& powercfg.exe /getactivescheme 2>$null | Out-String).Trim()}

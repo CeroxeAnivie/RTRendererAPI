@@ -2,6 +2,8 @@
 
 本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
 
+2026-11-04 的光源遍历优化继续使用本地坐标 7.1.1，按用户要求删除旧 Maven Local 包后重新发布。消费方重新解析同版本依赖时使用 `--refresh-dependencies`，并核对发布记录中的 JAR/runtime hash，不能仅凭版本号认定已更新。新 native DLL SHA-256 为 `b8b4bca550f2dce38fc169e3edb4f8249e5a3a5f78695556396acd7337f2fd57`；内置 raw shader 为 `6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57`。扩展使用新包内 SDK 重编译。432 张信号／guide 逐位一致，36 次真实 RR 通过；性能数据见 [最新报告](quality/native-lighting-performance.md)。本批只发布 GitHub 和 Maven Local。
+
 ## 已修复的接入问题
 
 | 审核项 | 修改与使用方式 |

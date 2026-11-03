@@ -8,7 +8,7 @@ param(
     [string]$ComparisonRoundId='',
     [int]$Width=1280,[int]$Height=800,[int]$Frames=120,[int]$Sources=64,
     [string]$Java='java.exe',[string]$JavaCompiler='javac.exe',
-    [switch]$Packaged,[switch]$CompileOnly,[switch]$LegacyOnly,[switch]$CompareOnly,[switch]$GeneralGroups
+    [switch]$Packaged,[switch]$CompileOnly,[switch]$LegacyOnly,[switch]$CompareOnly,[switch]$GeneralGroups,[switch]$RequireIdle
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -40,6 +40,8 @@ if($GeneralGroups){$arguments+='--general-groups'}
 if($CompileOnly){$arguments+='--compile-only'}else{
     # Capture independently on each backend. Never copy hardware/idle evidence
     # from the candidate or manufacture a matched comparison condition.
+    $deadline=[DateTime]::UtcNow.AddSeconds(30)
+    do {
     $samples=@();$hardware=$null;$smi=Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
     if($smi){for($i=0;$i -lt 3;$i++){
         $rows=@(& $smi.Source '--query-gpu=uuid,name,driver_version,pstate,power.limit,utilization.gpu,clocks.gr,clocks.mem,power.draw' '--format=csv,noheader,nounits' 2>$null)
@@ -48,6 +50,10 @@ if($CompileOnly){$arguments+='--compile-only'}else{
                 $hardware=[ordered]@{uuid=$fields[0];name=$fields[1];driver=$fields[2];pstate=$fields[3];powerLimitWatts=$fields[4];graphicsClockMHz=$fields[6];memoryClockMHz=$fields[7];powerDrawWatts=$fields[8]};$samples+=$usage}}
         if($i -lt 2){[Threading.Thread]::Sleep(200)}
     }}
+    $idle=$samples.Count -eq 3 -and ($samples|Measure-Object -Maximum).Maximum -le 10
+    if($RequireIdle -and !$idle){[Threading.Thread]::Sleep(500)}
+    } while($RequireIdle -and !$idle -and [DateTime]::UtcNow -lt $deadline)
+    if($RequireIdle -and !$idle){throw 'Legacy GPU baseline did not settle below 10%; no clean comparison was run'}
     $environment=[ordered]@{format='rtr-e12-environment';formatVersion=1;comparisonRoundId=$ComparisonRoundId;timestampUtc=[DateTime]::UtcNow.ToString('o');hardware=$hardware;
         gpuBaselinePercent=$samples;baselineKnown=($samples.Count -eq 3);baselineMaximumPercent=if($samples.Count -eq 3){($samples|Measure-Object -Maximum).Maximum}else{$null};
         effectiveFrameCap='NONE';vsync=$false;hostVisible=$false;jobMemoryLimitGiB=10;scenario='static';minimumDynamicSeconds=0;fullDynamicAcceptance=$false;
@@ -57,5 +63,6 @@ if($CompileOnly){$arguments+='--compile-only'}else{
 & $runner -FilePath $Java -ArgumentList $arguments -MemoryLimitGB 10
 if($LASTEXITCODE){throw 'Legacy Vulkan lighting execution failed'}
 if($CompileOnly -or $LegacyOnly){return}
-& (Join-Path $PSScriptRoot 'Invoke-NativeLightingCost.ps1') -OutputDirectory $candidate -ClassPath $ClassPath -RuntimeDirectory $RuntimeDirectory -ComparisonRoundId $ComparisonRoundId -Width $Width -Height $Height -Frames $Frames -Sources $Sources -Java $Java -JavaCompiler $JavaCompiler -Packaged:$Packaged
+$expectedPstate=if($RequireIdle){$hardware.pstate}else{''}
+& (Join-Path $PSScriptRoot 'Invoke-NativeLightingCost.ps1') -OutputDirectory $candidate -ClassPath $ClassPath -RuntimeDirectory $RuntimeDirectory -ComparisonRoundId $ComparisonRoundId -Width $Width -Height $Height -Frames $Frames -Sources $Sources -Java $Java -JavaCompiler $JavaCompiler -Packaged:$Packaged -RequireIdle:$RequireIdle -ExpectedPstate $expectedPstate
 & (Join-Path $PSScriptRoot 'Compare-NativeLightingCost.ps1') -CandidateDirectory $candidate -BaselineDirectory $baseline -RequireComparable

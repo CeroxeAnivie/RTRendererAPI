@@ -257,24 +257,39 @@ void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,boo
 {
     local=dynamic=0;uint count=uint(t_Sources[0].position.x);if(count==0)return;
     RtrSourceGroups allSources=(RtrSourceGroups)0,dynamicSources=(RtrSourceGroups)0;
-    uint stack[33],pending=1;stack[0]=uint(t_Sources[0].position.y);
-    while(pending>0)
+    // Visit the right child directly and keep only its deferred sibling. This
+    // preserves the original right-first order, without pushing/popping both
+    // children at every branch of the retained AVL tree.
+    uint stack[32],pending=0,next=uint(t_Sources[0].position.y);
+    while(next!=0xffffffff)
     {
-        RtrNode node=t_SourceTree[stack[--pending]];RtrCount(4);if(!RtrSupport(node,receiver.position))continue;
-        if(node.upper.w<0){stack[pending++]=uint(node.lower.w);stack[pending++]=uint(node.left.w);continue;}
+        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position);
+        if(supported&&node.upper.w<0){stack[pending++]=uint(node.lower.w);next=uint(node.left.w);continue;}
+        if(pending>0)next=stack[--pending];else next=0xffffffff;
+        if(!supported)continue;
         uint slot=uint(node.upper.w);if(slot>=count)continue;RtrCount(5);RtrSource source=t_Sources[slot+1];
         float3 origin=source.position.xyz;
         if(source.position.w==1)origin=clamp(receiver.position,origin-source.extent.xyz,origin+source.extent.xyz);
-        float3 delta=origin-receiver.position;float distance=length(delta);if(distance>=source.direction.w)continue;
+        float3 delta=origin-receiver.position;
+        bool isLinear=(uint(source.identity.w)&2)!=0,isDynamic=needDynamic&&(uint(source.identity.w)&1)!=0;
+        float attenuation=0;
+        [branch] if(isLinear){
+            attenuation=saturate(1-dot(abs(delta),float3(1,1,1))/source.direction.w);
+            // This bound does not need a normalized direction or Euclidean
+            // distance. Spot cones and visibility can only reduce it. Check
+            // both independent subsets before doing that work for a source
+            // that cannot change the result (including stable-ID ties).
+            float3 upper=source.color.rgb*source.color.w*attenuation;
+            if(!RtrCanImprove(allSources,source,upper)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,upper)))continue;
+        }
+        float distance=length(delta);if(distance>=source.direction.w)continue;
         float3 direction=distance>1e-5?delta/distance:receiver.normal;if(dot(receiver.normal,direction)<=0)continue;
-        float attenuation;
-        [branch] if((uint(source.identity.w)&2)!=0)attenuation=saturate(1-dot(abs(delta),float3(1,1,1))/source.direction.w);
-        else attenuation=pow(saturate(1-distance/source.direction.w),source.extent.w)/max(distance*distance,1);
+        [branch] if(!isLinear)attenuation=pow(saturate(1-distance/source.direction.w),source.extent.w)/max(distance*distance,1);
         if(source.position.w==2){float cosine=dot(source.direction.xyz,-direction);
             attenuation*=source.cone.x==source.cone.y?step(source.cone.y,cosine):smoothstep(source.cone.y,source.cone.x,cosine);}
         float3 contribution=source.color.rgb*source.color.w*attenuation;
-        bool isDynamic=needDynamic&&(uint(source.identity.w)&1)!=0;
-        if(!RtrCanImprove(allSources,source,contribution)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,contribution)))continue;
+        if(!isLinear||source.position.w==2)
+            if(!RtrCanImprove(allSources,source,contribution)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,contribution)))continue;
         if(source.identity.x>0&&distance>1e-5)contribution*=RtrShadow(receiver,direction,distance);
         RtrAccumulate(allSources,source,contribution);if(isDynamic)RtrAccumulate(dynamicSources,source,contribution);
     }
@@ -288,13 +303,15 @@ void RtrLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool need
 #endif
 #if RTR_ANALYTIC_LIGHTS
     uint count=asuint(g.farJitter.w);if(count<=1)return;
-    uint base=asuint(g.gi.w),stack[33],pending=1;stack[0]=asuint(g.sunColor.w);
-    while(pending>0)
+    uint base=asuint(g.gi.w),stack[32],pending=0,next=asuint(g.sunColor.w);
+    while(next!=0xffffffff)
     {
-        RtrAnalytic node=t_Analytic[base+stack[--pending]];RtrCount(4);
+        RtrAnalytic node=t_Analytic[base+next];RtrCount(4);
         float3 boundsDelta=max(max(node.position.xyz-receiver.position,receiver.position-node.direction.xyz),0);
-        if(node.color.y==0&&length(boundsDelta)>=node.color.z)continue;
-        if(node.color.w<0){stack[pending++]=uint(node.position.w);stack[pending++]=uint(node.direction.w);continue;}
+        bool supported=node.color.y!=0||length(boundsDelta)<node.color.z;
+        if(supported&&node.color.w<0){stack[pending++]=uint(node.position.w);next=uint(node.direction.w);continue;}
+        if(pending>0)next=stack[--pending];else next=0xffffffff;
+        if(!supported)continue;
         uint index=uint(node.color.w);if(index==0||index>=count)continue;RtrCount(5);RtrAnalytic light=t_Analytic[index];
         float attenuation=1,distance=1e20;float3 direction=-RtrNormalize(light.direction.xyz);
         if(light.position.w!=0){float3 delta=light.position.xyz-receiver.position;distance=length(delta);if(distance<=1e-5||distance>=light.direction.w)continue;

@@ -1,5 +1,7 @@
 # 原生双信号与旧 Vulkan 后端实测
 
+2026-11-04 最新干净环境对照：每端 1,800 帧，测前 GPU 0%、P8。旧 Vulkan P50/P95=3.561312/4.247680 ms，最终 native=3.470080/4.142176 ms，本轮核心耗时分别减少 2.56%/2.48%，图像通过原定误差阈值。详见 [性能报告](native-lighting-performance.md) 与 [完整数据](data/native-lighting-traversal.json)。首次 native 的测前 P4 与旧端 P8 不一致，该轮未用于结论；只补测 native，保留已通过的旧端。以下为早期受干扰的历史记录。
+
 下述表格保留修复前的原始跨后端记录。随后 native 已完成通用性能修复，600 帧同算法 A/B 的 P50 为 11.351488→8.303168 ms、两输出逐位一致；见 [最新 native 记录](native-lighting-performance.md)。这轮同样受外部占用影响，不与下述旧 Vulkan 时间直接计算倍率。
 
 本批增加了可运行的旧后端适配器。它实际加载已发布的 Vulkan core JAR，通过正式 `VulkanSceneRuntime` 上传同一 retained scene、构建四个 BLAS 和一个 TLAS，再对该 TLAS 执行 GLSL compute ray query。输出为 direct gain、indirect contribution 两个 RGBA16F 图像。没有用 CPU 求交、beauty pass、旧游戏 FPS 或既有 native 剪枝数据充当旧后端结果。
