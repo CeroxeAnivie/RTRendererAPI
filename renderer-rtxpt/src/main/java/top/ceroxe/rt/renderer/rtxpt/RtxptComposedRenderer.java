@@ -252,10 +252,19 @@ public final class RtxptComposedRenderer implements Renderer {
         return new FrameSubmitted(result);
     }
     private void retireExternalFrames(){if(presenter!=null){presenter.retireD3D12SharedFrames();rtxpt.retireSharedFrames();}}
+    private final class DiagnosticView implements RtxptDiagnosticAccess {
+        public void diagnosticLevel(RtxptDiagnostics.Level level){rtxpt.diagnosticLevel(level);}
+        public RtxptDiagnostics.Snapshot diagnosticSnapshot(){return rtxpt.diagnosticSnapshot();}
+        public RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){return rtxpt.diagnosticGpuSnapshot();}
+        public RtxptAccess.SubmitStages submitStages(){return rtxpt.submitStages();}
+        public RtxptAccess.PresentationStatus presentationStatus(){return rtxpt.presentationStatus();}
+        public RtxptAccess.RuntimeStatus runtimeStatus(){return rtxpt.runtimeStatus();}
+    }
     @Override public <T> Optional<T> extension(Class<T> type){
         ready();Objects.requireNonNull(type,"extensionType");
         if(type.isInstance(this))return Optional.of(type.cast(this));
         if(type==VulkanFramePresenter.class)return nativePresentation?Optional.empty():Optional.of(type.cast(presenter));
+        if(type==RtxptDiagnosticAccess.class)return Optional.of(type.cast(new DiagnosticView()));
         // Exposing the hidden host's renderFrame/window controls could publish unconsumed slots
         // or present a second window. The composed owner alone advances the native producer.
         if(type==RtxptAccess.class)return nativePresentation?Optional.of(type.cast(rtxpt)):Optional.empty();

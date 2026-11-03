@@ -33,6 +33,12 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$framePatch=Join-Path $PSScriptRoot 'patches/rtxpt-frame-preparation.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $framePatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $framePatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT frame-preparation overlay could not be removed'}
+}
 $transparentPatch=Join-Path $PSScriptRoot 'patches/rtxpt-transparent-background.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $transparentPatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -1524,6 +1530,11 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT transparent-background patch does not match
 & git -C $sdk apply --ignore-space-change $transparentPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT transparent-background patch failed'}
 
+& git -C $sdk apply --check --ignore-space-change $framePatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT frame-preparation overlay does not match the verified base'}
+& git -C $sdk apply --ignore-space-change $framePatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT frame-preparation overlay failed'}
+
 $rootCMake=Join-Path $sdk 'CMakeLists.txt'
 $cmakeText=[IO.File]::ReadAllText($rootCMake)
 # The command-line OptiX screenshot utility is not used by the embedded realtime host.
@@ -1546,11 +1557,13 @@ if($StreamlineSdk){
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $cmake `
-    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','rtxpt_memory_diagnostics_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
+    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','rtxpt_memory_diagnostics_selftest','rtxpt_task_batch_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
     -WorkingDirectory $sdk -MemoryLimitGB $MemoryLimitGB
 if($LASTEXITCODE -ne 0){throw 'RTXPT JNI bridge build failed'}
 & (Join-Path $sdk 'bin/rtxpt_streamline_cache_selftest.exe')
-if($LASTEXITCODE -ne 0){throw 'Streamline feature function cache lifecycle self-test failed'}
+if($LASTEXITCODE -ne 0){throw 'Streamline function-cache self-test failed'}
+& (Join-Path $sdk 'bin/rtxpt_task_batch_selftest.exe')
+if($LASTEXITCODE -ne 0){throw 'RTXPT task-batch self-test failed'}
 & (Join-Path $sdk 'bin/rtxpt_memory_diagnostics_selftest.exe')
 if($LASTEXITCODE -ne 0){throw 'Disabled memory diagnostics self-test failed'}
 & (Join-Path $sdk 'bin/rtxpt_memory_diagnostics_selftest.exe') enabled

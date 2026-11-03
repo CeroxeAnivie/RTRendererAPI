@@ -16,6 +16,10 @@ add_library(rtrenderer_rtxpt SHARED
     "${CMAKE_CURRENT_LIST_DIR}/rtxpt_jni.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/rtxpt_material_policy.cpp")
 add_executable(rtxpt_native_control "${CMAKE_CURRENT_LIST_DIR}/rtxpt_native_control.cpp")
+add_executable(rtxpt_task_batch_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_task_batch_selftest.cpp")
+target_include_directories(rtxpt_task_batch_selftest PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
+target_link_libraries(rtxpt_task_batch_selftest PRIVATE donut_engine)
+target_compile_features(rtxpt_task_batch_selftest PRIVATE cxx_std_17)
 add_executable(rtxpt_streamline_cache_selftest EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_LIST_DIR}/rtxpt_streamline_cache_selftest.cpp")
 add_executable(rtxpt_memory_diagnostics_selftest EXCLUDE_FROM_ALL

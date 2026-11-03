@@ -26,6 +26,10 @@ final class RtxptNative {
     }
     static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,boolean gpuTimingsEnabled,int maxFramesInFlight,int workerThreads,int shaderCompilerThreads,String[] options,int[] qualityInts,float[] qualityFloats);
     static native void prepare(String runtime);
+    static native void diagnosticContext(long handle,long sequence,long revision);
+    static native void diagnosticLevel(long handle,int level);
+    static native long[] diagnosticSnapshot(long handle);
+    static native String[] diagnosticGpuSnapshot(long handle);
     @FunctionalInterface interface Compositor { void compose(long[] frame); }
     static native void compositor(long handle,Compositor callback);
     static native void title(long handle,String text);

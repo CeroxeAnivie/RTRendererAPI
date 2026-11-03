@@ -1,3 +1,5 @@
+#include "rtxpt_diagnostics.h"
+#include "rtxpt_host_resources.h"
 #pragma once
 #include <array>
 #include <atomic>
@@ -32,10 +34,24 @@ public:
     // Lifecycle only: the caller MUST first drain/retire every Vulkan consumer.
     // Queue signals preserve the producer copy order, including descriptors rejected before import.
     void retire(nvrhi::IDevice* device) {
+        RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Retirement);
         auto* queue=static_cast<ID3D12CommandQueue*>(device->getNativeQueue(
             nvrhi::ObjectTypes::D3D12_CommandQueue,nvrhi::CommandQueue::Graphics).pointer);
-        for(auto& slot:slots)if(slot.completion && slot.fence->GetCompletedValue()<slot.completion)
+        for(auto& slot:slots)if(slot.completion && slot.fence->GetCompletedValue()<slot.completion) {
             check(queue->Signal(slot.fence.Get(),slot.completion),"Retire abandoned shared frame");
+            // NVRHI's last submission fence can precede this native queue signal.
+            // Wait for the actual shared fence before clearing its generation.
+            HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+            if(!event)throw std::runtime_error("Cannot create shared-frame retirement event");
+            const HRESULT result=slot.fence->SetEventOnCompletion(slot.completion,event);
+            if(FAILED(result)){CloseHandle(event);check(result,"Arm shared-frame retirement");}
+            DWORD waited=WAIT_TIMEOUT;
+            for(unsigned polls=0;polls<625&&waited==WAIT_TIMEOUT;++polls){
+                waited=WaitForSingleObject(event,8);RtrHostResources::PumpEvents();
+            }
+            CloseHandle(event);
+            if(waited!=WAIT_OBJECT_0)throw std::runtime_error("Shared-frame retirement did not complete within 5 seconds");
+        }
         device->waitForIdle();
         clear();
     }
@@ -53,6 +69,7 @@ public:
         commands=nullptr;width=height=next=0;latest=-1;
     }
     void publish(nvrhi::IDevice* device,nvrhi::ITexture* source,bool premultipliedAlpha=false) {
+        RtrDiagnostics::Scope diagnostic(RtrDiagnostics::SharedPublish);
         if(!source)throw std::runtime_error("RTXPT has no completed display-color target");
         const auto& sourceDesc=source->getDesc();
         if(sourceDesc.format!=nvrhi::Format::SRGBA8_UNORM && sourceDesc.format!=nvrhi::Format::RGBA8_UNORM)
@@ -84,7 +101,7 @@ public:
             commands=device->createCommandList();
         }
         auto& slot=slots[next];slot.premultipliedAlpha=premultipliedAlpha;
-        if(slot.completion)check(queue->Wait(slot.fence.Get(),slot.completion),"Wait for Vulkan frame consumption");
+        if(slot.completion){RtrDiagnostics::Scope diagnostic(RtrDiagnostics::SharedReuseWait);diagnostic.event[11]=1;check(queue->Wait(slot.fence.Get(),slot.completion),"Wait for Vulkan frame consumption");}
         commands->open();
         commands->copyTexture(slot.texture,nvrhi::TextureSlice(),source,nvrhi::TextureSlice());
         commands->setTextureState(slot.texture,nvrhi::AllSubresources,nvrhi::ResourceStates::Common);

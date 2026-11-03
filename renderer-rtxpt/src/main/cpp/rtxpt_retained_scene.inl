@@ -54,9 +54,9 @@ void ApplyResources(const std::filesystem::path& manifest) {
     Json::Value json;std::ifstream input(manifest);
     if(!input||!(input>>json))throw std::runtime_error("Could not read retained delta");
     auto stageBegin=std::chrono::steady_clock::now();
-    auto imported=m_scene->HostImport(std::filesystem::u8path(json["model"].asString()));
+    auto imported=[&]{RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Import);return m_scene->HostImport(std::filesystem::u8path(json["model"].asString()));}();
     importerNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-stageBegin).count();
-    stageBegin=std::chrono::steady_clock::now();m_scene->HostFinalizeTextures(*GetCommonPasses());
+    stageBegin=std::chrono::steady_clock::now();{RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Textures);m_scene->HostFinalizeTextures(*GetCommonPasses());}
     textureFinalizeNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-stageBegin).count();
     auto graph=m_scene->GetSceneGraph();
     std::unordered_map<std::string,std::shared_ptr<donut::engine::MeshInfo>> meshes;
@@ -159,11 +159,12 @@ void ApplyResources(const std::filesystem::path& manifest) {
     for(auto& entry:invalidated)ommChanged|=entry.second;
     if(m_ommBaker&&ommChanged)m_ommBaker->SceneUnloading();
     auto command=GetDevice()->createCommandList();command->open();
-    auto gpuQuery=GetDevice()->createTimerQuery();GetDevice()->resetTimerQuery(gpuQuery);command->beginTimerQuery(gpuQuery);
+    nvrhi::TimerQueryHandle gpuQuery;
+    if(RtrDiagnostics::level.load()!=0&&resourceGpuQueries.size()<8){gpuQuery=GetDevice()->createTimerQuery();GetDevice()->resetTimerQuery(gpuQuery);command->beginTimerQuery(gpuQuery);}
     for(auto& copy:textureCopies)for(uint32_t mip=0;mip<copy.first->getDesc().mipLevels;mip++)
         command->copyTexture(copy.first,nvrhi::TextureSlice().setMipLevel(mip),copy.second,nvrhi::TextureSlice().setMipLevel(mip));
     m_scene->Refresh(command,GetFrameIndex());
-    stageBegin=std::chrono::steady_clock::now();bool materialShadersChanged=GetMaterialsBaker()->HostSyncMaterials(m_scene);
+    stageBegin=std::chrono::steady_clock::now();bool materialShadersChanged=[&]{RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Materials);return GetMaterialsBaker()->HostSyncMaterials(m_scene);}();
     materialSyncNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-stageBegin).count();
     ApplyDefaultTransmissionDenoisingGuides(graph.get(),true);
     uint64_t pending=0,retained=0;
@@ -179,8 +180,8 @@ void ApplyResources(const std::filesystem::path& manifest) {
     bool hitGroupsChanged=topology||pending||materialShadersChanged;
     for(auto& entry:invalidated)hitGroupsChanged|=entry.second;
     if(hitGroupsChanged)GetRTPipelineBaker()->HostInvalidateScene();
-    command->endTimerQuery(gpuQuery);command->close();GetDevice()->executeCommandList(command);
-    resourceGpuQueries.push_back(gpuQuery);
+    if(gpuQuery)command->endTimerQuery(gpuQuery);command->close();GetDevice()->executeCommandList(command);
+    if(gpuQuery)resourceGpuQueries.push_back(gpuQuery);
     // Material-only edits keep geometry, BLAS, TLAS and their buffer identities.
     GetBindingCache().Clear();InvalidateBindingSet();
     stageBegin=std::chrono::steady_clock::now();
@@ -191,6 +192,6 @@ void ApplyResources(const std::filesystem::path& manifest) {
     if(UsesBakedLighting())if(auto baker=GetLightsBaker())baker->SceneReloaded();
     if(auto cache=GetSharc())cache->NotifySceneReloaded();
     g_sampleUIData.ResetAccumulation=true;g_sampleUIData.ResetRealtimeCaches=true;preSrHistoryReset=true;
-    lightingSceneDirty=true;
+    ++cacheGeneration;lightingSceneDirty=true;
     resourceRecordingNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-recordBegin).count();
 }

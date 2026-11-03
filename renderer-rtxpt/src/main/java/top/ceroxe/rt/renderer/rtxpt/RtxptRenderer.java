@@ -23,6 +23,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
     private RendererFeatureProfile requestedProfile;
     private final RtxptFeatureController features;
     private long handle,revision,submitted=-1,completed=-1,frames,frameNs,exports,exportNs,batches,transformNs;
+    private RtxptDiagnostics.Level diagnosticLevel=RtxptDiagnostics.Level.SUMMARY;
     private boolean closed,dirty=true,windowClosed,scenePublished,nativeContractPending;
     private int width,height;
     private Path directory,nativeScene,fullDirectory;
@@ -173,7 +174,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
         camera=null;
     }
     @Override public FrameSubmissionResult submit(RenderFrameRequest f){
-        long validationBegin=System.nanoTime();ready();Objects.requireNonNull(f);if(f.sequence()<=submitted)throw new IllegalArgumentException("Frame sequence must increase");
+        long validationBegin=System.nanoTime();ready();Objects.requireNonNull(f);if(f.width()>16384||f.height()>16384)throw new IllegalArgumentException("RTXPT output dimensions exceed D3D12 limit 16384");if(f.sequence()<=submitted)throw new IllegalArgumentException("Frame sequence must increase");
         var historyBefore=handle==0?new long[16]:RtxptNative.executionTelemetry(handle);
         var historyCauses=EnumSet.noneOf(HistoryCause.class);
         if(handle==0)historyCauses.add(HistoryCause.FIRST_FRAME);
@@ -224,11 +225,13 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
             if(path==null)throw new IllegalStateException("Submit a populated scene");
             handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,gpuTimingsEnabled,
                 maxFramesInFlight,resources.workerThreads(),resources.shaderCompilerThreads(),options.arguments(),options.qualityInts(),options.qualityFloats());
+            RtxptNative.diagnosticLevel(handle,diagnosticLevel.ordinal());
             if(compositor!=null)RtxptNative.compositor(handle,compositor);
             if(title!=null)RtxptNative.title(handle,title);
             applyNativeSettings();
             if(nativeScene==null)scene.uploadInteriors(handle);
         }else if(rebuild){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();scene.uploadInteriors(handle);}
+        RtxptNative.diagnosticContext(handle,f.sequence(),revision);
         if(preparedDelta!=null&&preparedDelta.hasWork()){
             long begin=System.nanoTime();RtxptNative.resources(handle,preparedDelta.manifest().toString());nativeResourceNs+=System.nanoTime()-begin;preparedDelta.translated().uploadInteriors(handle);
             textureFiles=preparedDelta.textureFiles();resourceBatches++;resourceMeshes+=preparedDelta.meshes();
@@ -462,6 +465,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl {
     }
     @Override public boolean renderFrame(){ready();if(handle==0)throw new IllegalStateException("Submit a scene first");if(windowClosed)return false;
         long begin=System.nanoTime();int result=RtxptNative.frame(handle);frameNs+=System.nanoTime()-begin;if(result==2){frames++;completed=submitted;}else if(result==0)windowClosed=true;return result!=0;}
+    @Override public void diagnosticLevel(RtxptDiagnostics.Level level){ready();diagnosticLevel=Objects.requireNonNull(level);if(handle!=0)RtxptNative.diagnosticLevel(handle,level.ordinal());}
+    @Override public RtxptDiagnostics.Snapshot diagnosticSnapshot(){ready();return handle==0?RtxptDiagnostics.decode(new long[]{2,12,0,0,0,0,0}):RtxptDiagnostics.decode(RtxptNative.diagnosticSnapshot(handle));}
+    @Override public RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){ready();return RtxptDiagnostics.decodeGpu(handle==0?new String[]{"0,0,0,0,0"}:RtxptNative.diagnosticGpuSnapshot(handle));}
     @Override public void awaitIdle(){ready();if(handle!=0)RtxptNative.awaitIdle(handle);}
     @Override public void setOverlayText(String text){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.overlay(handle,Objects.requireNonNull(text));}
     @Override public void setOverlayChoices(List<String> labels,int selectedIndex){

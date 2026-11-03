@@ -34,6 +34,7 @@
 #include "rtxpt_host_resources.h"
 #include "rtxpt_memory_diagnostics.h"
 #include "rtxpt_light_tree.h"
+#include "rtxpt_gpu_profile.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
@@ -53,6 +54,11 @@ class HostPathTracer final : public AdvancedPathTracer {
     bool continuousPending=false,independentBackground=false,transparentBackground=false;
     float3 primaryBackground={};
     uint64_t executedAccumulationResets=0,executedReconstructionResets=0,executedDenoiserResets=0,cacheNotifications=0,continuousUploads=0;
+    uint64_t cacheGeneration=1;
+    uint64_t HostSceneCacheGeneration() const override { return managedLighting ? cacheGeneration : 0; }
+public:
+    void InvalidateFrameCache(){++cacheGeneration;}
+private:
     void HostHistoryAction(int scope,bool reset) override {
         if(!reset)return;
         if(scope==0)++executedAccumulationResets;
@@ -565,7 +571,7 @@ struct Session {
     nvrhi::TextureHandle lastPresentedTexture;
     SharedFrameProducer sharedFrames;
     bool externalPresentation=false;
-    bool gpuTimingsEnabled=true;
+    bool gpuTimingsEnabled=true,gpuTimingsAllowed=true;
     uint64_t rendered=0;
     std::chrono::steady_clock::time_point memoryReport{};
     bool presentationTrace=[] {const char* v=std::getenv("RTR_RTXPT_PRESENTATION_TRACE");return v && std::string(v)=="1";}();
@@ -611,13 +617,13 @@ struct Session {
     double gpuAverageNs=0;
     void beginGpuSample(uint32_t index) {
         currentGpuSample=nullptr;
-        if(!gpuTimingsEnabled)return;
         auto* device=app->HostDeviceManager()->GetDevice();
         for(auto& sample:gpuSamples)if(sample.pending && device->pollTimerQuery(sample.query)) {
             double ns=device->getTimerQueryTime(sample.query)*1e9;
             ++gpuSampleCount;gpuAverageNs=gpuSampleCount==1?ns:gpuAverageNs*.9+ns*.1;
             gpuMaxNs=std::max(gpuMaxNs,uint64_t(ns));sample.pending=false;
         }
+        if(!gpuTimingsEnabled)return;
         auto& sample=gpuSamples[index%gpuSamples.size()];if(sample.pending)return;
         if(!sample.query)sample.query=device->createTimerQuery();
         if(!timerCommands)timerCommands=device->createCommandList();
@@ -633,6 +639,7 @@ struct Session {
     }
     std::unordered_map<std::string, donut::engine::SceneGraphNode*> nodes;
     void shutdown() {
+        RtrDiagnostics::Configure(0);
         RtrMemoryDiagnostics::Checkpoint("shutdown.begin");
         if (app) {
             auto* dm=app->HostDeviceManager();
@@ -761,9 +768,11 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             args.push_back(utf8(e, s)); e->DeleteLocalRef(s);
         }
         std::vector<const char*> argv; for (const auto& a : args) argv.push_back(a.c_str());
+        RtrDiagnostics::Reset();
+        RtrMemoryDiagnostics::recording=true;
         auto s = std::make_unique<Session>();
         s->externalPresentation=externalPresentation;
-        s->gpuTimingsEnabled=gpuTimingsEnabled;
+        s->gpuTimingsEnabled=s->gpuTimingsAllowed=gpuTimingsEnabled;
         donut::log::ConsoleApplicationMode();
         g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();
@@ -937,6 +946,7 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
 extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frame(
     JNIEnv* e, jclass, jlong h) {
     try {
+        RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Frame);
         auto& s = session(h); auto dm = s.app->HostDeviceManager();
         if (glfwWindowShouldClose(dm->GetWindow())) return 0;
         static_cast<HostPathTracer*>(s.app->HostRenderPass())->UpdateLightingPolicy();
@@ -1056,7 +1066,7 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
         const auto* sample=static_cast<HostPathTracer*>(s.app->HostRenderPass());
         const auto& camera=sample->GetCurrentCamera();
         const auto p=camera.GetPosition(),d=camera.GetDir(),u=camera.GetUp();
-        int width=0,height=0;glfwGetFramebufferSize(s.app->HostDeviceManager()->GetWindow(),&width,&height);
+        int width=0,height=0;s.app->HostDeviceManager()->GetWindowDimensions(width,height);
         const jdouble values[]={p.x,p.y,p.z,d.x,d.y,d.z,u.x,u.y,u.z,sample->GetCameraVerticalFOV(),
             double(std::max(width,1)),double(std::max(height,1))};
         auto result=e->NewDoubleArray(12);
@@ -1269,6 +1279,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_interiors(
     JNIEnv* e, jclass, jlong h, jobjectArray names, jobject values) {
     try {
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->InvalidateFrameCache();
         auto& s=session(h); auto* data=static_cast<float*>(e->GetDirectBufferAddress(values));
         const auto count=e->GetArrayLength(names);
         if(!data || e->GetDirectBufferCapacity(values)<jlong(count)*5) throw std::invalid_argument("Interior buffer too small");
@@ -1294,6 +1305,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_materialIors(
     JNIEnv* e, jclass, jlong h, jobjectArray names, jobject values) {
     try {
+        static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->InvalidateFrameCache();
         auto& s=session(h); auto* data=static_cast<float*>(e->GetDirectBufferAddress(values));
         const auto count=e->GetArrayLength(names);
         if(!data || e->GetDirectBufferCapacity(values)<count)throw std::invalid_argument("Material IOR buffer too small");
@@ -1337,6 +1349,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             decomposeAffine(transform,&translation,&rotation,&scaling);
             checked[i]->SetTransform(&translation,&rotation,&scaling);
         }
+        if(count)static_cast<HostPathTracer*>(s.app->HostRenderPass())->InvalidateFrameCache();
     } catch(const std::exception& x) { fail(e,x); }
 }
 
@@ -1358,7 +1371,11 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             g_sampleUIData.DLSSFGMode=SI::DLSSGMode::eOff;
             s.restoreFrameGenerationBeforeRender=true;
         }
-        glfwSetWindowSize(s.app->HostDeviceManager()->GetWindow(), w, height);
+        if(w>16384 || height>16384)throw std::invalid_argument("Output dimensions exceed D3D12 2D texture limit 16384");
+        RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Resize,uint64_t(w)*height);
+        auto* dm=s.app->HostDeviceManager();
+        if(s.externalPresentation){dm->HostOutputWidth=uint32_t(w);dm->HostOutputHeight=uint32_t(height);}
+        else glfwSetWindowSize(dm->GetWindow(), w, height);
     } catch (const std::exception& x) { fail(e, x); }
 }
 
@@ -1380,4 +1397,23 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             throw std::runtime_error("Streamline shutdown failed, result="+std::to_string(static_cast<int>(shutdownResult)));
     }
     catch (const std::exception& x) { fail(e, x); }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticContext(JNIEnv* e,jclass,jlong h,jlong frame,jlong revision) {
+    try {session(h);RtrDiagnostics::Context(uint64_t(frame),uint64_t(revision));}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticLevel(JNIEnv* e,jclass,jlong h,jint level) {
+    try {auto& s=session(h);if(level<0||level>2)throw std::invalid_argument("Diagnostic level must be 0..2");RtrDiagnostics::Configure(unsigned(level));RtrMemoryDiagnostics::Configure(level!=0);s.gpuTimingsEnabled=level!=0&&s.gpuTimingsAllowed;RtrGpuProfile::Configure(s.app->HostDeviceManager()->GetDevice(),unsigned(level),s.gpuTimingsAllowed);}
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticSnapshot(JNIEnv* e,jclass,jlong h) {
+    try {session(h);auto values=RtrDiagnostics::Snapshot();auto result=e->NewLongArray(jsize(values.size()));
+        if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;}
+    catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticGpuSnapshot(JNIEnv* e,jclass,jlong h) {
+    try {session(h);auto values=RtrGpuProfile::Snapshot();auto type=e->FindClass("java/lang/String");auto result=e->NewObjectArray(jsize(values.size()),type,nullptr);e->DeleteLocalRef(type);
+        if(result)for(jsize i=0;i<jsize(values.size());++i){auto text=e->NewStringUTF(values[i].c_str());e->SetObjectArrayElement(result,i,text);e->DeleteLocalRef(text);}return result;}
+    catch(const std::exception& x){fail(e,x);return nullptr;}
 }

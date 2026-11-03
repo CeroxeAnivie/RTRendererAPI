@@ -89,6 +89,25 @@ final class RtxptRuntimeBundle {
             if (!Files.isRegularFile(root.resolve(file))) throw new IOException("Missing RTXPT runtime file: " + file);
         for (var dir : new String[]{"ShaderPrecompiled", "ShaderDynamic/Source", "Assets/EnvironmentMaps", "Assets/Materials"})
             if (!Files.isDirectory(root.resolve(dir))) throw new IOException("Missing RTXPT runtime directory: " + dir);
+        var binRoot=root.resolve("ShaderDynamic/Bin/dxil");
+        var manifest=Files.readString(binRoot.resolve("bundle.json"));
+        var binaries=java.util.regex.Pattern.compile("\"path\"\\s*:\\s*\"([^\"\\\\]+\\.bin)\"[^{}]*?\"sha256\"\\s*:\\s*\"([0-9a-f]{64})\"").matcher(manifest);
+        int checked=0;
+        while(binaries.find()){
+            var file=binRoot.resolve(binaries.group(1)).normalize();
+            if(!file.startsWith(binRoot)||!Files.isRegularFile(file))throw new IOException("Missing packaged shader: "+binaries.group(1));
+            if(!binaries.group(2).equals(sha256(file)))throw new IOException("Corrupt packaged shader: "+binaries.group(1));
+            checked++;
+        }
+        if(checked==0)throw new IOException("Empty or incompatible RTXPT shader inventory");
+    }
+
+    private static String sha256(Path file) throws IOException {
+        try {
+            var hash=MessageDigest.getInstance("SHA-256");
+            try(var stream=Files.newInputStream(file)){byte[] buffer=new byte[65536];for(int n;(n=stream.read(buffer))>=0;)hash.update(buffer,0,n);}
+            return HexFormat.of().formatHex(hash.digest());
+        }catch(NoSuchAlgorithmException e){throw new IOException(e);}
     }
 
     private static boolean complete(Path root, String digest) {

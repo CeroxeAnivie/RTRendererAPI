@@ -2,6 +2,10 @@
 // Mirrors GpuProfiler.cpp's per-queue timestamp/resolve/fence design, without Tracy.
 #pragma once
 #include <nvrhi/d3d12.h>
+#include "rtxpt_async_output.h"
+#include "rtxpt_diagnostics.h"
+#include <string>
+#include <vector>
 #include <array>
 #include <chrono>
 #include <cstdio>
@@ -17,7 +21,7 @@ struct Event { uint32_t name=0; int parent=-1; bool ended=false; };
 struct Slot {
     std::array<Event,ZoneCount> events{};
     uint32_t count=0;
-    uint64_t frame=0, fence=0;
+    uint64_t frame=0, fence=0, sequence=0, revision=0;
     bool pending=false;
 };
 struct Queue {
@@ -37,7 +41,10 @@ struct State {
     std::array<std::array<char,160>,NameCount> names{};
     uint32_t namesUsed=0, stride=16, warmup=240;
     uint64_t frame=0, dropped=0;
-    FILE* output=nullptr;
+    std::unique_ptr<RtrAsyncOutput> output;
+    std::array<std::array<char,512>,4096> completed{};
+    uint64_t completedCount=0, overwritten=0;
+    bool enabled=true;
     std::mutex mutex;
 };
 inline std::unique_ptr<State> state;
@@ -50,23 +57,26 @@ inline uint32_t EnvNumber(const char* name,uint32_t fallback) {
 }
 inline void Collect(Queue& q,int queueIndex) {
     const uint64_t completed=q.fence->GetCompletedValue();
-    if(completed==UINT64_MAX) return;
+    if(completed==UINT64_MAX) {for(auto& s:q.slots)if(s.pending){state->dropped+=s.count;s.pending=false;}return;}
     for(auto& s:q.slots) {
         if(!s.pending || s.fence>completed) continue;
         const uint32_t slotIndex=uint32_t(&s-q.slots.data());
         const size_t offset=size_t(slotIndex)*ZoneCount*2;
         const D3D12_RANGE range{offset*sizeof(uint64_t),(offset+s.count*2)*sizeof(uint64_t)};
         void* mapped=nullptr;
-        if(FAILED(q.readback->Map(0,&range,&mapped))) continue;
+        if(FAILED(q.readback->Map(0,&range,&mapped))) {state->dropped+=s.count;s.pending=false;continue;}
         const auto* ticks=static_cast<const uint64_t*>(mapped)+offset;
         for(uint32_t i=0;i<s.count;++i) {
             if(!s.events[i].ended || ticks[i*2+1]<ticks[i*2]) {++state->dropped; continue;}
             const auto& e=s.events[i];
-            std::fprintf(state->output,"%llu,%s,%u,%d,%s,%.9f,%llu,%llu,%llu\n",
+            auto& line=state->completed[state->completedCount%state->completed.size()];
+            std::snprintf(line.data(),line.size(),"%llu,%s,%u,%d,%s,%.9f,%llu,%llu,%llu,%llu,%llu\n",
                 static_cast<unsigned long long>(s.frame),queueIndex==0?"graphics":"compute",i,e.parent,
                 state->names[e.name].data(),double(ticks[i*2+1]-ticks[i*2])*1000.0/double(q.frequency),
                 static_cast<unsigned long long>(ticks[i*2]),static_cast<unsigned long long>(ticks[i*2+1]),
-                static_cast<unsigned long long>(q.frequency));
+                static_cast<unsigned long long>(q.frequency),static_cast<unsigned long long>(s.sequence),static_cast<unsigned long long>(s.revision));
+            ++state->completedCount;if(state->completedCount>state->completed.size())++state->overwritten;
+            if(state->output)state->output->Write(line.data());
         }
         const D3D12_RANGE written{0,0}; q.readback->Unmap(0,&written);
         s.pending=false;
@@ -89,22 +99,22 @@ inline bool InitQueue(Queue& q,nvrhi::IDevice* device,nvrhi::CommandQueue type) 
     nvrhi::CommandListParameters p; p.queueType=type; q.resolve=device->createCommandList(p);
     return q.resolve!=nullptr;
 }
-inline void Init(nvrhi::IDevice* device) {
+inline void Init(nvrhi::IDevice* device,bool explicitEnable=false) {
+    if(state){state->enabled=explicitEnable||state->output!=nullptr;return;}
     const char* path=std::getenv("RTR_RTXPT_GPU_PROFILE");
-    if(!path || !*path || device->getGraphicsAPI()!=nvrhi::GraphicsAPI::D3D12) return;
+    if(((!path || !*path)&&!explicitEnable) || device->getGraphicsAPI()!=nvrhi::GraphicsAPI::D3D12) return;
     state=std::make_unique<State>();
-    if(fopen_s(&state->output,path,"wb")!=0) {state.reset(); return;}
-    state->stride=EnvNumber("RTR_RTXPT_GPU_PROFILE_STRIDE",16);
-    state->warmup=EnvNumber("RTR_RTXPT_GPU_PROFILE_WARMUP",240);
-    std::setvbuf(state->output,nullptr,_IOFBF,256*1024);
-    std::fprintf(state->output,"frame,queue,event,parent,name,inclusive_ms,begin_tick,end_tick,frequency\n");
+    if(path&&*path)state->output=std::make_unique<RtrAsyncOutput>(path);
+    state->stride=EnvNumber("RTR_RTXPT_GPU_PROFILE_STRIDE",explicitEnable?1:16);
+    state->warmup=explicitEnable?0:EnvNumber("RTR_RTXPT_GPU_PROFILE_WARMUP",240);
+    if(state->output)state->output->Write("frame,queue,event,parent,name,inclusive_ms,begin_tick,end_tick,frequency,sequence,revision\n");
     if(!InitQueue(state->queues[0],device,nvrhi::CommandQueue::Graphics)
         || !InitQueue(state->queues[1],device,nvrhi::CommandQueue::Compute)) {
-        std::fclose(state->output); state.reset();
+        state.reset();
     }
 }
 inline Token Begin(nvrhi::ICommandList* list,const char* name,int parent) {
-    if(!state || state->frame<state->warmup || (state->frame-state->warmup)%state->stride) return {};
+    if(!state || !state->enabled || state->frame<state->warmup || (state->frame-state->warmup)%state->stride) return {};
     const auto type=list->getDesc().queueType;
     const int qi=type==nvrhi::CommandQueue::Graphics?0:type==nvrhi::CommandQueue::Compute?1:-1;
     if(qi<0) return {};
@@ -112,7 +122,7 @@ inline Token Begin(nvrhi::ICommandList* list,const char* name,int parent) {
     auto& q=state->queues[qi];
     if(q.active<0) {
         for(uint32_t i=0;i<SlotCount;++i) if(!q.slots[i].pending) {
-            q.active=int(i); q.slots[i].count=0; q.slots[i].frame=state->frame; break;
+            q.active=int(i); q.slots[i].count=0; q.slots[i].frame=state->frame;q.slots[i].sequence=RtrDiagnostics::frame.load();q.slots[i].revision=RtrDiagnostics::revision.load(); break;
         }
     }
     if(q.active<0 || q.slots[q.active].count==ZoneCount) {++state->dropped; return {};}
@@ -155,6 +165,22 @@ inline void AfterPresent() {
     }
     ++state->frame;
 }
+inline void Configure(nvrhi::IDevice* device,unsigned level,bool allowed){
+    const char* path=std::getenv("RTR_RTXPT_GPU_PROFILE");
+    const bool enabled=allowed&&level!=0&&(level==2||(path&&*path));
+    if(enabled)Init(device,level==2);
+    if(state)state->enabled=enabled;
+}
+inline std::vector<std::string> Snapshot(){
+    if(!state)return {"0,0,0,0,0"};
+    std::vector<std::string> result;
+    uint64_t pending=0;for(auto& q:state->queues)for(auto& slot:q.slots)pending+=slot.pending?slot.count:0;
+    result.push_back(std::to_string(state->dropped)+","+std::to_string(state->overwritten)+","+std::to_string(pending)+","+std::to_string(state->stride)+","+std::to_string(state->enabled));
+    const uint64_t count=std::min<uint64_t>(state->completedCount,state->completed.size());
+    result.reserve(size_t(count)+1);
+    for(uint64_t i=state->completedCount-count;i<state->completedCount;++i)result.emplace_back(state->completed[i%state->completed.size()].data());
+    return result;
+}
 inline void Shutdown() {
     if(!state) return;
     // Only shutdown may wait. Sampling never waits for a GPU query.
@@ -169,9 +195,9 @@ inline void Shutdown() {
         }
         Collect(q,i);
     }
-    std::fprintf(state->output,"# frames=%llu,stride=%u,warmup=%u,dropped=%llu\n",
+    if(state->output){char line[256];std::snprintf(line,sizeof(line),"# frames=%llu,stride=%u,warmup=%u,dropped=%llu,outputDropped=%llu\n",
         static_cast<unsigned long long>(state->frame),state->stride,state->warmup,
-        static_cast<unsigned long long>(state->dropped));
-    std::fclose(state->output); state.reset();
+        static_cast<unsigned long long>(state->dropped),static_cast<unsigned long long>(state->output->dropped));state->output->Write(line);}
+    state.reset();
 }
 }

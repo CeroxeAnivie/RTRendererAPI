@@ -6,7 +6,7 @@ RTRendererAPI 适合嵌入 Java 25 或更高版本的桌面或引擎进程。普
 
 普通模式提交场景、材质、实例和帧请求。`vulkan-rt` 保留普通表面、可编程场景和通用命令；`rtxpt` 可托管完整 PBR／透明介质场景及原生呈现。Vulkan 专家模式通过显式资源／命令事务或 `SceneShaderProgram` 阶段替换表达。两者共用 `Renderer` 和 `RendererConfig`，配置对象本身不切换提交语义；先根据下表选择后端，再学习对应的输出循环。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.4`，默认传递解析 Vulkan 后端、NVIDIA provider 和 native runtime。RTXPT 场景额外添加 `top.ceroxe.rt:renderer-rtxpt:7.0.4`；使用下面的 `RtxptAccess`／组合类时需要编译依赖。本轮从源码构建到本地 Maven 仓库使用，不上传 Central。消费方不需要安装 SDK 或手工复制 DLL。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:7.0.5`，默认传递解析 Vulkan 后端、NVIDIA provider 和 native runtime。RTXPT 场景额外添加 `top.ceroxe.rt:renderer-rtxpt:7.0.5`；使用下面的 `RtxptAccess`／组合类时需要编译依赖。本轮从源码构建到本地 Maven 仓库使用，不上传 Central。消费方不需要安装 SDK 或手工复制 DLL。
 
 ## 学习顺序与后端选择
 
@@ -466,7 +466,7 @@ session 内完成，只有 `APPLIED` 是提交证据。
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:7.0.4`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:7.0.5`。把对应 options 传给
 `RendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java

@@ -2,7 +2,7 @@ package top.ceroxe.rt.renderer.rtxpt;
 import java.nio.file.Path;
 
 /** Expert host boundary. Call on the renderer's creating thread. The host owns window lifetime. */
-public interface RtxptAccess {
+public interface RtxptAccess extends RtxptDiagnosticAccess {
     /** Load an upstream scene directly, bypassing retained-scene translation and its raw-asset
      * admission limits. Native external asset sizes are owned by the caller/upstream loader.
      */
@@ -60,6 +60,12 @@ public interface RtxptAccess {
     /** Explicit one-shot readback. Never called in the presentation or benchmark frame loop. */
     void capture(Path png);
     BridgeTimings bridgeTimings();
+    /** Changes bounded native recording on the owner thread, including before first submission. */
+    default void diagnosticLevel(RtxptDiagnostics.Level level){throw new UnsupportedOperationException("Native diagnostics unavailable");}
+    /** Explicit bounded snapshot; no GPU synchronization or implicit disk output. */
+    default RtxptDiagnostics.Snapshot diagnosticSnapshot(){return RtxptDiagnostics.decode(new long[]{2,12,0,0,0,0,0});}
+    /** Per-queue command scopes. Elapsed timestamps include scheduling/preemption, not shader busy time. */
+    default RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){return RtxptDiagnostics.decodeGpu(new String[]{"0,0,0,0,0"});}
     /** Native execution counters. Upload time measures CPU command recording, not GPU completion. */
     default LightingTimings lightingTimings(){return new LightingTimings(0,0,0,0,0);}
     record LightingTimings(long nativeSceneLoads,long committedBatches,long recordedUploads,

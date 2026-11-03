@@ -1,6 +1,6 @@
 # API Contract
 
-RTRendererAPI 7.0.4 retains the Java 25 major-7 binary/API contract introduced in 7.0.0. Use matching API,
+RTRendererAPI 7.0.5 retains the Java 25 major-7 binary/API contract introduced in 7.0.0. Use matching API,
 backend and NVIDIA modules. Medium data is expressed directly by `Rgb`, `Medium`,
 `MediumBoundary` records. RTXPT keeps only absorption, IOR and nested priority; density,
 scattering, emission, camera-medium and `MediumTransport` controls were removed. The nested 6.x medium type, medium builders
@@ -8,7 +8,7 @@ and compatibility wrappers are absent. Recompile custom retained-scene shaders a
 7.0.4 `gpuscene_abi.glsl`; do not embed record strides from an older release.
 
 This version is delivered through GitHub source and local Maven artifacts. No remote release
-or Maven Central publication is implied by building the sources. See [7.0.4 migration](7.0.4.md)
+or Maven Central publication is implied by building the sources. See [7.0.5 changes](7.0.5.md)
 for the exact medium API. GPU and packaged-runtime evidence is recorded separately in
 [RTXPT integration](quality/rtxpt-managed-medium-migration.md),
 [advanced-feature audit](quality/rtxpt-advanced-audit-20261101.md), and

@@ -16,11 +16,15 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <atomic>
+#include <cstdarg>
+#include "rtxpt_async_output.h"
 
 namespace RtrMemoryDiagnostics {
+inline std::atomic<bool> recording{true};
 inline bool Enabled() {
     static const bool enabled=[] {wchar_t value[2]{};return GetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_DIAGNOSTICS",value,2)==1 && value[0]==L'1';}();
-    return enabled;
+    return enabled && recording.load(std::memory_order_relaxed);
 }
 inline FILE* Output() {
     static FILE* output=[] {
@@ -33,6 +37,11 @@ inline FILE* Output() {
         return file?file:stderr;
     }();
     return output;
+}
+inline RtrAsyncOutput& Writer(){static RtrAsyncOutput output(Output(),Output()!=stderr);return output;}
+inline void Write(const char* format,...){
+    char line[512];va_list args;va_start(args,format);vsnprintf(line,sizeof(line),format,args);va_end(args);
+    Writer().Write(line);
 }
 inline unsigned long long Timestamp() {
     FILETIME time;GetSystemTimeAsFileTime(&time);
@@ -47,6 +56,10 @@ inline PROCESS_MEMORY_COUNTERS_EX ProcessMemory() {
 struct Resource {std::string name,kind;UINT heap;UINT64 logical,allocated;};
 inline std::mutex mutex;
 inline std::unordered_map<const void*,Resource> resources;
+inline void Configure(bool enabled){
+    recording=enabled;
+    if(!enabled){std::lock_guard lock(mutex);resources.clear();}
+}
 
 inline void Created(const void* object,const char* kind,std::string_view name,ID3D12Device* device,ID3D12Resource* resource,UINT64 logical) {
     if(!Enabled() || !resource)return;
@@ -57,30 +70,28 @@ inline void Created(const void* object,const char* kind,std::string_view name,ID
     const UINT type=SUCCEEDED(heapResult)?UINT(heap.Type):0;
     std::lock_guard lock(mutex);
     resources[object]={std::string(name),kind,type,logical,info.SizeInBytes};
-    std::fprintf(Output(),"RTXPT_MEMORY_RESOURCE time=%llu action=create object=%p kind=%s heap=%u logical=%llu allocated=%llu name=\"%.*s\"\n",
+    Write("RTXPT_MEMORY_RESOURCE time=%llu action=create object=%p kind=%s heap=%u logical=%llu allocated=%llu name=\"%.*s\"\n",
         Timestamp(),object,kind,type,(unsigned long long)logical,(unsigned long long)info.SizeInBytes,int(name.size()),name.data());
     if(info.SizeInBytes>=4*1024*1024) {
         void* frames[24]{};USHORT count=CaptureStackBackTrace(1,24,frames,nullptr);
-        std::fprintf(Output(),"RTXPT_MEMORY_STACK time=%llu object=%p",Timestamp(),object);
+        Write("RTXPT_MEMORY_STACK time=%llu object=%p",Timestamp(),object);
         for(USHORT i=0;i<count;++i) {
             HMODULE module=nullptr;wchar_t path[MAX_PATH]{};
             if(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                 reinterpret_cast<LPCWSTR>(frames[i]),&module) && GetModuleFileNameW(module,path,MAX_PATH)) {
                 const wchar_t* filename=wcsrchr(path,L'\\');filename=filename?filename+1:path;
-                std::fprintf(Output()," %ls+0x%llx",filename,(unsigned long long)(reinterpret_cast<uintptr_t>(frames[i])-reinterpret_cast<uintptr_t>(module)));
-            } else std::fprintf(Output()," %p",frames[i]);
+                Write(" %ls+0x%llx",filename,(unsigned long long)(reinterpret_cast<uintptr_t>(frames[i])-reinterpret_cast<uintptr_t>(module)));
+            } else Write(" %p",frames[i]);
         }
-        std::fprintf(Output(),"\n");
+        Write("\n");
     }
-    std::fflush(Output());
 }
 inline void Released(const void* object) {
     if(!Enabled())return;
     std::lock_guard lock(mutex);
     if(resources.erase(object)) {
-        std::fprintf(Output(),"RTXPT_MEMORY_RESOURCE time=%llu action=release object=%p\n",Timestamp(),object);
-        std::fflush(Output());
-    }
+        Write("RTXPT_MEMORY_RESOURCE time=%llu action=release object=%p\n",Timestamp(),object);
+        }
 }
 inline void Checkpoint(const char* phase,ID3D12Device* device=nullptr) {
     if(!Enabled())return;
@@ -97,11 +108,10 @@ inline void Checkpoint(const char* phase,ID3D12Device* device=nullptr) {
     std::lock_guard lock(mutex);
     UINT64 totals[5]{};
     for(const auto& entry:resources)if(entry.second.heap<5)totals[entry.second.heap]+=entry.second.allocated;
-    std::fprintf(Output(),"RTXPT_MEMORY_PHASE time=%llu phase=%s private=%llu workingSet=%llu gpuQueryStatus=0x%08lx dedicated=%llu shared=%llu trackedDefault=%llu trackedUpload=%llu trackedReadback=%llu liveResources=%zu\n",
+    Write("RTXPT_MEMORY_PHASE time=%llu phase=%s private=%llu workingSet=%llu gpuQueryStatus=0x%08lx dedicated=%llu shared=%llu trackedDefault=%llu trackedUpload=%llu trackedReadback=%llu liveResources=%zu outputDropped=%llu\n",
         Timestamp(),phase,(unsigned long long)memory.PrivateUsage,(unsigned long long)memory.WorkingSetSize,
         (unsigned long)gpuResult,(unsigned long long)local.CurrentUsage,(unsigned long long)shared.CurrentUsage,
-        (unsigned long long)totals[1],(unsigned long long)totals[2],(unsigned long long)totals[3],resources.size());
-    std::fflush(Output());
+        (unsigned long long)totals[1],(unsigned long long)totals[2],(unsigned long long)totals[3],resources.size(),(unsigned long long)Writer().dropped);
 }
 class Scope {
     const char* phase;
@@ -114,9 +124,8 @@ public:
         if(!phase)return;
         auto after=ProcessMemory().PrivateUsage;
         std::lock_guard lock(mutex);
-        std::fprintf(Output(),"RTXPT_MEMORY_SCOPE time=%llu phase=%s before=%llu after=%llu delta=%lld\n",
+        Write("RTXPT_MEMORY_SCOPE time=%llu phase=%s before=%llu after=%llu delta=%lld\n",
             Timestamp(),phase,(unsigned long long)before,(unsigned long long)after,(long long)after-(long long)before);
-        std::fflush(Output());
-    }
+        }
 };
 }

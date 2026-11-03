@@ -3,6 +3,8 @@ import java.util.HexFormat
 import java.nio.file.Files
 import java.util.zip.ZipFile
 import org.gradle.api.tasks.Sync
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
 
 plugins { `java-library` }
 description = "Thin in-process JNI host for NVIDIA RTXPT managed rendering."
@@ -21,6 +23,15 @@ tasks.withType<JavaExec>().configureEach {
     workingDir(rootProject.projectDir)
     jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler", "--enable-native-access=ALL-UNNAMED", "-Dfile.encoding=UTF-8")
     systemProperties(System.getProperties().stringPropertyNames().filter { it.startsWith("top.ceroxe.rt.rtxpt.") }.associateWith(System::getProperty))
+    if (project.hasProperty("rtxptTestPackaged")) {
+        dependsOn(tasks.named("jar"))
+        environment("RTR_RTXPT_REQUIRE_PRECOMPILED", "1")
+        environment("RTR_RTXPT_SHADER_MANIFEST_DIR", "")
+        doFirst {
+            check(!systemProperties.containsKey("top.ceroxe.rt.rtxpt.runtime") && !systemProperties.containsKey("top.ceroxe.rt.rtxpt.bridge"))
+            classpath = sourceSets.test.get().output + configurations.testRuntimeClasspath.get() + files(tasks.named("jar"))
+        }
+    }
 }
 tasks.register<Exec>("buildRtxptBridge") {
     group = "build"
@@ -36,6 +47,53 @@ tasks.register<JavaExec>("rtxptBudgetContractSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptBudgetContractSelfTest")
+}
+
+tasks.register<JavaExec>("rtxptFramePreparationNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptFramePreparationNativeSelfTest")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "1")
+    environment("RTR_RTXPT_SHADER_MANIFEST_DIR", rootProject.file("build/rtxpt-shader-manifests").absolutePath)
+    if (project.hasProperty("preparationCases")) args(project.property("preparationCases").toString().split(","))
+}
+
+tasks.register<JavaExec>("rtxptPackagedFramePreparationNativeSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses, tasks.jar)
+    classpath = sourceSets.test.get().output + configurations.testRuntimeClasspath.get() + files(tasks.jar)
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptFramePreparationNativeSelfTest")
+    environment("RTR_RTXPT_REQUIRE_PRECOMPILED", "1")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    environment("RTR_RTXPT_DIAGNOSTIC_FREEZE_NOISE", "1")
+    environment("RTR_RTXPT_SHADER_MANIFEST_DIR", "")
+    systemProperty("top.ceroxe.rt.rtxpt.testOutput",rootProject.file("build/reports/rtxpt-frame-705-packaged").absolutePath)
+    doFirst {
+        check(!systemProperties.containsKey("top.ceroxe.rt.rtxpt.runtime") && !systemProperties.containsKey("top.ceroxe.rt.rtxpt.bridge"))
+        workingDir(Files.createTempDirectory("rf-").toFile())
+        systemProperty("top.ceroxe.rt.rtxpt.cache",workingDir.absolutePath)
+    }
+    doLast { workingDir.deleteRecursively() }
+}
+
+tasks.register<JavaExec>("rtxptFrameBenchmark") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptFrameBenchmark")
+    val baseline = project.findProperty("benchmarkBaseline")?.toString()
+    classpath = if (baseline == null) sourceSets.test.get().runtimeClasspath else
+        files("${System.getProperty("user.home")}/.m2/repository/top/ceroxe/rt/renderer-api/$baseline/renderer-api-$baseline.jar",
+            "${System.getProperty("user.home")}/.m2/repository/top/ceroxe/rt/renderer-rtxpt/$baseline/renderer-rtxpt-$baseline.jar") + sourceSets.test.get().runtimeClasspath
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    if (project.hasProperty("benchmarkInstances")) args(project.property("benchmarkInstances").toString())
+    doFirst { rootProject.file("build/frame-benchmark-classpath.txt").writeText(classpath.asPath,Charsets.UTF_8) }
+}
+
+tasks.register("rtxptReleaseValidationClasspath") {
+    group = "verification"; dependsOn(tasks.testClasses,tasks.jar)
+    doLast {
+        rootProject.file("build/705-release-classpath.txt").writeText(
+            (sourceSets.test.get().output + configurations.testRuntimeClasspath.get() + files(tasks.jar)).asPath,Charsets.UTF_8)
+    }
 }
 tasks.register<JavaExec>("rtxptLightingNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
@@ -188,6 +246,18 @@ tasks.register<JavaExec>("rtxptPackagedNativeSelfTest") {
 tasks.named("check") { dependsOn("rtxptAdapterSelfTest", "rtxptBudgetContractSelfTest") }
 
 val nativeRuntime = rootProject.layout.buildDirectory.dir("rtxpt-sdk/bin")
+val nativeSymbols = tasks.register<Zip>("rtxptNativeSymbols") {
+    group = "distribution"
+    archiveClassifier.set("native-symbols")
+    from(nativeRuntime) { include("rtrenderer_rtxpt.pdb") }
+    from("NOTICE-RTXPT.txt")
+    doFirst { check(nativeRuntime.get().file("rtrenderer_rtxpt.pdb").asFile.isFile) { "Build the matching RTXPT PDB first" } }
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+extensions.configure<PublishingExtension> {
+    publications.named<MavenPublication>("mavenJava") { artifact(nativeSymbols) }
+}
 val rtxptShaderSource = rootProject.layout.buildDirectory.dir("rtxpt-sdk/Rtxpt/Shaders")
 val syncRtxptRuntimeShaders = tasks.register<Sync>("syncRtxptRuntimeShaders") {
     from(rtxptShaderSource)
