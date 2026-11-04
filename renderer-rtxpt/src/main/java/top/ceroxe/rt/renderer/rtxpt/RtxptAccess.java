@@ -105,6 +105,12 @@ public interface RtxptAccess extends RtxptDiagnosticAccess {
         long attributeBatches,long textureUploadBytes,long deviceDrains,long retiredGenerations,long pendingGenerations,
         long peakPendingGenerations,long geometryUploadBytes,long attributeMigrationBytes,long attributeTableVisits,long attributeClears) { }
     DynamicResourceStatistics dynamicResourceStatistics();
+    /** Thread-safe bounded protocol observations, available independently of the owner thread. */
+    default RtxptDiagnostics.ProtocolMonitor protocolMonitor(){throw new UnsupportedOperationException("Protocol monitor unavailable");}
+    /** Cumulative AS work, physical GPU texture copies and background release work. */
+    record ResourceMaintenance(long blasBuilds,long blasRefits,long tlasBuilds,long gpuTextureCopyBytes,
+        long releasePending,long releaseCompleted,long releaseWallNanos) { }
+    default ResourceMaintenance resourceMaintenance(){return new ResourceMaintenance(0,0,0,0,0,0,0);}
     default NativePreparationStatistics nativePreparationStatistics(){return new NativePreparationStatistics(false,0,0,0);}
     /** Cumulative inclusive Java scopes and native CPU subscopes; native subscopes overlap the
      * Java resource/lighting scopes. Fence waits and GPU queue intervals remain in retainedUpdateTimings. */

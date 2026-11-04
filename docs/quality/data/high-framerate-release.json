@@ -1,0 +1,82 @@
+{
+  "version": "7.1.4",
+  "selectedCandidate": "falloff-branch",
+  "optimizationStoppedByUser": true,
+  "performanceEvidence": {
+    "run": {
+      "meshes": 977,
+      "triangles": 750336,
+      "sources": 22000,
+      "textures": 63,
+      "width": 1280,
+      "height": 800,
+      "seconds": 30.0104446,
+      "acceptedWindowSeconds": 30.0019749,
+      "frames": 8722,
+      "fps": 290.63214878196106,
+      "animationBatches": 600,
+      "deferrals": 18795,
+      "diagnostics": "SUMMARY",
+      "rr": "ReconstructionState[requested=DLSS_RR, actual=DLSS_RR, width=1280, height=800, evaluatedFrames=8734, historyResets=1, guidesValid=true]",
+      "before": "ResourceMaintenance[blasBuilds=977, blasRefits=0, tlasBuilds=2, gpuTextureCopyBytes=0, releasePending=0, releaseCompleted=2, releaseWallNanos=88468300]",
+      "after": "ResourceMaintenance[blasBuilds=997, blasRefits=355, tlasBuilds=161, gpuTextureCopyBytes=0, releasePending=0, releaseCompleted=602, releaseWallNanos=91513000]",
+      "resources": "DynamicResourceStatistics[collecting=true, validationRecords=2704, indexHits=2704, indexFailures=0, geometryVisits=2704, attributeBatches=151, textureUploadBytes=1039720, deviceDrains=0, retiredGenerations=601, pendingGenerations=0, peakPendingGenerations=1, geometryUploadBytes=28548832, attributeMigrationBytes=0, attributeTableVisits=1954, attributeClears=1]",
+      "beautyFrames": 0,
+      "formalWindow": true
+    },
+    "measuredRuntime": {
+      "native": "738A38A367BE4175C7EB894A82F6510004764F46FCB19317DBEDDA7FCD54E5EE",
+      "rawShader": "A552CF130488916086F9B84E818C784198F383BFED1A4F84FF928A6B00F9B48B",
+      "rrShader": "FC3B535771062D7C336812698C3F0CAED92E15B4AE2D22B2F374BD1338214688",
+      "dynamicRawShader": "49F1097421B782E0235C2BF4990A1203C86131208C1CF037773360D4605CBCE2",
+      "dynamicRrShader": "90BFA7C67AC49901106B9C9847FDD6317B0760C405FAB4175A4AF0E65EFDEDAA",
+      "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 623 MiB, 10.93 W, 180 MHz, 405 MHz",
+      "time": "2026-11-04T18:48:49.9220185+08:00"
+    }
+  },
+  "finalPackaging": {
+    "runtimeZipSha256": "ffe1c86efc1c6bfa1b1176af1b2411dc2386f72d49560b126e42e68267927a16",
+    "runtimeFilesSha256": {
+      "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeLighting.bin": "a552cf130488916086f9b84e818c784198f383bfed1a4f84ff928a6b00f9b48b",
+      "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeLightingReconstruct.bin": "fc3b535771062d7c336812698c3f0caed92e15b4ae2d22b2f374bd1338214688",
+      "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeDynamicLighting.bin": "49f1097421b782e0235c2bf4990a1203c86131208c1cf037773360d4605cbce2",
+      "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeDynamicLightingReconstruct.bin": "90bfa7c67ac49901106b9c9847fdd6317b0760c405fab4175a4af0e65efdedaa",
+      "rtrenderer_rtxpt.dll": "53fe20a6218e2ec669a51e7bbb2c1d87a1d381ea3bb30fed13d63c34f5cb8321",
+      "sdk/backend/RtrNativeLighting.hlsl": "09bc351381909c44d67e3d69a666f69a4131f0782c312f6a92f6065cdb1a3926"
+    },
+    "artifacts": [
+      {
+        "module": "renderer-api",
+        "file": "renderer-api-7.1.4.jar",
+        "bytes": 785589,
+        "sha256": "0d4cadd7a083beb49748b6c0ff3a03bba7829be0190751e22b1302d5100ed60c"
+      },
+      {
+        "module": "renderer-core",
+        "file": "renderer-core-7.1.4.jar",
+        "bytes": 14561563,
+        "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69"
+      },
+      {
+        "module": "renderer-nvidia",
+        "file": "renderer-nvidia-7.1.4.jar",
+        "bytes": 62644784,
+        "sha256": "9d67fcd108bb5dfcba696b4fd8fb8991869411aec57f6f292dd85196421f6121"
+      },
+      {
+        "module": "renderer-rtxpt",
+        "file": "renderer-rtxpt-7.1.4.jar",
+        "bytes": 768574491,
+        "sha256": "5ce1c37c2efdd13ba78049234471f9ad413703e6b32991afdc65a952b60d942e"
+      }
+    ],
+    "shaderMatchMeasuredCandidate": true,
+    "nativeRebuiltAfterRollback": true,
+    "gpuBenchmarkRerun": false
+  },
+  "limits": [
+    "Update-frame 4 ms target not met",
+    "Full 719/977/4096 and OFF/DEEP matrix incomplete",
+    "No MC or GL-driver acceptance claim"
+  ]
+}

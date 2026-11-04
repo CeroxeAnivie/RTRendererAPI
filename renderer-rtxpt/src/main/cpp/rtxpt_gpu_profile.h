@@ -4,6 +4,7 @@
 #include <nvrhi/d3d12.h>
 #include "rtxpt_async_output.h"
 #include "rtxpt_diagnostics.h"
+#include "rtxpt_fence.h"
 #include <string>
 #include <vector>
 #include <array>
@@ -57,8 +58,7 @@ inline uint32_t EnvNumber(const char* name,uint32_t fallback) {
 }
 inline void Collect(Queue& q,int queueIndex) {
     if(std::none_of(q.slots.begin(),q.slots.end(),[](const auto& slot){return slot.pending;}))return;
-    const uint64_t completed=q.fence->GetCompletedValue();
-    if(completed==UINT64_MAX) {for(auto& s:q.slots)if(s.pending){state->dropped+=s.count;s.pending=false;}return;}
+    const uint64_t completed=RtrCompletedFence(q.fence.Get());
     for(auto& s:q.slots) {
         if(!s.pending || s.fence>completed) continue;
         const uint32_t slotIndex=uint32_t(&s-q.slots.data());
@@ -166,8 +166,9 @@ inline void AfterPresent() {
         nativeList->ResolveQueryData(q.heap,D3D12_QUERY_TYPE_TIMESTAMP,start,s.count*2,q.readback,uint64_t(start)*sizeof(uint64_t));
         q.resolve->close(); q.device->executeCommandList(q.resolve,q.type);
         s.fence=++q.signaled;
-        if(SUCCEEDED(q.native->Signal(q.fence,s.fence))) s.pending=true;
-        else ++state->dropped;
+        const auto result=q.native->Signal(q.fence,s.fence);
+        if(SUCCEEDED(result)) s.pending=true;
+        else{++state->dropped;RtrLatchDeviceFailure(result);RtrRequireHealthy();}
         q.active=-1;
     }
     if(state->enabled)++state->frame;
@@ -216,7 +217,8 @@ inline void Shutdown() {
     // Only shutdown may wait. Sampling never waits for a GPU query.
     for(int i=0;i<2;++i) {
         auto& q=state->queues[i];
-        if(q.signaled && q.fence->GetCompletedValue()<q.signaled) {
+        if(q.device&&RtrDeviceRemoved(static_cast<ID3D12Device*>(q.device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device))))continue;
+        if(q.signaled && RtrCompletedFence(q.fence.Get())<q.signaled) {
             HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
             if(event) {
                 if(SUCCEEDED(q.fence->SetEventOnCompletion(q.signaled,event))) WaitForSingleObject(event,5000);

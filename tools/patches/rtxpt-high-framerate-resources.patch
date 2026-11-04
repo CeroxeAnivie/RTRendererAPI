@@ -1,0 +1,248 @@
+diff --git a/External/Donut/nvrhi/src/d3d12/d3d12-device.cpp b/External/Donut/nvrhi/src/d3d12/d3d12-device.cpp
+--- a/External/Donut/nvrhi/src/d3d12/d3d12-device.cpp
++++ b/External/Donut/nvrhi/src/d3d12/d3d12-device.cpp
+@@ -21,6 +21,7 @@
+ */
+ 
+ #include "d3d12-backend.h"
++#include "rtxpt_fence.h"
+ #include "rtxpt_host_resources.h"
+ #include <stdexcept>
+ 
+@@ -76,21 +77,21 @@
+     void WaitForFence(ID3D12Fence* fence, uint64_t value, HANDLE event)
+     {
+         // Device removal reports UINT64_MAX, which must never count as completion.
+-        if(fence->GetCompletedValue()==UINT64_MAX)throw std::runtime_error("GPU device removed during fence wait");
++        if(RtrCompletedFence(fence)==UINT64_MAX)throw std::runtime_error("GPU device removed during fence wait");
+         // Test if the fence has been reached
+-        if (fence->GetCompletedValue() < value)
++        if (RtrCompletedFence(fence) < value)
+         {
+             // If it's not, wait for it to finish using an event
+             ResetEvent(event);
+             if(FAILED(fence->SetEventOnCompletion(value,event)))throw std::runtime_error("GPU fence registration failed");
+             const ULONGLONG start=GetTickCount64();
+-            while(fence->GetCompletedValue()<value) {
++            while(RtrCompletedFence(fence)<value) {
+                 DWORD result=WaitForSingleObject(event,20);
+                 RtrHostResources::PumpEvents();
+                 if(result==WAIT_FAILED)throw std::runtime_error("GPU fence wait failed");
+                 if(GetTickCount64()-start>30000)throw std::runtime_error("GPU fence timeout (30 seconds)");
+             }
+-            if(fence->GetCompletedValue()==UINT64_MAX)throw std::runtime_error("GPU device removed during fence wait");
++            if(RtrCompletedFence(fence)==UINT64_MAX)throw std::runtime_error("GPU device removed during fence wait");
+         }
+     }
+ 
+@@ -147,7 +148,7 @@
+     {
+         if (lastCompletedInstance < lastSubmittedInstance)
+         {
+-            lastCompletedInstance = fence->GetCompletedValue();
++            lastCompletedInstance = RtrCompletedFence(fence);
+         }
+         return lastCompletedInstance;
+     }
+@@ -155,7 +156,8 @@
+     uint64_t Queue::Signal()
+     {
+         ++lastSubmittedInstance;
+-        queue->Signal(fence, lastSubmittedInstance);
++        const auto result=queue->Signal(fence, lastSubmittedInstance);
++        if(FAILED(result)){RtrLatchDeviceFailure(result);RtrRequireHealthy();}
+ 
+         return lastSubmittedInstance;
+     }
+@@ -510,6 +512,7 @@
+ 
+     bool Device::waitForIdle()
+     {
++        if(RtrDeviceRemoved(m_Context.device))return false;
+         // Wait for every queue to reach its last submitted instance
+         for (const auto& pQueue : m_Queues)
+         {
+diff --git a/External/Donut/nvrhi/src/d3d12/d3d12-queries.cpp b/External/Donut/nvrhi/src/d3d12/d3d12-queries.cpp
+--- a/External/Donut/nvrhi/src/d3d12/d3d12-queries.cpp
++++ b/External/Donut/nvrhi/src/d3d12/d3d12-queries.cpp
+@@ -21,6 +21,7 @@
+ */
+ 
+ #include "d3d12-backend.h"
++#include "rtxpt_fence.h"
+ 
+ #include <nvrhi/common/misc.h>
+ 
+@@ -60,7 +61,7 @@
+ 
+         assert(query->fence);
+         
+-        if (query->fence->GetCompletedValue() >= query->fenceCounter)
++        if (RtrCompletedFence(query->fence) >= query->fenceCounter)
+         {
+             query->resolved = true;
+             query->fence = nullptr;
+@@ -136,7 +137,7 @@
+         if (!query->fence)
+             return true;
+ 
+-        if (query->fence->GetCompletedValue() >= query->fenceCounter)
++        if (RtrCompletedFence(query->fence) >= query->fenceCounter)
+         {
+             query->fence = nullptr;
+             return true;
+diff --git a/Rtxpt/OpacityMicroMap/OmmBaker.cpp b/Rtxpt/OpacityMicroMap/OmmBaker.cpp
+--- a/Rtxpt/OpacityMicroMap/OmmBaker.cpp
++++ b/Rtxpt/OpacityMicroMap/OmmBaker.cpp
+@@ -82,6 +82,8 @@
+     }
+ }
+ 
++void OmmBaker::HostInvalidateMesh(const MeshInfoEx& mesh) { m_ommBuildQueue->CancelMesh(&mesh); }
++
+ void OmmBaker::SceneUnloading()
+ {
+     m_ommBuildQueue->CancelPendingBuilds();
+@@ -112,6 +114,7 @@
+ 
+     for (auto& mesh : scene.GetSceneGraph()->GetMeshes())
+     {
++        if (static_cast<const MeshInfoEx&>(*mesh).HostDynamicCoverage) continue;
+         if (mesh->isSkinPrototype) //buffers->hasAttribute(engine::VertexAttribute::JointWeights))
+             continue; // skip the skinning prototypes
+         if (mesh->skinPrototype)
+diff --git a/Rtxpt/OpacityMicroMap/OmmBaker.h b/Rtxpt/OpacityMicroMap/OmmBaker.h
+--- a/Rtxpt/OpacityMicroMap/OmmBaker.h
++++ b/Rtxpt/OpacityMicroMap/OmmBaker.h
+@@ -66,6 +66,10 @@
+ 
+ struct MeshInfoEx : public donut::engine::MeshInfo
+ {
++    bool HostDynamicCoverage=false;
++    bool HostCoverageCandidates=false;
++    std::shared_ptr<const std::vector<uint32_t>> HostIndices;
++    uint32_t HostRefitFrames=0;
+     std::shared_ptr<omm::CpuMeshInputIdentity> OmmCpuInputIdentity;
+     // Static UV/index buffers are immutable after upload. Before editing a shared
+     // buffer, cancel pending OMM builds, invalidate every affected mesh, then rebuild.
+@@ -169,6 +173,7 @@
+ 
+     void                            SceneLoaded(const donut::engine::Scene& scene);
+     void                            SceneUnloading();
++    void HostInvalidateMesh(const MeshInfoEx& mesh);
+ 
+     void                            CreateOpacityMicromaps(const donut::engine::Scene& scene);
+     void                            DestroyOpacityMicromaps(nvrhi::ICommandList& commandList, const donut::engine::Scene& scene);
+diff --git a/Rtxpt/OpacityMicroMap/OmmBuildQueue.cpp b/Rtxpt/OpacityMicroMap/OmmBuildQueue.cpp
+--- a/Rtxpt/OpacityMicroMap/OmmBuildQueue.cpp
++++ b/Rtxpt/OpacityMicroMap/OmmBuildQueue.cpp
+@@ -1,3 +1,4 @@
++#include <unordered_set>
+ /*
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ *
+@@ -620,7 +621,8 @@
+     }
+ 
+     // Store results
+-    std::static_pointer_cast<MeshInfoEx>(task.input.mesh)->AccelStructOMM = as;
++    if(!std::static_pointer_cast<MeshInfoEx>(task.input.mesh)->HostDynamicCoverage)
++        std::static_pointer_cast<MeshInfoEx>(task.input.mesh)->AccelStructOMM = as;
+ }
+ 
+ void OmmBuildQueue::RunBakeAndBuild(nvrhi::ICommandList& commandList, BuildTask& task)
+@@ -724,9 +726,9 @@
+ {
+     for (auto& task : m_pending)
+     {
+-        if (task.state == taskState && (taskState != BuildState::WaitingForSharedBake || task.sharedBake->ready))
+-        {
+-            bool finished = ExecuteTask(commandList, task);
++        if (task.state == taskState && (task.cancelled || taskState != BuildState::WaitingForSharedBake || task.sharedBake->ready))
++        {
++            bool finished = task.cancelled || ExecuteTask(commandList, task);
+             if (finished)
+             {
+                 // Remove the task from the queue
+@@ -837,6 +839,18 @@
+     return (uint32_t)m_pending.size();
+ }
+ 
++void OmmBuildQueue::CancelMesh(const donut::engine::MeshInfo* mesh)
++{
++    // Submitted storage stays alive until the queue's completion gate retires it.
++    std::unordered_set<const SharedBake*> groups;
++    for(auto& task:m_pending)if(task.input.mesh.get()==mesh){task.cancelled=true;if(task.sharedBake)groups.insert(task.sharedBake.get());}
++    for(auto& task:m_pending)if(task.sharedBake&&groups.count(task.sharedBake.get()))task.cancelled=true;
++    for(auto i=m_sharedBakes.begin();i!=m_sharedBakes.end();) {
++        bool remove=groups.count(i->second.get())!=0;
++        if(remove)i=m_sharedBakes.erase(i);else ++i;
++    }
++}
++
+ void OmmBuildQueue::CancelPendingBuilds()
+ {
+     m_pending.clear();
+diff --git a/Rtxpt/OpacityMicroMap/OmmBuildQueue.h b/Rtxpt/OpacityMicroMap/OmmBuildQueue.h
+--- a/Rtxpt/OpacityMicroMap/OmmBuildQueue.h
++++ b/Rtxpt/OpacityMicroMap/OmmBuildQueue.h
+@@ -75,6 +75,7 @@
+ 
+ 	void Update(nvrhi::ICommandList& commandList);
+ 	void CancelPendingBuilds();
++	void CancelMesh(const donut::engine::MeshInfo* mesh);
+ 	void QueueBuild(const BuildInput& inputs);
+ 	uint32_t NumPendingBuilds() const;
+ 	void SetRetainDebugData(bool retain);
+@@ -137,6 +138,7 @@
+ 
+ 	struct BuildTask
+ 	{
++        bool cancelled=false;
+ 		BuildInput input;
+ 		BuildState state = BuildState::None;
+ 		std::vector<omm::GpuBakeNvrhi::Input> bakeInputs;
+diff --git a/Rtxpt/Sample.cpp b/Rtxpt/Sample.cpp
+--- a/Rtxpt/Sample.cpp
++++ b/Rtxpt/Sample.cpp
+@@ -1702,7 +1702,7 @@
+             // the sum always equalled GetGeometryInstanceIndex() anyway, so use that directly - the invariant it was
+             // asserting is re-checked serially in Debug below.
+             instanceDesc.instanceContributionToHitGroupIndex = instance->GetGeometryInstanceIndex();
+-            instanceDesc.flags = (ommForce2State) ? nvrhi::rt::InstanceFlags::ForceOMM2State : nvrhi::rt::InstanceFlags::None;
++            instanceDesc.flags = nvrhi::rt::InstanceFlags((ommForce2State ? uint32_t(nvrhi::rt::InstanceFlags::ForceOMM2State) : 0u) | (dynamic_cast<MeshInstanceExtension*>(instance.get()) ? dynamic_cast<MeshInstanceExtension*>(instance.get())->HostRayFlags : 0u));
+             if (forceOpaque)
+                 instanceDesc.flags = (nvrhi::rt::InstanceFlags)((uint32_t)instanceDesc.flags | (uint32_t)nvrhi::rt::InstanceFlags::ForceOpaque);
+ 
+@@ -1805,7 +1805,7 @@
+         instanceData[i].BlasAddress    = (mesh->accelStruct.Get()   != nullptr) ? mesh->accelStruct->getDeviceAddress()   : 0;
+         instanceData[i].OmmBlasAddress = (mesh->AccelStructOMM.Get()!= nullptr) ? mesh->AccelStructOMM->getDeviceAddress(): 0;
+         instanceData[i].MeshIndex      = (uint32_t)mesh->globalMeshIndex;
+-        instanceData[i].Flags          = 0;
++        instanceData[i].Flags          = (dynamic_cast<MeshInstanceExtension*>(instances[i].get()) ? dynamic_cast<MeshInstanceExtension*>(instances[i].get())->HostRayFlags : 0u) << 8;
+     }
+     // Marked from the skinned list rather than a dynamic_cast per instance.
+     for (const auto & skinnedInstance : m_scene->GetSceneGraph()->GetSkinnedMeshInstances())
+diff --git a/Rtxpt/SampleCommon/ExtendedScene.h b/Rtxpt/SampleCommon/ExtendedScene.h
+--- a/Rtxpt/SampleCommon/ExtendedScene.h
++++ b/Rtxpt/SampleCommon/ExtendedScene.h
+@@ -55,6 +55,7 @@
+ 
+ struct MeshInstanceExtension
+ {
++    uint32_t HostRayFlags=0;
+     std::vector<LightSamplerLink>       PerGeometryLightSamplerLinks;
+     std::weak_ptr<LightExtension>       ProxiedAnalyticLight;
+ 
+diff --git a/Rtxpt/Shaders/TLASCull.hlsl b/Rtxpt/Shaders/TLASCull.hlsl
+--- a/Rtxpt/Shaders/TLASCull.hlsl
++++ b/Rtxpt/Shaders/TLASCull.hlsl
+@@ -89,7 +89,7 @@
+     if (culled)
+         instanceMask = 0;
+ 
+-    uint flags = force2State ? kInstanceFlags_ForceOMM2State : 0;
++    uint flags = (force2State ? kInstanceFlags_ForceOMM2State : 0) | (accel.Flags >> 8);
+     if (forceOpaque)
+         flags |= kInstanceFlags_ForceOpaque;
+ 

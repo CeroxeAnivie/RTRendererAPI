@@ -76,3 +76,7 @@ if (RTXPT_D3D_AGILITY_SDK_PATH AND RTXPT_D3D_AGILITY_SDK_VERSION)
             ${RTXPT_D3D_AGILITY_SDK_PATH}/build/native/bin/${NVRHI_TARGET_ARCH}/D3D12Core.dll
             "$<TARGET_FILE_DIR:rtrenderer_rtxpt>/D3D12/")
 endif()
+
+add_executable(rtxpt_resource_protocol_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_resource_protocol_selftest.cpp")
+target_compile_features(rtxpt_resource_protocol_selftest PRIVATE cxx_std_17)
+target_link_libraries(rtxpt_resource_protocol_selftest PRIVATE d3d12 dxgi)

@@ -7,26 +7,43 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Synchronous borrowed memory packet. Native staging copies finish before JNI returns. */
 final class RtxptMemoryResources {
+    static final class PacketPool {
+        private ByteBuffer buffer;
+        void clear(){buffer=null;}
+        ByteBuffer acquire(int size){
+            if(buffer==null||buffer.capacity()<size){int capacity=Math.max(4096,Integer.highestOneBit(Math.max(1,size-1))<<1);
+                buffer=ByteBuffer.allocateDirect(capacity).order(ByteOrder.LITTLE_ENDIAN);}
+            return buffer.clear().limit(size);
+        }
+    }
     private record Geometry(RtxptScene.Item item,RtxptScene.ExportGeometry data,List<RtxptAttributeBatch.Group> groups) { }
     static ByteBuffer pack(RtxptScene old,RtxptScene scene,Collection<RtxptScene.Item> meshes,
             Collection<RtxptScene.Variant> materials,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage){
+        return pack(old,scene,meshes,materials,nodes,removals,coverage,Map.of(),new PacketPool());
+    }
+    static ByteBuffer pack(RtxptScene old,RtxptScene scene,Collection<RtxptScene.Item> meshes,
+            Collection<RtxptScene.Variant> materials,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,
+            Map<Long,TextureAsset> resident,PacketPool pool){
         var textures=new LinkedHashMap<Long,TextureAsset>();
         for(var variant:materials){var material=scene.materials.get(variant.material());
             for(long id:new long[]{material.baseColorTextureId(),material.normalTextureId(),material.metallicRoughnessTextureId(),material.emissiveTextureId()})
-                if(id>=0)textures.put(id,scene.textures.get(id));}
+                if(id>=0&&resident.get(id)!=scene.textures.get(id))textures.put(id,scene.textures.get(id));}
         var geometry=new ArrayList<Geometry>();
         for(var item:meshes){var mesh=scene.meshes.get(item.mesh());geometry.add(new Geometry(item,RtxptScene.ExportGeometry.from(mesh),scene.attributeGroups(mesh)));}
         var removedTextures=new ArrayList<Long>();scene.textures.forEachChanged(old.textures,(id,value)->{if(value==null)removedTextures.add(id);});
-        var size=new Writer(null);write(size,textures,materials,geometry,nodes,removals,coverage,scene,removedTextures);
+        var size=new Writer(null);write(size,textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,resident);
         if(size.offset>512L*1024*1024)throw new IllegalArgumentException("Dynamic resource packet exceeds 512 MiB staging capacity; split the transaction");
-        var packet=ByteBuffer.allocateDirect(Math.toIntExact(size.offset)).order(ByteOrder.LITTLE_ENDIAN);
-        write(new Writer(packet),textures,materials,geometry,nodes,removals,coverage,scene,removedTextures);return packet.flip().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        var packet=pool.acquire(Math.toIntExact(size.offset));
+        write(new Writer(packet),textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,resident);return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static void write(Writer w,Map<Long,TextureAsset> textures,Collection<RtxptScene.Variant> materials,
-            List<Geometry> meshes,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,RtxptScene scene,List<Long> removedTextures){
+            List<Geometry> meshes,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,RtxptScene scene,List<Long> removedTextures,Map<Long,TextureAsset> resident){
         w.i(0x52445254);w.i(textures.size());
         for(var t:textures.values()){w.l(t.id());w.i(t.width());w.i(t.height());w.i(t.mipLevelCount());w.i(t.colorSpace().ordinal());
-            w.i(t.addressU().ordinal());w.i(t.addressV().ordinal());w.i(t.filter().ordinal());w.bytes(t.rgba8());}
+            w.i(t.addressU().ordinal());w.i(t.addressV().ordinal());w.i(t.filter().ordinal());w.l(t.generation());
+            var base=resident.get(t.id());var patch=t.sourcePatch().filter(p->base!=null&&base.generation()==t.parentGeneration()).orElse(null);
+            w.i(patch==null?0:1);
+            if(patch==null)w.bytes(t.rgba8());else{w.l(t.parentGeneration());w.i(patch.mipLevel());w.i(patch.x());w.i(patch.y());w.i(patch.width());w.i(patch.height());w.i(patch.rowPitch());w.bytes(patch.rgba8());}}
         w.i(materials.size());for(var v:materials){var m=scene.materials.get(v.material());w.s(v.name());w.i(m.baseColorRgba8());
             w.f(v.visibility());w.f(m.roughness());w.f(m.metallic());w.f(m.transmission());w.f(m.alphaCutoff());w.i(m.blendMode().ordinal());w.i(m.doubleSided()?1:0);
             w.i(m.emissiveColorRgba8());w.f(m.emissiveStrength());w.f(v.boundary()==null?m.indexOfRefraction():v.boundary().medium().indexOfRefraction());

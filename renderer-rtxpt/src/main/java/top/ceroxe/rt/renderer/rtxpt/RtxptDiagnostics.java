@@ -18,6 +18,17 @@ public final class RtxptDiagnostics {
     /** A borrowed thread-safe view. It never enters the renderer or waits for its owner thread.
      * A monitor stays valid across level changes and expires when a new native session replaces it. */
     @FunctionalInterface public interface Monitor { Snapshot snapshot(); }
+    /** Does not enter the renderer, poll a fence or wait for the owner thread. */
+    @FunctionalInterface public interface ProtocolMonitor { ProtocolSnapshot snapshot(); }
+    /** flags: published=1, leased=2, returned=4, consumer imported=8. Tick time is monotonic milliseconds. */
+    public record ProtocolEvent(long ordinal,long kind,long adapterLuid,long queue,long slot,long generation,long sequence,
+        long revision,long readyTarget,long doneTarget,long observedCompletion,long flags,long error,long tickMillis,long thread) { }
+    public record ProtocolSnapshot(long token,long overwritten,List<ProtocolEvent> events){public ProtocolSnapshot{events=List.copyOf(events);}}
+    static ProtocolSnapshot decodeProtocol(long[] data){
+        if(data.length<4||data[3]!=16||data[2]<0||data[2]>256||data.length!=4+data[2]*16)throw new IllegalStateException("Invalid protocol snapshot");
+        var events=new ArrayList<ProtocolEvent>((int)data[2]);for(int i=4;i<data.length;i+=16)events.add(new ProtocolEvent(data[i],data[i+1],data[i+2],data[i+3],data[i+4],data[i+5],data[i+6],data[i+7],data[i+8],data[i+9],data[i+10],data[i+11],data[i+12],data[i+13],data[i+14]));
+        return new ProtocolSnapshot(data[0],data[1],events);
+    }
     public enum Stage { UNKNOWN, FRAME, INSTANCE_CACHE, SUB_INSTANCES, DISPATCH, CALLER,
         WORKER, TASK_WAIT, MESSAGE_PUMP, SHADER_CACHE, SHADER_COMPILE, SHADER_LIBRARY,
         PIPELINE, SHADER_TABLE, IMPORT, TEXTURES, MATERIALS, ACCELERATION, RETIREMENT,

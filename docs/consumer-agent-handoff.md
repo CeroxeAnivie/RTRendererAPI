@@ -2,9 +2,19 @@
 
 本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
 
-当前批次为 **7.1.3**。本批解决局部 mesh 触发全属性重提、重复 JNI 查找和动态资源经文件导入的问题，增加内存事务、mip／矩形 patch、异步退休和 GPU 资源复用。完整 beauty 的 OMM 表随内存拓扑扩容；退化法线的切线回退保持有限值。详见[本批修复](release-dynamic-resources.md)和[仓库量化证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/main/docs/quality/dynamic-resources.md)。交付渠道为 GitHub 和 Maven Local，不发布 Central；发布状态、分位数和制品身份以仓库量化报告为准。
+当前批次为 **7.1.4**。本批将 coverage 与几何 AS 失效分离，兼容变形 clone/refit，未变共享纹理只传引用，patch 校验父 generation，主线程有界维护并后台释放完成资源。新增 `resourceMaintenance()` 和可独立线程读取的 `protocolMonitor()`，设备移除标记不代表完成。少量分组使用精简光照状态，保留真实 GI RR。详见[本批修复](release-high-framerate-resources.md)和[量化证据](quality/high-framerate-resources.md)。渠道为 GitHub 和 Maven Local，不发布 Central；性能达标、未测边界和制品身份均以量化报告为准。
 
 此前 2026-11-04 的光源遍历优化使用本地坐标 7.1.1，按用户要求删除旧 Maven Local 包后重新发布。消费方重新解析同版本依赖时使用 `--refresh-dependencies`，并核对发布记录中的 JAR/runtime hash，不能仅凭版本号认定已更新。新 native DLL SHA-256 为 `b8b4bca550f2dce38fc169e3edb4f8249e5a3a5f78695556396acd7337f2fd57`；内置 raw shader 为 `6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57`。扩展使用新包内 SDK 重编译。432 张信号／guide 逐位一致，36 次真实 RR 通过；性能数据见 [最新报告](quality/native-lighting-performance.md)。该次交付已发布 GitHub 和 Maven Local。
+
+## 本批保留候选与复验口径
+
+最终保留 falloff-branch：串行 fused 双信号、真实 GI RR、bitstack 近先遍历、全动态源专用 shader、提前写 guides 和 falloff 常用指数分支。已撤回性能较差的 packed-order 和双队列实验。普通入口不需要新增开关，专家诊断保留现有明确配置。
+
+977 mesh、750,336 三角形、22,000 BOX 源、63 纹理的正式 30 秒场景：290.63 FPS，更新帧完整 GPU P50/P95 为 5.010016/5.606112 ms，复用帧 P50/P95 为 3.234208/3.451584 ms；超过 7 ms 为 16/8,722 帧（0.1834%），全部位于更新帧。更新帧未达到 4 ms，按用户决定停止继续优化。
+
+F01–F10 的完整 719/977/4096 增长矩阵和完整 OFF/DEEP 对照尚未全部执行，不代表消费方 MC 180 FPS 或 GL 长调用已经闭环。已通过测试不重跑，不运行 FG/MFG。旧性能证据保留原制品 hash，最终恢复构建与归档核对不记成新的 GPU 跑分。
+
+升级时四个 renderer 模块统一使用 gradle.properties 中的版本，从 Maven Local 重新解析依赖；离线扩展使用当前包内 SDK 重编译。检查 runtime ZIP、DLL 和 shader 的真实身份；后文的 7.1.1 hash 仅属于历史交付。资源 generation、ready/completion fence 和纹理 patch 父 generation 契约继续生效，禁止用宿主特例绕过。
 
 ## 已修复的接入问题
 

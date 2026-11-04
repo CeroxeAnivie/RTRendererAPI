@@ -1,6 +1,7 @@
 #include "rtxpt_diagnostics.h"
 #include "rtxpt_host_resources.h"
 #pragma once
+#include "rtxpt_fence.h"
 #include <array>
 #include <atomic>
 #include <cstring>
@@ -37,7 +38,7 @@ public:
         RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Retirement);
         auto* queue=static_cast<ID3D12CommandQueue*>(device->getNativeQueue(
             nvrhi::ObjectTypes::D3D12_CommandQueue,nvrhi::CommandQueue::Graphics).pointer);
-        for(auto& slot:slots)if(slot.completion && slot.fence->GetCompletedValue()<slot.completion) {
+        for(auto& slot:slots)if(slot.completion && RtrCompletedFence(slot.fence.Get())<slot.completion) {
             check(queue->Signal(slot.fence.Get(),slot.completion),"Retire abandoned shared frame");
             // NVRHI's last submission fence can precede this native queue signal.
             // Wait for the actual shared fence before clearing its generation.
@@ -56,11 +57,11 @@ public:
         clear();
     }
     void requireRetired() const {
-        for(const auto& slot:slots)if(slot.completion && slot.fence->GetCompletedValue()<slot.completion)
+        for(const auto& slot:slots)if(slot.completion && RtrCompletedFence(slot.fence.Get())<slot.completion)
             throw std::runtime_error("Retire the Vulkan consumer before resizing or closing shared RTXPT frames");
     }
-    void clear() {
-        requireRetired();
+    void clear(bool deviceRemoved=false) {
+        if(!deviceRemoved)requireRetired();
         for(auto& slot:slots) {
             slot.texture=nullptr;slot.fence.Reset();
             if(slot.fenceHandle)CloseHandle(slot.fenceHandle);

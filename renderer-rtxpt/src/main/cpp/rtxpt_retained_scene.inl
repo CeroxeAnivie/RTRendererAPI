@@ -2,6 +2,8 @@ static std::chrono::steady_clock::time_point ResourceClock(){return RtrDiagnosti
 // Included inside HostPathTracer. Imports use the resident scene's factory,
 // descriptor allocator and texture cache, never SetCurrentScene/SceneLoaded.
 uint64_t resourceBlases=0,resourceRetainedBlases=0,resourceTlas=0,resourceWaitNs=0,resourceRecordingNs=0;
+uint64_t resourceRefits=0,actualNativeTlasBuilds=0;
+uint64_t textureGpuCopiedBytes=0;
 uint64_t importerNs=0,textureFinalizeNs=0,materialSyncNs=0,accelerationNs=0,nativeRetirementNs=0;
 uint64_t reusedTextureAllocations=0,resourceGpuSamples=0,resourceGpuIntervalNs=0;
 std::vector<nvrhi::TimerQueryHandle> resourceGpuQueries;
@@ -68,6 +70,9 @@ std::unordered_map<std::string,ResidentMesh> residentMeshes;
 std::unordered_map<std::string,ResidentMaterial> residentMaterials;
 std::unordered_map<donut::engine::Material*,std::vector<ResidentMesh>> residentMaterialMeshes;
 std::unordered_map<donut::engine::MeshInfo*,std::vector<donut::engine::SceneGraphNode*>> residentMeshNodes;
+std::unordered_map<std::string,donut::engine::SceneGraphNode*> residentInstanceNodes;
+std::unordered_set<std::string> candidateDirtyMeshes;
+bool candidateLayoutDirty=true;
 std::unordered_map<donut::engine::LoadedTexture*,size_t> residentTextureUsers;
 uint64_t nativePreparationMaterialVisits=0,nativePreparationMeshVisits=0,nativePreparationIndexBuilds=0;
 static auto MaterialTextures(const ResidentMaterial& material) {
@@ -75,10 +80,10 @@ static auto MaterialTextures(const ResidentMaterial& material) {
         material->normalTexture,material->emissiveTexture,material->occlusionTexture,material->transmissionTexture};
 }
 void IndexRetainedResources() {
-    residentMeshes.clear();residentMaterials.clear();residentMaterialMeshes.clear();residentTextureUsers.clear();residentMeshNodes.clear();
+    residentMeshes.clear();residentMaterials.clear();residentMaterialMeshes.clear();residentTextureUsers.clear();residentMeshNodes.clear();residentInstanceNodes.clear();candidateLayoutDirty=true;
     if(!m_scene)return;
     auto graph=m_scene->GetSceneGraph();
-    for(auto& instance:graph->GetMeshInstances())residentMeshNodes[instance->GetMesh().get()].push_back(instance->GetNode());
+    for(auto& instance:graph->GetMeshInstances()){residentMeshNodes[instance->GetMesh().get()].push_back(instance->GetNode());residentInstanceNodes.emplace(instance->GetNode()->GetName(),instance->GetNode());}
     for(auto& mesh:graph->GetMeshes()) {
         residentMeshes.emplace(mesh->name,mesh);std::unordered_set<donut::engine::Material*> used;
         for(auto& geometry:mesh->geometries)if(used.insert(geometry->material.get()).second)
@@ -141,11 +146,15 @@ nvrhi::CommandListHandle ResourceCommand(){
 }
 void PollResourceRetirement(){
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::ResourceRetirement);
-    for(auto i=resourceRetirement.begin();i!=resourceRetirement.end();)if(GetDevice()->pollEventQuery(i->done)&&GetDevice()->pollEventQuery(i->computeDone)){
-        for(auto& mesh:i->meshes)RecycleMesh(mesh);
+    size_t budget=2;
+    // Generations are ordered on both producer queues. Inspect only the oldest;
+    // an unfinished predecessor cannot be bypassed by scanning later entries.
+    for(auto i=resourceRetirement.begin();i!=resourceRetirement.end()&&budget&&nativeLighting.reclaimer->Available();)if(GetDevice()->pollEventQuery(i->done)&&GetDevice()->pollEventQuery(i->computeDone)){
+        size_t recycleBudget=4;for(auto& mesh:i->meshes){if(!recycleBudget)break;--recycleBudget;RecycleMesh(mesh);}
         if(i->recycleCommands)for(auto& command:i->commands)if(resourceCommandPool.size()<8)resourceCommandPool.push_back(std::move(command));
-        i=resourceRetirement.erase(i);if(RtrDiagnostics::level.load()!=0)++dynamicWork[7];
-    }else ++i;
+        if(!nativeLighting.reclaimer->Enqueue(*i))break;
+        i=resourceRetirement.erase(i);--budget;if(RtrDiagnostics::level.load()!=0)++dynamicWork[7];
+    }else break;
     if(RtrDiagnostics::level.load()!=0)dynamicWork[8]=resourceRetirement.size();
 }
 void RetireResources(RetiredResources&& value){
@@ -185,6 +194,7 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
     auto& meshes=residentMeshes;auto& materials=residentMaterials;
     RetiredResources retiredGeneration;
     std::vector<ResidentMesh> localMeshes;
+    std::unordered_map<donut::engine::MeshInfo*,nvrhi::rt::AccelStructHandle> refitSources;
     std::unordered_map<std::string,ResidentMesh> affectedMeshes;
     std::vector<ResidentMaterial> changedMaterials;
     std::vector<std::shared_ptr<donut::engine::LoadedTexture>> oldTextures;
@@ -202,10 +212,20 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
             }
             if(compatible){
                 auto target=std::static_pointer_cast<MeshInfoEx>(old->second);
+                auto next=std::static_pointer_cast<MeshInfoEx>(mesh);
+                if(m_ommBaker)m_ommBaker->HostInvalidateMesh(*target);
+                RtrProtocolTrace::Record(6,0,0,target->HostRefitFrames,target->accelStruct?uint32_t(target->accelStruct->getDesc().buildFlags):0,
+                    RtrDiagnostics::frame.load(),resourceRevision,0,0,0,
+                    (target->HostIndices?1:0)|(next->HostIndices?2:0)|((target->HostIndices&&next->HostIndices&&*target->HostIndices==*next->HostIndices)?4:0));
+                if(target->HostIndices&&next->HostIndices&&*target->HostIndices==*next->HostIndices&&target->HostRefitFrames<16&&target->accelStruct
+                    &&(target->accelStruct->getDesc().buildFlags&nvrhi::rt::AccelStructBuildFlags::AllowUpdate)!=0)
+                    refitSources.emplace(target.get(),target->accelStruct);
                 retiredGeneration.meshes.push_back(std::make_shared<MeshInfoEx>(*target));
                 int meshIndex=target->globalMeshIndex;
                 for(size_t g=0;g<mesh->geometries.size();g++)mesh->geometries[g]->globalGeometryIndex=target->geometries[g]->globalGeometryIndex;
                 static_cast<donut::engine::MeshInfo&>(*target)=*mesh;target->globalMeshIndex=meshIndex;
+                target->HostIndices=next->HostIndices;target->HostDynamicCoverage|=next->HostDynamicCoverage;
+                target->HostCoverageCandidates|=next->HostCoverageCandidates;
                 target->AccelStructOMM=nullptr;target->OpacityMicroMaps.clear();target->InvalidateOmmCpuInputIdentity();
                 mesh=target;localMeshes.push_back(mesh);
             }else if(old!=meshes.end())retiredGeneration.meshes.push_back(old->second);
@@ -222,7 +242,6 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
 
     // Both producer queues finish before retired scene generations are released.
     // External output leases own separate textures, independent of scene storage.
-    PollResourceRetirement();
     ResourceTelemetry(); // Retire completed timer queries even when nobody polls diagnostics.
     // No CPU fence/device wait occurs in a dynamic resource commit.
     const auto recordBegin=ResourceClock();
@@ -237,7 +256,7 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
             materials[source->name]=source;GetMaterialsBaker()->HostImportMaterial(*source);changedMaterials.push_back(source);continue;
         }
         auto target=found->second;auto* pt=PTMaterial::SafeCast(target);
-        bool before=pt&&(pt->EnableAlphaTesting||pt->ExcludeFromNEE);
+        bool before=pt&&pt->EnableAlphaTesting;
         bool alphaTextureChanged=coverageChanged[source->name];
         bool alphaValuesChanged=target->alphaCutoff!=source->alphaCutoff || target->opacity!=source->opacity;
         auto from=MaterialTextures(source),to=MaterialTextures(target);
@@ -248,8 +267,21 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
         GetMaterialsBaker()->HostImportMaterial(*target);pt=PTMaterial::SafeCast(target);
         changedMaterials.push_back(target);
         for(auto& texture:MaterialTextures(target))if(texture)++residentTextureUsers[texture.get()];
-        bool after=pt&&(pt->EnableAlphaTesting||pt->ExcludeFromNEE);
-        invalidated[source->name]=before!=after||domain!=target->domain||(before&&(alphaTextureChanged||alphaValuesChanged));
+        bool after=pt&&pt->EnableAlphaTesting;
+        // Ordinary non-opaque geometry already yields candidates to current alpha
+        // testing. Pixel/cutoff edits invalidate baked coverage, not that geometry.
+        // Native queries resolve current coverage in the candidate shader. NEE
+        // eligibility is shading metadata, not a native geometry build flag.
+        invalidated[source->name]=!nativeLighting.active&&(before!=after||domain!=target->domain);
+        if(alphaTextureChanged||alphaValuesChanged||domain!=target->domain)for(auto& mesh:residentMaterialMeshes[target.get()]){
+            auto* extended=static_cast<MeshInfoEx*>(mesh.get());extended->HostDynamicCoverage=true;extended->HostCoverageCandidates=true;
+            if(m_ommBaker)m_ommBaker->HostInvalidateMesh(*extended);
+            candidateDirtyMeshes.insert(mesh->name);
+            if(extended->AccelStructOMM){retiredGeneration.acceleration.push_back(extended->AccelStructOMM);
+                retiredGeneration.opacityMaps.insert(retiredGeneration.opacityMaps.end(),extended->OpacityMicroMaps.begin(),extended->OpacityMicroMaps.end());
+                extended->AccelStructOMM=nullptr;extended->OpacityMicroMaps.clear();m_tlasInstanceDataDirty=true;nativeTlasDirty=true;}
+            extended->InvalidateOmmCpuInputIdentity();
+        }
         if(domain!=target->domain)for(auto& mesh:residentMaterialMeshes[target.get()])domainChangedMeshes.insert(mesh.get());
         // A mixed geometry/coverage transaction already selected the replacement
         // mesh. An old reverse edge must not overwrite it with the retired mesh.
@@ -270,9 +302,10 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
                 extended->AccelStructOMM=nullptr;extended->OpacityMicroMaps.clear();extended->InvalidateOmmCpuInputIdentity();
             }
         }
+
     }
     }
-    bool topology=false;
+    bool topology=false,transformsChanged=false;
     for(auto& record:json["removeNodes"]) {
         auto found=nodes.find(record.asString());if(found!=nodes.end()){graph->Detach(found->second->shared_from_this());nodes.erase(found);topology=true;}
     }
@@ -290,16 +323,15 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
         double p[12];for(int i=0;i<12;i++)p[i]=record["transform"][i].asDouble();
         auto transform=node->GetLocalToParentTransform();bool same=true;
         for(int row=0;row<3;row++)for(int column=0;column<4;column++)same&=std::abs((column==3?transform.m_translation[row]:transform.m_linear[column][row])-p[row*4+column])<1e-12;
-        if(!same)RtrSetInstanceTransform(node.get(),p);
+        if(!same){RtrSetInstanceTransform(node.get(),p);transformsChanged=true;}
         if(affectedMeshes.count(mesh->name))changedLeafNodes.push_back(node.get());
         nodes.insert_or_assign(name,node.get());
     }
     if(!changedLeafNodes.empty()&&(topology||!graph->HostRefreshLeafNodes(changedLeafNodes)))for(auto* node:changedLeafNodes)node->InvalidateContent();
     m_scene->HostReleaseModels();
     // Compatible RGB-only edits retain the OMM inputs and pending jobs as well as the AS.
-    bool ommChanged=topology;for(auto& [name,mesh]:affectedMeshes)ommChanged|=!mesh->accelStruct;
-    for(auto& entry:invalidated)ommChanged|=entry.second;
-    if(m_ommBaker&&ommChanged)m_ommBaker->SceneUnloading();
+    // Queue tasks re-check each mesh's coverage eligibility before publishing.
+    // Dynamic edits must not cancel unrelated OMM builds.
     commitPart.reset();commitPart.emplace(RtrDiagnostics::Preparation);
     auto command=staged?staged:ResourceCommand();if(!staged)command->open();
     failureGuard.command=command;
@@ -340,26 +372,45 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
             for(auto& mesh:pendingMeshes){
                 bvh::Config cfg={.excludeTransmissive=m_ui.AS.ExcludeTransmissive};
                 auto desc=bvh::GetMeshBlasDesc(cfg,*mesh,nullptr,false);
-                desc.buildFlags=nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+                if(nativeLighting.active)for(auto& geometry:desc.bottomLevelGeometries){
+                    geometry.flags=nvrhi::rt::GeometryFlags::Opaque;geometry.useTransform=false;
+                }
+                desc.buildFlags=nvrhi::rt::AccelStructBuildFlags::PreferFastTrace|nvrhi::rt::AccelStructBuildFlags::AllowUpdate;
                 desc.debugName="Retained mutable BLAS";
                 nvrhi::rt::AccelStructHandle next;
                 for(auto i=spareMeshBlases.begin();i!=spareMeshBlases.end();++i)if(CompatibleBlas(i->acceleration->getDesc(),desc)){
                     next=i->acceleration;spareMeshBlasBytes-=i->bytes;spareMeshBlases.erase(i);break;
                 }
                 if(!next)next=GetDevice()->createAccelStruct(desc);if(!next)throw std::runtime_error("Dynamic BLAS allocation failed");
-                nvrhi::utils::BuildBottomLevelAccelStruct(command,next,desc);mesh->accelStruct=next;
+                auto source=refitSources.find(mesh.get());
+                RtrProtocolTrace::Record(7,0,0,0,0,RtrDiagnostics::frame.load(),resourceRevision,desc.bottomLevelGeometries.size(),
+                    source!=refitSources.end()?source->second->getDesc().bottomLevelGeometries.size():0,source!=refitSources.end()&&CompatibleBlas(source->second->getDesc(),desc),source!=refitSources.end());
+                if(source!=refitSources.end()&&CompatibleBlas(source->second->getDesc(),desc)){
+                    command->copyRaytracingAccelerationStructure(next,source->second);
+                    // NVRHI tracks both clone and in-place refit as
+                    // AccelStructWrite. That unchanged state does not emit a UAV
+                    // barrier, but the refit must read the completed clone.
+                    command->commitBarriers();
+                    auto* list=static_cast<ID3D12GraphicsCommandList*>(command->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
+                    D3D12_RESOURCE_BARRIER dependency{};dependency.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                    list->ResourceBarrier(1,&dependency);
+                    command->buildBottomLevelAccelStruct(next,desc.bottomLevelGeometries.data(),desc.bottomLevelGeometries.size(),desc.buildFlags|nvrhi::rt::AccelStructBuildFlags::PerformUpdate);
+                    ++resourceRefits;++static_cast<MeshInfoEx*>(mesh.get())->HostRefitFrames;
+                }else{nvrhi::utils::BuildBottomLevelAccelStruct(command,next,desc);++resourceBlases;static_cast<MeshInfoEx*>(mesh.get())->HostRefitFrames=0;}
+                mesh->accelStruct=next;
             }
             command->commitBarriers();
             auto* list=static_cast<ID3D12GraphicsCommandList*>(command->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
             D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;barrier.UAV.pResource=nullptr;
             list->ResourceBarrier(1,&barrier);
         }else CreateBlases(command,true,&pendingMeshes);
-        resourceBlases+=pending;
+        if(!memory)resourceBlases+=pending;
     }
     m_ui.AccelerationStructRebuildRequested=false;
     resourceRetainedBlases+=retained;
     if(topology)CreateTlas(command);
     if(topology||pending){
+        nativeTlasDirty=true;
         bool patched=memory&&!topology&&!m_tlasInstanceDataDirty&&m_ui.AS.GPUTLASBuild&&m_tlasMeshBoundsBuffer&&m_tlasInstanceDataBuffer
             &&m_tlasInstanceCount==graph->GetMeshInstances().size();
         if(m_blasPool&&m_tlasInstanceDataBlasGeneration!=m_blasPool->GetGeneration())patched=false;
@@ -377,6 +428,8 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
                     uint32_t(mesh->globalMeshIndex),mesh->skinPrototype.use_count()?1u:0u};
                 auto users=residentMeshNodes.find(mesh.get());if(users!=residentMeshNodes.end())for(auto* node:users->second){
                     auto instance=std::static_pointer_cast<donut::engine::MeshInstance>(node->GetLeaf());
+                    auto* extension=dynamic_cast<MeshInstanceExtension*>(instance.get());
+                    data.flags=(mesh->skinPrototype?1u:0u)|((extension?extension->HostRayFlags:0u)<<8);
                     command->writeBuffer(m_tlasInstanceDataBuffer,&data,sizeof(data),size_t(instance->GetInstanceIndex())*sizeof(data));
                     upload.event[9]+=sizeof(data);
                 }
@@ -416,5 +469,42 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
     g_sampleUIData.ResetAccumulation=true;g_sampleUIData.ResetRealtimeCaches=true;if(!nativeLighting.active)preSrHistoryReset=true;
     if(topology)nativeLighting.metadataDirty=true;
     ++cacheGeneration;lightingSceneDirty=true;
+    if(topology||transformsChanged||!localMeshes.empty())++nativeMotionGeneration;
     resourceRecordingNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(ResourceClock()-recordBegin).count();
+}
+
+
+void PrepareNativeCandidateFlags(nvrhi::ICommandList* command){
+    std::unordered_set<donut::engine::SceneGraphNode*> changed;
+    if(candidateLayoutDirty)for(auto& [name,node]:residentInstanceNodes)changed.insert(node);
+    else {
+        for(auto& name:nativeLighting.dirtyInstances){auto i=residentInstanceNodes.find(name);if(i!=residentInstanceNodes.end())changed.insert(i->second);}
+        for(auto& key:nativeLighting.dirtyColors)candidateDirtyMeshes.insert(key.substr(0,key.rfind(':')));
+        for(auto& name:candidateDirtyMeshes){auto mesh=residentMeshes.find(name);if(mesh==residentMeshes.end())continue;
+            auto users=residentMeshNodes.find(mesh->second.get());if(users!=residentMeshNodes.end())changed.insert(users->second.begin(),users->second.end());}
+    }
+    for(auto* node:changed){
+        auto instance=std::static_pointer_cast<donut::engine::MeshInstance>(node->GetLeaf());
+        auto* extension=dynamic_cast<MeshInstanceExtension*>(instance.get());if(!extension)continue;
+        auto* mesh=static_cast<MeshInfoEx*>(instance->GetMesh().get());
+        auto attributes=nativeLighting.instanceAttributes.find(node->GetName());
+        bool custom=attributes!=nativeLighting.instanceAttributes.end()&&attributes->second.rolesVisibility.x!=23;
+        bool coverage=mesh->HostCoverageCandidates;
+        for(size_t g=0;g<mesh->geometries.size();++g){
+            coverage|=mesh->geometries[g]->material->domain!=donut::engine::MaterialDomain::Opaque;
+            if(nativeLighting.alphaMeshes.count(mesh->name+":"+std::to_string(g))){coverage=true;mesh->HostDynamicCoverage=true;}
+        }
+        custom|=coverage;
+        if(coverage||(attributes!=nativeLighting.instanceAttributes.end()&&attributes->second.rolesVisibility.w!=0)){
+            auto& value=nativeLighting.instanceAttributes[node->GetName()];
+            if(value.rolesVisibility.w!=float(coverage)){value.rolesVisibility.w=float(coverage);nativeLighting.dirtyInstances.insert(node->GetName());}
+        }
+        const uint32_t flags=custom?uint32_t(nvrhi::rt::InstanceFlags::ForceNonOpaque):0u;
+        if(extension->HostRayFlags==flags)continue;extension->HostRayFlags=flags;nativeTlasDirty=true;
+        if(!candidateLayoutDirty&&!m_tlasInstanceDataDirty&&m_tlasInstanceDataBuffer){
+            const uint32_t data=(mesh->skinPrototype?1u:0u)|(flags<<8);
+            command->writeBuffer(m_tlasInstanceDataBuffer,&data,sizeof(data),size_t(instance->GetInstanceIndex())*24+20);
+        }else m_tlasInstanceDataDirty=true;
+    }
+    candidateLayoutDirty=false;candidateDirtyMeshes.clear();nativeLighting.instanceCandidates=true;
 }

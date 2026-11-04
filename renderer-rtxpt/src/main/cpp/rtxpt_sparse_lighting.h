@@ -2,6 +2,8 @@
 #include "rtxpt_retained_light_tree.h"
 #include <array>
 #include <cstring>
+#include <cstdlib>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -17,13 +19,18 @@ public:
     std::vector<int64_t> ids;
     std::unordered_map<int64_t,uint32_t> slots;
     rtr::RetainedLightTree tree;
+    std::vector<rtr::LightTreeNode> queryNodes;
     double normalization=1;
     std::vector<uint32_t> dirtyRecords,dirtyNodes;
     bool full=true,headerDirty=true;
     std::array<uint32_t,32> groupCounts{};
     uint32_t groupMask=0;
-    void Group(const Record& record,bool add){if(record.cone[3]==0)return;const auto group=uint32_t(record.cone[2]);
+    size_t visibleMaxCount=0,dynamicCount=0;
+    void Group(const Record& record,bool add){if(uint32_t(record.identity[3])&1){if(add)++dynamicCount;else --dynamicCount;}if(record.cone[3]==1){if(add)++visibleMaxCount;else --visibleMaxCount;}if(record.cone[3]==0)return;const auto group=uint32_t(record.cone[2]);
         if(add){++groupCounts[group];groupMask|=1u<<group;}else if(--groupCounts[group]==0)groupMask&=~(1u<<group);}
+    bool SmallGroups()const{return (groupMask&~15u)==0;}
+    bool PairGroups()const{return (groupMask&~3u)==0;}
+    bool VisibleMax()const{return !records.empty()&&visibleMaxCount==records.size();}
     bool SingleGroup()const{return (groupMask&(groupMask-1))==0;}
     uint32_t recordCapacity=0,nodeCapacity=0;
     nvrhi::BufferHandle sourceBuffer,treeBuffer;
@@ -64,7 +71,7 @@ public:
         size_t capacity=std::max<size_t>(64,records.capacity());while(capacity<count)capacity*=2;
         records.reserve(capacity);proxies.reserve(capacity);ids.reserve(capacity);slots.reserve(capacity);tree.Reserve(capacity);
         dirtyRecords.reserve(dirtyRecords.size()+changed.size()+removed.size());dirtyNodes.reserve(dirtyNodes.size()+(changed.size()+removed.size())*128);
-        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;full=true;}
+        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;visibleMaxCount=dynamicCount=0;full=true;}
         uint64_t visited=tree.visited;
         for(auto id:removed){uint32_t slot=slots.at(id),last=uint32_t(records.size()-1);Group(records[slot],false);tree.Remove(slot,dirtyNodes);slots.erase(id);
             if(slot!=last){records[slot]=records[last];proxies[slot]=proxies[last];ids[slot]=ids[last];slots.at(ids[slot])=slot;dirtyRecords.push_back(slot);}
@@ -72,13 +79,48 @@ public:
         for(size_t i=0;i<changed.size();i++){
             auto old=slots.find(changed[i]);uint32_t slot=old==slots.end()?uint32_t(records.size()):old->second;
             if(old!=slots.end())Group(records[slot],false);Group(prepared[i],true);
-            if(old==slots.end()){slots.emplace(changed[i],slot);records.push_back(prepared[i]);proxies.push_back(MakeProxy(prepared[i]));ids.push_back(changed[i]);tree.Insert(proxies,slot,normalization,dirtyNodes);}
+            if(old==slots.end()){slots.emplace(changed[i],slot);records.push_back(prepared[i]);proxies.push_back(MakeProxy(prepared[i]));ids.push_back(changed[i]);if(!reset)tree.Insert(proxies,slot,normalization,dirtyNodes);}
             else{records[slot]=prepared[i];proxies[slot]=MakeProxy(prepared[i]);tree.Refit(proxies,slot,normalization,dirtyNodes);}
             dirtyRecords.push_back(slot);
         }
+        // Bulk publication has every source available. Spatial partitioning avoids
+        // insertion-order-dependent overlap in the AVL hierarchy; later small
+        // edits keep the existing bounded incremental path.
+        if(reset){tree.Rebuild(proxies,&normalization);dirtyNodes.clear();}
+        PrepareQueryNodes(reset);
         // No probability normalization is needed for exact spatial queries. Tree powers
         // are intentionally unused; the geometry/support bounds are authoritative.
         headerDirty=true;work[0]=records.size();++work[1];work[2]+=changed.size();work[3]+=removed.size();work[4]+=tree.visited-visited;
+    }
+    void PrepareQueryNodes(bool rebuild){
+        queryNodes.resize(tree.nodes.size());
+        auto changed=dirtyNodes;
+        if(rebuild){changed.resize(tree.nodes.size());std::iota(changed.begin(),changed.end(),0);}
+        std::sort(changed.begin(),changed.end());changed.erase(std::unique(changed.begin(),changed.end()),changed.end());
+        // Rotations can reorder indices. Heights, rather than allocation order,
+        // guarantee that every changed child is aggregated before its parent.
+        std::sort(changed.begin(),changed.end(),[&](auto a,auto b){return tree.heights[a]<tree.heights[b];});
+        for(auto index:changed){
+            auto& n=queryNodes[index];n=tree.nodes[index];if(n.light< -1)continue;
+            uint32_t mask=0;
+            if(n.light>=0){const auto& r=records.at(uint32_t(n.light));
+                // Query bounds enclose the emitting volume itself. Expanding a
+                // center bound and also its radius paid twice for BOX extents.
+                for(int a=0;a<3;a++){n.minimum[a]=r.position[a]-r.extent[a];n.maximum[a]=r.position[a]+r.extent[a];}
+                n.range=r.direction[3];
+                n.power=r.color[0]*r.color[3];n.directional=r.color[1]*r.color[3];n.leaves=r.color[2]*r.color[3];
+                n.unused[0]=(uint32_t(r.identity[3])&2)?-1.f:r.extent[3];
+                n.unused[1]=0;mask=1u<<uint32_t(r.cone[2]);
+            }else{const auto& a=queryNodes[uint32_t(n.left)];const auto& b=queryNodes[uint32_t(n.right)];
+                for(int axis=0;axis<3;axis++){n.minimum[axis]=std::min(a.minimum[axis],b.minimum[axis]);n.maximum[axis]=std::max(a.maximum[axis],b.maximum[axis]);}
+                n.range=std::max(a.range,b.range);
+                n.power=std::max(a.power,b.power);n.directional=std::max(a.directional,b.directional);n.leaves=std::max(a.leaves,b.leaves);
+                n.unused[0]=std::min(std::abs(a.unused[0]),std::abs(b.unused[0]))*((a.unused[0]<0||b.unused[0]<0)?-1.f:1.f);
+                n.unused[1]=0;uint32_t x,y;std::memcpy(&x,&a.unused[2],4);std::memcpy(&y,&b.unused[2],4);mask=x|y;
+            }
+            std::memcpy(&n.unused[2],&mask,4);
+            std::memcpy(&n.unused[1],&tree.parents[index],4);
+        }
     }
     bool Ensure(nvrhi::IDevice* device){
         for(auto i=retired.begin();i!=retired.end();)if(device->pollEventQuery(i->graphics)&&device->pollEventQuery(i->compute))i=retired.erase(i);else ++i;
@@ -103,8 +145,13 @@ public:
     void Upload(nvrhi::ICommandList* command){
         if(!headerDirty)return;
         Record header{};header.position={float(records.size()),float(tree.root==rtr::RetainedLightTree::None?0:tree.root),1,0};
+        header.direction[0]=dynamicCount==records.size()?1.f:0.f;header.direction[1]=dynamicCount==0?1.f:0.f;
+        // Bounds are an exact early rejection for max composition only. Mixed
+        // and additive compositions retain the general traversal unchanged.
+        const char* disable=std::getenv("RTR_RTXPT_DISABLE_SPARSE_NODE_BOUNDS");
+        header.position[3]=!records.empty()&&visibleMaxCount==records.size()&&(!disable||std::string(disable)!="1")?1.f:0.f;
         command->writeBuffer(sourceBuffer,&header,sizeof(header));
-        UploadSpans(command,sourceBuffer,records,dirtyRecords,1,5);UploadSpans(command,treeBuffer,tree.nodes,dirtyNodes,0,6);
+        UploadSpans(command,sourceBuffer,records,dirtyRecords,1,5);UploadSpans(command,treeBuffer,queryNodes,dirtyNodes,0,6);
         dirtyRecords.clear();dirtyNodes.clear();full=headerDirty=false;
     }
 };

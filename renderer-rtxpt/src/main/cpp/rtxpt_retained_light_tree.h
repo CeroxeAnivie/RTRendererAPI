@@ -43,6 +43,7 @@ public:
         uint32_t oldParent=parents[sibling],branch=Allocate();
         nodes[branch].light=-1;nodes[branch].left=float(sibling);nodes[branch].right=float(leaf);
         parents[branch]=oldParent;parents[sibling]=parents[leaf]=branch;
+        dirty.push_back(sibling);
         Replace(oldParent,sibling,branch);Fix(branch,dirty);
     }
     void Remove(uint32_t slot,std::vector<uint32_t>& dirty){
@@ -50,7 +51,7 @@ public:
         if(branch==None){root=None;Release(leaf,dirty);}
         else{
             auto& p=nodes[branch];uint32_t sibling=uint32_t(p.left)==leaf?uint32_t(p.right):uint32_t(p.left),grand=parents[branch];
-            Replace(grand,branch,sibling);parents[sibling]=grand;Release(leaf,dirty);Release(branch,dirty);Fix(grand,dirty);
+            Replace(grand,branch,sibling);parents[sibling]=grand;dirty.push_back(sibling);Release(leaf,dirty);Release(branch,dirty);Fix(grand,dirty);
         }
         if(slot+1!=leaves.size()){
             leaves[slot]=leaves.back();nodes[leaves[slot]].light=float(slot);dirty.push_back(leaves[slot]);
@@ -95,11 +96,13 @@ private:
     uint32_t Left(uint32_t a,std::vector<uint32_t>& dirty){
         uint32_t b=uint32_t(nodes[a].right),beta=uint32_t(nodes[b].left),p=parents[a];
         Replace(p,a,b);parents[b]=p;nodes[b].left=float(a);parents[a]=b;nodes[a].right=float(beta);parents[beta]=a;
+        dirty.push_back(beta);
         Refresh(a,dirty);Refresh(b,dirty);return b;
     }
     uint32_t Right(uint32_t a,std::vector<uint32_t>& dirty){
         uint32_t b=uint32_t(nodes[a].left),beta=uint32_t(nodes[b].right),p=parents[a];
         Replace(p,a,b);parents[b]=p;nodes[b].right=float(a);parents[a]=b;nodes[a].left=float(beta);parents[beta]=a;
+        dirty.push_back(beta);
         Refresh(a,dirty);Refresh(b,dirty);return b;
     }
     void Fix(uint32_t i,std::vector<uint32_t>& dirty){

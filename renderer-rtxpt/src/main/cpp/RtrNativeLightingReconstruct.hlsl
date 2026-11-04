@@ -23,24 +23,30 @@ float3 RtrPreviousPosition(RtrReceiver r) {
 }
 [numthreads(8,8,1)]
 void main(uint2 pixel:SV_DispatchThreadID) {
-    if(any(pixel>=g.grid.xy))return;RtrCount(0);
+    if(any(pixel>=g.grid.xy))return;RtrSetSourcePixel(pixel);RtrCount(0);
     float2 ndc=(float2(pixel)+.5)/float2(g.grid.xy)*float2(2,-2)+float2(-1,1)+g.farJitter.yz;
     float4 nearView=mul(g.inverseClip,float4(ndc,g.cameraNear.w,1)),farView=mul(g.inverseClip,float4(ndc,g.farJitter.x,1));
     float3 direction=RtrNormalize(mul((float3x3)g.cameraToWorld,farView.xyz/farView.w-nearView.xyz/nearView.w));
     RtrReceiver r;float3 gain=1,indirect=0;bool valid=RtrTrace(g.cameraNear.xyz,direction,1e20,1,r);
+    // Publish trace-only data before the nested lighting/shadow queries. Keeping
+    // barycentrics, geometry IDs and material guide fields alive through that
+    // traversal increases register pressure without changing either signal.
+    if((g.grid.z&4)!=0)u_Geometry[pixel]=valid?float4(r.normal,r.distance):0;
+    if((g.grid.z&8)!=0)u_Identity[pixel]=valid?uint4(r.instance,r.geometry,r.primitive,1):uint4(0xffffffff,0xffffffff,0xffffffff,0);
+    u_DiffuseAlbedo[pixel]=valid?float4(r.albedo*r.diffuseWeight,1):0;
+    // Specular albedo and hit distance stay zero for this diffuse-only layer;
+    // their textures are cleared once when allocated by RtrNativeRR.
+    u_NormalRoughness[pixel]=valid?float4(r.normal,r.roughness):float4(0,0,1,1);
+    float4 clip=mul(rtrWorldToClip,float4(valid?r.position:g.cameraNear.xyz+direction*1e7,1));
+    // Retained scene buffers keep their previous deformation until the next
+    // resource update. Consume that motion once, then project current positions.
+    float3 previousPosition=valid?((g.publication.w&16)!=0?RtrPreviousPosition(r):r.position):g.cameraNear.xyz+direction*1e7;
+    float4 previous=mul(rtrPreviousWorldToClip,float4(previousPosition,1));
+    float2 motion=(previous.xy/previous.w-clip.xy/clip.w)*float2(.5,-.5);
+    u_Motion[pixel]=all(isfinite(motion))?motion:0;
+    u_Depth[pixel]=saturate(clip.z/clip.w*rtrDepth.x+rtrDepth.y);
     if(valid){RtrCount(1);RtrEvaluateReceiver(r,gain,indirect);}
     gain=clamp(gain,0,65504);indirect=clamp(indirect,0,65504);
     if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,valid?r.opacity:0);
     u_Indirect[pixel]=float4(indirect,valid?r.opacity:0);
-    if((g.grid.z&4)!=0)u_Geometry[pixel]=valid?float4(r.normal,r.distance):0;
-    if((g.grid.z&8)!=0)u_Identity[pixel]=valid?uint4(r.instance,r.geometry,r.primitive,1):uint4(0xffffffff,0xffffffff,0xffffffff,0);
-    u_DiffuseAlbedo[pixel]=valid?float4(r.albedo*r.diffuseWeight,1):0;
-    // This layer contains no specular radiance or specular paths.
-    u_SpecularAlbedo[pixel]=0;u_SpecularDistance[pixel]=0;
-    u_NormalRoughness[pixel]=valid?float4(r.normal,r.roughness):float4(0,0,1,1);
-    float4 clip=mul(rtrWorldToClip,float4(valid?r.position:g.cameraNear.xyz+direction*1e7,1));
-    float4 previous=mul(rtrPreviousWorldToClip,float4(valid?RtrPreviousPosition(r):g.cameraNear.xyz+direction*1e7,1));
-    float2 motion=(previous.xy/previous.w-clip.xy/clip.w)*float2(.5,-.5);
-    u_Motion[pixel]=all(isfinite(motion))?motion:0;
-    u_Depth[pixel]=saturate(clip.z/clip.w*rtrDepth.x+rtrDepth.y);
 }

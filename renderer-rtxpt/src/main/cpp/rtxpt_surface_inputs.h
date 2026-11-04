@@ -136,7 +136,7 @@ private:
 public:
     void Poll(){
         Owner();for(auto& generation:generations)for(auto& slot:generation->slots)if(slot.ownership.state==State::InFlight){
-            const auto completed=slot.fence->GetCompletedValue();if(completed==UINT64_MAX)throw std::runtime_error("Device lost while retiring host-surface inputs");slot.ownership.Complete(completed);}
+            const auto completed=RtrCompletedFence(slot.fence.Get());slot.ownership.Complete(completed);}
         while(generations.size()>1&&generations.front()->Idle())generations.pop_front();
     }
     void Configure(nvrhi::IDevice* selectedDevice,const Plan& requested){
@@ -226,7 +226,7 @@ public:
                 throw std::runtime_error("Return host-surface leases and publish/discard pending input before closing");
     }
     void RequireRetired(){Poll();for(const auto& generation:generations)if(!generation->Idle())throw std::runtime_error("Return host-surface leases and retire published/read input before closing");}
-    void Clear(){Owner();RequireRetired();generations.clear();device=nullptr;adapter=0;}
+    void Clear(bool deviceRemoved=false){Owner();if(!deviceRemoved)RequireRetired();generations.clear();device=nullptr;adapter=0;}
     static std::vector<int64_t> Encode(const Packet& packet){
         const auto& token=packet.token;const auto& id=packet.identity;
         std::vector<int64_t> words={AbiVersion,token.slot,int64_t(token.generation),int64_t(token.ticket),int64_t(id.sequence),int64_t(id.revision),int64_t(id.resourceGeneration),int64_t(id.viewIdentity),

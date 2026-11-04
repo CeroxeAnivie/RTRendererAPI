@@ -11,6 +11,10 @@ import java.util.Objects;
  * or the builder's immutable-direct methods to retain off-heap pixels without copying them.</p>
  */
 public final class TextureAsset {
+    private static final java.util.concurrent.atomic.AtomicLong generations=new java.util.concurrent.atomic.AtomicLong();
+    private final long generation=generations.incrementAndGet();
+    private final TexturePatch sourcePatch;
+    private final long parentGeneration;
     private final Object generationIdentity=new Object();
     private final Object patchBaseIdentity;
     private final long id;
@@ -54,6 +58,7 @@ public final class TextureAsset {
             );
         }
         this.patchBaseIdentity=null;
+        this.sourcePatch=null;this.parentGeneration=0;
         this.id = id;
         this.width = width;
         this.height = height;
@@ -323,12 +328,19 @@ public final class TextureAsset {
         byte[] next=new byte[rgba8.remaining()];rgba8.duplicate().get(next);var source=patch.rgba8();
         int stride=Math.multiplyExact(mipWidth(patch.mipLevel()),4),offset=mipByteOffset(patch.mipLevel());
         for(int row=0;row<patch.height();row++)source.get(row*patch.rowPitch(),next,offset+(patch.y()+row)*stride+patch.x()*4,patch.width()*4);
-        return new TextureAsset(this,ByteBuffer.wrap(next).asReadOnlyBuffer());
+        return new TextureAsset(this,ByteBuffer.wrap(next).asReadOnlyBuffer(),patch);
     }
-    private TextureAsset(TextureAsset base,ByteBuffer pixels){
+    private TextureAsset(TextureAsset base,ByteBuffer pixels,TexturePatch patch){
         id=base.id;width=base.width;height=base.height;colorSpace=base.colorSpace;addressU=base.addressU;addressV=base.addressV;
         filter=base.filter;mipLevelCount=base.mipLevelCount;rgba8=pixels;patchBaseIdentity=base.generationIdentity;
+        sourcePatch=patch;parentGeneration=base.generation;
     }
+    /** @return immutable process-local content generation identity */
+    public long generation(){return generation;}
+    /** @return direct parent generation for a patch, or zero for a complete snapshot */
+    public long parentGeneration(){return parentGeneration;}
+    /** @return immutable authored rectangle, when this snapshot was created by a patch */
+    public java.util.Optional<TexturePatch> sourcePatch(){return java.util.Optional.ofNullable(sourcePatch);}
 
     /**
      * Provider validation before publishing a replacement. Full upserts have no base constraint.

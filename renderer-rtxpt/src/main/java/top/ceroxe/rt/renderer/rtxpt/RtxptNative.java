@@ -28,6 +28,9 @@ final class RtxptNative {
     static native void prepare(String runtime);
     static native void diagnosticContext(long handle,long sequence,long revision);
     static native void diagnosticSubmitBegin(long handle,long sequence,long revision,long elapsedNanos);
+    static native void diagnosticSubmitDeferred();
+    static native long protocolMonitorToken(long handle);
+    static native long[] protocolMonitorSnapshot(long token);
     static native void diagnosticSubmitEnd(boolean failed);
     static native void diagnosticSubmitStage(int stage,long offsetNanos,long durationNanos,long items,long tasks);
     static native void diagnosticLevel(long handle,int level);
@@ -107,6 +110,8 @@ final class RtxptNative {
     static native void resourcesMemory(long handle,long revision,java.nio.ByteBuffer packet);
     static native long[] dynamicResourceStatistics(long handle);
     static native boolean resourcesCanUpdate(long handle);
+    static native boolean deviceRemoved(long handle);
+    static native long[] resourceMaintenance(long handle);
     static native void nativeLightingVertexColors(long handle,String geometry,int[] colors);
     static native long[] nativeLightingTelemetry(long handle);
     static native void nativeLightingCapture(long handle,String path,int signal);

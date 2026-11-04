@@ -7,12 +7,13 @@
 // samples the independent full-resolution host base afterwards.
 class RtrNativeRR {
 public:
-    bool requested=false,valid=false,reset=true;
+    bool requested=false,valid=false,reset=true,guidesNeedClear=false;
     uint64_t evaluated=0,resets=0,lastSequence=0;
     uint32_t width=0,height=0;
     nvrhi::BindingLayoutHandle layout,resolveLayout;
-    nvrhi::ComputePipelineHandle pipeline,singleGroupPipeline,sparseOnlyPipeline,sparseOnlySingleGroupPipeline,resolvePipeline;
-    std::array<nvrhi::ComputePipelineHandle,4> uninstrumentedPipelines;
+    nvrhi::ComputePipelineHandle pipeline,singleGroupPipeline,sparseOnlyPipeline,sparseOnlySingleGroupPipeline,smallGroupPipeline,sparseOnlySmallGroupPipeline,resolvePipeline;
+    std::array<nvrhi::ComputePipelineHandle,8> uninstrumentedPipelines;
+    std::array<nvrhi::ComputePipelineHandle,16> maxPipelines;
     nvrhi::BufferHandle constants;
     std::array<nvrhi::TextureHandle,6> guides;
     nvrhi::TextureHandle reconstructed,result;
@@ -23,24 +24,30 @@ public:
     static void Check(sl::Result result,const char* stage){
         if(result!=sl::Result::eOk)throw std::runtime_error(std::string("Native GI RR ")+stage+" failed: "+std::to_string(int(result)));
     }
-    void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* base,nvrhi::IBindingLayout* bindless,uint32_t w,uint32_t h){
+    void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* base,nvrhi::IBindingLayout* bindless,nvrhi::IBindingLayout* sourceHistory,uint32_t w,uint32_t h,unsigned groupVariant,bool maximum,bool allDynamic){
         if(!requested)return;
         if(!donut::app::StreamlineIntegration::Get().IsDLSSRRAvailable())throw std::runtime_error("Native diffuse GI RR is not available on this device");
         if(!pipeline){
             auto desc=*base->getDesc();desc.bindings.push_back(nvrhi::BindingLayoutItem::ConstantBuffer(1));
             for(uint32_t i=5;i<=10;i++)desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(i));
-            layout=device->createBindingLayout(desc);std::vector<donut::engine::ShaderMacro> defaultMacros{{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"}};
+            layout=device->createBindingLayout(desc);std::vector<donut::engine::ShaderMacro> defaultMacros{{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
             auto shader=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&defaultMacros,nvrhi::ShaderType::Compute);
             if(!layout||!shader)throw std::runtime_error("Native GI RR guide shader unavailable");
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindless};pso.CS=shader;pipeline=device->createComputePipeline(pso);
-            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY","1"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"}};
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY","1"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);singleGroupPipeline=device->createComputePipeline(pso);
-            macros={{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","0"},{"RTR_WORK_STATISTICS","1"}};
+            macros={{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","0"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);sparseOnlyPipeline=device->createComputePipeline(pso);
             macros[0].definition="1";
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);sparseOnlySingleGroupPipeline=device->createComputePipeline(pso);
+            for(unsigned analytic=0;analytic<2;++analytic){
+                macros={{"RTR_LIGHT_GROUP_CAPACITY","4"},{"RTR_ANALYTIC_LIGHTS",analytic?"1":"0"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
+                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+                auto prepared=device->createComputePipeline(pso);if(!prepared)throw std::runtime_error("Small-group lighting pipeline unavailable");
+                (analytic?smallGroupPipeline:sparseOnlySmallGroupPipeline)=prepared;
+            }
             for(unsigned i=0;i<uninstrumentedPipelines.size();i++){
-                macros={{"RTR_LIGHT_GROUP_CAPACITY",(i&1)?"1":"32"},{"RTR_ANALYTIC_LIGHTS",(i&2)?"0":"1"},{"RTR_WORK_STATISTICS","0"}};
+                macros={{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},{"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","0"}};
                 pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);
                 uninstrumentedPipelines[i]=device->createComputePipeline(pso);
                 if(!uninstrumentedPipelines[i])throw std::runtime_error("Uninstrumented native GI RR pipeline unavailable");
@@ -50,6 +57,13 @@ public:
             resolveLayout=device->createBindingLayout(rd);pso.bindingLayouts={resolveLayout};pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingResolve.hlsl","main",nullptr,nvrhi::ShaderType::Compute);resolvePipeline=device->createComputePipeline(pso);
             if(!pipeline||!singleGroupPipeline||!sparseOnlyPipeline||!sparseOnlySingleGroupPipeline||!constants||!resolvePipeline)throw std::runtime_error("Native GI RR pipeline allocation failed");
         }
+        const unsigned maxOffset=allDynamic?8:0;
+        if(maximum)for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!maxPipelines[maxOffset+i]){
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},{"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","1"}};
+            nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindless,sourceHistory};
+            pso.CS=factory.CreateShader(allDynamic?"app/ProcessingPasses/RtrNativeDynamicLightingReconstruct.hlsl":"app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);maxPipelines[maxOffset+i]=device->createComputePipeline(pso);
+            if(!maxPipelines[maxOffset+i])throw std::runtime_error("Max-composition native GI RR pipeline unavailable");
+        }
         if(width==w&&height==h)return;
         // NVRHI command-list references retain old textures until GPU completion.
         std::array<nvrhi::TextureHandle,8> next;
@@ -58,9 +72,12 @@ public:
             auto td=nvrhi::TextureDesc().setWidth(w).setHeight(h).setFormat(format).setIsUAV(true).setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);
             td.debugName="Native diffuse GI RR";next[i]=device->createTexture(td);if(!next[i])throw std::runtime_error("Native GI RR texture allocation failed");
         }
-        for(unsigned i=0;i<6;i++)guides[i]=next[i];reconstructed=next[6];result=next[7];width=w;height=h;valid=false;reset=true;
+        for(unsigned i=0;i<6;i++)guides[i]=next[i];reconstructed=next[6];result=next[7];width=w;height=h;valid=false;reset=true;guidesNeedClear=true;
     }
     void Bind(nvrhi::ICommandList* command,nvrhi::BindingSetDesc& bindings,const float* words,uint64_t sequence){
+        // Diffuse-only reconstruction has invariant zero specular inputs. Clear
+        // once per allocation instead of writing twelve MB of zeros every frame.
+        if(guidesNeedClear){for(unsigned i:{1u,5u})command->clearTextureFloat(guides[i],nvrhi::AllSubresources,nvrhi::Color(0));guidesNeedClear=false;}
         dm::float4x4 inverseClip,cameraToWorld;std::memcpy(&inverseClip,words,64);std::memcpy(&cameraToWorld,words+16,64);
         parameters.worldToClip=dm::inverse(cameraToWorld*inverseClip);
         if(sequence!=lastSequence+1)reset=true;

@@ -15,6 +15,12 @@ final class RtxptDelta {
     static boolean alphaEquivalent(TextureAsset a,TextureAsset b){
         if(a==b)return true;if(a==null||b==null)return false;
         if(a.width()!=b.width()||a.height()!=b.height()||a.mipLevelCount()!=b.mipLevelCount()||a.filter()!=b.filter()||a.addressU()!=b.addressU()||a.addressV()!=b.addressV())return false;
+        var patch=b.sourcePatch().orElse(null);
+        if(patch!=null&&b.parentGeneration()==a.generation()){
+            var original=a.rgba8();var pixels=patch.rgba8();int stride=a.mipWidth(patch.mipLevel())*4,offset=a.mipByteOffset(patch.mipLevel());
+            for(int y=0;y<patch.height();y++)for(int x=0;x<patch.width();x++)if(original.get(offset+(patch.y()+y)*stride+(patch.x()+x)*4+3)!=pixels.get(y*patch.rowPitch()+x*4+3))return false;
+            return true;
+        }
         var x=a.rgba8();var y=b.rgba8();for(int i=3;i<x.remaining();i+=4)if(x.get(i)!=y.get(i))return false;return true;
     }
     private static final class Selection {
@@ -40,6 +46,10 @@ final class RtxptDelta {
     }
     static Prepared prepare(Path parent,RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
                             List<RtxptScene.Item> items,Map<Long,Path> existingTextures)throws IOException {
+        return prepare(parent,old,scene,previous,items,existingTextures,Map.of(),new RtxptMemoryResources.PacketPool());
+    }
+    static Prepared prepare(Path parent,RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
+            List<RtxptScene.Item> items,Map<Long,Path> existingTextures,Map<Long,TextureAsset> residentTextures,RtxptMemoryResources.PacketPool packets)throws IOException {
         var changedTextures=new HashSet<Long>();var changedMaterials=new HashSet<Long>();var changedGeometry=new HashSet<Long>();
         long nodes=scene.textures.forEachChanged(old.textures,(id,value)->{if(!Objects.equals(value,old.textures.get(id)))changedTextures.add(id);});
         nodes+=scene.materials.forEachChanged(old.materials,(id,value)->{if(!Objects.equals(value,old.materials.get(id)))changedMaterials.add(id);});
@@ -94,7 +104,7 @@ final class RtxptDelta {
             if(a==null||!alphaEquivalent(old.textures.get(a.baseColorTextureId()),scene.textures.get(b.baseColorTextureId())))coverageChanged.add(variant.name());
         }
         int writtenTextures=0;for(long id:translated.textures.keySet())if(textureFiles.get(id)==null)writtenTextures++;
-        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged);
+        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged,residentTextures,packets);
         return new Prepared(null,translated,textureFiles,meshItems.size(),variants.size(),changedTextures.size(),true,mappingsChanged,null,List.of(),new Work(reads,dependencies,nodes,0),memory,List.copyOf(meshItems.values()));
     }
     private static boolean sameDynamicStructure(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,List<RtxptScene.Item> items){

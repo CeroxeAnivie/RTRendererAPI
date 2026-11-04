@@ -1,6 +1,8 @@
 #pragma once
 #include <nvrhi/d3d12.h>
 #include <wrl/client.h>
+#include "rtxpt_fence.h"
+#include "rtxpt_gpu_profile.h"
 
 // HDR/AOV packets have a separate descriptor and ownership protocol from the
 // legacy SDR SharedFrameProducer. All planes in a packet share one fence pair.
@@ -24,18 +26,22 @@ class RtrSignalFrameRing {
     uint64_t adapter=0;
     inline static std::atomic<uint64_t> identities{1};
     int latest=-1;
-    static void Check(HRESULT hr,const char* operation){if(FAILED(hr))throw std::runtime_error(std::string(operation)+" failed: "+std::to_string(uint32_t(hr)));}
+    static void Check(HRESULT hr,const char* operation){if(FAILED(hr)){RtrLatchDeviceFailure(hr);RtrProtocolTrace::Record(4,0,0,0,0,0,0,0,0,0,0,uint32_t(hr));throw std::runtime_error(std::string(operation)+" failed: "+std::to_string(uint32_t(hr)));}}
     bool Available(Slot& slot){
         if(!slot.published)return true;
-        if(!slot.leased&&slot.fence->GetCompletedValue()>=slot.completion-1)return true;
-        if(slot.returned&&slot.fence->GetCompletedValue()>=slot.completion){slot.published=slot.leased=slot.returned=false;return true;}
+        const auto completed=RtrCompletedFence(slot.fence.Get());
+        RtrProtocolTrace::Record(1,adapter,0,uint64_t(&slot-slots.data()),slot.generation,slot.sequence,slot.revision,slot.completion-1,slot.completion,completed,
+            1|(slot.leased?2:0)|(slot.returned?4:0)|(slot.consumerImported?8:0));
+        if(!slot.leased&&completed>=slot.completion-1)return true;
+        if(slot.returned&&completed>=slot.completion){slot.published=slot.leased=slot.returned=false;return true;}
         return false;
     }
 public:
-    bool CanPublish(){for(auto& slot:slots)if(Available(slot))return true;return false;}
+    bool CanPublish(){RtrRequireHealthy();for(auto& slot:slots)if(Available(slot))return true;return false;}
     bool Outstanding() const {for(auto& slot:slots)if(slot.published)return true;return false;}
-    bool ConsumersRetired(){for(auto& slot:slots)if(slot.leased&&(!slot.returned||(slot.consumerImported&&slot.fence->GetCompletedValue()<slot.completion)))return false;return true;}
+    bool ConsumersRetired(){for(auto& slot:slots)if(slot.leased&&(!slot.returned||(slot.consumerImported&&RtrCompletedFence(slot.fence.Get())<slot.completion)))return false;return true;}
     void Publish(nvrhi::IDevice* device,const std::array<nvrhi::TextureHandle,PlaneCount>& sources,uint64_t sequence,uint64_t revision,uint64_t attributes,int64_t time,int64_t delta,uint32_t encoding=0,float maximumGi=1,const std::array<jlong,4>& provenance={}){
+        RtrRequireHealthy();
         int index=-1;for(int i=0;i<3;i++)if(Available(slots[i])){index=i;break;}
         if(index<0)throw std::runtime_error("All native signal slots are awaiting consumer completion");
         auto& slot=slots[index];uint32_t mask=0,width=0,height=0;
@@ -68,21 +74,24 @@ public:
             Check(native->CreateSharedHandle(slot.fence.Get(),nullptr,GENERIC_ALL,nullptr,&slot.fenceHandle),"Export signal packet fence");
         }
         if(!copy)copy=device->createCommandList();copy->open();
+        const auto copyScope=RtrGpuProfile::Begin(copy,"SharedSignalCopy",-1);
         for(unsigned i=0;i<PlaneCount;i++)if(sources[i]){
             copy->copyTexture(slot.textures[i],nvrhi::TextureSlice(),sources[i],nvrhi::TextureSlice());
             copy->setTextureState(slot.textures[i],nvrhi::AllSubresources,nvrhi::ResourceStates::Common);
         }
-        copy->commitBarriers();copy->close();device->executeCommandList(copy);
+        copy->commitBarriers();RtrGpuProfile::End(copy,copyScope);copy->close();device->executeCommandList(copy);
         slot.sequence=sequence;slot.revision=revision;slot.completion+=2;
         slot.attributes=attributes;slot.time=time;slot.delta=delta;
         slot.encoding=encoding;std::memcpy(&slot.maximumGiBits,&maximumGi,sizeof(maximumGi));
         slot.provenance=provenance;
         Check(queue->Signal(slot.fence.Get(),slot.completion-1),"Publish signal packet readiness");
         slot.published=true;slot.returned=slot.leased=slot.consumerImported=false;latest=index;
+        RtrProtocolTrace::Record(2,adapter,0,index,slot.generation,sequence,revision,slot.completion-1,slot.completion,0,1);
     }
     // [abi,slot,generation,sequence,revision,LUID,width,height,mask,fence,ready,done,
     //  attributes,time,delta,count,{signal,format(1=RGBA16F/2=RGBA32UI),allocation,resource}...]
     std::vector<jlong> Acquire(){
+        RtrRequireHealthy();
         if(latest<0||!slots[latest].published||slots[latest].leased)return {};
         auto& slot=slots[latest];
         std::vector<jlong> result={1,latest,jlong(slot.generation),jlong(slot.sequence),jlong(slot.revision),jlong(adapter),slot.width,slot.height,slot.mask,
@@ -97,7 +106,7 @@ public:
         }
         if constexpr(PlaneCount==4){result[0]=2;result.push_back(slot.encoding);result.push_back(slot.maximumGiBits);}
         if constexpr(PlaneCount==8)result.insert(result.end(),slot.provenance.begin(),slot.provenance.end());
-        slot.leased=true;return result;
+        slot.leased=true;RtrProtocolTrace::Record(5,adapter,0,latest,slot.generation,slot.sequence,slot.revision,slot.completion-1,slot.completion,0,3);return result;
     }
     void Release(nvrhi::IDevice* device,int index,uint64_t generation,uint64_t sequence,bool imported){
         if(index<0||index>=3)throw std::invalid_argument("Invalid signal slot");auto& slot=slots[index];
@@ -106,9 +115,10 @@ public:
         if(!imported){auto* queue=static_cast<ID3D12CommandQueue*>(device->getNativeQueue(nvrhi::ObjectTypes::D3D12_CommandQueue,nvrhi::CommandQueue::Graphics).pointer);
             Check(queue->Signal(slot.fence.Get(),slot.completion),"Abandon unimported signal lease");}
         slot.returned=true;slot.consumerImported=imported;
+        RtrProtocolTrace::Record(3,adapter,0,index,slot.generation,sequence,slot.revision,slot.completion-1,slot.completion,0,1|2|4|(imported?8:0));
     }
     void RequireRetired(){for(auto& slot:slots)if(!Available(slot))throw std::runtime_error("Return native signal leases and complete consumer GPU work before closing");}
-    void Clear(){RequireRetired();for(auto& slot:slots){slot.textures={};slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=-1;}
+    void Clear(bool deviceRemoved=false){if(!deviceRemoved)RequireRetired();for(auto& slot:slots){slot.textures={};slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=-1;}
 };
 
 using RtrSignalFrames=RtrSignalFrameRing<4>;

@@ -530,3 +530,28 @@ tasks.register<JavaExec>("rtxptNativeLightingReconstructionNativeSelfTest") {
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeLightingReconstructionNativeSelfTest")
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
 }
+
+listOf("RtxptHighFramerateResourcesSelfTest", "RtxptHighFramerateResourcesNativeSelfTest", "RtxptHighFramerateCompositionNativeSelfTest").forEach { name ->
+    tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
+        group = "verification"; dependsOn(tasks.testClasses)
+        classpath = sourceSets.test.get().runtimeClasspath
+        mainClass.set("top.ceroxe.rt.renderer.rtxpt.$name")
+        if(name=="RtxptHighFramerateCompositionNativeSelfTest" && project.hasProperty("highFramerateCompositionCases"))
+            args(project.property("highFramerateCompositionCases").toString().split(","))
+        doFirst { rootProject.file("build/high-framerate-classpath.txt").writeText(classpath.asPath,Charsets.UTF_8) }
+        environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    }
+}
+
+tasks.register<JavaExec>("rtxptHighFramerateBenchmark") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    val baseline = providers.systemProperty("highFramerate.baseline").orNull
+    classpath = if (baseline == null) sourceSets.test.get().runtimeClasspath else
+        files(listOf("renderer-api", "renderer-core", "renderer-nvidia", "renderer-rtxpt").map {
+            "${System.getProperty("user.home")}/.m2/repository/top/ceroxe/rt/$it/$baseline/$it-$baseline.jar"
+        }) + sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptHighFramerateBenchmark")
+    jvmArgs("-Xmx2g")
+    systemProperties(System.getProperties().stringPropertyNames().filter { it.startsWith("highFramerate.") }.associateWith(System::getProperty))
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+}

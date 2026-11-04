@@ -2,9 +2,11 @@
 #include <array>
 #include <unordered_map>
 #include <unordered_set>
+#include <cstdlib>
 #include "rtxpt_native_application_ranges.h"
 #include "rtxpt_gpu_profile.h"
 #include "rtxpt_native_rr.h"
+#include "rtxpt_resource_reclaimer.h"
 
 // Independent execution resources. The caller supplies the existing scene/AS,
 // descriptor table and command list; this object never owns a second RT scene.
@@ -19,6 +21,7 @@ public:
     static_assert(sizeof(Constants)==320&&sizeof(InstanceAttributes)==32&&sizeof(GeometryAttributes)==8);
     Constants constants;
     bool active=false,metadataDirty=true;
+    bool instanceCandidates=false;
     bool diagnosticDecomposition=false;
     RtrNativeRR reconstruction;
     nvrhi::BindingLayoutHandle deepLayout;
@@ -26,9 +29,21 @@ public:
     nvrhi::BufferHandle deepReceivers;
     std::array<nvrhi::BufferHandle,3> deepConstants;
     RtrCachedBindings dispatchBindings,encodeBindings;
+    std::array<RtrCachedBindings,2> sourceHistoryBindings;
+    nvrhi::BindingLayoutHandle sourceHistoryLayout;
+    std::array<nvrhi::TextureHandle,2> sourceHistory;
+    unsigned sourceHistoryRead=0;
+    bool sourceHistoryActive=false,sourceHistoryClear=false;
     std::array<RtrCachedBindings,3> phaseBindings;
     uint32_t width=0,height=0,mask=0;
     uint64_t executedFrames=0,beautyFrames=0,publication=0,metadataUploads=0;
+    // The built-in evaluator is deterministic and independent of frame time.
+    // Only managed, non-skinned scenes opt in with an authoritative generation.
+    bool retainSignalsAllowed=false,retainedSignals=false,retainedReconstruction=false;
+    uint64_t inputGeneration=0,retainedInputGeneration=0,retainedSourceGeneration=0,retainedMetadata=0;
+    uint64_t geometryGeneration=0,lastGeometryGeneration=0;
+    uint64_t analyticGeneration=0,retainedAnalyticGeneration=0;
+    Constants retainedConstants;
     int64_t timeNanos=0,deltaNanos=0;
     bool workStatisticsEnabled=false,workStatisticsRequested=false,diagnosticsEnabled=true;
     size_t specialRoleCount=0;
@@ -64,8 +79,9 @@ public:
     nvrhi::ComputePipelineHandle pipeline;
     nvrhi::ComputePipelineHandle defaultPipeline;
     nvrhi::ComputePipelineHandle singleGroupPipeline;
-    nvrhi::ComputePipelineHandle sparseOnlyPipeline,sparseOnlySingleGroupPipeline;
-    std::array<nvrhi::ComputePipelineHandle,4> uninstrumentedPipelines;
+    nvrhi::ComputePipelineHandle sparseOnlyPipeline,sparseOnlySingleGroupPipeline,smallGroupPipeline,sparseOnlySmallGroupPipeline;
+    std::array<nvrhi::ComputePipelineHandle,8> uninstrumentedPipelines;
+    std::array<nvrhi::ComputePipelineHandle,16> maxPipelines;
     std::string extensionIdentity;
     uint32_t extensionSignals=15,extensionMinimumBytes=0;
     std::unordered_map<std::string,InstanceAttributes> instanceAttributes;
@@ -74,6 +90,7 @@ public:
     std::unordered_set<std::string> alphaMeshes;
     std::unordered_map<std::string,uint32_t> instanceSlots;
     std::unordered_map<std::string,GeometryAttributes> geometrySlots;
+    std::unordered_map<std::string,uint32_t> geometryIndices;
     std::unordered_set<std::string> dirtyInstances,dirtyBaselines,dirtyColors;
     size_t attributeEnd=0;
     struct FreeAttributeRange{uint32_t offset,count;};
@@ -134,8 +151,12 @@ public:
     size_t previousInstanceCount=0,previousGeometryCount=0;
     struct Retired {std::vector<nvrhi::BufferHandle> buffers;std::vector<nvrhi::TextureHandle> textures;std::vector<nvrhi::ComputePipelineHandle> pipelines;nvrhi::EventQueryHandle done;};
     std::vector<Retired> retired;
+    std::shared_ptr<RtrResourceReclaimer> reclaimer=std::make_shared<RtrResourceReclaimer>();
     void PollRetired(nvrhi::IDevice* device){
-        for(auto i=retired.begin();i!=retired.end();)if(device->pollEventQuery(i->done))i=retired.erase(i);else ++i;
+        size_t budget=2;
+        for(auto i=retired.begin();i!=retired.end()&&budget&&reclaimer->Available();)if(device->pollEventQuery(i->done)){
+            if(!reclaimer->Enqueue(*i))break;i=retired.erase(i);--budget;
+        }else break;
     }
     void Configure(const std::vector<float>& parameters){
         if(parameters.size()!=80)throw std::invalid_argument("Native-lighting ABI v1 requires 80 parameter words");
@@ -165,7 +186,7 @@ public:
         Retired old;old.buffers=std::move(buffers);old.textures=std::move(textures);old.done=device->createEventQuery();
         device->setEventQuery(old.done,nvrhi::CommandQueue::Graphics);retired.push_back(std::move(old));
     }
-    void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* bindlessLayout){
+    void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* bindlessLayout,const RtrSparseLighting* sources=nullptr){
         PollRetired(device);
         if(!pipeline){
             nvrhi::BindingLayoutDesc desc;desc.visibility=nvrhi::ShaderType::Compute;
@@ -178,7 +199,7 @@ public:
                 nvrhi::BindingLayoutItem::Sampler(0),nvrhi::BindingLayoutItem::Texture_UAV(0),nvrhi::BindingLayoutItem::Texture_UAV(1),
                 nvrhi::BindingLayoutItem::Texture_UAV(2),nvrhi::BindingLayoutItem::Texture_UAV(3),nvrhi::BindingLayoutItem::RawBuffer_UAV(4)};
             auto preparedLayout=device->createBindingLayout(desc);
-            std::vector<donut::engine::ShaderMacro> defaultMacros{{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"}};
+            std::vector<donut::engine::ShaderMacro> defaultMacros{{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
             auto shader=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&defaultMacros,nvrhi::ShaderType::Compute);
             if(!shader)throw std::runtime_error("Native-lighting shader ABI v1 is unavailable");
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={preparedLayout,bindlessLayout};pso.CS=shader;
@@ -194,18 +215,24 @@ public:
                 .setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);
             dummyColor=device->createTexture(td);td.format=nvrhi::Format::RGBA32_UINT;dummyIdentity=device->createTexture(td);
             layout=preparedLayout;pipeline=defaultPipeline=preparedPipeline;
-            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY","1"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"}};
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY","1"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
             singleGroupPipeline=device->createComputePipeline(pso);if(!singleGroupPipeline)throw std::runtime_error("Single-group native lighting pipeline unavailable");
-            macros={{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","0"},{"RTR_WORK_STATISTICS","1"}};
+            macros={{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","0"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
             sparseOnlyPipeline=device->createComputePipeline(pso);
             macros[0].definition="1";
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
             sparseOnlySingleGroupPipeline=device->createComputePipeline(pso);
             if(!sparseOnlyPipeline||!sparseOnlySingleGroupPipeline)throw std::runtime_error("Sparse-only native lighting pipeline unavailable");
+            for(unsigned analytic=0;analytic<2;++analytic){
+                macros={{"RTR_LIGHT_GROUP_CAPACITY","4"},{"RTR_ANALYTIC_LIGHTS",analytic?"1":"0"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
+                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+                auto prepared=device->createComputePipeline(pso);if(!prepared)throw std::runtime_error("Small-group lighting pipeline unavailable");
+                (analytic?smallGroupPipeline:sparseOnlySmallGroupPipeline)=prepared;
+            }
             for(unsigned i=0;i<uninstrumentedPipelines.size();i++){
-                macros={{"RTR_LIGHT_GROUP_CAPACITY",(i&1)?"1":"32"},{"RTR_ANALYTIC_LIGHTS",(i&2)?"0":"1"},{"RTR_WORK_STATISTICS","0"}};
+                macros={{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},{"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","0"}};
                 pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
                 uninstrumentedPipelines[i]=device->createComputePipeline(pso);
                 if(!uninstrumentedPipelines[i])throw std::runtime_error("Uninstrumented native lighting pipeline unavailable");
@@ -232,7 +259,36 @@ public:
             width=integers[40];height=integers[41];mask=integers[42];
         }
         PrepareCompact(device,factory);
-        reconstruction.Prepare(device,factory,layout,bindlessLayout,width,height);
+        const unsigned groupVariant=!sources?0:sources->SingleGroup()?1:sources->PairGroups()?6:sources->SmallGroups()?4:0;
+        const bool maximum=sources&&sources->VisibleMax();
+        const bool allDynamic=sources&&sources->dynamicCount==sources->records.size();
+        const unsigned maxOffset=allDynamic?8:0;
+        const unsigned capacity=groupVariant==1?1:groupVariant==6?2:groupVariant==4?4:32;
+        if(!sourceHistoryLayout){
+            // Host augmentation owns the remaining space-zero registers.
+            nvrhi::BindingLayoutDesc desc;desc.visibility=nvrhi::ShaderType::Compute;desc.registerSpace=3;
+            desc.bindings={nvrhi::BindingLayoutItem::Texture_SRV(0),nvrhi::BindingLayoutItem::Texture_UAV(0)};
+            sourceHistoryLayout=device->createBindingLayout(desc);
+            if(!sourceHistoryLayout)throw std::runtime_error("Could not create sparse winner seed layout");
+        }
+        const char* disabled=std::getenv("RTR_RTXPT_DISABLE_SPARSE_HISTORY");
+        sourceHistoryActive=maximum&&capacity<=4&&(mask&1)!=0&&uint64_t(width)*height*capacity*8<=64*1024*1024&&(!disabled||std::string(disabled)!="1");
+        if(!sourceHistory[0]||(sourceHistoryActive&&(sourceHistory[0]->getDesc().width!=width||sourceHistory[0]->getDesc().height!=height||sourceHistory[0]->getDesc().arraySize<capacity))){
+            auto desc=nvrhi::TextureDesc().setWidth(sourceHistoryActive?width:1).setHeight(sourceHistoryActive?height:1)
+                .setArraySize(sourceHistoryActive?capacity:1).setDimension(nvrhi::TextureDimension::Texture2DArray)
+                .setFormat(nvrhi::Format::R32_UINT).setIsUAV(true).setInitialState(nvrhi::ResourceStates::ShaderResource).setKeepInitialState(true);
+            desc.debugName="Exact sparse light winner seeds";std::array<nvrhi::TextureHandle,2> next;
+            for(auto& texture:next){texture=device->createTexture(desc);if(!texture)throw std::runtime_error("Could not allocate sparse winner seeds");}
+            if(sourceHistory[0])Retire(device,{}, {sourceHistory[0],sourceHistory[1]});
+            sourceHistory=std::move(next);sourceHistoryRead=0;sourceHistoryClear=true;
+        }
+        if(!reconstruction.requested&&maximum)for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!maxPipelines[maxOffset+i]){
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},{"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","1"}};
+            nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout,sourceHistoryLayout};
+            pso.CS=factory.CreateShader(allDynamic?"app/ProcessingPasses/RtrNativeDynamicLighting.hlsl":"app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);maxPipelines[maxOffset+i]=device->createComputePipeline(pso);
+            if(!maxPipelines[maxOffset+i])throw std::runtime_error("Max-composition native lighting pipeline unavailable");
+        }
+        reconstruction.Prepare(device,factory,layout,bindlessLayout,sourceHistoryLayout,width,height,groupVariant,maximum,allDynamic);
     }
     float maximumGi()const{return constants.words[70];}
     std::array<nvrhi::TextureHandle,4> Outputs()const{
@@ -301,8 +357,7 @@ public:
     void UploadAttributes(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene){
         const auto graph=scene->GetSceneGraph();
         const size_t instanceCount=graph->GetMeshInstances().size(),geometryCount=graph->GetGeometryCount();
-        if(previousSceneInstances!=scene->GetInstanceBuffer()||previousSceneGeometry!=scene->GetGeometryBuffer()
-            ||previousInstanceCount!=instanceCount||previousGeometryCount!=geometryCount)metadataDirty=true;
+        if(previousInstanceCount!=instanceCount||previousGeometryCount!=geometryCount)metadataDirty=true;
         if(!metadataDirty){
             bool changed=!dirtyInstances.empty()||!dirtyBaselines.empty()||!dirtyColors.empty()||lookupDirty||applicationDirty||!applicationDirtyRanges.empty();
             for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found!=instanceSlots.end()){
@@ -338,18 +393,21 @@ public:
         for(auto i=geometrySlots.begin();i!=geometrySlots.end();)if(!live.count(i->first)){
             FreeAttributeRangeAt(i->second.offset,i->second.triangles*3);i=geometrySlots.erase(i);
         }else ++i;
-        std::vector<GeometryAttributes> geometryData(std::max<size_t>(1,geometryCount));
+        EnsureAttributeBuffer(device,command,geometryBaselines,std::max<size_t>(1,geometryCount)*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
         std::unordered_set<std::string> upload=dirtyBaselines;upload.insert(dirtyColors.begin(),dirtyColors.end());
         for(const auto& entry:entries){auto found=geometrySlots.find(entry.name);
-            if(found==geometrySlots.end()||found->second.triangles*3!=entry.corners){
+            bool mappingChanged=found==geometrySlots.end()||found->second.triangles*3!=entry.corners;
+            if(mappingChanged){
                 if(found!=geometrySlots.end())FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);
                 geometrySlots[entry.name]={AllocateAttributeRange(entry.corners),entry.corners/3};upload.insert(entry.name);
             }
-            geometryData.at(entry.index)=geometrySlots.at(entry.name);
+            auto oldIndex=geometryIndices.find(entry.name);
+            if(mappingChanged||oldIndex==geometryIndices.end()||oldIndex->second!=entry.index){auto value=geometrySlots.at(entry.name);
+                command->writeBuffer(geometryBaselines,&value,sizeof(value),size_t(entry.index)*sizeof(value));attributeWork[3]+=sizeof(value);}
+            geometryIndices.insert_or_assign(entry.name,entry.index);
         }
-        EnsureAttributeBuffer(device,command,geometryBaselines,geometryData.size()*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
         EnsureAttributeBuffer(device,command,baselineCoordinates,attributeEnd*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
-        command->writeBuffer(geometryBaselines,geometryData.data(),geometryData.size()*sizeof(GeometryAttributes));attributeWork[3]+=geometryData.size()*sizeof(GeometryAttributes);
+        for(auto i=geometryIndices.begin();i!=geometryIndices.end();)if(!live.count(i->first))i=geometryIndices.erase(i);else ++i;
         for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
             auto values=PackVertices(name,size_t(found->second.triangles)*3);
             if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
@@ -379,14 +437,44 @@ public:
             applicationDirtyRanges.clear();
         }
     }
+#if defined(_MSC_VER)
+    // Keep this command recorder out of the large SDK host Render function.
+    __declspec(noinline)
+#endif
     void Dispatch(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene,
             nvrhi::rt::IAccelStruct* tlas,RtrSparseLighting& sources,nvrhi::ISampler* sampler,nvrhi::IBuffer* analytic,uint32_t lightCount,uint32_t lightRoot,uint32_t treeBase){
         const auto uploadScope=RtrGpuProfile::Begin(command,"NativeLightingUpload",-1);
         UploadAttributes(device,command,scene);sources.Upload(command);
+        if(sourceHistoryClear){for(auto& texture:sourceHistory)command->clearTextureUInt(texture,nvrhi::AllSubresources,0);sourceHistoryClear=false;}
+        const bool seeded=sourceHistoryActive&&!workStatisticsEnabled&&extensionIdentity.empty()&&!(diagnosticDecomposition&&RtrDiagnostics::level.load()==2);
         auto* words=reinterpret_cast<uint32_t*>(constants.words.data());words[72]=uint32_t(applicationData.size());words[73]=uint32_t(publication);words[74]=uint32_t(publication>>32);
-        words[75]=(workStatisticsEnabled?1:0)|((specialRoleCount||!alphaMeshes.empty())?2:0);
+        words[75]=(workStatisticsEnabled?1:0)|((specialRoleCount||!alphaMeshes.empty())?2:0)|(instanceCandidates?4:0)|(seeded?8:0)
+            |(geometryGeneration!=lastGeometryGeneration?16:0);
         words[76]=uint32_t(timeNanos);words[77]=uint32_t(uint64_t(timeNanos)>>32);words[78]=uint32_t(deltaNanos);words[79]=uint32_t(uint64_t(deltaNanos)>>32);
         words[39]=lightCount;words[51]=lightRoot;words[59]=treeBase;
+        const char* disableReuse=std::getenv("RTR_RTXPT_DISABLE_SIGNAL_REUSE");
+        const bool retain=retainSignalsAllowed&&extensionIdentity.empty()&&!workStatisticsEnabled&&!diagnosticDecomposition
+            &&(!disableReuse||std::string(disableReuse)!="1");
+        const bool reuse=retain&&retainedSignals&&retainedReconstruction==reconstruction.requested&&retainedInputGeneration==inputGeneration
+            &&retainedAnalyticGeneration==analyticGeneration
+            &&retainedSourceGeneration==sources.work[1]&&retainedMetadata==metadataUploads
+            &&std::memcmp(constants.words.data(),retainedConstants.words.data(),72*sizeof(float))==0
+            &&(words[75]&~16u)==(reinterpret_cast<const uint32_t*>(retainedConstants.words.data())[75]&~16u);
+        if(reuse){
+            RtrGpuProfile::End(command,uploadScope);
+            const auto scope=RtrGpuProfile::Begin(command,"NativeLightingReuse",-1);
+            if(reconstruction.requested){
+                // A repeated camera and unchanged scene have zero screen motion.
+                // Do not reuse the nonzero motion from the last changed frame.
+                nvrhi::BindingSetDesc unused;
+                reconstruction.Bind(command,unused,constants.words.data(),sequence);
+                command->clearTextureFloat(reconstruction.guides[3],nvrhi::AllSubresources,nvrhi::Color(0));
+            }
+            RtrGpuProfile::End(command,scope);
+            if(reconstruction.requested)reconstruction.Evaluate(device,command,indirect,constants.words.data(),sequence);
+            EncodeOutputs(device,command);++executedFrames;return;
+        }
+        retainedSignals=false;
         command->writeBuffer(constantBuffer,&constants,sizeof(constants));
         RtrGpuProfile::End(command,uploadScope);
         nvrhi::BindingSetDesc bindings;bindings.bindings={nvrhi::BindingSetItem::ConstantBuffer(0,constantBuffer),
@@ -437,17 +525,31 @@ public:
             }
             words[75]=flags;
         }else{if(reconstruction.requested)state.pipeline=lightCount<=1
-                ?(sources.SingleGroup()?reconstruction.sparseOnlySingleGroupPipeline:reconstruction.sparseOnlyPipeline)
-                :(sources.SingleGroup()?reconstruction.singleGroupPipeline:reconstruction.pipeline);
+                ?(sources.SingleGroup()?reconstruction.sparseOnlySingleGroupPipeline:sources.SmallGroups()?reconstruction.sparseOnlySmallGroupPipeline:reconstruction.sparseOnlyPipeline)
+                :(sources.SingleGroup()?reconstruction.singleGroupPipeline:sources.SmallGroups()?reconstruction.smallGroupPipeline:reconstruction.pipeline);
             else if(extensionIdentity.empty())state.pipeline=lightCount<=1
-                ?(sources.SingleGroup()?sparseOnlySingleGroupPipeline:sparseOnlyPipeline)
-                :(sources.SingleGroup()?singleGroupPipeline:pipeline);
+                ?(sources.SingleGroup()?sparseOnlySingleGroupPipeline:sources.SmallGroups()?sparseOnlySmallGroupPipeline:sparseOnlyPipeline)
+                :(sources.SingleGroup()?singleGroupPipeline:sources.SmallGroups()?smallGroupPipeline:pipeline);
             if(!workStatisticsEnabled&&extensionIdentity.empty()){
-                const unsigned variant=(sources.SingleGroup()?1:0)|(lightCount<=1?2:0);
-                state.pipeline=reconstruction.requested?reconstruction.uninstrumentedPipelines[variant]:uninstrumentedPipelines[variant];
+                const unsigned variant=sources.SingleGroup()?1+(lightCount<=1?2:0):sources.PairGroups()?6+(lightCount<=1?1:0):sources.SmallGroups()?4+(lightCount<=1?1:0):(lightCount<=1?2:0);
+                const unsigned maxVariant=variant+(sources.dynamicCount==sources.records.size()?8:0);
+                state.pipeline=reconstruction.requested
+                    ?(sources.VisibleMax()?reconstruction.maxPipelines[maxVariant]:reconstruction.uninstrumentedPipelines[variant])
+                    :(sources.VisibleMax()?maxPipelines[maxVariant]:uninstrumentedPipelines[variant]);
+                if(sources.VisibleMax()){
+                    nvrhi::BindingSetDesc history;
+                    history.bindings={nvrhi::BindingSetItem::Texture_SRV(0,sourceHistory[sourceHistoryRead]),
+                        nvrhi::BindingSetItem::Texture_UAV(0,sourceHistory[1-sourceHistoryRead])};
+                    state.bindings.push_back(sourceHistoryBindings[sourceHistoryRead].Get(device,history,sourceHistoryLayout));
+                }
             }
             command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);}
         RtrGpuProfile::End(command,dispatchScope);
+        if(retain){retainedConstants=constants;retainedReconstruction=reconstruction.requested;retainedInputGeneration=inputGeneration;
+            retainedAnalyticGeneration=analyticGeneration;
+            retainedSourceGeneration=sources.work[1];retainedMetadata=metadataUploads;retainedSignals=true;}
+        if(seeded)sourceHistoryRead=1-sourceHistoryRead;
+        lastGeometryGeneration=geometryGeneration;
         if(reconstruction.requested)reconstruction.Evaluate(device,command,indirect,constants.words.data(),sequence);
         EncodeOutputs(device,command);++executedFrames;
     }

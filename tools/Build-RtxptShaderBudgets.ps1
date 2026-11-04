@@ -87,6 +87,32 @@ function Source-Inventory {
         [ordered]@{path=[IO.Path]::GetRelativePath($sourceRoot,$_.FullName).Replace('\','/');sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
     })
 }
+function Independent-SourceChanges($previousSources,$currentSources,$shaderPlan) {
+    # A standalone entry point that no captured command or source includes
+    # cannot change these binaries. Be conservative about macros and additions:
+    # they still invalidate the full bundle rather than guessing dependencies.
+    if($previousSources.Count -ne $currentSources.Count){return $null}
+    $changed=[Collections.Generic.List[string]]::new()
+    for($i=0;$i -lt $currentSources.Count;$i++){
+        if($currentSources[$i].path -cne $previousSources[$i].path){return $null}
+        if($currentSources[$i].sha256 -cne $previousSources[$i].sha256){$changed.Add($currentSources[$i].path)}
+    }
+    if(!$changed.Count){return ,@()}
+    $leaves=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach($path in $changed){
+        [void]$leaves.Add([IO.Path]::GetFileName($path))
+        foreach($shader in $shaderPlan){if($shader.canonicalCommand.Contains('"@'+$path+'"',[StringComparison]::OrdinalIgnoreCase)){return $null}}
+    }
+    foreach($source in $currentSources){
+        $text=[IO.File]::ReadAllText((Join-Path $sourceRoot $source.path))
+        if($text -match '(?m)^\s*#\s*(?:include\b.*)?\\\s*$'){return $null}
+        foreach($include in [regex]::Matches($text,'(?m)^\s*#\s*include\s+([^\r\n]+)')){
+            $literal=[regex]::Match($include.Groups[1].Value,'^["<]([^">]+)[">]')
+            if(!$literal.Success -or $leaves.Contains([IO.Path]::GetFileName($literal.Groups[1].Value))){return $null}
+        }
+    }
+    return ,@($changed.ToArray())
+}
 function Verify-Bundle([string]$bundleDirectory=$output) {
     $indexPath=Join-Path $bundleDirectory 'bundle.json'
     if(!(Test-Path -LiteralPath $indexPath)){throw 'Missing six-budget bundle; collect native manifests and run this script first'}
@@ -133,13 +159,12 @@ if(!(Test-Path -LiteralPath $compiler)){throw 'Missing the pinned upstream DXC c
 $sources=@(Source-Inventory)
 $compilerHash=(Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant()
 $previousShaders=@{}
+$independentChanges=$null
 $previousIndex=Join-Path $output 'bundle.json'
 if(Test-Path -LiteralPath $previousIndex){
     $previous=Get-Content -LiteralPath $previousIndex -Raw -Encoding UTF8 | ConvertFrom-Json
-    $sameSources=$previous.sources.Count -eq $sources.Count
-    for($i=0;$sameSources -and $i -lt $sources.Count;$i++){
-        $sameSources=$sources[$i].path -ceq $previous.sources[$i].path -and $sources[$i].sha256 -ceq $previous.sources[$i].sha256
-    }
+    $independentChanges=Independent-SourceChanges $previous.sources $sources $plan
+    $sameSources=$null -ne $independentChanges
     $previousCompiler=$previous.compilerSha256
     $legacyArchive=Join-Path $repo 'renderer-rtxpt/build/native-bundle/rtxpt-runtime.zip'
     if(!$previousCompiler -and (Test-Path -LiteralPath $legacyArchive)){
@@ -194,7 +219,7 @@ try {
             Write-Host "RTXPT offline shader $($entries.Count): optical budget=$budget origin=$origin $relative"
     }
     Assert-Coverage $entries
-    $index=[ordered]@{format=1;pipelineIdentity='runtime StandardBSDF; captured host-primary, analytic and small-point configurations';compilerSha256=$compilerHash;contract='All captured renderer configurations with canonical material identities and scene-analytic budgets 1..6 are required. Exact/tree selection is runtime state. Release coverage additionally checks host-primary, scene-analytic and small-point reference/build/fill branches. Uncaptured renderer configurations may use the bundled upstream compiler; strict package acceptance must disable that fallback.';sources=$sources;shaders=@($entries.ToArray())}
+    $index=[ordered]@{format=1;pipelineIdentity='runtime StandardBSDF; captured host-primary, analytic and small-point configurations';compilerSha256=$compilerHash;independentSourceChanges=@($independentChanges);contract='All captured renderer configurations with canonical material identities and scene-analytic budgets 1..6 are required. Exact/tree selection is runtime state. Release coverage additionally checks host-primary, scene-analytic and small-point reference/build/fill branches. Uncaptured renderer configurations may use the bundled upstream compiler; strict package acceptance must disable that fallback.';sources=$sources;shaders=@($entries.ToArray())}
     [IO.File]::WriteAllText((Join-Path $stage 'bundle.json'),($index | ConvertTo-Json -Depth 8),$utf8)
     Verify-Bundle $stage
     if(Test-Path -LiteralPath $output){[IO.Directory]::Move($output,$backup);$oldMoved=$true}
