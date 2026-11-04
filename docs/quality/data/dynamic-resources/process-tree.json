@@ -1,0 +1,7 @@
+{
+  "wallSeconds": 35.321,
+  "processTreePeakCommitGB": 3.784,
+  "processTreeCpuSeconds": 26.453,
+  "exitCode": 0,
+  "source": "Invoke-BoundedBuild final artifact performance stdout"
+}

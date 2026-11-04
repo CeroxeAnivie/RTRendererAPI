@@ -8,7 +8,7 @@ RTRendererAPI 适合嵌入 Java 25 或更高版本的桌面或引擎进程。普
 
 独立光照和主表面入口增加仅传 plan 的快捷工厂；兼容策略、专家派生与 GPU 交接责任见[普通用法与专家控制](ordinary-and-expert.md)。
 
-Maven 坐标是 `top.ceroxe.rt:renderer-api:7.1.2`，默认传递解析 Vulkan 后端、NVIDIA provider 和 native runtime。RTXPT 场景额外添加 `top.ceroxe.rt:renderer-rtxpt:7.1.2`；使用下面的 `RtxptAccess`／组合类时需要编译依赖。这些坐标使用当前版本；本批目标为 Maven Local，发布身份以交接记录为准。消费方不需要安装 SDK 或手工复制 DLL。
+Maven 坐标是 `top.ceroxe.rt:renderer-api:7.1.3`，默认传递解析 Vulkan 后端、NVIDIA provider 和 native runtime。RTXPT 场景额外添加 `top.ceroxe.rt:renderer-rtxpt:7.1.3`；使用下面的 `RtxptAccess`／组合类时需要编译依赖。这些坐标使用当前版本；本批目标为 Maven Local，发布身份以交接记录为准。消费方不需要安装 SDK 或手工复制 DLL。
 
 ## 学习顺序与后端选择
 
@@ -469,7 +469,7 @@ session 内完成，只有 `APPLIED` 是提交证据。
 
 ### 各能力的最短配置
 
-以下片段都只需要 `top.ceroxe.rt:renderer-api:7.1.2`。把对应 options 传给
+以下片段都只需要 `top.ceroxe.rt:renderer-api:7.1.3`。把对应 options 传给
 `RendererConfig.builder()` 即可；没有任何片段要求额外模块或手工 DLL。
 
 ```java

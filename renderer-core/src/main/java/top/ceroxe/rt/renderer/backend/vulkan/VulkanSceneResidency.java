@@ -67,7 +67,8 @@ final class VulkanSceneResidency {
             if(!checked.reset()) {meshes.valuesSnapshot().forEach(m->nextMeshes.put(m.id(),m));textures.valuesSnapshot().forEach(t->nextTextures.put(t.id(),t));}
             var removedMeshes=removals.meshIds();while(removedMeshes.hasRemaining())nextMeshes.remove(removedMeshes.get());
             var removedTextures=removals.textureIds();while(removedTextures.hasRemaining())nextTextures.remove(removedTextures.get());
-            upserts.meshes().forEach(m->nextMeshes.put(m.id(),m));upserts.textures().forEach(t->nextTextures.put(t.id(),t));
+            upserts.meshes().forEach(m->nextMeshes.put(m.id(),m));
+            upserts.textures().forEach(t->{t.validateReplacementOf(nextTextures.get(t.id()));nextTextures.put(t.id(),t);});
             resourceBudget.validateAssets(nextMeshes.values(),nextTextures.values());
         }
         StableIdentitySlots.Prepared<TextureAsset> preparedTextures =

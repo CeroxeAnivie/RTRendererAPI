@@ -1,0 +1,31 @@
+{
+  "version": "7.1.3",
+  "mavenLocalVerified": true,
+  "mavenLocalRoot": "D:\\.m2\\repository\\top\\ceroxe\\rt",
+  "githubRepository": "https://github.com/CeroxeAnivie/RTRendererAPI",
+  "githubBranch": "main",
+  "centralPublished": false,
+  "nvidiaJavaPayloadIdentical": true,
+  "artifacts": [
+    {
+      "module": "renderer-api",
+      "bytes": 785274,
+      "sha256": "9b9b8198ee45ca49bdacf106eebcdc203a81b75fedf8258106d6e255a5c8ce6d"
+    },
+    {
+      "module": "renderer-core",
+      "bytes": 14561563,
+      "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69"
+    },
+    {
+      "module": "renderer-nvidia",
+      "bytes": 62644790,
+      "sha256": "4cc30f510f9f1086430e9aeb809f0eff7536acbb99434854aa123105f13f6d98"
+    },
+    {
+      "module": "renderer-rtxpt",
+      "bytes": 764392463,
+      "sha256": "3520afc5532fe94ceba4904b2c79b52b164842a34026a4606e691aa417a458d1"
+    }
+  ]
+}

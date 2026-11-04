@@ -34,6 +34,12 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$dynamicResourcesPatch=Join-Path $PSScriptRoot 'patches/rtxpt-dynamic-resources.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $dynamicResourcesPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $dynamicResourcesPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT dynamic-resources overlay could not be removed'}
+}
 $localPreparationPatch=Join-Path $PSScriptRoot 'patches/rtxpt-local-preparation.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $localPreparationPatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -1604,6 +1610,11 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT host-surface overlay failed'}
 if($LASTEXITCODE -ne 0){throw 'RTXPT local-preparation overlay does not match the verified base'}
 & git -C $sdk apply --ignore-space-change $localPreparationPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT local-preparation overlay failed'}
+& git -C $sdk apply --check --ignore-space-change $dynamicResourcesPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT dynamic-resources overlay does not match the verified base'}
+& git -C $sdk apply --ignore-space-change $dynamicResourcesPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT dynamic-resources overlay failed'}
+
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostSurface.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/RtrHostSurface.hlsli'),$true)
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostAov.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrHostAov.hlsli'),$true)
 Patch-Once 'External/Donut/src/app/DeviceManager.cpp' '    if (!HostExternalPresentation) { glfwShowWindow(m_Window); if (!hostBackgroundWindow) glfwFocusWindow(m_Window); }' @'

@@ -111,6 +111,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     private final Map<Long,float[]> lightingBaselines=new HashMap<>();
     private final Set<Long> pendingLightingInstances=new HashSet<>(),pendingLightingBaselines=new HashSet<>();
     private final Set<Long> pendingLightingColors=new HashSet<>();
+    private record AttributeGroups(MeshAsset mesh,List<RtxptAttributeBatch.Group> groups) { }
+    private final Map<Long,AttributeGroups> attributeGroups=new HashMap<>();
+    private List<RtxptScene.Item> pendingGeometryVariants=List.of();
     private long baselineCornersConverted,colorCornersConverted,attributeMeshesConverted;
     private long preparationSubmissions,preparationItemReads,preparationDependencies,preparationMapNodes,preparationModels,
         preparationTransforms,preparationAttributeInstances,preparationAllocatedBytes;
@@ -238,58 +241,55 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         RtxptNative.nativeLightingClock(handle,frame.clock().timeNanos(),frame.clock().deltaNanos());
         RtxptNative.nativeLightingWorkEnabled(handle,lightingWorkStatisticsEnabled);
         RtxptNative.nativeLightingDecomposition(handle,lightingDiagnosticDecomposition);
-        if(geometryChanged||lightingAttributeReset)RtxptNative.nativeLightingClearAttributes(handle);
-        if(geometryChanged||!pendingLightingBaselines.isEmpty()||!pendingLightingColors.isEmpty()){
-        var uploaded=new HashSet<String>();
-        Iterable<RtxptScene.Item> affected=items;
-        if(!geometryChanged){
+        RtxptNative.diagnosticAttributesBegin(handle);try{
+        boolean reset=geometryChanged||lightingAttributeReset;
+        if(reset)RtxptNative.nativeLightingClearAttributes(handle);
+        var variants=new LinkedHashMap<String,RtxptScene.Item>();
+        if(reset)for(var item:items)variants.putIfAbsent(RtxptScene.meshName(item),item);
+        else {
+            for(var item:pendingGeometryVariants)variants.putIfAbsent(RtxptScene.meshName(item),item);
             var meshIds=new HashSet<>(pendingLightingBaselines);meshIds.addAll(pendingLightingColors);
-            var variants=new LinkedHashMap<String,RtxptScene.Item>();
             for(long mesh:meshIds)for(long id:scene.instancesUsingMesh(mesh)){
                 var item=scene.item(id);variants.putIfAbsent(RtxptScene.meshName(item),item);
                 if(diagnosticLevel!=RtxptDiagnostics.Level.OFF)preparationAttributeInstances++;
             }
-            for(int index=scene.instances.size();index<items.size();index++){var item=items.get(index);if(meshIds.contains(item.mesh()))variants.putIfAbsent(RtxptScene.meshName(item),item);
-                if(diagnosticLevel!=RtxptDiagnostics.Level.OFF)preparationItemReads++;}
-            affected=variants.values();
-        }
-        for(var item:affected){if(geometryChanged&&diagnosticLevel!=RtxptDiagnostics.Level.OFF)preparationAttributeInstances++;
-            String meshName=RtxptScene.meshName(item);if(!uploaded.add(meshName))continue;
-            boolean baselineChanged=geometryChanged||pendingLightingBaselines.contains(item.mesh());
-            boolean colorChanged=geometryChanged||pendingLightingColors.contains(item.mesh());
-            if(!baselineChanged&&!colorChanged)continue;
-            var mesh=scene.meshes.get(item.mesh());var materials=mesh.triangleMaterialIds();var indices=mesh.triangleIndices();var coordinates=mesh.lightmapCoordinates();
-            var override=lightingBaselines.get(item.mesh());
-            var groups=new LinkedHashMap<Long,ArrayList<Float>>();
-            var colorGroups=new LinkedHashMap<Long,ArrayList<Integer>>();var colors=mesh.vertexColorsRgba8();
-            for(int triangle=0;triangle<mesh.triangleCount();triangle++){
-                var group=groups.computeIfAbsent(materials.get(triangle),ignored->new ArrayList<>());
-                var colorGroup=colorGroups.computeIfAbsent(materials.get(triangle),ignored->new ArrayList<>());
-                for(int vertex=0;vertex<3;vertex++){int vertexIndex=indices.get(triangle*3+vertex),index=vertexIndex*2;
-                    if(baselineChanged){group.add(override!=null?override[index]:coordinates.hasRemaining()?coordinates.get(index):0);group.add(override!=null?override[index+1]:coordinates.hasRemaining()?coordinates.get(index+1):0);}
-                    if(colorChanged)colorGroup.add(colors.hasRemaining()?colors.get(vertexIndex):0xffffffff);}
+            if(!meshIds.isEmpty())for(int index=scene.instances.size();index<items.size();index++){
+                var item=items.get(index);if(meshIds.contains(item.mesh()))variants.putIfAbsent(RtxptScene.meshName(item),item);
+                if(diagnosticLevel!=RtxptDiagnostics.Level.OFF)preparationItemReads++;
             }
-            int geometry=0;for(var group:groups.values()){float[] values=new float[group.size()];for(int i=0;i<values.length;i++)values[i]=group.get(i);
-                if(baselineChanged){RtxptNative.nativeLightingBaseline(handle,meshName+":"+geometry,values);baselineCornersConverted+=values.length/2;}
-                geometry++;}
-            geometry=0;if(colorChanged)for(var group:colorGroups.values()){int[] values=new int[group.size()];for(int i=0;i<values.length;i++)values[i]=group.get(i);
-                RtxptNative.nativeLightingVertexColors(handle,meshName+":"+geometry++,values);colorCornersConverted+=values.length;}
+        }
+        var geometryNames=new HashSet<String>();for(var item:pendingGeometryVariants)geometryNames.add(RtxptScene.meshName(item));
+        var batch=new ArrayList<RtxptAttributeBatch.Entry>();
+        for(var item:variants.values()){
+            String name=RtxptScene.meshName(item);
+            boolean baseline=reset||geometryNames.contains(name)||pendingLightingBaselines.contains(item.mesh());
+            boolean color=reset||geometryNames.contains(name)||pendingLightingColors.contains(item.mesh());
+            var mesh=scene.meshes.get(item.mesh());var cached=attributeGroups.get(item.mesh());
+            if(cached==null||!cached.mesh().triangleMaterialIds().equals(mesh.triangleMaterialIds())){
+                cached=new AttributeGroups(mesh,scene.attributeGroups(mesh));attributeGroups.put(item.mesh(),cached);
+            }
+            int geometry=0;for(var group:cached.groups()){
+                var entry=RtxptAttributeBatch.convert(name+":"+geometry++,mesh,group,lightingBaselines.get(item.mesh()),baseline,color);batch.add(entry);
+                if(baseline)baselineCornersConverted+=group.corners().length;if(color)colorCornersConverted+=group.corners().length;
+            }
             attributeMeshesConverted++;
         }
-        }
+        RtxptAttributeBatch.submit(handle,revision,batch);
+        pendingGeometryVariants=List.of();
         while(!pendingApplicationPatches.isEmpty()){
             var patch=pendingApplicationPatches.getFirst();var data=patch.data();var bytes=new byte[data.remaining()];data.get(bytes);
             RtxptNative.nativeLightingApplicationPatch(handle,patch.generation(),patch.offset(),bytes);pendingApplicationPatches.removeFirst();
         }
-        if(geometryChanged||appliedLightingAttributeGeneration!=lightingAttributeGeneration){
-        var instanceIds=geometryChanged?lightingInstances.keySet():pendingLightingInstances;
-        var names=new ArrayList<String>();var values=new ArrayList<Float>();
-        for(long id:instanceIds){if(!scene.instances.containsKey(id))continue;var value=lightingInstances.get(id);names.add("i"+id);
-            for(float v:new float[]{value.roles(),value.visibility(),value.fog(),0,value.localScale(),value.skyScale(),value.localBias(),value.skyBias()})values.add(v);}
-        float[] packed=new float[values.size()];for(int i=0;i<packed.length;i++)packed[i]=values.get(i);
-        RtxptNative.nativeLightingAttributes(handle,lightingAttributeGeneration,names.toArray(String[]::new),packed,pendingBaselineLookup,pendingApplicationData);
-        appliedLightingAttributeGeneration=lightingAttributeGeneration;
+        if(reset||appliedLightingAttributeGeneration!=lightingAttributeGeneration){
+            var instanceIds=reset?lightingInstances.keySet():pendingLightingInstances;
+            var names=new ArrayList<String>();float[] packed=new float[Math.multiplyExact(instanceIds.size(),8)];int offset=0;
+            for(long id:instanceIds){if(!scene.instances.containsKey(id))continue;var value=lightingInstances.get(id);names.add("i"+id);
+                packed[offset++]=value.roles();packed[offset++]=value.visibility();packed[offset++]=value.fog();packed[offset++]=0;
+                packed[offset++]=value.localScale();packed[offset++]=value.skyScale();packed[offset++]=value.localBias();packed[offset++]=value.skyBias();}
+            RtxptNative.nativeLightingAttributes(handle,lightingAttributeGeneration,names.toArray(String[]::new),offset==packed.length?packed:Arrays.copyOf(packed,offset),pendingBaselineLookup,pendingApplicationData);
+            appliedLightingAttributeGeneration=lightingAttributeGeneration;
         }
+
         if(lightingExtensionPending&&nativeLightingPlan!=null){
             try{
                 RtxptNative.nativeLightingExtension(handle,lightingExtensionManifest==null?null:lightingExtensionManifest.toString(),lightingExtensionHash);
@@ -298,6 +298,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         }
         pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingBaselineLookup=null;pendingApplicationData=null;
         lightingAttributeReset=false;
+        }finally{RtxptNative.diagnosticAttributesEnd();}
     }
     private boolean sparseLightingSupported(){return nativeScene==null&&options.qualityInts()[0]==1&&!options.restirDi()&&!options.restirGi()&&!options.sharc();}
     @Override public SparseLightingControl.Capacity sparseLightingCapacity(){ready();if(!sparseLightingSupported())throw new IllegalStateException("Sparse sources require retained SCENE_ANALYTIC without ReSTIR or radiance cache");return new SparseLightingControl.Capacity(262144,32,96);}
@@ -451,9 +452,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             if(old==null||!old.lightmapCoordinates().equals(mesh.lightmapCoordinates()))pendingLightingBaselines.add(mesh.id());
             if(old==null||!old.vertexColorsRgba8().equals(mesh.vertexColorsRgba8()))pendingLightingColors.add(mesh.id());
         }
-        if(tx.reset()){pendingSparseIds.clear();lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();lightingAttributeReset=true;}
+        if(tx.reset()){attributeGroups.clear();pendingSparseIds.clear();lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();lightingAttributeReset=true;}
         var removedInstances=tx.removals().instanceIds();while(removedInstances.hasRemaining()){long id=removedInstances.get();lightingInstances.remove(id);pendingLightingInstances.remove(id);}
-        var removedMeshes=tx.removals().meshIds();while(removedMeshes.hasRemaining()){long id=removedMeshes.get();lightingBaselines.remove(id);pendingLightingBaselines.remove(id);}
+        var removedMeshes=tx.removals().meshIds();while(removedMeshes.hasRemaining()){long id=removedMeshes.get();lightingBaselines.remove(id);pendingLightingBaselines.remove(id);attributeGroups.remove(id);}
         tx.upserts().lights().forEach(l->pendingLightIds.add(l.id()));var removedLights=tx.removals().lightIds();while(removedLights.hasRemaining())pendingLightIds.add(removedLights.get());
         scene=prepared.value();dirty|=tx.hasChanges()&&!prepared.geometryUnchanged();fullReset|=tx.reset();
         nativeContractPending=!prepared.nativeContract();
@@ -476,6 +477,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         if(nativeLightingPlan!=null&&handle!=0&&!RtxptNative.nativeLightingCanPublish(handle))throw new IllegalStateException("Lighting output ring is full; return GPU leases or use trySubmit");
         if(hostSurfacePlan!=null&&!preparingHostSurface){var host=hostRequests.get(f.sequence());
             if(host==null||host.frame()!=f||host.revision()!=revision)throw new IllegalArgumentException("Submit the exact immutable request used to acquire a published input, at the same resident scene revision");}
+        if(handle!=0&&!RtxptNative.resourcesCanUpdate(handle))throw new IllegalStateException("Resource generation ring is full; retry with trySubmit after GPU retirement");
         long allocationStart=allocatedBytes();
         long submitBegin=preparingHostSurface?0:diagnosticClock();boolean submitTracked=!preparingHostSurface&&handle!=0,submitAccepted=false;
         if(submitTracked)RtxptNative.diagnosticSubmitBegin(handle,f.sequence(),revision,0);
@@ -529,8 +531,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         Path path=nativeScene;
         if(rebuild){long begin=diagnosticClock();try{
             if(directory==null)directory=Files.createTempDirectory("rtrenderer-rtxpt-");
-            var generation=Files.createTempDirectory(directory,"full-");path=scene.export(generation,f,items);fullDirectory=generation;
-            textureFiles=new RtxptPersistentMap<>();for(long id:scene.textures.keySet())textureFiles.put(id,generation.resolve("t"+id+".png"));
+            var generation=Files.createTempDirectory(directory,"full-");var bootstrap=new RtxptScene();path=bootstrap.export(generation,f,List.of());fullDirectory=generation;
+            textureFiles=new RtxptPersistentMap<>();
+            preparedDelta=RtxptDelta.prepare(directory,bootstrap,scene,List.of(),items,textureFiles);
             if(diagnosticLevel!=RtxptDiagnostics.Level.OFF){preparationModels++;preparationItemReads+=items.size();}
         }catch(IOException e){throw new IllegalStateException("RTXPT asset translation failed",e);}exportNs+=diagnosticElapsed(begin);exports++;}
         if(delta)try{preparedDelta=RtxptDelta.prepare(directory,residentScene,scene,previous,items,textureFiles);
@@ -556,7 +559,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             RtxptNative.diagnosticSubmitStage(RtxptDiagnostics.Stage.TRANSLATION.ordinal(),translationBegin-submitBegin,translationDuration,items.size(),0);
         }
         if(preparedDelta!=null&&preparedDelta.hasWork()){
-            long begin=diagnosticClock();RtxptNative.resources(handle,preparedDelta.manifest().toString());nativeResourceNs+=diagnosticElapsed(begin);preparedDelta.translated().uploadInteriors(handle);
+            long begin=diagnosticClock();RtxptNative.resourcesMemory(handle,revision,preparedDelta.memory());nativeResourceNs+=diagnosticElapsed(begin);preparedDelta.translated().uploadInteriors(handle);
             textureFiles=preparedDelta.textureFiles();resourceBatches++;resourceMeshes+=preparedDelta.meshes();
             resourceMaterials+=preparedDelta.materials();resourceTextures+=preparedDelta.textures();
         }
@@ -592,7 +595,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             if(rebuild||!sources.isEmpty()||!removed.isEmpty())RtxptNative.sparseLighting(handle,sources.stream().mapToLong(SparseLightSource::id).toArray(),RtxptSparseSources.pack(sources),removed.stream().mapToLong(Long::longValue).toArray(),rebuild);
         }
         boolean mappingsChanged=rebuild||(preparedDelta!=null?preparedDelta.mappingsChanged():!RtxptScene.sameStructure(items,previous));
-        prepareNativeLighting(f,items,mappingsChanged);
+        pendingGeometryVariants=preparedDelta==null?List.of():preparedDelta.changedVariants();
+        prepareNativeLighting(f,items,rebuild);
         prepareHostSurface(f,items,mappingsChanged);
         previous=items;dirty=false;fullReset=false;residentScene=scene;pendingLightIds.clear();pendingSparseIds.clear();
         if(preparingHostSurface){
@@ -871,9 +875,12 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     void snapshotMaterials(Path directory){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.snapshotMaterials(handle,directory.toAbsolutePath().toString());}
     @Override public BridgeTimings bridgeTimings(){return new BridgeTimings(frames,frameNs,exports,exportNs,batches,transformNs);}
     @Override public FrameSubmissionAttempt trySubmit(RenderFrameRequest f){ready();Objects.requireNonNull(f);
+        if(handle!=0&&!RtxptNative.resourcesCanUpdate(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.SCENE_UPDATE_BACKLOG,"Resource generations await GPU completion; retry the same sequence after retirement");
         if(hostSurfacePlan!=null&&handle!=0&&!RtxptNative.hostSurfaceCanPublish(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"All host-surface HDR slots await consumer completion");
         if(nativeLightingPlan!=null&&handle!=0&&!RtxptNative.nativeLightingCanPublish(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"All HDR lighting slots await consumer completion");
         return new FrameSubmitted(submit(f));}
+    @Override public DynamicResourceStatistics dynamicResourceStatistics(){ready();var n=handle==0?new long[19]:RtxptNative.dynamicResourceStatistics(handle);
+        return new DynamicResourceStatistics(diagnosticLevel!=RtxptDiagnostics.Level.OFF,n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8],n[9],n[14],n[16],n[17],n[15]);}
     @Override public boolean readFrame(FrameConsumer consumer){ready();Objects.requireNonNull(consumer);throw new UnsupportedOperationException("RTXPT presents GPU frames directly; CPU readback is not exposed");}
     @Override public Optional<FrameSnapshot> pollFrame(){ready();throw new UnsupportedOperationException("RTXPT GPU-native presentation");}
     @Override public Optional<FrameSnapshot> awaitFrame(Duration timeout){Objects.requireNonNull(timeout);return pollFrame();}

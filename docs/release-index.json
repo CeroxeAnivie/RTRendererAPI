@@ -17,5 +17,6 @@
   "7.0.5": "docs/release-frame-tasks-and-shader-preparation.md",
   "7.1.0": "docs/release-independent-native-and-host-lighting.md",
   "7.1.1": "docs/quality/lighting-repair-validation.md",
-  "7.1.2": "docs/release-local-scene-preparation.md"
+  "7.1.2": "docs/release-local-scene-preparation.md",
+  "7.1.3": "docs/release-dynamic-resources.md"
 }

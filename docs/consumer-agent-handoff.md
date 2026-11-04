@@ -2,7 +2,7 @@
 
 本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
 
-当前版本为 **7.1.2**。本批补齐 H04 的局部资源准备：persistent diff、真实反向依赖、结构身份复用、局部姿态提交、原生材质刷新及纹理引用退休；增加准备计数，同时清理代码中的版本绑定命名。详见[本批修复](release-local-scene-preparation.md)和[量化证据](quality/local-scene-preparation.md)。发布目标为 GitHub 和 Maven Local，不发布 Central；最终制品身份见 `build/reports/local-scene-release/result.json`。
+当前批次为 **7.1.3**。本批解决局部 mesh 触发全属性重提、重复 JNI 查找和动态资源经文件导入的问题，增加内存事务、mip／矩形 patch、异步退休和 GPU 资源复用。完整 beauty 的 OMM 表随内存拓扑扩容；退化法线的切线回退保持有限值。详见[本批修复](release-dynamic-resources.md)和[仓库量化证据](https://github.com/CeroxeAnivie/RTRendererAPI/blob/main/docs/quality/dynamic-resources.md)。交付渠道为 GitHub 和 Maven Local，不发布 Central；发布状态、分位数和制品身份以仓库量化报告为准。
 
 此前 2026-11-04 的光源遍历优化使用本地坐标 7.1.1，按用户要求删除旧 Maven Local 包后重新发布。消费方重新解析同版本依赖时使用 `--refresh-dependencies`，并核对发布记录中的 JAR/runtime hash，不能仅凭版本号认定已更新。新 native DLL SHA-256 为 `b8b4bca550f2dce38fc169e3edb4f8249e5a3a5f78695556396acd7337f2fd57`；内置 raw shader 为 `6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57`。扩展使用新包内 SDK 重编译。432 张信号／guide 逐位一致，36 次真实 RR 通过；性能数据见 [最新报告](quality/native-lighting-performance.md)。该次交付已发布 GitHub 和 Maven Local。
 

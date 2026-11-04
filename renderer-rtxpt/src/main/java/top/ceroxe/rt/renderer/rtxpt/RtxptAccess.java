@@ -100,6 +100,11 @@ public interface RtxptAccess extends RtxptDiagnosticAccess {
     /** Native resource preparation visits. Index builds are reserved for initial publication
      * and topology changes; counts freeze at diagnostic OFF. These exclude AS and render work. */
     record NativePreparationStatistics(boolean collecting,long materialVisits,long meshVisits,long indexBuilds) { }
+    /** Cumulative work while diagnostics are enabled; pending generations describe the last collection. */
+    record DynamicResourceStatistics(boolean collecting,long validationRecords,long indexHits,long indexFailures,long geometryVisits,
+        long attributeBatches,long textureUploadBytes,long deviceDrains,long retiredGenerations,long pendingGenerations,
+        long peakPendingGenerations,long geometryUploadBytes,long attributeMigrationBytes,long attributeTableVisits,long attributeClears) { }
+    DynamicResourceStatistics dynamicResourceStatistics();
     default NativePreparationStatistics nativePreparationStatistics(){return new NativePreparationStatistics(false,0,0,0);}
     /** Cumulative inclusive Java scopes and native CPU subscopes; native subscopes overlap the
      * Java resource/lighting scopes. Fence waits and GPU queue intervals remain in retainedUpdateTimings. */

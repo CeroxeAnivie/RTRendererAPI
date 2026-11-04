@@ -101,6 +101,12 @@ final class RtxptNative {
     static native long[] nativeLightingUpdateStatistics(long handle);
     static native void nativeLightingDecomposition(long handle,boolean enabled);
     static native void nativeLightingBaseline(long handle,String geometry,float[] coordinates);
+    static native void diagnosticAttributesBegin(long handle);
+    static native void diagnosticAttributesEnd();
+    static native void nativeLightingAttributeBatch(long handle,long revision,String[] names,float[][] baselines,int[][] colors);
+    static native void resourcesMemory(long handle,long revision,java.nio.ByteBuffer packet);
+    static native long[] dynamicResourceStatistics(long handle);
+    static native boolean resourcesCanUpdate(long handle);
     static native void nativeLightingVertexColors(long handle,String geometry,int[] colors);
     static native long[] nativeLightingTelemetry(long handle);
     static native void nativeLightingCapture(long handle,String path,int signal);

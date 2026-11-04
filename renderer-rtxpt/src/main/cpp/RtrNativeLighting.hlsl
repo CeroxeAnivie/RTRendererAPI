@@ -49,6 +49,22 @@ RWTexture2D<float4> u_Geometry : register(u2);
 RWTexture2D<uint4> u_Identity : register(u3);
 RWByteAddressBuffer u_Work : register(u4);
 
+// Three bits per material slot: clamp U, clamp V, nearest. Zero is the fast default.
+float4 RtrSampleTexture(int textureIndex,float2 uv,uint policy){
+    if(policy==0)return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_Material,uv,0);
+    uint w,h;t_Textures[NonUniformResourceIndex(textureIndex)].GetDimensions(w,h);int2 extent=int2(w,h);
+    float2 normalized=float2((policy&1)!=0?saturate(uv.x):frac(uv.x),(policy&2)!=0?saturate(uv.y):frac(uv.y));
+    float2 position=normalized*extent-((policy&4)!=0?0:.5);int2 origin=int2(floor(position));float2 f=frac(position);
+    int2 a=origin,b=origin+1;
+    a.x=(policy&1)!=0?clamp(a.x,0,extent.x-1):(a.x%extent.x+extent.x)%extent.x;
+    a.y=(policy&2)!=0?clamp(a.y,0,extent.y-1):(a.y%extent.y+extent.y)%extent.y;
+    if((policy&4)!=0)return t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(a,0));
+    b.x=(policy&1)!=0?clamp(b.x,0,extent.x-1):(b.x%extent.x+extent.x)%extent.x;
+    b.y=(policy&2)!=0?clamp(b.y,0,extent.y-1):(b.y%extent.y+extent.y)%extent.y;
+    return lerp(lerp(t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(a,0)),t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(b.x,a.y,0)),f.x),
+        lerp(t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(a.x,b.y,0)),t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(b,0)),f.x),f.y);
+}
+
 struct RtrReceiver
 {
     float3 position,normal,geometricNormal,albedo;
@@ -95,7 +111,7 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
     r.uv=RtrUv(vertices,geom,tri.x)*bary.x+RtrUv(vertices,geom,tri.y)*bary.y+RtrUv(vertices,geom,tri.z)*bary.z;
     MaterialConstants mat=t_Materials[geom.materialIndex];float4 base=float4(mat.baseOrDiffuseColor,mat.opacity);
     if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)
-        base*=t_Textures[NonUniformResourceIndex(mat.baseOrDiffuseTextureIndex)].SampleLevel(s_Material,r.uv,0);
+        base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,r.uv,(uint(mat.flags)>>12)&7);
     if((mat.flags&MaterialFlags_UseOpacityTexture)!=0)
         base.a*=t_Textures[NonUniformResourceIndex(mat.opacityTextureIndex)].SampleLevel(s_Material,r.uv,0).r;
     uint2 vertexRange=t_GeometryBaselines[inst.firstGeometryIndex+geometry];
@@ -104,7 +120,7 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
     r.albedo=max(base.rgb,0);r.opacity=saturate(base.a);
     r.roughness=mat.roughness;r.metalness=mat.metalness;r.transmission=mat.transmissionFactor;
     if((mat.flags&MaterialFlags_UseMetalRoughOrSpecularTexture)!=0&&(mat.flags&MaterialFlags_UseSpecularGlossModel)==0){
-        float4 sampled=t_Textures[NonUniformResourceIndex(mat.metalRoughOrSpecularTextureIndex)].SampleLevel(s_Material,r.uv,0);
+        float4 sampled=RtrSampleTexture(mat.metalRoughOrSpecularTextureIndex,r.uv,(uint(mat.flags)>>18)&7);
         r.roughness*=sampled.g;r.metalness*=(mat.flags&MaterialFlags_MetalnessInRedChannel)!=0?sampled.r:sampled.b;}
     if((mat.flags&MaterialFlags_UseTransmissionTexture)!=0)r.transmission*=t_Textures[NonUniformResourceIndex(mat.transmissionTextureIndex)].SampleLevel(s_Material,r.uv,0).r;
     r.roughness=saturate(r.roughness);r.metalness=saturate(r.metalness);r.transmission=saturate(r.transmission);
@@ -115,7 +131,7 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
             +Unpack_RGBA8_SNORM(vertices.Load(geom.tangentOffset+tri.y*4))*bary.y
             +Unpack_RGBA8_SNORM(vertices.Load(geom.tangentOffset+tri.z*4))*bary.z;
         float3 t=mul((float3x3)inst.transform,tangent.xyz);t=RtrNormalize(t-r.normal*dot(t,r.normal));
-        float3 map=t_Textures[NonUniformResourceIndex(mat.normalTextureIndex)].SampleLevel(s_Material,r.uv,0).xyz*2-1;
+        float3 map=RtrSampleTexture(mat.normalTextureIndex,r.uv,(uint(mat.flags)>>15)&7).xyz*2-1;
         map.xy*=mat.normalTextureScale;
         r.normal=RtrNormalize(t*map.x+cross(r.normal,t)*sign(tangent.w)*map.y+r.normal*map.z);
         if(dot(r.normal,r.geometricNormal)<0)r.normal=-r.normal;
@@ -158,7 +174,7 @@ bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attrib
         ByteAddressBuffer vertices=t_Buffers[NonUniformResourceIndex(geom.vertexBufferIndex)];
         uint3 tri=indices.Load3(geom.indexOffset+primitive*12);
         uv=RtrUv(vertices,geom,tri.x)*bary.x+RtrUv(vertices,geom,tri.y)*bary.y+RtrUv(vertices,geom,tri.z)*bary.z;
-        if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)base*=t_Textures[NonUniformResourceIndex(mat.baseOrDiffuseTextureIndex)].SampleLevel(s_Material,uv,0);
+        if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,uv,(uint(mat.flags)>>12)&7);
         if((mat.flags&MaterialFlags_UseOpacityTexture)!=0)base.a*=t_Textures[NonUniformResourceIndex(mat.opacityTextureIndex)].SampleLevel(s_Material,uv,0).r;
     }
     uint2 range=t_GeometryBaselines[inst.firstGeometryIndex+geometry];

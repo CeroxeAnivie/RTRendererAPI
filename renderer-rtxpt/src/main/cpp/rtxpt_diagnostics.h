@@ -29,7 +29,7 @@ enum Stage : uint64_t { Frame=1, InstanceCache, SubInstances, Dispatch, Caller,
     Pipeline, ShaderTable, Import, Textures, Materials, Acceleration, Retirement,
     SharedPublish, SharedReuseWait, Resize, PoolWait, Lighting, Preparation, Upload, Submit,
     LightValidation, LightObjects, LightGraph, LightTree, LightUpload, LightingPolicy,
-    SubmitValidation, Translation, Resources, SubmitRetirement };
+    SubmitValidation, Translation, Resources, SubmitRetirement, AttributePreparation, AttributeValidation, ResourceStaging, ResourceIndex, ResourceRetirement };
 enum Flag : uint64_t { QueueWaitEnqueue=1, Failed=2, CacheHit=4, CacheMiss=8,
     Active=256, Truncated=512, Cancelled=1024, EnteredNativeFrame=2048 };
 enum SubmissionKind : uint64_t { Initial=0, Update, Steady, Resized, Waited, KindCount };

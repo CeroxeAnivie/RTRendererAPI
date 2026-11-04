@@ -23,7 +23,7 @@ public final class RtxptDiagnostics {
         PIPELINE, SHADER_TABLE, IMPORT, TEXTURES, MATERIALS, ACCELERATION, RETIREMENT,
         SHARED_PUBLISH, SHARED_REUSE_WAIT, RESIZE, POOL_WAIT, LIGHTING, PREPARATION, UPLOAD, SUBMIT,
         LIGHT_VALIDATION, LIGHT_OBJECTS, LIGHT_GRAPH, LIGHT_TREE, LIGHT_UPLOAD, LIGHTING_POLICY,
-        SUBMIT_VALIDATION, TRANSLATION, RESOURCES, SUBMIT_RETIREMENT }
+        SUBMIT_VALIDATION, TRANSLATION, RESOURCES, SUBMIT_RETIREMENT, ATTRIBUTE_PREPARATION, ATTRIBUTE_VALIDATION, RESOURCE_STAGING, RESOURCE_INDEX, RESOURCE_RETIREMENT }
     /** flags=1 on SHARED_REUSE_WAIT means CPU queue-wait enqueue cost, not a CPU fence wait.
      * batch links caller, workers and completion waits. Self subtracts same-thread children only. */
     public record CpuEvent(long sequence,long revision,long batch,long thread,Stage stage,

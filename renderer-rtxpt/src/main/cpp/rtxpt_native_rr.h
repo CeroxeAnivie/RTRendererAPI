@@ -1,5 +1,6 @@
 #pragma once
 #include "rtxpt_streamline_cache.h"
+#include "rtxpt_cached_bindings.h"
 #include <sl_dlss_d.h>
 
 // One diffuse radiance layer, at the lighting-grid extent. Spatial composition
@@ -15,6 +16,7 @@ public:
     nvrhi::BufferHandle constants;
     std::array<nvrhi::TextureHandle,6> guides;
     nvrhi::TextureHandle reconstructed,result;
+    RtrCachedBindings resolveBindings;
     struct alignas(16) Parameters {dm::float4x4 worldToClip,previousWorldToClip;float4 depth;};
     Parameters parameters{};
     dm::float4x4 previous=dm::float4x4::identity();
@@ -104,7 +106,7 @@ public:
         const sl::BaseStructure* inputs[]{&viewport};Check(slEvaluateFeature(sl::kFeatureDLSS_RR,*token,inputs,1,native),"evaluate");
         command->clearState();RtrGpuProfile::End(command,scope);
         nvrhi::BindingSetDesc bindings;bindings.bindings={nvrhi::BindingSetItem::Texture_SRV(0,reconstructed),nvrhi::BindingSetItem::Texture_SRV(1,raw),nvrhi::BindingSetItem::Texture_UAV(0,result)};
-        auto binding=device->createBindingSet(bindings,resolveLayout);nvrhi::ComputeState state;state.pipeline=resolvePipeline;state.bindings={binding};command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);
+        auto binding=resolveBindings.Get(device,bindings,resolveLayout);nvrhi::ComputeState state;state.pipeline=resolvePipeline;state.bindings={binding};command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);
         ++evaluated;if(reset)++resets;reset=false;valid=true;previous=parameters.worldToClip;lastSequence=sequence;
     }
 };

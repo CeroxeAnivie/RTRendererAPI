@@ -17,7 +17,7 @@ final class RtxptScene {
     final RtxptPersistentMap<SceneInstance> instances;
     final RtxptLightMap lights;
     final RtxptPersistentMap<SparseLightSource> sparseSources;
-    private record MeshMaterials(MeshAsset mesh,Set<Long> ids) { }
+    private record MeshMaterials(MeshAsset mesh,Set<Long> ids,List<RtxptAttributeBatch.Group> groups) { }
     private final RtxptPersistentMap<MeshMaterials> meshMaterials;
     private final RtxptPersistentMap<RtxptPersistentMap<Boolean>> textureUsers,materialUsers,meshUsers;
     private final RtxptPersistentMap<Item> itemTable;
@@ -26,9 +26,13 @@ final class RtxptScene {
     long referenceChecks;
     Set<Long> materialIds(MeshAsset mesh){
         var cached=meshMaterials.get(mesh.id());if(cached!=null&&cached.mesh()==mesh)return cached.ids();
-        var ids=new LinkedHashSet<Long>();var data=mesh.triangleMaterialIds();while(data.hasRemaining())ids.add(data.get());
-        var result=Set.copyOf(ids);meshMaterials.put(mesh.id(),new MeshMaterials(mesh,result));return result;
+        if(cached!=null&&cached.mesh().triangleMaterialIds().equals(mesh.triangleMaterialIds())){
+            meshMaterials.put(mesh.id(),new MeshMaterials(mesh,cached.ids(),cached.groups()));return cached.ids();
+        }
+        var groups=RtxptAttributeBatch.groups(mesh);var ids=new LinkedHashSet<Long>();for(var group:groups)ids.add(group.material());
+        var result=Set.copyOf(ids);meshMaterials.put(mesh.id(),new MeshMaterials(mesh,result,groups));return result;
     }
+    List<RtxptAttributeBatch.Group> attributeGroups(MeshAsset mesh){materialIds(mesh);return meshMaterials.get(mesh.id()).groups();}
     private List<SceneLight> sortedLights;
     private List<Item> residentItems;
     List<SceneLight> sortedLights(){if(sortedLights==null)sortedLights=List.copyOf(lights.values());return sortedLights;}
@@ -56,6 +60,7 @@ final class RtxptScene {
         if(tx.reset()){meshMaterials.clear();textureUsers.clear();materialUsers.clear();meshUsers.clear();textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();sparseSources.clear();itemTable.clear();itemStructure=new Object();residentItems=null;geometryBytes=textureBytes=0;}
         if(tx.reset()||!tx.upserts().lights().isEmpty()||tx.removals().lightIds().hasRemaining())sortedLights=null;
         var r=tx.removals();var u=tx.upserts();
+        for(var t:u.textures())t.validateReplacementOf(textures.get(t.id()));
         // Reverse dependencies are immutable sets in persistent maps. Only changed paths are copied.
         var changedMaterials=new HashSet<Long>();u.materials().forEach(m->changedMaterials.add(m.id()));collectIds(r.materialIds(),changedMaterials);
         var changedMeshes=new HashSet<Long>();u.meshes().forEach(m->changedMeshes.add(m.id()));collectIds(r.meshIds(),changedMeshes);
@@ -64,11 +69,12 @@ final class RtxptScene {
         for(long id:changedMeshes){var old=meshes.get(id);if(old!=null)geometryBytes=Math.subtractExact(geometryBytes,RendererResourceOptions.meshBytes(old));}
         for(long id:changedTextures){var old=textures.get(id);if(old!=null)textureBytes=Math.subtractExact(textureBytes,old.rgba8().remaining());}
         for(long id:changedMaterials){var old=materials.get(id);if(old!=null)for(long texture:textureIds(old))dependency(textureUsers,texture,id,false);}
-        for(long id:changedMeshes){var old=meshes.get(id);if(old!=null)for(long material:materialIds(old))dependency(materialUsers,material,id,false);meshMaterials.remove(id);}
+        for(long id:changedMeshes){var old=meshes.get(id);if(old!=null)for(long material:materialIds(old))dependency(materialUsers,material,id,false);}
         for(long id:changedInstances){var old=instances.get(id);if(old!=null)dependency(meshUsers,old.meshAssetId(),id,false);}
         remove(textures,r.textureIds());remove(materials,r.materialIds());remove(meshes,r.meshIds());remove(instances,r.instanceIds());remove(lights,r.lightIds());
         u.textures().forEach(t->textures.put(t.id(),t));u.materials().forEach(m->materials.put(m.id(),m));
         u.meshes().forEach(m->meshes.put(m.id(),m));u.instances().forEach(i->instances.put(i.id(),i));u.lights().forEach(l->lights.put(l.id(),l));
+        var removedMeshMaterials=r.meshIds();while(removedMeshMaterials.hasRemaining())meshMaterials.remove(removedMeshMaterials.get());
         for(long id:changedMeshes){var value=meshes.get(id);if(value!=null)geometryBytes=Math.addExact(geometryBytes,RendererResourceOptions.meshBytes(value));}
         for(long id:changedTextures){var value=textures.get(id);if(value!=null)textureBytes=Math.addExact(textureBytes,value.rgba8().remaining());}
         for(var m:u.materials()){for(long t:textureIds(m))if(t>=0){++referenceChecks;if(!textures.containsKey(t))throw new IllegalArgumentException("Missing texture "+t);dependency(textureUsers,t,m.id(),true);}

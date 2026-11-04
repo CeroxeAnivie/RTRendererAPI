@@ -25,6 +25,8 @@ public:
     nvrhi::ComputePipelineHandle deepPipeline;
     nvrhi::BufferHandle deepReceivers;
     std::array<nvrhi::BufferHandle,3> deepConstants;
+    RtrCachedBindings dispatchBindings,encodeBindings;
+    std::array<RtrCachedBindings,3> phaseBindings;
     uint32_t width=0,height=0,mask=0;
     uint64_t executedFrames=0,beautyFrames=0,publication=0,metadataUploads=0;
     int64_t timeNanos=0,deltaNanos=0;
@@ -73,6 +75,38 @@ public:
     std::unordered_map<std::string,uint32_t> instanceSlots;
     std::unordered_map<std::string,GeometryAttributes> geometrySlots;
     std::unordered_set<std::string> dirtyInstances,dirtyBaselines,dirtyColors;
+    size_t attributeEnd=0;
+    struct FreeAttributeRange{uint32_t offset,count;};
+    std::vector<FreeAttributeRange> freeAttributeRanges;
+    uint64_t attributeMigrationBytes=0,attributeTableVisits=0;
+    void FreeAttributeRangeAt(uint32_t offset,uint32_t count){
+        if(!count)return;
+        freeAttributeRanges.push_back({offset,count});
+        std::sort(freeAttributeRanges.begin(),freeAttributeRanges.end(),[](auto a,auto b){return a.offset<b.offset;});
+        size_t out=0;
+        for(auto range:freeAttributeRanges){
+            if(out&&uint64_t(freeAttributeRanges[out-1].offset)+freeAttributeRanges[out-1].count==range.offset)freeAttributeRanges[out-1].count+=range.count;
+            else freeAttributeRanges[out++]=range;
+        }
+        freeAttributeRanges.resize(out);
+        while(!freeAttributeRanges.empty()&&uint64_t(freeAttributeRanges.back().offset)+freeAttributeRanges.back().count==attributeEnd){
+            attributeEnd=freeAttributeRanges.back().offset;freeAttributeRanges.pop_back();
+        }
+    }
+    uint32_t AllocateAttributeRange(uint32_t count){
+        for(auto i=freeAttributeRanges.begin();i!=freeAttributeRanges.end();++i)if(i->count>=count){
+            uint32_t result=i->offset;i->offset+=count;i->count-=count;if(!i->count)freeAttributeRanges.erase(i);return result;}
+        if(attributeEnd+count>uint64_t(UINT32_MAX))throw std::runtime_error("Attribute arena exceeds index capacity");
+        uint32_t result=uint32_t(attributeEnd);attributeEnd+=count;return result;
+    }
+    void EnsureAttributeBuffer(nvrhi::IDevice* device,nvrhi::ICommandList* command,nvrhi::BufferHandle& buffer,size_t bytes,size_t stride,const char* name){
+        bytes=std::max(bytes,stride);if(buffer&&buffer->getDesc().byteSize>=bytes)return;
+        size_t capacity=std::max<size_t>(256,stride);while(capacity<bytes)capacity*=2;
+        if(capacity>512ULL*1024*1024)throw std::runtime_error("Attribute arena exceeds 512 MiB capacity");
+        auto next=Buffer(device,capacity,stride,name);
+        if(buffer){auto copy=buffer->getDesc().byteSize;command->copyBuffer(next,0,buffer,0,copy);attributeMigrationBytes+=copy;Retire(device,{buffer});}
+        buffer=next;
+    }
     // Cumulative operational counts, independent of optional diagnostic recording.
     std::array<uint64_t,5> attributeWork{}; // layout builds, corners packed, instance writes, attribute bytes, local geometry writes
     std::vector<VertexAttributes> PackVertices(const std::string& name,size_t count){
@@ -100,6 +134,9 @@ public:
     size_t previousInstanceCount=0,previousGeometryCount=0;
     struct Retired {std::vector<nvrhi::BufferHandle> buffers;std::vector<nvrhi::TextureHandle> textures;std::vector<nvrhi::ComputePipelineHandle> pipelines;nvrhi::EventQueryHandle done;};
     std::vector<Retired> retired;
+    void PollRetired(nvrhi::IDevice* device){
+        for(auto i=retired.begin();i!=retired.end();)if(device->pollEventQuery(i->done))i=retired.erase(i);else ++i;
+    }
     void Configure(const std::vector<float>& parameters){
         if(parameters.size()!=80)throw std::invalid_argument("Native-lighting ABI v1 requires 80 parameter words");
         for(auto v:parameters)if(!std::isfinite(v))throw std::invalid_argument("Non-finite native-lighting parameter");
@@ -124,11 +161,12 @@ public:
         auto buffer=device->createBuffer(desc);if(!buffer)throw std::runtime_error(std::string("Could not allocate ")+name);return buffer;
     }
     void Retire(nvrhi::IDevice* device,std::vector<nvrhi::BufferHandle> buffers,std::vector<nvrhi::TextureHandle> textures={}){
+        PollRetired(device);if(retired.size()>=64)throw std::runtime_error("Lighting retirement capacity exhausted");
         Retired old;old.buffers=std::move(buffers);old.textures=std::move(textures);old.done=device->createEventQuery();
         device->setEventQuery(old.done,nvrhi::CommandQueue::Graphics);retired.push_back(std::move(old));
     }
     void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* bindlessLayout){
-        for(auto i=retired.begin();i!=retired.end();)if(device->pollEventQuery(i->done))i=retired.erase(i);else ++i;
+        PollRetired(device);
         if(!pipeline){
             nvrhi::BindingLayoutDesc desc;desc.visibility=nvrhi::ShaderType::Compute;
             desc.bindings={nvrhi::BindingLayoutItem::ConstantBuffer(0),nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
@@ -241,7 +279,7 @@ public:
         nvrhi::BindingSetDesc desc;desc.bindings={nvrhi::BindingSetItem::ConstantBuffer(0,compactConstants),
             nvrhi::BindingSetItem::Texture_SRV(0,direct?direct:dummyColor),nvrhi::BindingSetItem::Texture_SRV(1,reconstruction.requested&&reconstruction.valid?reconstruction.result:(indirect?indirect:dummyColor)),
             nvrhi::BindingSetItem::Texture_UAV(0,compactDirect?compactDirect:compactDummy),nvrhi::BindingSetItem::Texture_UAV(1,compactIndirect?compactIndirect:compactDummy)};
-        auto bindings=device->createBindingSet(desc,compactLayout);if(!bindings)throw std::runtime_error("Could not bind compact lighting encoder");
+        auto bindings=encodeBindings.Get(device,desc,compactLayout);
         nvrhi::ComputeState state;state.pipeline=compactPipeline;state.bindings={bindings};command->setComputeState(state);
         command->dispatch((width+7)/8,(height+7)/8);RtrGpuProfile::End(command,scope);
     }
@@ -276,34 +314,51 @@ public:
                 attributeWork[3]+=values.size()*sizeof(VertexAttributes);++attributeWork[4];}}
             UploadPublications(device,command);dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();if(changed)++metadataUploads;return;
         }
-        instanceSlots.clear();geometrySlots.clear();
-        std::vector<InstanceAttributes> instanceData(std::max<size_t>(1,instanceCount));
+        RtrDiagnostics::Scope indexScope(RtrDiagnostics::ResourceIndex);
+        auto oldInstanceSlots=std::move(instanceSlots);instanceSlots.clear();
+        EnsureAttributeBuffer(device,command,instances,std::max<size_t>(1,instanceCount)*sizeof(InstanceAttributes),sizeof(InstanceAttributes),"Native receiver roles");
         for(const auto& instance:graph->GetMeshInstances()){
-            instanceSlots.emplace(instance->GetNode()->GetName(),instance->GetInstanceIndex());
-            auto found=instanceAttributes.find(instance->GetNode()->GetName());
-            if(found!=instanceAttributes.end())instanceData.at(instance->GetInstanceIndex())=found->second;
+            const auto& name=instance->GetNode()->GetName();auto index=instance->GetInstanceIndex();instanceSlots.emplace(name,index);
+            auto old=oldInstanceSlots.find(name);
+            if(old==oldInstanceSlots.end()||old->second!=index||dirtyInstances.count(name)){
+                auto found=instanceAttributes.find(name);InstanceAttributes value=found==instanceAttributes.end()?InstanceAttributes{}:found->second;
+                command->writeBuffer(instances,&value,sizeof(value),size_t(index)*sizeof(value));++attributeWork[2];attributeWork[3]+=sizeof(value);
+            }
         }
         specialRoleCount=0;
         for(auto entry=instanceAttributes.begin();entry!=instanceAttributes.end();)if(!instanceSlots.count(entry->first))entry=instanceAttributes.erase(entry);
             else{specialRoleCount+=entry->second.rolesVisibility.x!=23;++entry;}
-        std::vector<GeometryAttributes> geometryData(std::max<size_t>(1,geometryCount));std::vector<VertexAttributes> coordinates;
+        struct GeometryEntry{std::string name;uint32_t index,corners;};std::vector<GeometryEntry> entries;entries.reserve(geometryCount);
+        std::unordered_set<std::string> live;
         for(const auto& mesh:graph->GetMeshes())for(size_t j=0;j<mesh->geometries.size();j++){
-            const auto& geometry=mesh->geometries[j];auto name=mesh->name+":"+std::to_string(j);
-            auto& entry=geometryData.at(geometry->globalGeometryIndex);entry.offset=uint32_t(coordinates.size());entry.triangles=geometry->numIndices/3;
-            geometrySlots.emplace(name,entry);auto values=PackVertices(name,geometry->numIndices);
-            coordinates.insert(coordinates.end(),values.begin(),values.end());
+            const auto& g=mesh->geometries[j];auto name=mesh->name+":"+std::to_string(j);live.insert(name);
+            entries.push_back({std::move(name),uint32_t(g->globalGeometryIndex),g->numIndices});++attributeTableVisits;
         }
-        auto nextInstances=Buffer(device,instanceData.size()*sizeof(InstanceAttributes),sizeof(InstanceAttributes),"Native receiver roles");
-        auto nextGeometry=Buffer(device,geometryData.size()*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
-        auto nextCoordinates=Buffer(device,coordinates.size()*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver baseline and vertex colors");
-        command->writeBuffer(nextInstances,instanceData.data(),instanceData.size()*sizeof(InstanceAttributes));
-        command->writeBuffer(nextGeometry,geometryData.data(),geometryData.size()*sizeof(GeometryAttributes));
-        if(!coordinates.empty())command->writeBuffer(nextCoordinates,coordinates.data(),coordinates.size()*sizeof(VertexAttributes));
-        ++attributeWork[0];attributeWork[2]+=instanceData.size();attributeWork[3]+=instanceData.size()*sizeof(InstanceAttributes)+geometryData.size()*sizeof(GeometryAttributes)+coordinates.size()*sizeof(VertexAttributes);
+        // Release only retired identities. Same-size replacements keep their stable range.
+        for(auto i=geometrySlots.begin();i!=geometrySlots.end();)if(!live.count(i->first)){
+            FreeAttributeRangeAt(i->second.offset,i->second.triangles*3);i=geometrySlots.erase(i);
+        }else ++i;
+        std::vector<GeometryAttributes> geometryData(std::max<size_t>(1,geometryCount));
+        std::unordered_set<std::string> upload=dirtyBaselines;upload.insert(dirtyColors.begin(),dirtyColors.end());
+        for(const auto& entry:entries){auto found=geometrySlots.find(entry.name);
+            if(found==geometrySlots.end()||found->second.triangles*3!=entry.corners){
+                if(found!=geometrySlots.end())FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);
+                geometrySlots[entry.name]={AllocateAttributeRange(entry.corners),entry.corners/3};upload.insert(entry.name);
+            }
+            geometryData.at(entry.index)=geometrySlots.at(entry.name);
+        }
+        EnsureAttributeBuffer(device,command,geometryBaselines,geometryData.size()*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
+        EnsureAttributeBuffer(device,command,baselineCoordinates,attributeEnd*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
+        command->writeBuffer(geometryBaselines,geometryData.data(),geometryData.size()*sizeof(GeometryAttributes));attributeWork[3]+=geometryData.size()*sizeof(GeometryAttributes);
+        for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
+            auto values=PackVertices(name,size_t(found->second.triangles)*3);
+            if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
+            attributeWork[3]+=values.size()*sizeof(VertexAttributes);++attributeWork[4];
+        }
+        ++attributeWork[0];
         for(auto i=meshBaselines.begin();i!=meshBaselines.end();)if(!geometrySlots.count(i->first))i=meshBaselines.erase(i);else ++i;
         for(auto i=meshColors.begin();i!=meshColors.end();)if(!geometrySlots.count(i->first)){alphaMeshes.erase(i->first);i=meshColors.erase(i);}else ++i;
         UploadPublications(device,command);
-        Retire(device,{instances,geometryBaselines,baselineCoordinates});instances=nextInstances;geometryBaselines=nextGeometry;baselineCoordinates=nextCoordinates;
         previousSceneInstances=scene->GetInstanceBuffer();previousSceneGeometry=scene->GetGeometryBuffer();previousInstanceCount=instanceCount;previousGeometryCount=geometryCount;
         metadataDirty=false;dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();++metadataUploads;
     }
@@ -357,7 +412,7 @@ public:
             }
             bindings.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_UAV(5,deepReceivers));
         }else if(deepReceivers){Retire(device,{deepReceivers});deepReceivers=nullptr;}
-        auto binding=device->createBindingSet(bindings,reconstruction.requested?reconstruction.layout:deep?deepLayout:layout);if(!binding)throw std::runtime_error("Could not bind native-lighting resources");
+        auto binding=dispatchBindings.Get(device,bindings,reconstruction.requested?reconstruction.layout:deep?deepLayout:layout);
         if(workStatisticsEnabled)command->clearBufferUInt(work,0);
         nvrhi::ComputeState state;state.pipeline=pipeline;state.bindings={binding,scene->GetDescriptorTable()};
         const auto dispatchScope=RtrGpuProfile::Begin(command,deep?"DiagnosticDecomposedLighting":"NativeLightingDispatch",-1);
@@ -374,7 +429,7 @@ public:
                     parameters=device->createBuffer(desc);if(!parameters)throw std::runtime_error("Could not allocate DEEP phase parameters");}
                 words[75]=flags|(phase<<8);command->writeBuffer(parameters,&constants,sizeof(constants));
                 bindings.bindings[0]=nvrhi::BindingSetItem::ConstantBuffer(0,parameters);
-                auto phaseBinding=device->createBindingSet(bindings,deepLayout);
+                auto phaseBinding=phaseBindings[phase-1].Get(device,bindings,deepLayout);
                 if(!phaseBinding)throw std::runtime_error("Could not bind DEEP phase parameters");
                 state.bindings={phaseBinding,scene->GetDescriptorTable()};
                 const char* name=phase==1?"DiagnosticReceiverTrace":phase==2?"DiagnosticDirectIncludingSourcesAndShadows":"DiagnosticGiIncludingSourcesAndShadows";

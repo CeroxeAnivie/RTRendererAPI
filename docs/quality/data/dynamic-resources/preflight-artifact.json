@@ -1,0 +1,27 @@
+{
+  "runtimeSha256": "ce2108e77764e0f1edf4efd518af76e146905972a4603e22214ea30f5e6b3978",
+  "nativeSha256": "527cd316bf77306caa2b1ca3a251fccd7ff172320ee4c8af523167a9a99f67b8",
+  "version": "7.1.3",
+  "artifacts": [
+    {
+      "module": "renderer-api",
+      "bytes": 785274,
+      "sha256": "9b9b8198ee45ca49bdacf106eebcdc203a81b75fedf8258106d6e255a5c8ce6d"
+    },
+    {
+      "module": "renderer-core",
+      "bytes": 14561563,
+      "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69"
+    },
+    {
+      "module": "renderer-nvidia",
+      "bytes": 145926,
+      "sha256": "d200610b71bf131bc6770331c1d740b111a5e303436e259bdd2f5da655ff37ec"
+    },
+    {
+      "module": "renderer-rtxpt",
+      "bytes": 763575168,
+      "sha256": "7b8ddfac570046917ab0f24ee9fe8b88176ba511f9b88522626bf77d632715c5"
+    }
+  ]
+}

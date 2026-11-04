@@ -1,0 +1,2 @@
+name, driver_version, utilization.gpu [%], memory.used [MiB], pstate, power.draw [W]
+NVIDIA GeForce RTX 5080 Laptop GPU, 616.92, 0 %, 148 MiB, P8, 8.46 W

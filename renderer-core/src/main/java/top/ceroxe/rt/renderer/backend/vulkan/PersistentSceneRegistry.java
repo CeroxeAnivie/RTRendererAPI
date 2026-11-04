@@ -243,7 +243,7 @@ final class PersistentSceneRegistry {
         transaction.upserts().materials().forEach(material -> validateMaterial(material, transaction, pending));
         transaction.upserts().meshes().forEach(mesh -> validateMesh(mesh, transaction, pending));
         var nextTextures = new Long2ObjectOpenHashMap<TextureAsset>();
-        for (TextureAsset texture : transaction.upserts().textures()) nextTextures.put(texture.id(), texture);
+        for (TextureAsset texture : transaction.upserts().textures()) {texture.validateReplacementOf(nextTextures.get(texture.id()));nextTextures.put(texture.id(), texture);}
         transaction.upserts().instances().forEach(instance -> validateInstance(instance, transaction, pending, nextTextures));
         // A mesh can be replaced while a retained boundary instance keeps its stable identity.
         if (!transaction.reset()) for (MeshAsset mesh : transaction.upserts().meshes()) {

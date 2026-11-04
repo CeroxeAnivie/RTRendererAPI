@@ -11,6 +11,8 @@ import java.util.Objects;
  * or the builder's immutable-direct methods to retain off-heap pixels without copying them.</p>
  */
 public final class TextureAsset {
+    private final Object generationIdentity=new Object();
+    private final Object patchBaseIdentity;
     private final long id;
     private final int width;
     private final int height;
@@ -51,6 +53,7 @@ public final class TextureAsset {
                     "RGBA8 byte count must be " + requiredBytes + " but was " + pixels.remaining()
             );
         }
+        this.patchBaseIdentity=null;
         this.id = id;
         this.width = width;
         this.height = height;
@@ -304,6 +307,36 @@ public final class TextureAsset {
      */
     public int mipLevelCount() {
         return mipLevelCount;
+    }
+
+    /**
+     * Copies this immutable generation and updates one mip rectangle. All sampling metadata
+     * and untouched mips are preserved. Upsert the result through SceneTransaction; providers
+     * reject it if the accepted base generation changed. Calls are owner-thread independent.
+     * @param patch copied rectangle for this texture identity
+     * @return a new immutable, generation-checked texture
+     */
+    public TextureAsset patched(TexturePatch patch){
+        Objects.requireNonNull(patch,"patch");
+        if(patch.textureId()!=id||(long)patch.x()+patch.width()>mipWidth(patch.mipLevel())
+                ||(long)patch.y()+patch.height()>mipHeight(patch.mipLevel()))throw new IllegalArgumentException("Texture patch identity or bounds mismatch");
+        byte[] next=new byte[rgba8.remaining()];rgba8.duplicate().get(next);var source=patch.rgba8();
+        int stride=Math.multiplyExact(mipWidth(patch.mipLevel()),4),offset=mipByteOffset(patch.mipLevel());
+        for(int row=0;row<patch.height();row++)source.get(row*patch.rowPitch(),next,offset+(patch.y()+row)*stride+patch.x()*4,patch.width()*4);
+        return new TextureAsset(this,ByteBuffer.wrap(next).asReadOnlyBuffer());
+    }
+    private TextureAsset(TextureAsset base,ByteBuffer pixels){
+        id=base.id;width=base.width;height=base.height;colorSpace=base.colorSpace;addressU=base.addressU;addressV=base.addressV;
+        filter=base.filter;mipLevelCount=base.mipLevelCount;rgba8=pixels;patchBaseIdentity=base.generationIdentity;
+    }
+
+    /**
+     * Provider validation before publishing a replacement. Full upserts have no base constraint.
+     * @param previous currently accepted generation, or null
+     * @throws IllegalArgumentException if a rectangle was based on a stale generation
+     */
+    public void validateReplacementOf(TextureAsset previous){
+        if(patchBaseIdentity!=null&&(previous==null||patchBaseIdentity!=previous.generationIdentity))throw new IllegalArgumentException("Texture patch base generation is stale");
     }
 
     /**

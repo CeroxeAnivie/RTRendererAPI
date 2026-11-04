@@ -65,6 +65,7 @@ Add-Source 'docs/ordinary-and-expert.md' 'docs/ordinary-and-expert.md'
 Add-Source 'docs/native-lighting-reconstruction.md' 'docs/native-lighting-reconstruction.md'
 Add-Source 'docs/consumer-agent-handoff.md' 'docs/consumer-agent-handoff.md'
 Add-Source 'docs/release-local-scene-preparation.md' 'docs/release-local-scene-preparation.md'
+Add-Source 'docs/release-dynamic-resources.md' 'docs/release-dynamic-resources.md'
 Add-Source 'docs/quality/local-scene-preparation.md' 'docs/quality/local-scene-preparation.md'
 foreach($file in Get-ChildItem -LiteralPath (Join-Path $repo 'docs/quality/data/local-scene-preparation') -File){
     Add-Source "docs/quality/data/local-scene-preparation/$($file.Name)" "docs/quality/data/local-scene-preparation/$($file.Name)"

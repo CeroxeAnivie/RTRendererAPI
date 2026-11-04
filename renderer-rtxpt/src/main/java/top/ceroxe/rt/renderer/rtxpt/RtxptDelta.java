@@ -10,10 +10,11 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptJson.object;
 final class RtxptDelta {
     record Work(long itemReads,long dependencyVisits,long inspectedMapNodes,int exportedModels) { }
     record Prepared(Path manifest,RtxptScene translated,Map<Long,Path> textureFiles,int meshes,int materials,int textures,
-                    boolean hasWork,boolean mappingsChanged,Path directory,List<Path> retiredTextures,Work work) { }
+                    boolean hasWork,boolean mappingsChanged,Path directory,List<Path> retiredTextures,Work work,
+                    java.nio.ByteBuffer memory,List<RtxptScene.Item> changedVariants) { }
     static boolean alphaEquivalent(TextureAsset a,TextureAsset b){
         if(a==b)return true;if(a==null||b==null)return false;
-        if(a.width()!=b.width()||a.height()!=b.height()||a.addressU()!=b.addressU()||a.addressV()!=b.addressV())return false;
+        if(a.width()!=b.width()||a.height()!=b.height()||a.mipLevelCount()!=b.mipLevelCount()||a.filter()!=b.filter()||a.addressU()!=b.addressU()||a.addressV()!=b.addressV())return false;
         var x=a.rgba8();var y=b.rgba8();for(int i=3;i<x.remaining();i+=4)if(x.get(i)!=y.get(i))return false;return true;
     }
     private static final class Selection {
@@ -58,7 +59,14 @@ final class RtxptDelta {
             for(int index=scene.instances.size();index<items.size();index++){var user=items.get(index);current.reads++;if(RtxptScene.meshName(user).equals(RtxptScene.meshName(item)))updates.put(user.name(),user);}
         }
         var variants=new LinkedHashMap<String,RtxptScene.Variant>();
-        for(var item:meshItems.values())for(long id:scene.materialIds(scene.meshes.get(item.mesh()))){current.dependencies++;var variant=new RtxptScene.Variant(id,item.boundary(),item.visibility());variants.put(variant.name(),variant);}
+        for(var item:meshItems.values()){
+            var previousMesh=old.meshes.get(item.mesh());boolean resident=previousMesh!=null&&prior.contains(item);
+            var previousMaterials=resident?old.materialIds(previousMesh):Set.<Long>of();
+            for(long id:scene.materialIds(scene.meshes.get(item.mesh()))){current.dependencies++;
+                if(resident&&previousMaterials.contains(id)&&!changedMaterials.contains(id))continue;
+                var variant=new RtxptScene.Variant(id,item.boundary(),item.visibility());variants.put(variant.name(),variant);
+            }
+        }
         for(long id:changedMaterials){if(!scene.materials.containsKey(id))continue;
             for(long mesh:scene.meshesUsingMaterial(id)){current.dependencies++;
                 for(var item:current.variants(mesh)){var variant=new RtxptScene.Variant(id,item.boundary(),item.visibility());variants.put(variant.name(),variant);}
@@ -76,26 +84,18 @@ final class RtxptDelta {
                 current.dependencies++;if(id>=0)translated.textures.put(id,scene.textures.get(id));
             }
         }
-        boolean hasWork=!meshItems.isEmpty()||!variants.isEmpty()||!changes.removals().isEmpty()||!updates.isEmpty();
+        boolean hasWork=!meshItems.isEmpty()||!variants.isEmpty()||!changes.removals().isEmpty()||!updates.isEmpty()||!changedTextures.isEmpty();
         boolean mappingsChanged=!meshItems.isEmpty()||!old.sameRetainedStructure(scene)||!sameDynamicStructure(old,scene,previous,items);
         long dependencies=current.dependencies+prior.dependencies,reads=current.reads+prior.reads+changes.itemReads();
-        if(!hasWork)return new Prepared(null,translated,textureFiles,0,0,0,false,mappingsChanged,null,retired,new Work(reads,dependencies,nodes,0));
+        if(!hasWork)return new Prepared(null,translated,textureFiles,0,0,0,false,mappingsChanged,null,retired,new Work(reads,dependencies,nodes,0),null,List.of());
         var coverageChanged=new ArrayList<String>();
         for(var variant:variants.values()){
             var a=old.materials.get(variant.material());var b=scene.materials.get(variant.material());
             if(a==null||!alphaEquivalent(old.textures.get(a.baseColorTextureId()),scene.textures.get(b.baseColorTextureId())))coverageChanged.add(variant.name());
         }
         int writtenTextures=0;for(long id:translated.textures.keySet())if(textureFiles.get(id)==null)writtenTextures++;
-        Path directory=Files.createTempDirectory(parent,"delta-");
-        Path model=translated.exportModel(directory,new ArrayList<>(meshItems.values()),textureFiles,new ArrayList<>(variants.values()));
-        var nodeUpdates=new ArrayList<Object>();for(var item:updates.values()){
-            float[] transform=new float[12];item.transform().elements().get(transform);
-            nodeUpdates.add(object("name",item.name(),"mesh",RtxptScene.meshName(item),"transform",transform));
-        }
-        Path manifest=directory.resolve("delta.json");
-        Files.writeString(manifest,RtxptJson.encode(object("model",model.toAbsolutePath().toString().replace('\\','/'),
-            "removeNodes",changes.removals(),"nodes",nodeUpdates,"textures",writtenTextures,"coverageChangedMaterials",coverageChanged)));
-        return new Prepared(manifest,translated,textureFiles,meshItems.size(),variants.size(),writtenTextures,true,mappingsChanged,directory,retired,new Work(reads,dependencies,nodes,1));
+        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged);
+        return new Prepared(null,translated,textureFiles,meshItems.size(),variants.size(),changedTextures.size(),true,mappingsChanged,null,List.of(),new Work(reads,dependencies,nodes,0),memory,List.copyOf(meshItems.values()));
     }
     private static boolean sameDynamicStructure(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,List<RtxptScene.Item> items){
         int before=previous.size()-old.instances.size(),after=items.size()-scene.instances.size();if(before!=after)return false;

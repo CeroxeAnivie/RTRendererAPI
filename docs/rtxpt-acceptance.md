@@ -1,6 +1,6 @@
 # 实现与累计验收矩阵
 
-本表保留三份原需求的编号映射。当前开发批次为 7.1.2，H04 局部资源准备、命名和最终制品验收见[本批记录](release-local-scene-preparation.md)及[量化证据](quality/local-scene-preparation.md)；以下保留既有渲染验收结果。此前 7.1.1 新增 H01–H07、最终制品与逐项影响分析见 [修复验收记录](quality/lighting-repair-validation.md)。历史全量、失败补验、本批新覆盖和最终包复验分开累计；遵守不重跑已通过且未受影响项目、不运行 FG/MFG 的约束。`verifyApiClosure` 仍是从零执行完整验收的入口，本批不把累计结果称为一次全量全绿。
+本表保留三份原需求的编号映射。当前开发批次为 7.1.3，动态资源、属性增量和退休复用见[本批记录](release-dynamic-resources.md)及[量化证据](quality/dynamic-resources.md)；以下保留既有渲染验收结果。此前 7.1.1 新增 H01–H07、最终制品与逐项影响分析见 [修复验收记录](quality/lighting-repair-validation.md)。历史全量、失败补验、本批新覆盖和最终包复验分开累计；遵守不重跑已通过且未受影响项目、不运行 FG/MFG 的约束。`verifyApiClosure` 仍是从零执行完整验收的入口，本批不把累计结果称为一次全量全绿。
 
 宿主主表面模式复用有效 primary；独立原生模式使用自己的低分辨率 primary，不依赖宿主 G-buffer。底图增补输出 H×gain＋有限一跳 GI；主表面传输继续反射、折射和完整光照。两者共用常驻 RT 场景。原生 raw 报告 NONE，新 `openReconstructedNativeLighting` 默认对合法漫反射 GI 执行实际 RR，尺寸、guide 和归属见 [重建契约](native-lighting-reconstruction.md)。gain 不送入 RR，不声称各任意 AOV 均可执行 RR。
 

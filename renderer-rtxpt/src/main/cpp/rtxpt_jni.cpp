@@ -26,6 +26,7 @@
 #undef WinMain
 #include <Materials/MaterialsBaker.h>
 #include <OpacityMicroMap/OmmBaker.h>
+#include <SampleCommon/AccelerationStructureUtil.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include "rtxpt_shutdown.h"
@@ -46,9 +47,31 @@
 #include "rtxpt_host_augmentation.h"
 #include "rtxpt_gpu_profile.h"
 #include "rtxpt_instance_transform.h"
+#include "rtxpt_memory_resources.h"
 extern SampleUIData g_sampleUIData;
 
 namespace {
+void CheckRtrDevice(nvrhi::IDevice* device){
+        auto* nativeDevice=static_cast<ID3D12Device*>(device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device));
+        if(FAILED(nativeDevice->GetDeviceRemovedReason())){
+            Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData1> dred;
+            if(SUCCEEDED(nativeDevice->QueryInterface(IID_PPV_ARGS(&dred)))){
+                D3D12_DRED_PAGE_FAULT_OUTPUT1 fault{};
+                if(SUCCEEDED(dred->GetPageFaultAllocationOutput1(&fault))){
+                    std::fprintf(stderr,"DRED fault=%llx\n",fault.PageFaultVA);
+                    for(auto p=fault.pHeadExistingAllocationNode;p;p=p->pNext)std::fprintf(stderr,"DRED existing %s type=%u\n",p->ObjectNameA?p->ObjectNameA:"?",p->AllocationType);
+                    for(auto p=fault.pHeadRecentFreedAllocationNode;p;p=p->pNext)std::fprintf(stderr,"DRED freed %s type=%u\n",p->ObjectNameA?p->ObjectNameA:"?",p->AllocationType);
+                }
+                D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 output{};
+                if(SUCCEEDED(dred->GetAutoBreadcrumbsOutput1(&output)))for(auto p=output.pHeadAutoBreadcrumbNode;p;p=p->pNext){
+                    uint32_t last=p->pLastBreadcrumbValue?*p->pLastBreadcrumbValue:0;
+                    std::fprintf(stderr,"DRED command=%s last=%u count=%u\n",p->pCommandListDebugNameA?p->pCommandListDebugNameA:"?",last,p->BreadcrumbCount);
+                    for(uint32_t k=last>4?last-4:0;k<std::min(last+5,p->BreadcrumbCount);k++)std::fprintf(stderr,"DRED op[%u]=%u\n",k,p->pCommandHistory[k]);
+                }
+            }
+            throw std::runtime_error("D3D12 device removed before frame submission");
+        }
+}
 class HostPathTracer final : public AdvancedPathTracer {
     struct SceneLight { float4 positionType,directionRange,colorIntensity,coneShadow; };
     static_assert(sizeof(SceneLight)==64);
@@ -293,6 +316,7 @@ private:
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
     #include "rtxpt_retained_scene.inl"
+    #include "rtxpt_memory_resources.inl"
     int exactOpticalInterfaces=4;
     RtrPathQuality pathQuality;
     uint32_t HostRadianceCacheEntries() const override {return uint32_t(pathQuality.values[7]);}
@@ -665,6 +689,7 @@ struct Session {
     void beginGpuSample(uint32_t index) {
         currentGpuSample=nullptr;
         auto* device=app->HostDeviceManager()->GetDevice();
+        CheckRtrDevice(device);
         for(auto& sample:gpuSamples)if(sample.pending && device->pollTimerQuery(sample.query)) {
             double ns=device->getTimerQueryTime(sample.query)*1e9;
             ++gpuSampleCount;gpuAverageNs=gpuSampleCount==1?ns:gpuAverageNs*.9+ns*.1;
@@ -725,7 +750,11 @@ void indexNodes(Session& s) {
     auto graph = s.app->HostRenderPass()->GetScene()->GetSceneGraph();
     donut::engine::SceneGraphWalker w(graph->GetRootNode().get());
     while (w) { s.nodes.emplace(w->GetName(), w.Get()); w.Next(true); }
-    static_cast<HostPathTracer*>(s.app->HostRenderPass())->IndexRetainedResources();
+    auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());
+    host.memoryTextures.clear();host.spareMemoryTextures.clear();host.spareMemoryTextureBytes=0;
+    host.resourceRetirement.clear();host.resourceCommandPool.clear();
+    host.spareMeshBuffers.clear();host.spareMeshBlases.clear();host.spareMeshBufferBytes=host.spareMeshBlasBytes=0;
+    host.IndexRetainedResources();
 }
 std::mutex lifecycle;
 Session* active = nullptr; // Upstream globals have one process-wide owner.
@@ -802,8 +831,16 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
 #if defined(RTXPT_D3D_AGILITY_SDK_VERSION)
         configureAgility(std::filesystem::u8path(root));
 #endif
+        if(std::getenv("RTR_RTXPT_GPU_VALIDATION")){
+            Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings> settings;
+            if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&settings)))){
+                settings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+                settings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+            }
+        }
         std::vector<std::string> args {"RTRenderer-RTXPT", "--nonInteractive", "--scene", utf8(e, scene),
             "--width", std::to_string(width), "--height", std::to_string(height), "--overrideToRealtimeMode"};
+        if(const char* validation=std::getenv("RTR_RTXPT_GPU_VALIDATION");validation&&std::string(validation)=="1")args.emplace_back("--gpuValidation");
         // The pinned upstream RR async-prefix path repeatedly loses the device in this host.
         // Use its supported single-graphics-queue scheduler; SR/RR, SHaRC and FG stay enabled.
         // Keep an explicit diagnostic override for investigating upstream scheduling separately.
@@ -1034,6 +1071,7 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         return (s.externalPresentation?s.rendered:s.presented)>before ? 2 : 1;
     } catch (const std::exception& x) {
         // A readiness wait alone is not a GPU read. Restore publication if Render was never entered.
+        try{CheckRtrDevice(session(h).app->HostDeviceManager()->GetDevice());}catch(...){}
         try{static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->AbortHostRead();}catch(...){}
         fail(e,x);return 0;
     }
@@ -1252,12 +1290,42 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         std::vector<float2> values(size_t(count)/2);if(count)e->GetFloatArrayRegion(coordinates,0,count,reinterpret_cast<float*>(values.data()));if(e->ExceptionCheck())return;
         for(auto value:values)if(!std::isfinite(value.x)||!std::isfinite(value.y)||value.x<0||value.x>1||value.y<0||value.y>1)throw std::invalid_argument("Baseline coordinates must be in [0,1]");
         auto& host=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());bool found=false;auto& pass=host.nativeLighting;
-        auto slot=pass.geometrySlots.find(key);
-        if(slot!=pass.geometrySlots.end()&&!pass.metadataDirty){found=true;if(values.size()!=size_t(slot->second.triangles)*3)throw std::invalid_argument("Baseline layout mismatch");}
-        else for(const auto& mesh:host.GetScene()->GetSceneGraph()->GetMeshes())for(size_t i=0;i<mesh->geometries.size();i++)
-            if(mesh->name+":"+std::to_string(i)==key){found=true;if(values.size()!=mesh->geometries[i]->numIndices)throw std::invalid_argument("Baseline vertex count does not match resident geometry");}
-        if(!found)throw std::invalid_argument("Unknown native-lighting geometry: "+key);
+        if(values.size()!=host.ValidateGeometry(key))throw std::invalid_argument("Baseline layout mismatch");
         host.nativeLighting.meshBaselines[key]=std::move(values);host.nativeLighting.dirtyBaselines.insert(key);
+    }catch(const std::exception& x){fail(e,x);}
+}
+static thread_local std::unique_ptr<RtrDiagnostics::Scope> attributePreparationScope;
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticAttributesBegin(JNIEnv* e,jclass,jlong h){
+    try{session(h);if(RtrDiagnostics::level.load()!=0)attributePreparationScope=std::make_unique<RtrDiagnostics::Scope>(RtrDiagnostics::AttributePreparation);}catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticAttributesEnd(JNIEnv*,jclass){attributePreparationScope.reset();}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributeBatch(
+    JNIEnv* e,jclass,jlong h,jlong revision,jobjectArray names,jobjectArray baselines,jobjectArray colors){
+    try{RtrDiagnostics::Scope scope(RtrDiagnostics::AttributeValidation);
+        auto& host=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());auto& pass=host.nativeLighting;
+        if(revision<0||uint64_t(revision)<host.resourceRevision||!names||!baselines||!colors)throw std::invalid_argument("Stale attribute resource revision");
+        const auto count=e->GetArrayLength(names);
+        if(e->GetArrayLength(baselines)!=count||e->GetArrayLength(colors)!=count)throw std::invalid_argument("Attribute batch size mismatch");
+        struct Record{std::string key;std::vector<float2> baseline;std::vector<uint32_t> color;bool b=false,c=false;};
+        std::vector<Record> records;records.reserve(count);std::unordered_set<std::string> seen;
+        for(jsize i=0;i<count;i++){
+            auto name=static_cast<jstring>(e->GetObjectArrayElement(names,i));if(!name)throw std::invalid_argument("Missing geometry identity");
+            Record record;record.key=utf8(e,name);e->DeleteLocalRef(name);
+            if(!seen.insert(record.key).second)throw std::invalid_argument("Duplicate batch geometry");
+            const auto corners=host.ValidateGeometry(record.key);
+            auto b=static_cast<jfloatArray>(e->GetObjectArrayElement(baselines,i));auto c=static_cast<jintArray>(e->GetObjectArrayElement(colors,i));
+            if(b){record.b=true;if(uint64_t(e->GetArrayLength(b))!=uint64_t(corners)*2)throw std::invalid_argument("Baseline layout mismatch");
+                record.baseline.resize(corners);e->GetFloatArrayRegion(b,0,jsize(corners*2),reinterpret_cast<float*>(record.baseline.data()));e->DeleteLocalRef(b);
+                for(auto value:record.baseline)if(!std::isfinite(value.x)||!std::isfinite(value.y)||value.x<0||value.x>1||value.y<0||value.y>1)throw std::invalid_argument("Invalid baseline value");}
+            if(c){record.c=true;if(uint32_t(e->GetArrayLength(c))!=corners)throw std::invalid_argument("Color layout mismatch");
+                record.color.resize(corners);e->GetIntArrayRegion(c,0,jsize(corners),reinterpret_cast<jint*>(record.color.data()));e->DeleteLocalRef(c);}
+            if(e->ExceptionCheck())return;records.push_back(std::move(record));
+        }
+        // Validation covers the entire batch before any accepted attribute is replaced.
+        for(auto& r:records){if(r.b){pass.meshBaselines[r.key]=std::move(r.baseline);pass.dirtyBaselines.insert(r.key);}
+            if(r.c){bool alpha=std::any_of(r.color.begin(),r.color.end(),[](uint32_t v){return (v>>24)!=255;});
+                pass.meshColors[r.key]=std::move(r.color);pass.dirtyColors.insert(r.key);if(alpha)pass.alphaMeshes.insert(r.key);else pass.alphaMeshes.erase(r.key);}}
+        if(RtrDiagnostics::level.load()!=0)++host.dynamicWork[4];
     }catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributes(
@@ -1294,10 +1362,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     try{if(!name||!colors)throw std::invalid_argument("Missing native vertex colors");auto key=utf8(e,name);auto count=e->GetArrayLength(colors);
         if(count%3!=0)throw std::invalid_argument("Vertex colors require three RGBA8 values per triangle");
         auto& host=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());auto& pass=host.nativeLighting;
-        bool found=false;auto slot=pass.geometrySlots.find(key);
-        if(slot!=pass.geometrySlots.end()&&!pass.metadataDirty){found=true;if(size_t(count)!=size_t(slot->second.triangles)*3)throw std::invalid_argument("Vertex color layout mismatch");}
-        else for(const auto& mesh:host.GetScene()->GetSceneGraph()->GetMeshes())for(size_t i=0;i<mesh->geometries.size();i++)if(mesh->name+":"+std::to_string(i)==key){found=true;if(uint32_t(count)!=mesh->geometries[i]->numIndices)throw std::invalid_argument("Vertex color layout mismatch");}
-        if(!found)throw std::invalid_argument("Unknown native vertex color geometry");
+        if(uint32_t(count)!=host.ValidateGeometry(key))throw std::invalid_argument("Vertex color layout mismatch");
         std::vector<uint32_t> values(count);if(count)e->GetIntArrayRegion(colors,0,count,reinterpret_cast<jint*>(values.data()));if(e->ExceptionCheck())return;
         bool alpha=std::any_of(values.begin(),values.end(),[](uint32_t value){return (value>>24)!=255;});
         pass.meshColors[key]=std::move(values);pass.dirtyColors.insert(key);if(alpha)pass.alphaMeshes.insert(key);else pass.alphaMeshes.erase(key);
@@ -1305,6 +1370,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingClearAttributes(JNIEnv* e,jclass,jlong h){
     try{auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;
+        if(RtrDiagnostics::level.load()!=0)++static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->dynamicWork[15];
         pass.instanceAttributes.clear();pass.meshBaselines.clear();pass.meshColors.clear();pass.alphaMeshes.clear();pass.dirtyInstances.clear();pass.dirtyBaselines.clear();pass.dirtyColors.clear();pass.metadataDirty=true;pass.specialRoleCount=0;
     }catch(const std::exception& x){fail(e,x);}
 }
@@ -1509,6 +1575,28 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
     try{auto* p=static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
         auto t=p->ResourceTelemetry();
         auto result=e->NewLongArray(jsize(t.size()));if(result)e->SetLongArrayRegion(result,0,jsize(t.size()),t.data());return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesMemory(
+    JNIEnv* e,jclass,jlong h,jlong revision,jobject packet){
+    try{RtrDiagnostics::Scope scope(RtrDiagnostics::Resources);auto& s=session(h);
+        auto data=e->GetDirectBufferAddress(packet);auto size=e->GetDirectBufferCapacity(packet);
+        if(!data||size<=0||size>512LL*1024*1024||revision<0)throw std::invalid_argument("Invalid resource packet");
+        static_cast<HostPathTracer*>(s.app->HostRenderPass())->ApplyMemoryResources(data,size,uint64_t(revision),s.nodes);
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesCanUpdate(JNIEnv* e,jclass,jlong h){
+    try{auto& p=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
+        p.PollResourceRetirement();
+        p.nativeLighting.PollRetired(p.GetDevice());
+        return p.resourceRetirement.size()<16&&p.nativeLighting.retired.size()<32;
+    }catch(const std::exception& x){fail(e,x);return false;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_dynamicResourceStatistics(JNIEnv* e,jclass,jlong h){
+    try{auto& p=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
+        if(RtrDiagnostics::level.load()!=0){p.dynamicWork[16]=p.nativeLighting.attributeMigrationBytes;p.dynamicWork[17]=p.nativeLighting.attributeTableVisits;}
+        auto result=e->NewLongArray(jsize(p.dynamicWork.size()));
+        if(result)e->SetLongArrayRegion(result,0,jsize(p.dynamicWork.size()),reinterpret_cast<const jlong*>(p.dynamicWork.data()));return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_snapshotMaterials(

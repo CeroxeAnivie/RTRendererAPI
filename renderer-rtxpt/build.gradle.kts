@@ -90,7 +90,7 @@ tasks.register<JavaExec>("rtxptRetainedLightingRepairNativeSelfTest") {
     systemProperty("top.ceroxe.rt.rtxpt.testOutput",rootProject.file("build/reports/retained-lighting-repairs").absolutePath)
 }
 
-listOf("RtxptLocalPreparationSelfTest", "RtxptLocalResourceNativeSelfTest", "RtxptMixedResourceNativeSelfTest", "RtxptLightingAttributeNativeSelfTest", "RtxptRetainedTransactionBenchmark", "RtxptRetainedDependencySelfTest", "GlGuidedLightingComposerSelfTest",
+listOf("RtxptTexturePatchNativeSelfTest", "RtxptDynamicResourcesNativeSelfTest", "RtxptDynamicResourcesSelfTest", "RtxptLocalPreparationSelfTest", "RtxptLocalResourceNativeSelfTest", "RtxptMixedResourceNativeSelfTest", "RtxptLightingAttributeNativeSelfTest", "RtxptRetainedTransactionBenchmark", "RtxptRetainedDependencySelfTest", "GlGuidedLightingComposerSelfTest",
     "RtxptLightingGroupSpecializationNativeSelfTest", "RtxptWindowResponsivenessNativeSelfTest", "RtxptLightingResourceMatrixNativeSelfTest",
     "RtxptLightingPressureNativeSelfTest", "RtxptLightingDiagnosticsCostBenchmark", "RtxptLightingInstrumentationNativeSelfTest",
     "RtxptLightingLifecycleNativeSelfTest").forEach { name ->
@@ -443,6 +443,9 @@ val runtimeDigest = tasks.register("hashRtxptRuntime") {
 }
 tasks.named<Jar>("jar") {
     dependsOn(runtimeDigest)
+    // The runtime is already compressed. Storing the outer JAR avoids a
+    // second expensive compression pass over its large ZIP payload.
+    entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
     from("NOTICE-RTXPT.txt") { into("META-INF") }
     from(runtimeArchive.flatMap { it.archiveFile }) { into("META-INF/native/windows-x86_64") }
     from(layout.buildDirectory.file("native-bundle/rtxpt-runtime.sha256")) { into("META-INF/native/windows-x86_64") }
