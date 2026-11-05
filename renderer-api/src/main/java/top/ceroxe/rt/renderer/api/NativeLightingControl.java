@@ -16,7 +16,8 @@ public interface NativeLightingControl {
     void lightingWorkStatisticsEnabled(boolean enabled);
     record WorkStatistics(boolean available,long sequence,long sceneRevision,long primaryRays,long receivers,long shadowRays,long bounceRays,long sourceNodes,long sourceCandidates) { }
     WorkStatistics lightingWorkStatistics();
-    /** Requested counters are suppressed while the unified diagnostic level is OFF.
+    /** Requested RTXPT ray counters run only at the unified DEEP diagnostic level;
+     * OFF and SUMMARY suppress new ray instrumentation.
      * Pending samples may drain; cumulative copy/query/poll counts then stop. */
     record StatisticsCollection(boolean requested,boolean effective,long pending,long copies,long queries,long polls) { }
     default StatisticsCollection lightingStatisticsCollection(){return new StatisticsCollection(false,false,0,0,0,0);}

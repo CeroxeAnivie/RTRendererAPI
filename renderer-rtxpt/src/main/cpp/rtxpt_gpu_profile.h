@@ -18,7 +18,7 @@
 namespace RtrGpuProfile {
 constexpr uint32_t SlotCount=8, ZoneCount=512, NameCount=256;
 struct Token { int queue=-1; uint32_t slot=0, zone=0; };
-struct Event { uint32_t name=0; int parent=-1; bool ended=false; };
+struct Event { uint32_t name=0; int parent=-1; bool ended=false; uint64_t mode=0,resource=0,generation=0,reason=0; };
 struct Slot {
     std::array<Event,ZoneCount> events{};
     uint32_t count=0;
@@ -71,11 +71,11 @@ inline void Collect(Queue& q,int queueIndex) {
             if(!s.events[i].ended || ticks[i*2+1]<ticks[i*2]) {++state->dropped; continue;}
             const auto& e=s.events[i];
             auto& line=state->completed[state->completedCount%state->completed.size()];
-            std::snprintf(line.data(),line.size(),"%llu,%s,%u,%d,%s,%.9f,%llu,%llu,%llu,%llu,%llu\n",
+            std::snprintf(line.data(),line.size(),"%llu,%s,%u,%d,%s,%.9f,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
                 static_cast<unsigned long long>(s.frame),queueIndex==0?"graphics":"compute",i,e.parent,
                 state->names[e.name].data(),double(ticks[i*2+1]-ticks[i*2])*1000.0/double(q.frequency),
                 static_cast<unsigned long long>(ticks[i*2]),static_cast<unsigned long long>(ticks[i*2+1]),
-                static_cast<unsigned long long>(q.frequency),static_cast<unsigned long long>(s.sequence),static_cast<unsigned long long>(s.revision));
+                static_cast<unsigned long long>(q.frequency),static_cast<unsigned long long>(s.sequence),static_cast<unsigned long long>(s.revision),static_cast<unsigned long long>(e.mode),static_cast<unsigned long long>(e.resource),static_cast<unsigned long long>(e.generation),static_cast<unsigned long long>(e.reason));
             ++state->completedCount;if(state->completedCount>state->completed.size())++state->overwritten;
             if(state->output)state->output->Write(line.data());
         }
@@ -114,13 +114,13 @@ inline void Init(nvrhi::IDevice* device,bool explicitEnable=false) {
     if(path&&*path)state->output=std::make_unique<RtrAsyncOutput>(path);
     state->stride=EnvNumber("RTR_RTXPT_GPU_PROFILE_STRIDE",explicitEnable?1:16);
     state->warmup=explicitEnable?0:EnvNumber("RTR_RTXPT_GPU_PROFILE_WARMUP",240);
-    if(state->output)state->output->Write("frame,queue,event,parent,name,inclusive_ms,begin_tick,end_tick,frequency,sequence,revision\n");
+    if(state->output)state->output->Write("frame,queue,event,parent,name,inclusive_ms,begin_tick,end_tick,frequency,sequence,revision,mode,resource,generation,reason\n");
     if(!InitQueue(state->queues[0],device,nvrhi::CommandQueue::Graphics)
         || !InitQueue(state->queues[1],device,nvrhi::CommandQueue::Compute)) {
         state.reset();
     }
 }
-inline Token Begin(nvrhi::ICommandList* list,const char* name,int parent) {
+inline Token Begin(nvrhi::ICommandList* list,const char* name,int parent,uint64_t resource=0,uint64_t generation=0,uint64_t reason=0) {
     if(!state || !state->enabled || state->frame<state->warmup || (state->frame-state->warmup)%state->stride) return {};
     const auto type=list->getDesc().queueType;
     const int qi=type==nvrhi::CommandQueue::Graphics?0:type==nvrhi::CommandQueue::Compute?1:-1;
@@ -142,7 +142,7 @@ inline Token Begin(nvrhi::ICommandList* list,const char* name,int parent) {
         strcpy_s(state->names[ni].data(),state->names[ni].size(),name); ++state->namesUsed;
     }
     auto& s=q.slots[q.active]; const uint32_t i=s.count++;
-    s.events[i]={ni,parent,false};
+    s.events[i]={ni,parent,false,RtrDiagnostics::level.load(),resource,generation,reason};
     nativeList->EndQuery(q.heap,D3D12_QUERY_TYPE_TIMESTAMP,(uint32_t(q.active)*ZoneCount+i)*2);
     return {qi,uint32_t(q.active),i};
 }

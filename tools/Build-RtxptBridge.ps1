@@ -34,6 +34,18 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$maskedAlphaPatch=Join-Path $PSScriptRoot 'patches/rtxpt-masked-alpha.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $maskedAlphaPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $maskedAlphaPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT masked-alpha correction could not be removed'}
+}
+$sceneTablesPatch=Join-Path $PSScriptRoot 'patches/rtxpt-scene-tables.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $sceneTablesPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $sceneTablesPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT scene-table overlay could not be removed'}
+}
 $highFrameratePatch=Join-Path $PSScriptRoot 'patches/rtxpt-high-framerate-resources.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $highFrameratePatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -1624,6 +1636,21 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT dynamic-resources overlay failed'}
 if($LASTEXITCODE -ne 0){throw 'RTXPT high-framerate resource overlay does not match the verified base'}
 & git -C $sdk apply --ignore-space-change $highFrameratePatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT high-framerate resource overlay failed'}
+& git -C $sdk apply --check --ignore-space-change $sceneTablesPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT scene-table overlay does not match the verified base'}
+& git -C $sdk apply --ignore-space-change $sceneTablesPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT scene-table overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $maskedAlphaPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT masked-alpha correction does not match its base'}
+& git -C $sdk apply --ignore-space-change $maskedAlphaPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT masked-alpha correction failed'}
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-device.cpp' "    void Device::runGarbageCollection()`r`n    {" @'
+    void Device::runGarbageCollection()
+    {
+        // RTR failed devices cannot provide completion evidence. Leave queued
+        // objects for device teardown instead of throwing from app destruction.
+        if(RtrDeviceRemoved(m_Context.device))return;
+'@ 'RTR failed devices cannot provide completion evidence'
 
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostSurface.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/RtrHostSurface.hlsli'),$true)
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrHostAov.hlsli'),(Join-Path $sdk 'Rtxpt/Shaders/PathTracer/RtrHostAov.hlsli'),$true)

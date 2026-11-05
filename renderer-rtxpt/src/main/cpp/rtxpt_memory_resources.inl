@@ -3,7 +3,7 @@ struct MemoryTexture {
     std::vector<uint8_t> pixels;
     std::shared_ptr<donut::engine::LoadedTexture> loaded;
     uint64_t generation=0;uint32_t patchMip=0,patchX=0,patchY=0,patchWidth=0,patchHeight=0;
-    bool patch=false,patchChanged=false,hasAlpha=false;
+    bool patch=false,patchChanged=false,hasAlpha=false;uint64_t alphaPixels=0;
     bool sameLayout(const MemoryTexture& b)const{return width==b.width&&height==b.height&&mips==b.mips&&color==b.color&&u==b.u&&v==b.v&&filter==b.filter;}
 };
 std::unordered_map<int64_t,MemoryTexture> memoryTextures;
@@ -22,6 +22,7 @@ nvrhi::TextureHandle PatchStaging(const nvrhi::TextureDesc& desc){
     texturePatchStaging.push_back({texture,{},{},bytes,true});texturePatchStagingBytes+=bytes;return texture;
 }
 size_t spareMemoryTextureBytes=0;
+std::vector<uint8_t> meshUploadScratch;
 void UploadMemoryMesh(const ResidentMesh& mesh,nvrhi::ICommandList* command){
     static_cast<MeshInfoEx*>(mesh.get())->HostIndices=std::make_shared<const std::vector<uint32_t>>(mesh->buffers->indexData);
     static_cast<MeshInfoEx*>(mesh.get())->HostDynamicCoverage=true;
@@ -36,12 +37,13 @@ void UploadMemoryMesh(const ResidentMesh& mesh,nvrhi::ICommandList* command){
     range(VertexAttribute::TexCoord1,b.texcoord1Data.size()*sizeof(float2));
     uint64_t indexBytes=b.indexData.size()*4;
     for(auto i=spareMeshBuffers.begin();i!=spareMeshBuffers.end();++i)
-        if(i->buffers->vertexBuffer->getDesc().byteSize==vertexBytes&&i->buffers->indexBuffer->getDesc().byteSize==indexBytes){
-            b.vertexBuffer=i->buffers->vertexBuffer;b.indexBuffer=i->buffers->indexBuffer;
-            b.vertexBufferDescriptor=i->buffers->vertexBufferDescriptor;b.indexBufferDescriptor=i->buffers->indexBufferDescriptor;
+        if(i->vertex->getDesc().byteSize==vertexBytes&&i->index->getDesc().byteSize==indexBytes){
+            b.vertexBuffer=i->vertex;b.indexBuffer=i->index;
+            b.vertexBufferDescriptor=i->vertexDescriptor;b.indexBufferDescriptor=i->indexDescriptor;
             spareMeshBufferBytes-=i->bytes;spareMeshBuffers.erase(i);break;
         }
     if(!b.vertexBuffer){
+        RtrDiagnostics::Scope allocation(RtrDiagnostics::BufferAllocate,2,0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),1,vertexBytes+indexBytes);
         nvrhi::BufferDesc desc;desc.byteSize=vertexBytes;desc.debugName="Retained mutable vertices";
         desc.isVertexBuffer=true;desc.canHaveTypedViews=true;desc.canHaveRawViews=true;desc.isAccelStructBuildInput=true;
         desc.initialState=nvrhi::ResourceStates::VertexBuffer|nvrhi::ResourceStates::ShaderResource|nvrhi::ResourceStates::AccelStructBuildInput;desc.keepInitialState=true;
@@ -50,13 +52,19 @@ void UploadMemoryMesh(const ResidentMesh& mesh,nvrhi::ICommandList* command){
         desc.initialState=nvrhi::ResourceStates::IndexBuffer|nvrhi::ResourceStates::ShaderResource|nvrhi::ResourceStates::AccelStructBuildInput;
         b.indexBuffer=GetDevice()->createBuffer(desc);
         if(!b.vertexBuffer||!b.indexBuffer)throw std::runtime_error("Dynamic mesh buffer allocation failed");
+        RtrDiagnostics::Scope descriptors(RtrDiagnostics::DescriptorAllocate,2,0,1,0,RtrDiagnostics::Identity(mesh->name));
         b.vertexBufferDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,b.vertexBuffer)));
         b.indexBufferDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,b.indexBuffer)));
     }
-    std::vector<uint8_t> packed(vertexBytes);
+    // Owner-thread staging capacity is reused across meshes and transactions.
+    // writeBuffer copies into the command list's own retained upload chunks.
+    RtrDiagnostics::Scope packScope(RtrDiagnostics::PayloadPack,b.positionData.size(),0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes);
+    std::vector<uint8_t> oversized;
+    auto& packed=vertexBytes<=64*1024*1024?meshUploadScratch:oversized;packed.resize(vertexBytes);
     auto pack=[&](VertexAttribute attribute,const auto& data){std::memcpy(packed.data()+b.getVertexBufferRange(attribute).byteOffset,data.data(),data.size()*sizeof(data[0]));};
     pack(VertexAttribute::Position,b.positionData);pack(VertexAttribute::Normal,b.normalData);pack(VertexAttribute::Tangent,b.tangentData);pack(VertexAttribute::TexCoord1,b.texcoord1Data);
-    command->writeBuffer(b.vertexBuffer,packed.data(),packed.size());command->writeBuffer(b.indexBuffer,b.indexData.data(),indexBytes);
+    {RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,2,0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes+indexBytes);
+        command->writeBuffer(b.vertexBuffer,packed.data(),packed.size());command->writeBuffer(b.indexBuffer,b.indexData.data(),indexBytes);}
     std::vector<float3>().swap(b.positionData);std::vector<float2>().swap(b.texcoord1Data);
     std::vector<uint32_t>().swap(b.normalData);std::vector<uint32_t>().swap(b.tangentData);std::vector<uint32_t>().swap(b.indexData);
 }
@@ -80,16 +88,18 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
             const uint32_t w=std::max(1u,t.width>>t.patchMip),h=std::max(1u,t.height>>t.patchMip);
             if(uint64_t(t.patchX)+t.patchWidth>w||uint64_t(t.patchY)+t.patchHeight>h||uint64_t(pitch)<uint64_t(t.patchWidth)*4
                 ||uint64_t(pitch)*(t.patchHeight-1)+uint64_t(t.patchWidth)*4!=pixels.size())throw std::invalid_argument("Invalid texture patch range");
-            t.pixels=old->second.pixels;size_t offset=0;for(uint32_t mip=0;mip<t.patchMip;++mip)offset+=size_t(std::max(1u,t.width>>mip))*std::max(1u,t.height>>mip)*4;
+            {RtrDiagnostics::Scope copy(RtrDiagnostics::PayloadPack,1,0,1,0,uint64_t(id),t.generation,RtrDiagnostics::Texture|RtrDiagnostics::IndexMigration,old->second.pixels.size());t.pixels=old->second.pixels;}t.alphaPixels=old->second.alphaPixels;size_t offset=0;for(uint32_t mip=0;mip<t.patchMip;++mip)offset+=size_t(std::max(1u,t.width>>mip))*std::max(1u,t.height>>mip)*4;
             for(uint32_t row=0;row<t.patchHeight;++row){auto* target=t.pixels.data()+offset+(size_t(t.patchY+row)*w+t.patchX)*4;
                 t.patchChanged|=std::memcmp(target,pixels.data()+size_t(row)*pitch,size_t(t.patchWidth)*4)!=0;
+                for(uint32_t x=0;x<t.patchWidth;++x){if(target[x*4+3]!=255)--t.alphaPixels;if(pixels[size_t(row)*pitch+x*4+3]!=255)++t.alphaPixels;}
                 std::memcpy(target,pixels.data()+size_t(row)*pitch,size_t(t.patchWidth)*4);}
         }
         uint64_t required=0;uint32_t w=t.width,h=t.height;
         if(id<0||!w||!h||w>16384||h>16384||!t.mips||t.mips>15||t.color>1||t.u>1||t.v>1||t.filter>1)throw std::invalid_argument("Invalid texture metadata");
         for(uint32_t mip=0;mip<t.mips;mip++){required+=uint64_t(w)*h*4;w=std::max(1u,w/2);h=std::max(1u,h/2);}
         if(required!=t.pixels.size())throw std::invalid_argument("Invalid texture data");
-        for(size_t a=3;a<t.pixels.size();a+=4)if(t.pixels[a]!=255){t.hasAlpha=true;break;}
+        if(!t.patch)for(size_t a=3;a<t.pixels.size();a+=4)t.alphaPixels+=t.pixels[a]!=255;
+        t.hasAlpha=t.alphaPixels!=0;
         if(!textures.emplace(id,std::move(t)).second)throw std::invalid_argument("Duplicate texture identity");
     }
     donut::engine::SceneImportResult imported;imported.rootNode=std::make_shared<donut::engine::SceneGraphNode>();
@@ -157,6 +167,29 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
         auto values=r.floats();if(values.size()!=12)throw std::invalid_argument("Transform requires twelve floats");for(auto v:values)node["transform"].append(v);json["nodes"].append(node);}
     n=r.count();for(uint32_t i=0;i<n;i++)json["coverageChangedMaterials"].append(r.text());
     std::vector<int64_t> removedTextures;n=r.count();for(uint32_t i=0;i<n;i++){auto id=r.value<int64_t>();if(textures.count(id))throw std::invalid_argument("Texture upsert/remove conflict");removedTextures.push_back(id);}r.finish();
+    resourceChangeReasons.clear();uint64_t plannedBytes=0,plannedTriangles=0;
+    for(auto& mesh:newMeshes){
+        auto old=residentMeshes.find(mesh->name);uint64_t reason=RtrDiagnostics::Inflow;
+        if(old!=residentMeshes.end()){
+            auto* prior=static_cast<MeshInfoEx*>(old->second.get());
+            bool same=prior->geometries.size()==mesh->geometries.size()&&prior->HostIndices&&*prior->HostIndices==mesh->buffers->indexData;
+            if(same)for(size_t g=0;g<mesh->geometries.size();++g){auto a=prior->geometries[g],b=mesh->geometries[g];
+                same&=a->numVertices==b->numVertices&&a->numIndices==b->numIndices&&a->material->name==b->material->name;}
+            reason=same?RtrDiagnostics::Deformation:RtrDiagnostics::Topology;
+            if(same&&prior->HostRefitFrames>=16)reason|=RtrDiagnostics::RefitRefresh;
+        }
+        resourceChangeReasons.emplace(mesh->name,reason);
+        uint64_t payload=uint64_t(mesh->totalVertices)*28+uint64_t(mesh->totalIndices)*4;
+        plannedBytes+=payload;plannedTriangles+=mesh->totalIndices/3;
+        RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,mesh->totalIndices/3,1,0,RtrDiagnostics::Identity(mesh->name),revision,reason,payload);
+    }
+    for(auto& [id,t]:textures){plannedBytes+=t.patch?uint64_t(t.patchWidth)*t.patchHeight*4:t.pixels.size();
+        RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,0,1,0,uint64_t(id),t.generation,RtrDiagnostics::Texture,t.patch?uint64_t(t.patchWidth)*t.patchHeight*4:t.pixels.size());}
+    for(auto& node:json["nodes"])if(!resourceChangeReasons.count(node["mesh"].asString())){
+        RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,0,1,0,RtrDiagnostics::Identity(node["name"].asString()),revision,RtrDiagnostics::Pose);}
+    for(auto& node:json["removeNodes"]){RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,0,1,0,RtrDiagnostics::Identity(node.asString()),revision,RtrDiagnostics::Removal);}
+    for(auto& m:imported.materials){RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,0,1,0,RtrDiagnostics::Identity(m->name),revision,RtrDiagnostics::Material|(coverageMaterials.count(m->name)?RtrDiagnostics::Coverage:0));}
+    {RtrDiagnostics::Scope budget(RtrDiagnostics::ResourcePlan,newMeshes.size(),plannedTriangles,1,0,0,revision,0,plannedBytes);}
     // All references and byte ranges are validated before staging or graph mutation.
     part.reset();part.emplace(RtrDiagnostics::Upload);
     auto command=ResourceCommand();command->open();
@@ -175,9 +208,10 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
         if(!loaded){
             loaded=std::make_shared<donut::engine::LoadedTexture>();loaded->isMemorySource=true;loaded->path="memory/texture-"+std::to_string(id);loaded->originalBitsPerPixel=32;
             loaded->loadOptions.sRGBMode=t.color?donut::engine::SRGBMode::ForceSRGB:donut::engine::SRGBMode::ForceLinear;
-            loaded->texture=GetDevice()->createTexture(desc);if(!loaded->texture)throw std::runtime_error("Texture allocation failed");
-            loaded->bindlessDescriptor=m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0,loaded->texture));
+            {RtrDiagnostics::Scope allocation(RtrDiagnostics::TextureAllocate,1,0,1,0,uint64_t(id),t.generation,RtrDiagnostics::Texture|RtrDiagnostics::CapacityGrowth,t.pixels.size());loaded->texture=GetDevice()->createTexture(desc);}if(!loaded->texture)throw std::runtime_error("Texture allocation failed");
+            {RtrDiagnostics::Scope descriptor(RtrDiagnostics::DescriptorAllocate,1,0,1,0,uint64_t(id),t.generation,RtrDiagnostics::Texture);loaded->bindlessDescriptor=m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0,loaded->texture));}
         }
+        RtrDiagnostics::Scope upload(RtrDiagnostics::TextureUpload,t.mips,0,1,0,uint64_t(id),t.generation,RtrDiagnostics::Texture,t.patch?uint64_t(t.patchWidth)*t.patchHeight*4:t.pixels.size());
         uint32_t w=t.width,h=t.height;size_t offset=0;
         for(uint32_t mip=0;mip<t.mips;mip++){
             size_t bytesInMip=size_t(w)*h*4;

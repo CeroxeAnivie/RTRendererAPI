@@ -19,6 +19,7 @@
 #include <fstream>
 #include <chrono>
 #include <donut/engine/TextureCache.h>
+#include <donut/engine/HostSceneTableState.h>
 #include <json/json.h>
 #include "StreamlineIntegration.h"
 #define WinMain RtrUnusedSampleEntryPoint
@@ -52,7 +53,6 @@ extern SampleUIData g_sampleUIData;
 
 namespace {
 void CheckRtrDevice(nvrhi::IDevice* device){
-        RtrRequireHealthy();
         auto* nativeDevice=static_cast<ID3D12Device*>(device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device));
         const auto reason=nativeDevice->GetDeviceRemovedReason();
         if(FAILED(reason)){
@@ -75,6 +75,7 @@ void CheckRtrDevice(nvrhi::IDevice* device){
             }
             RtrRequireHealthy();
         }
+        RtrRequireHealthy();
 }
 class HostPathTracer final : public AdvancedPathTracer {
     struct SceneLight { float4 positionType,directionRange,colorIntensity,coneShadow; };
@@ -700,24 +701,58 @@ struct Session {
     jobject compositor=nullptr;
     jlongArray compositorFrame=nullptr;
     jmethodID composeMethod=nullptr;
-    struct GpuSample { nvrhi::TimerQueryHandle query; bool pending=false; };
+    // Independent fixture timing is opt-in for benchmark processes, including OFF.
+    // It never enables product events, work atomics, GPU scope exports or JFR.
+    bool benchmarkTimings=[] {const char* v=std::getenv("RTR_RTXPT_BENCHMARK_TIMING");return v&&std::string(v)=="1";}();
+    struct GpuSample {nvrhi::TimerQueryHandle query,requestQuery;bool pending=false,requestStarted=false;uint64_t sequence=0,revision=0,mode=0;};
+    std::array<std::array<uint64_t,7>,8192> benchmarkSamples{};
+    uint64_t benchmarkWritten=0,benchmarkDropped=0;
     std::array<GpuSample,8> gpuSamples;
     nvrhi::CommandListHandle timerCommands;
     GpuSample* currentGpuSample=nullptr;
-    RtrGpuProfile::Token fullGpuScope;
+    GpuSample* currentRequestGpuSample=nullptr;
+    RtrGpuProfile::Token fullGpuScope,requestGpuScope;
     uint64_t gpuSampleCount=0,gpuMaxNs=0;
     double gpuAverageNs=0;
+    void collectGpuSamples(){
+        auto* device=app->HostDeviceManager()->GetDevice();CheckRtrDevice(device);
+        for(auto& sample:gpuSamples)if(sample.pending&&device->pollTimerQuery(sample.query)
+                &&(!sample.requestStarted||device->pollTimerQuery(sample.requestQuery))){
+            const double ns=device->getTimerQueryTime(sample.query)*1e9;
+            if(sample.mode!=0){++gpuSampleCount;gpuAverageNs=gpuSampleCount==1?ns:gpuAverageNs*.9+ns*.1;gpuMaxNs=std::max(gpuMaxNs,uint64_t(ns));}
+            if(benchmarkTimings){
+                const double requestNs=sample.requestStarted?device->getTimerQueryTime(sample.requestQuery)*1e9:ns;
+                benchmarkSamples[benchmarkWritten%benchmarkSamples.size()]={sample.sequence,sample.revision,uint64_t(requestNs),sample.mode,benchmarkWritten+1,uint64_t(ns),sample.requestStarted?1u:0u};++benchmarkWritten;
+            }
+            sample.pending=false;
+        }
+    }
+    void beginBenchmarkGpuRequest(uint64_t sequence,uint64_t revision){
+        if(!benchmarkTimings)throw std::logic_error("Independent benchmark timing was not enabled before creating the session");
+        if(currentRequestGpuSample||currentGpuSample)throw std::logic_error("A GPU request interval is already active");
+        auto* device=app->HostDeviceManager()->GetDevice();collectGpuSamples();
+        auto& sample=gpuSamples[rendered%gpuSamples.size()];
+        if(sample.pending){++benchmarkDropped;throw std::runtime_error("No free independent GPU request timer");}
+        sample.sequence=sequence;sample.revision=revision;sample.mode=RtrDiagnostics::level.load();sample.requestStarted=true;
+        if(!sample.requestQuery)sample.requestQuery=device->createTimerQuery();
+        if(!timerCommands)timerCommands=device->createCommandList();
+        device->resetTimerQuery(sample.requestQuery);
+        timerCommands->open();timerCommands->beginTimerQuery(sample.requestQuery);
+        requestGpuScope=RtrGpuProfile::Begin(timerCommands,"NativeLightingRequestFull",-1);timerCommands->close();
+        device->executeCommandList(timerCommands);currentRequestGpuSample=&sample;
+    }
     void beginGpuSample(uint32_t index) {
         currentGpuSample=nullptr;
         auto* device=app->HostDeviceManager()->GetDevice();
         CheckRtrDevice(device);
-        for(auto& sample:gpuSamples)if(sample.pending && device->pollTimerQuery(sample.query)) {
-            double ns=device->getTimerQueryTime(sample.query)*1e9;
-            ++gpuSampleCount;gpuAverageNs=gpuSampleCount==1?ns:gpuAverageNs*.9+ns*.1;
-            gpuMaxNs=std::max(gpuMaxNs,uint64_t(ns));sample.pending=false;
-        }
-        if(!gpuTimingsEnabled)return;
-        auto& sample=gpuSamples[index%gpuSamples.size()];if(sample.pending)return;
+        collectGpuSamples();
+        if(!gpuTimingsEnabled&&!benchmarkTimings)return;
+        auto& sample=currentRequestGpuSample?*currentRequestGpuSample:gpuSamples[index%gpuSamples.size()];
+        if(sample.pending){if(benchmarkTimings)++benchmarkDropped;return;}
+        if(currentRequestGpuSample&&(sample.sequence!=signalSequence||sample.revision!=signalRevision))
+            throw std::logic_error("GPU request timer identity changed before rendering");
+        if(!currentRequestGpuSample)sample.requestStarted=false;
+        sample.sequence=signalSequence;sample.revision=signalRevision;sample.mode=RtrDiagnostics::level.load();
         if(!sample.query)sample.query=device->createTimerQuery();
         if(!timerCommands)timerCommands=device->createCommandList();
         device->resetTimerQuery(sample.query);
@@ -727,9 +762,11 @@ struct Session {
     }
     void endGpuSample() {
         if(!currentGpuSample)return;
-        timerCommands->open();RtrGpuProfile::End(timerCommands,fullGpuScope);timerCommands->endTimerQuery(currentGpuSample->query);timerCommands->close();
+        timerCommands->open();RtrGpuProfile::End(timerCommands,fullGpuScope);timerCommands->endTimerQuery(currentGpuSample->query);
+        if(currentGpuSample->requestStarted){RtrGpuProfile::End(timerCommands,requestGpuScope);timerCommands->endTimerQuery(currentGpuSample->requestQuery);}
+        timerCommands->close();
         app->HostDeviceManager()->GetDevice()->executeCommandList(timerCommands);
-        currentGpuSample->pending=true;currentGpuSample=nullptr;
+        currentGpuSample->pending=true;currentGpuSample=nullptr;currentRequestGpuSample=nullptr;
     }
     std::unordered_map<std::string, donut::engine::SceneGraphNode*> nodes;
     void shutdown() {
@@ -754,7 +791,8 @@ struct Session {
             if(compositor)compositorEnv->DeleteGlobalRef(compositor);
             if(compositorFrame)compositorEnv->DeleteGlobalRef(compositorFrame);
             compositor=nullptr;compositorFrame=nullptr;composeMethod=nullptr;compositorEnv=nullptr;
-            for(auto& sample:gpuSamples)sample.query=nullptr;
+            for(auto& sample:gpuSamples){sample.query=nullptr;sample.requestQuery=nullptr;sample.pending=false;sample.requestStarted=false;}
+            currentGpuSample=nullptr;currentRequestGpuSample=nullptr;
             app->End();
             RtrHostResources::eventPump=nullptr;
         }
@@ -776,11 +814,13 @@ void indexNodes(Session& s) {
     while (w) { s.nodes.emplace(w->GetName(), w.Get()); w.Next(true); }
     auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());
     host.memoryTextures.clear();host.spareMemoryTextures.clear();host.spareMemoryTextureBytes=0;
-    host.resourceRetirement.clear();host.resourceCommandPool.clear();
+    host.resourceRetirement.clear();host.resourceCommandPool.clear();host.resourceQueryPool.clear();host.resourceBlasAllocationBytes.clear();host.meshUploadScratch.clear();
     host.spareMeshBuffers.clear();host.spareMeshBlases.clear();host.spareMeshBufferBytes=host.spareMeshBlasBytes=0;
+    host.spareResourceTlas={};host.spareResourceTlasBytes=0;host.resourceTlasAllocationBytes=0;host.resourceTlasAllocationIdentity=nullptr;
     host.IndexRetainedResources();
 }
 std::mutex lifecycle;
+bool diagnosticsPrepared=false;
 Session* active = nullptr; // Upstream globals have one process-wide owner.
 std::string utf8(JNIEnv* e, jstring s) {
     if (!s) throw std::invalid_argument("null string");
@@ -833,7 +873,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(
-    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jboolean gpuTimingsEnabled,jint maxFramesInFlight,jint workerThreads,jint shaderCompilerThreads,jobjectArray options,jintArray qualityIntegers,jfloatArray qualityConstants) {
+    JNIEnv* e, jclass, jstring runtime, jstring scene, jint width, jint height, jboolean externalPresentation, jboolean gpuTimingsEnabled,jint maxFramesInFlight,jint workerThreads,jint shaderCompilerThreads,jobjectArray options,jintArray qualityIntegers,jfloatArray qualityConstants,jint diagnosticLevel) {
     std::lock_guard lock(lifecycle);
     try {
         if (active) throw std::runtime_error("The upstream RTXPT core supports one resident session per process");
@@ -879,8 +919,12 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             args.push_back(utf8(e, s)); e->DeleteLocalRef(s);
         }
         std::vector<const char*> argv; for (const auto& a : args) argv.push_back(a.c_str());
-        RtrDiagnostics::Reset();RtrProtocolTrace::Reset();RtrDeviceFailure.store(0);
-        RtrMemoryDiagnostics::Configure(true);
+        if(diagnosticLevel<0||diagnosticLevel>2)throw std::invalid_argument("Invalid initial diagnostics");
+        if(!diagnosticsPrepared){RtrDiagnostics::Reset();RtrProtocolTrace::Reset();}
+        diagnosticsPrepared=false;RtrDiagnostics::Configure(unsigned(diagnosticLevel));RtrProtocolTrace::enabled.store(diagnosticLevel!=0);
+        RtrDeviceFailure.store(0);
+        RtrDiagnostics::Scope initialization(RtrDiagnostics::RuntimeInitialize);
+        RtrMemoryDiagnostics::Configure(diagnosticLevel!=0);
         auto s = std::make_unique<Session>();
         s->externalPresentation=externalPresentation;
         s->gpuTimingsEnabled=s->gpuTimingsAllowed=gpuTimingsEnabled;
@@ -893,7 +937,8 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         s->app->HostDeviceManager()->HostFixedWindowTitle=true;
         RtrHostResources::lastPollNanos=RtrHostResources::maximumPollIntervalNanos=0;
         RtrHostResources::eventPump=[] { RtrHostResources::NoteEventPoll();glfwPollEvents(); };
-        auto status = s->app->Init(static_cast<int>(argv.size()), argv.data());
+        auto status = [&]{RtrDiagnostics::Scope initialize(RtrDiagnostics::DeviceInitialize);
+            return s->app->Init(static_cast<int>(argv.size()), argv.data());}();
         if(RtrMemoryDiagnostics::Enabled() && status==SampleBaseApp::InitReturnCodes::Success)
             RtrMemoryDiagnostics::Checkpoint("create.initialized",static_cast<ID3D12Device*>(s->app->HostDeviceManager()->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)));
         if (status != SampleBaseApp::InitReturnCodes::Success)
@@ -905,7 +950,8 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         if(externalPresentation)glfwHideWindow(s->app->HostDeviceManager()->GetWindow());
         donut::app::StreamlineIntegration::Get().hostFrameGeneration={};
         if(!s->app->HostRenderPass()->GetScene()) throw std::runtime_error("RTXPT scene failed to load");
-        static_cast<HostPathTracer*>(s->app->HostRenderPass())->LoadSceneLighting(utf8(e,scene));
+        {RtrDiagnostics::Scope sceneInitialization(RtrDiagnostics::SceneInitialize);
+            static_cast<HostPathTracer*>(s->app->HostRenderPass())->LoadSceneLighting(utf8(e,scene));}
         auto& afterPresent=s->app->HostDeviceManager()->m_callbacks.afterPresent;
         auto upstreamAfterPresent=afterPresent;
         afterPresent = [ptr=s.get(),upstreamAfterPresent](auto& dm, uint32_t index) {
@@ -1425,7 +1471,7 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingWorkEnabled(JNIEnv* e,jclass,jlong h,jboolean enabled){
-    try{auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;pass.workStatisticsRequested=enabled;pass.workStatisticsEnabled=enabled&&pass.diagnosticsEnabled;}catch(const std::exception& x){fail(e,x);}
+    try{auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;pass.workStatisticsRequested=enabled;pass.workStatisticsEnabled=enabled&&pass.diagnosticsEnabled&&RtrDiagnostics::level.load()==2;}catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingUpdateStatistics(JNIEnv* e,jclass,jlong h){
     try{const auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;
@@ -1514,7 +1560,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     try{session(h).surfaceInputs.RequireReleased();}catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceWorkEnabled(JNIEnv* e,jclass,jlong h,jboolean enabled){
-    try{auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->hostSurface;pass.workStatisticsRequested=enabled;pass.workStatisticsEnabled=enabled&&pass.diagnosticsEnabled;}catch(const std::exception& x){fail(e,x);}
+    try{auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->hostSurface;pass.workStatisticsRequested=enabled;pass.workStatisticsEnabled=enabled&&pass.diagnosticsEnabled&&RtrDiagnostics::level.load()==2;}catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfaceWork(JNIEnv* e,jclass,jlong h){
     try{auto& s=session(h);auto& state=static_cast<HostPathTracer*>(s.app->HostRenderPass())->hostSurface;state.PollWork(s.app->HostDeviceManager()->GetDevice());
@@ -1609,13 +1655,30 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         static_cast<HostPathTracer*>(s.app->HostRenderPass())->ApplyMemoryResources(data,size,uint64_t(revision),s.nodes);
     }catch(const std::exception& x){fail(e,x);}
 }
+static jint ResourceAdmission(jlong h){
+    auto& p=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
+    {RtrDiagnostics::Scope observation(RtrDiagnostics::CompletionPoll);RtrRequireHealthy();CheckRtrDevice(p.GetDevice());}
+    p.PollResourceRetirement();p.nativeLighting.PollRetired(p.GetDevice());
+    if(p.resourceRetirement.size()>=16)return 1;
+    if(!p.nativeLighting.reclaimer->Available())return 2;
+    if(p.nativeLighting.retired.size()>=32)return 3;
+    return 0;
+}
+extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesAdmission(JNIEnv* e,jclass,jlong h){
+    try{return ResourceAdmission(h);}catch(const std::exception& x){fail(e,x);return -1;}
+}
 extern "C" JNIEXPORT jboolean JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesCanUpdate(JNIEnv* e,jclass,jlong h){
-    try{auto& p=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
-        RtrRequireHealthy();CheckRtrDevice(p.GetDevice());
-        p.PollResourceRetirement();
-        p.nativeLighting.PollRetired(p.GetDevice());
-        return p.resourceRetirement.size()<16&&p.nativeLighting.retired.size()<32&&p.nativeLighting.reclaimer->Available();
-    }catch(const std::exception& x){fail(e,x);return false;}
+    try{return ResourceAdmission(h)==0;}catch(const std::exception& x){fail(e,x);return false;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcePressure(JNIEnv* e,jclass,jlong h){
+    try{auto& p=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());auto& q=*p.nativeLighting.reclaimer;
+        uint64_t age=0;if(RtrDiagnostics::level.load()!=0&&!p.resourceRetirement.empty()){
+            const auto tick=p.resourceRetirement.front().createdNanos;if(tick)age=RtrDiagnostics::Now()-tick;
+        }
+        jlong values[]={jlong(p.resourceRetirement.size()),jlong(q.pending.load()),jlong(q.pendingBytes.load()),jlong(q.peakPending.load()),
+            jlong(q.peakBytes.load()),jlong(q.enqueueRejected.load()),jlong(p.spareMeshBufferBytes),jlong(p.spareMeshBlasBytes),jlong(q.OldestAge()),jlong(age),jlong(p.spareResourceTlasBytes)};
+        auto result=e->NewLongArray(11);if(result)e->SetLongArrayRegion(result,0,11,values);return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT jboolean JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_deviceRemoved(JNIEnv* e,jclass,jlong h){
     try{return RtrDeviceRemoved(static_cast<ID3D12Device*>(session(h).app->HostDeviceManager()->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)));}
@@ -1878,8 +1941,8 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     try {auto& s=session(h);if(level<0||level>2)throw std::invalid_argument("Diagnostic level must be 0..2");RtrDiagnostics::Configure(unsigned(level));RtrMemoryDiagnostics::Configure(level!=0);s.gpuTimingsEnabled=level!=0&&s.gpuTimingsAllowed;RtrGpuProfile::Configure(s.app->HostDeviceManager()->GetDevice(),unsigned(level),s.gpuTimingsAllowed);
         auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());host.nativeLighting.diagnosticsEnabled=host.hostSurface.diagnosticsEnabled=level!=0;
         RtrProtocolTrace::enabled.store(level!=0,std::memory_order_relaxed);
-        host.nativeLighting.workStatisticsEnabled=level!=0&&host.nativeLighting.workStatisticsRequested;
-        host.hostSurface.workStatisticsEnabled=level!=0&&host.hostSurface.workStatisticsRequested;}
+        host.nativeLighting.workStatisticsEnabled=level==2&&host.nativeLighting.workStatisticsRequested;
+        host.hostSurface.workStatisticsEnabled=level==2&&host.hostSurface.workStatisticsRequested;}
     catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticSnapshot(JNIEnv* e,jclass,jlong h) {
@@ -1889,7 +1952,7 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticMonitorToken(JNIEnv* e,jclass,jlong h) {
-    try {session(h);return jlong(RtrDiagnostics::MonitorToken());}catch(const std::exception& x){fail(e,x);return 0;}
+    try {if(h)session(h);else if(!diagnosticsPrepared)throw std::logic_error("Prepare diagnostics before observing initialization");return jlong(RtrDiagnostics::MonitorToken());}catch(const std::exception& x){fail(e,x);return 0;}
 }
 extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_protocolMonitorToken(JNIEnv* e,jclass,jlong h){try{session(h);return jlong(RtrProtocolTrace::Token());}catch(const std::exception& x){fail(e,x);return 0;}}
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_protocolMonitorSnapshot(JNIEnv* e,jclass,jlong token){
@@ -1904,4 +1967,43 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
     try {session(h);auto values=RtrGpuProfile::Snapshot();auto type=e->FindClass("java/lang/String");auto result=e->NewObjectArray(jsize(values.size()),type,nullptr);e->DeleteLocalRef(type);
         if(result)for(jsize i=0;i<jsize(values.size());++i){auto text=e->NewStringUTF(values[i].c_str());e->SetObjectArrayElement(result,i,text);e->DeleteLocalRef(text);}return result;}
     catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_prepareDiagnostics(JNIEnv* e,jclass,jint level){
+    try{std::lock_guard lock(lifecycle);
+        if(active)throw std::logic_error("A resident renderer already owns diagnostics");
+        if(level<0||level>2)throw std::invalid_argument("Invalid diagnostic level");
+        if(!diagnosticsPrepared){RtrDiagnostics::Reset();RtrProtocolTrace::Reset();diagnosticsPrepared=true;}
+        RtrDiagnostics::Configure(unsigned(level));RtrProtocolTrace::enabled.store(level!=0);
+    }catch(const std::exception& x){fail(e,x);}
+}
+
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_benchmarkGpuBegin(JNIEnv* e,jclass,jlong h,jlong sequence,jlong revision){
+    try{auto& s=session(h);RtrDiagnostics::Context(uint64_t(sequence),uint64_t(revision));s.beginBenchmarkGpuRequest(uint64_t(sequence),uint64_t(revision));}
+    catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingInputSnapshot(JNIEnv* e,jclass,jlong h){
+    try{const auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;
+        // Explicit test snapshot only; no per-frame recording or GPU readback.
+        std::array<uint32_t,116> bits{};
+        static_assert(sizeof(pass.constants)==80*sizeof(uint32_t)&&sizeof(pass.reconstruction.parameters)==36*sizeof(uint32_t));
+        std::memcpy(bits.data(),&pass.constants,sizeof(pass.constants));
+        std::memcpy(bits.data()+80,&pass.reconstruction.parameters,sizeof(pass.reconstruction.parameters));
+        std::array<jlong,116> values{};std::copy(bits.begin(),bits.end(),values.begin());
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),values.data());return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_sceneTableUploadStatistics(JNIEnv* e,jclass,jlong h){
+    try{auto values=session(h).app->HostRenderPass()->GetScene()->HostTableUploadStatistics();
+        std::array<jlong,8> words{};std::copy(values.begin(),values.end(),words.begin());
+        auto result=e->NewLongArray(jsize(words.size()));if(result)e->SetLongArrayRegion(result,0,jsize(words.size()),words.data());return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_benchmarkGpuSnapshot(JNIEnv* e,jclass,jlong h){
+    try{auto& s=session(h);if(!s.benchmarkTimings)throw std::logic_error("Independent benchmark timing was not enabled before creating the session");
+        s.collectGpuSamples();const uint64_t count=std::min<uint64_t>(s.benchmarkWritten,s.benchmarkSamples.size());
+        std::vector<jlong> values{jlong(s.benchmarkWritten-count),jlong(s.benchmarkDropped),jlong(count),7};values.reserve(4+count*7);
+        for(uint64_t i=s.benchmarkWritten-count;i<s.benchmarkWritten;++i){auto& row=s.benchmarkSamples[i%s.benchmarkSamples.size()];values.insert(values.end(),row.begin(),row.end());}
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),values.data());return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
 }

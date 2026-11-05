@@ -45,7 +45,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             throw new IllegalArgumentException("Combined host color requires native input extent; use independent modulation/GI for lower-resolution lighting");
         hostSurfaceAugmentation=value;
     }
-    private boolean preparingHostSurface,hostSurfaceWorkEnabled;
+    private boolean preparingHostSurface,hostSurfaceWorkEnabled,diagnosticPrepared;
     @Override public void hostSurfaceWorkStatisticsEnabled(boolean enabled){ready();hostSurfacePlan();hostSurfaceWorkEnabled=enabled;if(handle!=0)RtxptNative.hostSurfaceWorkEnabled(handle,enabled);}
     @Override public HostSurfaceControl.WorkStatistics hostSurfaceWorkStatistics(){ready();hostSurfacePlan();var n=handle==0?new long[9]:RtxptNative.hostSurfaceWork(handle);return new HostSurfaceControl.WorkStatistics(n[0]!=0,n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8]);}
     private long nextHostViewIdentity;
@@ -473,8 +473,10 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     }
     private long diagnosticClock(){return diagnosticLevel==RtxptDiagnostics.Level.OFF?0:System.nanoTime();}
     private long diagnosticElapsed(long start){return start==0?0:System.nanoTime()-start;}
-    @Override public RtxptDiagnostics.ProtocolMonitor protocolMonitor(){ready();if(handle==0)throw new IllegalStateException("Submit first");long token=RtxptNative.protocolMonitorToken(handle);return ()->RtxptDiagnostics.decodeProtocol(RtxptNative.protocolMonitorSnapshot(token));}
+    @Override public RtxptDiagnostics.ProtocolMonitor protocolMonitor(){ready();if(handle==0)throw new IllegalStateException("Submit first");return RtxptDiagnostics.protocolMonitor(RtxptNative.protocolMonitorToken(handle));}
     @Override public ResourceMaintenance resourceMaintenance(){ready();long[] n=handle==0?new long[7]:RtxptNative.resourceMaintenance(handle);return new ResourceMaintenance(n[0],n[1],n[2],n[3],n[4],n[5],n[6]);}
+    @Override public ResourcePressure resourcePressure(){ready();long[] n=handle==0?new long[11]:RtxptNative.resourcePressure(handle);
+        return new ResourcePressure(n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8],n[9],n[10]);}
     @Override public FrameSubmissionResult submit(RenderFrameRequest f){return submitFrame(f,false,diagnosticClock());}
     private FrameSubmissionResult submitFrame(RenderFrameRequest f,boolean admitted,long callBegin){
         ready();Objects.requireNonNull(f);
@@ -550,7 +552,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         if(handle==0){
             if(path==null)throw new IllegalStateException("Submit a populated scene");
             handle=RtxptNative.create(RtxptNative.runtime().toString(),path.toString(),f.width(),f.height(),externalPresentation,gpuTimingsEnabled,
-                maxFramesInFlight,resources.workerThreads(),resources.shaderCompilerThreads(),options.arguments(),options.qualityInts(),options.qualityFloats());
+                maxFramesInFlight,resources.workerThreads(),resources.shaderCompilerThreads(),options.arguments(),options.qualityInts(),options.qualityFloats(),diagnosticLevel.ordinal());
             RtxptNative.diagnosticLevel(handle,diagnosticLevel.ordinal());
             if(compositor!=null)RtxptNative.compositor(handle,compositor);
             if(title!=null)RtxptNative.title(handle,title);
@@ -646,6 +648,10 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         }finally{if(submitTracked)RtxptNative.diagnosticSubmitEnd(!submitAccepted);
             if(diagnosticLevel!=RtxptDiagnostics.Level.OFF){preparationSubmissions++;if(allocationStart>=0){long end=allocatedBytes();if(end>=allocationStart)preparationAllocatedBytes+=end-allocationStart;}}}
     }
+    long[] benchmarkGpuSnapshot(){ready();return RtxptNative.benchmarkGpuSnapshot(handle);}
+    long[] nativeLightingInputSnapshot(){ready();return RtxptNative.nativeLightingInputSnapshot(handle);}
+    long[] sceneTableUploadStatistics(){ready();return RtxptNative.sceneTableUploadStatistics(handle);}
+    void beginBenchmarkGpuRequest(RenderFrameRequest frame){ready();RtxptNative.benchmarkGpuBegin(handle,frame.sequence(),revision);}
     void resetWindowPollInterval(){ready();RtxptNative.resetWindowPollInterval(handle);}
     @Override public SubmitStages submitStages(){ready();var n=handle==0?new long[16]:RtxptNative.executionTelemetry(handle);return new SubmitStages(validationNs,translationNs,nativeResourceNs,lightingNs,retirementNs,n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[12],n[13],n[14],n[15]);}
     @Override public HistoryActions historyActions(){ready();var n=handle==0?new long[16]:RtxptNative.executionTelemetry(handle);return new HistoryActions(n[7],n[8],n[9],n[10],n[11]);}
@@ -842,11 +848,12 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     }
     @Override public boolean renderFrame(){ready();if(handle==0)throw new IllegalStateException("Submit a scene first");if(windowClosed)return false;
         long begin=diagnosticClock();int result=RtxptNative.frame(handle);frameNs+=diagnosticElapsed(begin);if(result==2){frames++;completed=submitted;}else if(result==0)windowClosed=true;return result!=0;}
-    @Override public void diagnosticLevel(RtxptDiagnostics.Level level){ready();diagnosticLevel=Objects.requireNonNull(level);if(handle!=0)RtxptNative.diagnosticLevel(handle,level.ordinal());}
+    @Override public void diagnosticLevel(RtxptDiagnostics.Level level){ready();diagnosticLevel=Objects.requireNonNull(level);if(handle!=0)RtxptNative.diagnosticLevel(handle,level.ordinal());else if(diagnosticPrepared)RtxptNative.prepareDiagnostics(level.ordinal());}
     @Override public RtxptDiagnostics.LightUpdates lightUpdates(){ready();return RtxptDiagnostics.decodeLights(handle==0?new long[16]:RtxptNative.lightUpdateTelemetry(handle));}
     @Override public RtxptDiagnostics.Snapshot diagnosticSnapshot(){ready();return handle==0?RtxptDiagnostics.decode(new long[]{2,12,0,0,0,0,0}):RtxptDiagnostics.decode(RtxptNative.diagnosticSnapshot(handle));}
-    @Override public RtxptDiagnostics.Monitor diagnosticMonitor(){ready();if(handle==0)throw new IllegalStateException("Submit a frame before acquiring a diagnostic monitor");
-        long token=RtxptNative.diagnosticMonitorToken(handle);return ()->RtxptDiagnostics.decode(RtxptNative.diagnosticMonitorSnapshot(token));}
+    @Override public RtxptDiagnostics.Monitor diagnosticMonitor(){ready();
+        if(handle==0&&!diagnosticPrepared){RtxptNative.prepareDiagnostics(diagnosticLevel.ordinal());diagnosticPrepared=true;}
+        long token=RtxptNative.diagnosticMonitorToken(handle);return RtxptDiagnostics.monitor(token);}
     @Override public RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){ready();return RtxptDiagnostics.decodeGpu(handle==0?new String[]{"0,0,0,0,0"}:RtxptNative.diagnosticGpuSnapshot(handle));}
     @Override public void awaitIdle(){ready();if(handle!=0)RtxptNative.awaitIdle(handle);}
     @Override public void setOverlayText(String text){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.overlay(handle,Objects.requireNonNull(text));}
@@ -888,7 +895,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         boolean tracked=handle!=0&&!preparingHostSurface,delegated=false;
         if(tracked)RtxptNative.diagnosticSubmitBegin(handle,f.sequence(),revision,0);
         try {
-        if(handle!=0&&!RtxptNative.resourcesCanUpdate(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.SCENE_UPDATE_BACKLOG,"Resource generations await GPU completion; retry the same sequence after retirement");
+        if(handle!=0){int admission=RtxptNative.resourcesAdmission(handle);if(admission!=0)return new FrameSubmissionDeferred(SubmissionDeferralReason.SCENE_UPDATE_BACKLOG,
+            switch(admission){case 1->"Scene generations await graphics/compute completion";case 2->"Completed-object release queue is full";
+                case 3->"Lighting allocations await GPU completion";default->throw new IllegalStateException("Unknown native admission result");});}
         if(hostSurfacePlan!=null&&handle!=0&&!RtxptNative.hostSurfaceCanPublish(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"All host-surface HDR slots await consumer completion");
         if(nativeLightingPlan!=null&&handle!=0&&!RtxptNative.nativeLightingCanPublish(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"All HDR lighting slots await consumer completion");
         delegated=true;return new FrameSubmitted(submitFrame(f,true,callBegin));

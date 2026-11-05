@@ -1,0 +1,3513 @@
+{
+  "date": "2026-11-05",
+  "versionLabel": "7.1.5",
+  "performanceOptimizationStopped": true,
+  "targetMs": 4,
+  "targetReached": false,
+  "currentGpuP95Ms": 5.400128,
+  "currentP95GapMs": 1.4001279999999996,
+  "lastAttempt": {
+    "id": "gi-first-rr-direct-overlap-final",
+    "status": "rejected-and-reverted",
+    "lastAuthorizedPerformanceCandidate": true,
+    "baselineDllSha256": "80803215305918E7113E043CD365CC5714F2EE96564BBF42BEEF823F7470C749",
+    "differenceFromRejectedConcurrentStates": "Do not start direct and GI simultaneously. Complete GI/guides first on graphics. RR alone borrows its own textures on compute; only then start independent direct on graphics. Scene/AS reads remain graphics-only, constants and unused UAVs are isolated, resolve/output wait for both stages.",
+    "quality": "Same samples, RR mode/model, outputs, shaders, complete-request boundary. Deep and reused-signal paths keep existing fused behavior.",
+    "acceptance": "All affected correctness passes; complete-request P50/P95 and throughput improve in two 30s windows per version. Any failure or unproven benefit: archive candidate, restore source plus default DLL, stop performance optimization. No next candidate.",
+    "after": "Re-read N01-N09 handoff and finish release-state/documentation/affected verification without further performance candidates",
+    "utc": "2026-11-05T05:27:45.2268990Z",
+    "correctnessPassed": false,
+    "performanceMeasured": false,
+    "candidateDllSha256": "5f299f45d09c1376a7164b7ac46f225252d8bdcf1149666069d856705aa2008e",
+    "reason": "Actual RR first frame returned DXGI_ERROR_INVALID_CALL (0x887A0001); no performance test and no gain claim. Exact native subcause unproven; do not attribute to driver. User last-attempt rule stops all performance work.",
+    "nativeSubcause": "unknown",
+    "sourceAndRuntimeRestored": true,
+    "rollbackEvidence": "build/reports/resource-critical-path/gi-first-final-rollback.json",
+    "failureEvidence": "build/reports/resource-critical-path/rr-handoff-gi-first-final-check",
+    "rejectedArchive": "build/reports/resource-critical-path/gi-first-final-rejected",
+    "retryAllowed": false,
+    "performanceOptimizationStopped": true,
+    "macroFailuresSinceLatestUserRule": 1
+  },
+  "restoredFilesSha256": {
+    "renderer-rtxpt/src/main/cpp/rtxpt_native_rr.h": "f41b995fc8a71b69c41bc03513aa34fa070de993b5754818806daa5c8b531d8e",
+    "renderer-rtxpt/src/main/cpp/rtxpt_native_lighting.h": "26102beb4ae01e7392548df69e0a36fbfbd4c569ba60bfa01537c73354042469",
+    "renderer-rtxpt/src/main/cpp/rtxpt_jni.cpp": "f96e675aac1ba0e60b77acdf04184003ac61b5cc5dcc582a289654a46ef41036",
+    "build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll": "80803215305918e7113e043cd365cc5714f2ee96564bbf42beef823f7470c749",
+    "build/rtxpt-sdk/bin/rtrenderer_rtxpt.pdb": "ae3482f3af27bdbce5f839499b6ef6c92ad20c1abe976434ea377b6da067dca3"
+  },
+  "dllPdbIdentity": {
+    "guidBytes": "42b75afe1d929142be32e164448828b6",
+    "age": 226,
+    "matched": true
+  },
+  "measuredRuntimeB2EntriesVerified": 15,
+  "runtimeDifferenceAudit": {
+    "NRD.dll": {
+      "A1": "3b20ab61abca160403daaae2ca822b533f57d057d1025bfbaed7b6c347e5df27",
+      "B1": "62eca2966d60171f185d0640a6927db09d6aa9762ade25d984ec40e17ab08225",
+      "B2": "62eca2966d60171f185d0640a6927db09d6aa9762ade25d984ec40e17ab08225",
+      "A2": "62eca2966d60171f185d0640a6927db09d6aa9762ade25d984ec40e17ab08225"
+    },
+    "rtrenderer_rtxpt.dll": {
+      "A1": "97a2b681e0ce6b6fb01943f379f5d7719663c5531c31d26316522eb9e18c80cd",
+      "B1": "80803215305918e7113e043cd365cc5714f2ee96564bbf42beef823f7470c749",
+      "B2": "80803215305918e7113e043cd365cc5714f2ee96564bbf42beef823f7470c749",
+      "A2": "97a2b681e0ce6b6fb01943f379f5d7719663c5531c31d26316522eb9e18c80cd"
+    }
+  },
+  "comparisonLimits": "A1 NRD.dll SHA-256 differs from B1/B2/A2. Keep the observed merged values, but do not attribute all latency changes solely to the RR handoff edit. No new performance windows are authorized or run.",
+  "currentStableComparison": {
+    "id": "evaluate-local-rr-handoff",
+    "conditions": {
+      "meshes": 4096,
+      "diagnostics": "SUMMARY",
+      "scenario": "stable",
+      "width": 1280,
+      "height": 800,
+      "secondsPerWindow": 30,
+      "order": [
+        "A1",
+        "B1",
+        "B2",
+        "A2"
+      ],
+      "dualHdr": true,
+      "realGiRR": true,
+      "reuseDisabled": true,
+      "gpuBoundary": "request-before-admission-through-output",
+      "aggregation": "Merge all original samples per version, then calculate percentiles; do not average window percentiles."
+    },
+    "windows": {
+      "A1": {
+        "fullGpu": {
+          "samples": 5805,
+          "p50Ms": 5.144095,
+          "p95Ms": 5.428223,
+          "p99Ms": 6.417695,
+          "maxMs": 7.847008,
+          "aboveMs": {
+            "4": 5803,
+            "5.56": 211,
+            "7": 38,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "fps": 193.38440640491552,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 16.56 W, 202 MHz, 9001 MHz",
+        "errors": []
+      },
+      "A2": {
+        "fullGpu": {
+          "samples": 5775,
+          "p50Ms": 5.175103,
+          "p95Ms": 5.5168,
+          "p99Ms": 6.910528,
+          "maxMs": 7.502399,
+          "aboveMs": {
+            "4": 5763,
+            "5.56": 256,
+            "7": 42,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "fps": 192.39708872121392,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 7.43 W, 225 MHz, 405 MHz",
+        "errors": []
+      },
+      "B1": {
+        "fullGpu": {
+          "samples": 5870,
+          "p50Ms": 5.095935,
+          "p95Ms": 5.400768,
+          "p99Ms": 6.605984,
+          "maxMs": 7.8712,
+          "aboveMs": {
+            "4": 5870,
+            "5.56": 232,
+            "7": 36,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "fps": 195.53781441668593,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 17.11 W, 225 MHz, 9001 MHz",
+        "errors": []
+      },
+      "B2": {
+        "fullGpu": {
+          "samples": 5846,
+          "p50Ms": 5.110336,
+          "p95Ms": 5.431327,
+          "p99Ms": 6.795808,
+          "maxMs": 8.103456,
+          "aboveMs": {
+            "4": 5845,
+            "5.56": 225,
+            "7": 39,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "fps": 194.74580871608285,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 1 %, 109 MiB, 7.11 W, 180 MHz, 405 MHz",
+        "errors": []
+      }
+    },
+    "versions": {
+      "old": {
+        "gpu": {
+          "samples": 11580,
+          "p50Ms": 5.1584,
+          "p95Ms": 5.466272,
+          "p99Ms": 6.751903,
+          "maxMs": 7.847008,
+          "aboveMs": {
+            "4": 11566,
+            "5.56": 467,
+            "7": 80,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "fps": 192.8907630675134,
+        "scopes": {
+          "NativeLightingRequestFull": {
+            "samples": 696,
+            "p50Ms": 5.18352,
+            "p95Ms": 5.459008,
+            "p99Ms": 6.132096,
+            "maxMs": 6.948576,
+            "aboveMs": {
+              "4": 696,
+              "5.56": 23,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "NativeLightingFrameFull": {
+            "samples": 696,
+            "p50Ms": 5.169952,
+            "p95Ms": 5.446368,
+            "p99Ms": 6.117216,
+            "maxMs": 6.931808,
+            "aboveMs": {
+              "4": 696,
+              "5.56": 20,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "Skinned BLAS Updates": {
+            "samples": 696,
+            "p50Ms": 0.001536,
+            "p95Ms": 0.003456,
+            "p99Ms": 0.003616,
+            "maxMs": 0.003648,
+            "aboveMs": {
+              "4": 0,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "NativeLightingUpload": {
+            "samples": 696,
+            "p50Ms": 0.001312,
+            "p95Ms": 0.001728,
+            "p99Ms": 0.001824,
+            "maxMs": 0.002016,
+            "aboveMs": {
+              "4": 0,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "NativeLightingDispatch": {
+            "samples": 696,
+            "p50Ms": 1.791296,
+            "p95Ms": 1.885568,
+            "p99Ms": 2.114624,
+            "maxMs": 2.4112,
+            "aboveMs": {
+              "4": 0,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "NativeDiffuseGiDLSSRR": {
+            "samples": 696,
+            "p50Ms": 3.296,
+            "p95Ms": 3.467008,
+            "p99Ms": 3.915616,
+            "maxMs": 4.42672,
+            "aboveMs": {
+              "4": 5,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "SharedSignalCopy": {
+            "samples": 696,
+            "p50Ms": 0.032384,
+            "p95Ms": 0.03392,
+            "p99Ms": 0.036672,
+            "maxMs": 0.038752,
+            "aboveMs": {
+              "4": 0,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          }
+        }
+      },
+      "new": {
+        "gpu": {
+          "samples": 11716,
+          "p50Ms": 5.099072,
+          "p95Ms": 5.422623,
+          "p99Ms": 6.767807,
+          "maxMs": 8.103456,
+          "aboveMs": {
+            "4": 11715,
+            "5.56": 457,
+            "7": 75,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "fps": 195.14181915884157,
+        "scopes": {
+          "NativeLightingRequestFull": {
+            "samples": 705,
+            "p50Ms": 5.12304,
+            "p95Ms": 5.349664,
+            "p99Ms": 6.033664,
+            "maxMs": 6.87408,
+            "aboveMs": {
+              "4": 705,
+              "5.56": 23,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "NativeLightingFrameFull": {
+            "samples": 705,
+            "p50Ms": 5.109216,
+            "p95Ms": 5.333888,
+            "p99Ms": 6.01856,
+            "maxMs": 6.85712,
+            "aboveMs": {
+              "4": 705,
+              "5.56": 22,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "Skinned BLAS Updates": {
+            "samples": 705,
+            "p50Ms": 0.001536,
+            "p95Ms": 0.003584,
+            "p99Ms": 0.003648,
+            "maxMs": 0.003712,
+            "aboveMs": {
+              "4": 0,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "NativeLightingUpload": {
+            "samples": 705,
+            "p50Ms": 0.001408,
+            "p95Ms": 0.00176,
+            "p99Ms": 0.001824,
+            "maxMs": 0.002048,
+            "aboveMs": {
+              "4": 0,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "NativeLightingDispatch": {
+            "samples": 705,
+            "p50Ms": 1.809408,
+            "p95Ms": 1.890784,
+            "p99Ms": 2.123808,
+            "maxMs": 2.431808,
+            "aboveMs": {
+              "4": 0,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "NativeDiffuseGiDLSSRR": {
+            "samples": 705,
+            "p50Ms": 3.217248,
+            "p95Ms": 3.358016,
+            "p99Ms": 3.81728,
+            "maxMs": 4.332864,
+            "aboveMs": {
+              "4": 4,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "SharedSignalCopy": {
+            "samples": 705,
+            "p50Ms": 0.032672,
+            "p95Ms": 0.034016,
+            "p99Ms": 0.036288,
+            "maxMs": 0.038976,
+            "aboveMs": {
+              "4": 0,
+              "5.56": 0,
+              "7": 0,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          }
+        }
+      }
+    },
+    "changes": {
+      "p50Ms": {
+        "old": 5.1584,
+        "new": 5.099072,
+        "delta": -0.059328000000000713,
+        "changePercent": -1.150124069478922
+      },
+      "p95Ms": {
+        "old": 5.466272,
+        "new": 5.422623,
+        "delta": -0.04364900000000027,
+        "changePercent": -0.7985149659585229
+      },
+      "p99Ms": {
+        "old": 6.751903,
+        "new": 6.767807,
+        "delta": 0.015903999999999918,
+        "changePercent": 0.23554840761189724
+      },
+      "fps": {
+        "old": 192.8907630675134,
+        "new": 195.14181915884157,
+        "delta": 2.2510560913281665,
+        "changePercent": 1.167010828061413
+      }
+    },
+    "scopeChanges": {
+      "NativeLightingDispatch": {
+        "p50Ms": {
+          "old": 1.791296,
+          "new": 1.809408,
+          "delta": 0.018111999999999906,
+          "changePercent": 1.0111115080924598
+        },
+        "p95Ms": {
+          "old": 1.885568,
+          "new": 1.890784,
+          "delta": 0.0052160000000001094,
+          "changePercent": 0.2766275201955119
+        }
+      },
+      "NativeDiffuseGiDLSSRR": {
+        "p50Ms": {
+          "old": 3.296,
+          "new": 3.217248,
+          "delta": -0.07875199999999971,
+          "changePercent": -2.389320388349506
+        },
+        "p95Ms": {
+          "old": 3.467008,
+          "new": 3.358016,
+          "delta": -0.10899199999999976,
+          "changePercent": -3.143690467400126
+        }
+      },
+      "SharedSignalCopy": {
+        "p50Ms": {
+          "old": 0.032384,
+          "new": 0.032672,
+          "delta": 0.0002879999999999966,
+          "changePercent": 0.889328063241096
+        },
+        "p95Ms": {
+          "old": 0.03392,
+          "new": 0.034016,
+          "delta": 9.599999999999886e-05,
+          "changePercent": 0.28301886792452496
+        }
+      }
+    },
+    "targetReached": false,
+    "outputEquivalence": {
+      "passed": true,
+      "comparedFiles": 19,
+      "groups": [
+        "native-gi-reconstruction",
+        "lifecycle",
+        "temporal"
+      ],
+      "rows": [
+        {
+          "path": "native-gi-reconstruction\\camera-motion.pfm",
+          "bitExact": true,
+          "oldSha256": "27f27a63b04816e8149a6a84b06a718af20ddee4c142ec4f4a7b647f40e89146",
+          "newSha256": "27f27a63b04816e8149a6a84b06a718af20ddee4c142ec4f4a7b647f40e89146"
+        },
+        {
+          "path": "native-gi-reconstruction\\diffuse-albedo.pfm",
+          "bitExact": true,
+          "oldSha256": "cf60c1313067e91ba8c8bb094bff75206b346334df6ee034c6af5b50efa2e5f2",
+          "newSha256": "cf60c1313067e91ba8c8bb094bff75206b346334df6ee034c6af5b50efa2e5f2"
+        },
+        {
+          "path": "native-gi-reconstruction\\hardware-depth.pfm",
+          "bitExact": true,
+          "oldSha256": "859b2f4cfbf2e017e632434ce66cab8019f0d8717373acd609fc843a9c9c76ac",
+          "newSha256": "859b2f4cfbf2e017e632434ce66cab8019f0d8717373acd609fc843a9c9c76ac"
+        },
+        {
+          "path": "native-gi-reconstruction\\last-reconstructed-gain.pfm",
+          "bitExact": true,
+          "oldSha256": "92ac458a2ac146e26d5f7bd6605901e0fd07866787ac8557d861f5716461bcd3",
+          "newSha256": "92ac458a2ac146e26d5f7bd6605901e0fd07866787ac8557d861f5716461bcd3"
+        },
+        {
+          "path": "native-gi-reconstruction\\normal-roughness.pfm",
+          "bitExact": true,
+          "oldSha256": "a4dbb2252a23e4d32d883f76d20af8105630c962f8e87b1150aa6b6240be7bfc",
+          "newSha256": "a4dbb2252a23e4d32d883f76d20af8105630c962f8e87b1150aa6b6240be7bfc"
+        },
+        {
+          "path": "native-gi-reconstruction\\object-motion.pfm",
+          "bitExact": true,
+          "oldSha256": "1a7938765a5896c416fbc40756291e03ad83e4a78c0a2e39c43ad6a7141e2e0a",
+          "newSha256": "1a7938765a5896c416fbc40756291e03ad83e4a78c0a2e39c43ad6a7141e2e0a"
+        },
+        {
+          "path": "native-gi-reconstruction\\raw-restored-gain.pfm",
+          "bitExact": true,
+          "oldSha256": "92ac458a2ac146e26d5f7bd6605901e0fd07866787ac8557d861f5716461bcd3",
+          "newSha256": "92ac458a2ac146e26d5f7bd6605901e0fd07866787ac8557d861f5716461bcd3"
+        },
+        {
+          "path": "native-gi-reconstruction\\specular-albedo.pfm",
+          "bitExact": true,
+          "oldSha256": "c1173dff177f98c28e1b222fe22b94007082379b7729e4ea5d9398119b8b2f88",
+          "newSha256": "c1173dff177f98c28e1b222fe22b94007082379b7729e4ea5d9398119b8b2f88"
+        },
+        {
+          "path": "native-gi-reconstruction\\specular-distance.pfm",
+          "bitExact": true,
+          "oldSha256": "c1173dff177f98c28e1b222fe22b94007082379b7729e4ea5d9398119b8b2f88",
+          "newSha256": "c1173dff177f98c28e1b222fe22b94007082379b7729e4ea5d9398119b8b2f88"
+        },
+        {
+          "path": "native-gi-reconstruction\\static-gain.pfm",
+          "bitExact": true,
+          "oldSha256": "ee1c1122cc77659717ede06af1dcd07c01ef3cffe9daef9ba02c281a69960462",
+          "newSha256": "ee1c1122cc77659717ede06af1dcd07c01ef3cffe9daef9ba02c281a69960462"
+        },
+        {
+          "path": "native-gi-reconstruction\\static-motion.pfm",
+          "bitExact": true,
+          "oldSha256": "9484a1eed935c7af42992aee31ce6b38351aa9bb177eb10b1b78b45b75858f00",
+          "newSha256": "9484a1eed935c7af42992aee31ce6b38351aa9bb177eb10b1b78b45b75858f00"
+        },
+        {
+          "path": "native-gi-reconstruction\\static-raw.pfm",
+          "bitExact": true,
+          "oldSha256": "5a6dd38bccd3074499ab8efdf54c65e02e1a6cafb6ca8e79ed4f67268afd3c8a",
+          "newSha256": "5a6dd38bccd3074499ab8efdf54c65e02e1a6cafb6ca8e79ed4f67268afd3c8a"
+        },
+        {
+          "path": "native-gi-reconstruction\\static-rr.pfm",
+          "bitExact": true,
+          "oldSha256": "002dda2855569271f28e292bebb0ed0d6fe607fc3175a17e7799852f9ec68a0f",
+          "newSha256": "002dda2855569271f28e292bebb0ed0d6fe607fc3175a17e7799852f9ec68a0f"
+        },
+        {
+          "path": "lifecycle\\lifecycle-motion.pfm",
+          "bitExact": true,
+          "oldSha256": "9484a1eed935c7af42992aee31ce6b38351aa9bb177eb10b1b78b45b75858f00",
+          "newSha256": "9484a1eed935c7af42992aee31ce6b38351aa9bb177eb10b1b78b45b75858f00"
+        },
+        {
+          "path": "lifecycle\\lifecycle-raw.pfm",
+          "bitExact": true,
+          "oldSha256": "5a6dd38bccd3074499ab8efdf54c65e02e1a6cafb6ca8e79ed4f67268afd3c8a",
+          "newSha256": "5a6dd38bccd3074499ab8efdf54c65e02e1a6cafb6ca8e79ed4f67268afd3c8a"
+        },
+        {
+          "path": "lifecycle\\lifecycle-rr.pfm",
+          "bitExact": true,
+          "oldSha256": "240738c0242cdb197e2e348cba61b1a6ddb3be451936df402675116647a99197",
+          "newSha256": "240738c0242cdb197e2e348cba61b1a6ddb3be451936df402675116647a99197"
+        },
+        {
+          "path": "temporal\\temporal-current-albedo.pfm",
+          "bitExact": true,
+          "oldSha256": "24d03ee52331f97870a40f84a39940e56a3ecb9d82db21699047a2dab8890740",
+          "newSha256": "24d03ee52331f97870a40f84a39940e56a3ecb9d82db21699047a2dab8890740"
+        },
+        {
+          "path": "temporal\\temporal-current-raw.pfm",
+          "bitExact": true,
+          "oldSha256": "ac8e39d8fc035bb12377b5f1bc78ecb1d8c46fc67a116b2c8b474a12d1bd1e4d",
+          "newSha256": "ac8e39d8fc035bb12377b5f1bc78ecb1d8c46fc67a116b2c8b474a12d1bd1e4d"
+        },
+        {
+          "path": "temporal\\temporal-current-rr.pfm",
+          "bitExact": true,
+          "oldSha256": "7a6d01d37838e8a8beafa7c72cd51279f25d415773f06409d0b6ff04cf2acdb9",
+          "newSha256": "7a6d01d37838e8a8beafa7c72cd51279f25d415773f06409d0b6ff04cf2acdb9"
+        }
+      ]
+    },
+    "allocationComparison": {
+      "control": {
+        "allocationCount": 67,
+        "allocatedBytes": 284950528,
+        "sizes": {
+          "65536": 20,
+          "17039360": 3,
+          "19660800": 2,
+          "2490368": 1,
+          "655360": 1,
+          "4587520": 8,
+          "9175040": 7,
+          "131072": 4,
+          "196608": 6,
+          "327680": 4,
+          "524288": 4,
+          "393216": 4,
+          "262144": 2,
+          "81920000": 1
+        },
+        "outputDroppedZero": true
+      },
+      "candidate": {
+        "allocationCount": 60,
+        "allocatedBytes": 234487808,
+        "sizes": {
+          "65536": 20,
+          "17039360": 3,
+          "19660800": 2,
+          "2490368": 1,
+          "655360": 1,
+          "4587520": 5,
+          "9175040": 3,
+          "131072": 4,
+          "196608": 6,
+          "327680": 4,
+          "524288": 4,
+          "393216": 4,
+          "262144": 2,
+          "81920000": 1
+        },
+        "outputDroppedZero": true
+      },
+      "delta": {
+        "allocationCount": -7,
+        "allocatedBytes": -50462720
+      }
+    },
+    "historicalPriorToLockedDependencyReview": true
+  },
+  "cpuStableComparison": {
+    "versions": {
+      "old": {
+        "requests": 11580,
+        "deferredAttempts": 42382,
+        "requestUntilAccepted": {
+          "samples": 11580,
+          "p50Ms": 5.1127,
+          "p95Ms": 6.3077,
+          "p99Ms": 7.111,
+          "maxMs": 9.5668,
+          "aboveMs": {
+            "4": 10810,
+            "5.56": 2943,
+            "7": 140,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "synchronousAttempts": {
+          "samples": 11580,
+          "p50Ms": 0.7277,
+          "p95Ms": 1.2091,
+          "p99Ms": 2.0092,
+          "maxMs": 5.4378,
+          "aboveMs": {
+            "4": 5,
+            "5.56": 0,
+            "7": 0,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "withOutputRelease": {
+          "samples": 11580,
+          "p50Ms": 5.126,
+          "p95Ms": 6.322,
+          "p99Ms": 7.1225,
+          "maxMs": 9.5853,
+          "aboveMs": {
+            "4": 10835,
+            "5.56": 3056,
+            "7": 147,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "acceptedCall": {
+          "samples": 11580,
+          "p50Ms": 0.6483,
+          "p95Ms": 1.1035,
+          "p99Ms": 1.9003,
+          "maxMs": 5.2193,
+          "aboveMs": {
+            "4": 5,
+            "5.56": 0,
+            "7": 0,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        }
+      },
+      "new": {
+        "requests": 11716,
+        "deferredAttempts": 42375,
+        "requestUntilAccepted": {
+          "samples": 11716,
+          "p50Ms": 5.0555,
+          "p95Ms": 6.198,
+          "p99Ms": 7.0519,
+          "maxMs": 14.1558,
+          "aboveMs": {
+            "4": 10780,
+            "5.56": 2641,
+            "7": 132,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "synchronousAttempts": {
+          "samples": 11716,
+          "p50Ms": 0.7095,
+          "p95Ms": 1.1862,
+          "p99Ms": 1.8626,
+          "maxMs": 7.1256,
+          "aboveMs": {
+            "4": 4,
+            "5.56": 3,
+            "7": 1,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "withOutputRelease": {
+          "samples": 11716,
+          "p50Ms": 5.0685,
+          "p95Ms": 6.2119,
+          "p99Ms": 7.0681,
+          "maxMs": 14.1843,
+          "aboveMs": {
+            "4": 10807,
+            "5.56": 2719,
+            "7": 133,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        },
+        "acceptedCall": {
+          "samples": 11716,
+          "p50Ms": 0.6318,
+          "p95Ms": 1.0833,
+          "p99Ms": 1.7464,
+          "maxMs": 7.0359,
+          "aboveMs": {
+            "4": 4,
+            "5.56": 3,
+            "7": 1,
+            "16.7": 0,
+            "33": 0,
+            "50": 0,
+            "100": 0,
+            "1000": 0
+          }
+        }
+      }
+    },
+    "changes": {
+      "requestUntilAccepted": {
+        "p50Ms": {
+          "old": 5.1127,
+          "new": 5.0555,
+          "delta": -0.05719999999999992,
+          "changePercent": -1.118782639309952
+        },
+        "p95Ms": {
+          "old": 6.3077,
+          "new": 6.198,
+          "delta": -0.10969999999999924,
+          "changePercent": -1.7391442205558167
+        },
+        "p99Ms": {
+          "old": 7.111,
+          "new": 7.0519,
+          "delta": -0.05909999999999993,
+          "changePercent": -0.8311067360427496
+        },
+        "maxMs": {
+          "old": 9.5668,
+          "new": 14.1558,
+          "delta": 4.588999999999999,
+          "changePercent": 47.96797257181083
+        }
+      },
+      "synchronousAttempts": {
+        "p50Ms": {
+          "old": 0.7277,
+          "new": 0.7095,
+          "delta": -0.018199999999999994,
+          "changePercent": -2.5010306444963577
+        },
+        "p95Ms": {
+          "old": 1.2091,
+          "new": 1.1862,
+          "delta": -0.022900000000000142,
+          "changePercent": -1.8939707220246582
+        },
+        "p99Ms": {
+          "old": 2.0092,
+          "new": 1.8626,
+          "delta": -0.14659999999999984,
+          "changePercent": -7.296436392594059
+        },
+        "maxMs": {
+          "old": 5.4378,
+          "new": 7.1256,
+          "delta": 1.6878000000000002,
+          "changePercent": 31.038287542756265
+        }
+      },
+      "withOutputRelease": {
+        "p50Ms": {
+          "old": 5.126,
+          "new": 5.0685,
+          "delta": -0.05750000000000011,
+          "changePercent": -1.1217323449083125
+        },
+        "p95Ms": {
+          "old": 6.322,
+          "new": 6.2119,
+          "delta": -0.11010000000000009,
+          "changePercent": -1.7415374881366668
+        },
+        "p99Ms": {
+          "old": 7.1225,
+          "new": 7.0681,
+          "delta": -0.05439999999999934,
+          "changePercent": -0.7637767637767545
+        },
+        "maxMs": {
+          "old": 9.5853,
+          "new": 14.1843,
+          "delta": 4.599,
+          "changePercent": 47.97971894463397
+        }
+      },
+      "acceptedCall": {
+        "p50Ms": {
+          "old": 0.6483,
+          "new": 0.6318,
+          "delta": -0.01649999999999996,
+          "changePercent": -2.5451180009254912
+        },
+        "p95Ms": {
+          "old": 1.1035,
+          "new": 1.0833,
+          "delta": -0.020199999999999996,
+          "changePercent": -1.8305391934753057
+        },
+        "p99Ms": {
+          "old": 1.9003,
+          "new": 1.7464,
+          "delta": -0.15390000000000015,
+          "changePercent": -8.098721254538765
+        },
+        "maxMs": {
+          "old": 5.2193,
+          "new": 7.0359,
+          "delta": 1.8166000000000002,
+          "changePercent": 34.80543367884582
+        }
+      }
+    }
+  },
+  "tailFrequency": {
+    "old": {
+      "gpu": {
+        "n": 11580,
+        "quantiles": {
+          "0.1": 4.941088,
+          "0.25": 5.121503,
+          "0.5": 5.1584,
+          "0.75": 5.209663,
+          "0.9": 5.297536,
+          "0.95": 5.466272,
+          "0.99": 6.751903,
+          "0.999": 7.342815
+        },
+        "exceed": {
+          "5.56": {
+            "count": 467,
+            "percent": 4.032815198618307
+          },
+          "6": {
+            "count": 231,
+            "percent": 1.994818652849741
+          },
+          "7": {
+            "count": 80,
+            "percent": 0.690846286701209
+          },
+          "7.5": {
+            "count": 6,
+            "percent": 0.05181347150259067
+          },
+          "8": {
+            "count": 0,
+            "percent": 0.0
+          },
+          "10": {
+            "count": 0,
+            "percent": 0.0
+          },
+          "16.7": {
+            "count": 0,
+            "percent": 0.0
+          }
+        },
+        "maxCount": 1,
+        "top": [
+          {
+            "tag": "A1",
+            "sequence": 128,
+            "gpu": 7.847008
+          },
+          {
+            "tag": "A1",
+            "sequence": 137,
+            "gpu": 7.825952
+          },
+          {
+            "tag": "A1",
+            "sequence": 139,
+            "gpu": 7.651872
+          },
+          {
+            "tag": "A1",
+            "sequence": 138,
+            "gpu": 7.650624
+          },
+          {
+            "tag": "A1",
+            "sequence": 136,
+            "gpu": 7.516191
+          },
+          {
+            "tag": "A2",
+            "sequence": 142,
+            "gpu": 7.502399
+          }
+        ],
+        "peakBins01ms": [
+          {
+            "start": 5.1,
+            "end": 5.2,
+            "count": 5422,
+            "percent": 46.822107081174444
+          },
+          {
+            "start": 5.2,
+            "end": 5.3,
+            "count": 2567,
+            "percent": 22.16753022452504
+          },
+          {
+            "start": 5.0,
+            "end": 5.1,
+            "count": 1038,
+            "percent": 8.963730569948186
+          },
+          {
+            "start": 4.9,
+            "end": 5.0,
+            "count": 483,
+            "percent": 4.170984455958549
+          }
+        ],
+        "centralBand": {
+          "count": 10338,
+          "percent": 89.27461139896373
+        }
+      },
+      "cpu": {
+        "n": 11580,
+        "quantiles": {
+          "0.1": 4.198,
+          "0.25": 4.5753,
+          "0.5": 5.1127,
+          "0.75": 5.5658,
+          "0.9": 6.0193,
+          "0.95": 6.3077,
+          "0.99": 7.111,
+          "0.999": 8.309
+        },
+        "exceed": {
+          "7": {
+            "count": 140,
+            "percent": 1.2089810017271159
+          },
+          "8": {
+            "count": 21,
+            "percent": 0.18134715025906736
+          },
+          "9": {
+            "count": 3,
+            "percent": 0.025906735751295335
+          },
+          "9.5668": {
+            "count": 0,
+            "percent": 0.0
+          },
+          "10": {
+            "count": 0,
+            "percent": 0.0
+          },
+          "12": {
+            "count": 0,
+            "percent": 0.0
+          },
+          "14": {
+            "count": 0,
+            "percent": 0.0
+          },
+          "16.7": {
+            "count": 0,
+            "percent": 0.0
+          }
+        },
+        "maxCount": 1,
+        "top": [
+          {
+            "tag": "A1",
+            "sequence": 154,
+            "cpu": 9.5668,
+            "sync": 3.11,
+            "accepted": 3.015,
+            "deferred": 5
+          },
+          {
+            "tag": "A2",
+            "sequence": 484,
+            "cpu": 9.4295,
+            "sync": 0.6171,
+            "accepted": 0.5382,
+            "deferred": 5
+          },
+          {
+            "tag": "A2",
+            "sequence": 2802,
+            "cpu": 9.3988,
+            "sync": 4.1505,
+            "accepted": 4.0899,
+            "deferred": 5
+          },
+          {
+            "tag": "A1",
+            "sequence": 1034,
+            "cpu": 8.6856,
+            "sync": 4.3147,
+            "accepted": 4.1712,
+            "deferred": 4
+          },
+          {
+            "tag": "A1",
+            "sequence": 3974,
+            "cpu": 8.581,
+            "sync": 4.4202,
+            "accepted": 4.37,
+            "deferred": 3
+          },
+          {
+            "tag": "A2",
+            "sequence": 517,
+            "cpu": 8.4818,
+            "sync": 2.54,
+            "accepted": 2.443,
+            "deferred": 5
+          }
+        ],
+        "peakBins01ms": [
+          {
+            "start": 5.4,
+            "end": 5.5,
+            "count": 951,
+            "percent": 8.21243523316062
+          },
+          {
+            "start": 4.9,
+            "end": 5.0,
+            "count": 840,
+            "percent": 7.253886010362693
+          },
+          {
+            "start": 5.5,
+            "end": 5.6,
+            "count": 824,
+            "percent": 7.115716753022452
+          },
+          {
+            "start": 4.4,
+            "end": 4.5,
+            "count": 741,
+            "percent": 6.398963730569948
+          }
+        ],
+        "centralBand": {
+          "count": 4348,
+          "percent": 37.54749568221071
+        }
+      }
+    },
+    "new": {
+      "gpu": {
+        "n": 11716,
+        "quantiles": {
+          "0.1": 4.877919,
+          "0.25": 5.046207,
+          "0.5": 5.099072,
+          "0.75": 5.134047,
+          "0.9": 5.224959,
+          "0.95": 5.422623,
+          "0.99": 6.767807,
+          "0.999": 7.45328
+        },
+        "exceed": {
+          "5.56": {
+            "count": 457,
+            "percent": 3.9006486855582114
+          },
+          "6": {
+            "count": 240,
+            "percent": 2.0484807101399793
+          },
+          "7": {
+            "count": 75,
+            "percent": 0.6401502219187436
+          },
+          "7.5": {
+            "count": 7,
+            "percent": 0.0597473540457494
+          },
+          "8": {
+            "count": 1,
+            "percent": 0.008535336292249915
+          },
+          "10": {
+            "count": 0,
+            "percent": 0.0
+          },
+          "16.7": {
+            "count": 0,
+            "percent": 0.0
+          }
+        },
+        "maxCount": 1,
+        "top": [
+          {
+            "tag": "B2",
+            "sequence": 128,
+            "gpu": 8.103456
+          },
+          {
+            "tag": "B2",
+            "sequence": 138,
+            "gpu": 7.888128
+          },
+          {
+            "tag": "B2",
+            "sequence": 137,
+            "gpu": 7.883328
+          },
+          {
+            "tag": "B1",
+            "sequence": 141,
+            "gpu": 7.8712
+          },
+          {
+            "tag": "B1",
+            "sequence": 142,
+            "gpu": 7.863967
+          },
+          {
+            "tag": "B2",
+            "sequence": 139,
+            "gpu": 7.789407
+          }
+        ],
+        "peakBins01ms": [
+          {
+            "start": 5.1,
+            "end": 5.2,
+            "count": 4392,
+            "percent": 37.487196995561625
+          },
+          {
+            "start": 5.0,
+            "end": 5.1,
+            "count": 4108,
+            "percent": 35.06316148856265
+          },
+          {
+            "start": 4.9,
+            "end": 5.0,
+            "count": 644,
+            "percent": 5.4967565722089455
+          },
+          {
+            "start": 4.6,
+            "end": 4.7,
+            "count": 453,
+            "percent": 3.8665073403892114
+          }
+        ],
+        "centralBand": {
+          "count": 10348,
+          "percent": 88.32365995220212
+        }
+      },
+      "cpu": {
+        "n": 11716,
+        "quantiles": {
+          "0.1": 4.0848,
+          "0.25": 4.5221,
+          "0.5": 5.0555,
+          "0.75": 5.525,
+          "0.9": 5.9665,
+          "0.95": 6.198,
+          "0.99": 7.0519,
+          "0.999": 8.4302
+        },
+        "exceed": {
+          "7": {
+            "count": 132,
+            "percent": 1.1266643905769889
+          },
+          "8": {
+            "count": 26,
+            "percent": 0.22191874359849778
+          },
+          "9": {
+            "count": 6,
+            "percent": 0.051212017753499484
+          },
+          "9.5668": {
+            "count": 5,
+            "percent": 0.042676681461249574
+          },
+          "10": {
+            "count": 3,
+            "percent": 0.025606008876749742
+          },
+          "12": {
+            "count": 1,
+            "percent": 0.008535336292249915
+          },
+          "14": {
+            "count": 1,
+            "percent": 0.008535336292249915
+          },
+          "16.7": {
+            "count": 0,
+            "percent": 0.0
+          }
+        },
+        "maxCount": 1,
+        "top": [
+          {
+            "tag": "B1",
+            "sequence": 3891,
+            "cpu": 14.1558,
+            "sync": 5.8459,
+            "accepted": 5.7527,
+            "deferred": 3
+          },
+          {
+            "tag": "B1",
+            "sequence": 4690,
+            "cpu": 11.5425,
+            "sync": 7.1256,
+            "accepted": 7.0359,
+            "deferred": 4
+          },
+          {
+            "tag": "B2",
+            "sequence": 80,
+            "cpu": 10.5163,
+            "sync": 5.9128,
+            "accepted": 5.8276,
+            "deferred": 4
+          },
+          {
+            "tag": "B1",
+            "sequence": 490,
+            "cpu": 9.7567,
+            "sync": 0.6857,
+            "accepted": 0.6316,
+            "deferred": 3
+          },
+          {
+            "tag": "B1",
+            "sequence": 359,
+            "cpu": 9.6028,
+            "sync": 2.8909,
+            "accepted": 2.8136,
+            "deferred": 5
+          },
+          {
+            "tag": "B1",
+            "sequence": 5635,
+            "cpu": 9.0061,
+            "sync": 4.0962,
+            "accepted": 4.012,
+            "deferred": 4
+          }
+        ],
+        "peakBins01ms": [
+          {
+            "start": 5.4,
+            "end": 5.5,
+            "count": 988,
+            "percent": 8.432912256742915
+          },
+          {
+            "start": 4.9,
+            "end": 5.0,
+            "count": 888,
+            "percent": 7.579378627517924
+          },
+          {
+            "start": 5.5,
+            "end": 5.6,
+            "count": 795,
+            "percent": 6.785592352338682
+          },
+          {
+            "start": 5.0,
+            "end": 5.1,
+            "count": 752,
+            "percent": 6.418572891771936
+          }
+        ],
+        "centralBand": {
+          "count": 4480,
+          "percent": 38.23830658927962
+        }
+      }
+    }
+  },
+  "retainedArchitectureStageComparisons": {
+    "stableSceneTableRows": {
+      "experiment": "stable-scene-table-rows",
+      "roundOrder": [
+        "A1",
+        "B1",
+        "B2",
+        "A2"
+      ],
+      "level": "SUMMARY",
+      "meshes": 4096,
+      "secondsPerWindow": 10,
+      "boundary": "request-before-admission-through-output",
+      "windows": [
+        {
+          "round": "A1",
+          "scenario": "stream",
+          "fullGpu": {
+            "samples": 863,
+            "p50Ms": 8.891872,
+            "p95Ms": 25.190208,
+            "p99Ms": 30.112896,
+            "maxMs": 57.181566,
+            "aboveMs": {
+              "4": 863,
+              "5.56": 828,
+              "7": 707,
+              "16.7": 178,
+              "33": 3,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 21.642496,
+            "p95Ms": 29.521536,
+            "p99Ms": 33.754687,
+            "maxMs": 57.181566,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 178,
+              "33": 3,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 24.1485,
+            "p95Ms": 29.3659,
+            "p99Ms": 35.4359,
+            "maxMs": 61.3035,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 200,
+              "33": 4,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 86.0730872415668,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 39 %, 3292 MiB, 69.30 W, 1845 MHz, 11001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-stream-f7fd7db8f4b61584-analysis.json"
+        },
+        {
+          "round": "B1",
+          "scenario": "stream",
+          "fullGpu": {
+            "samples": 937,
+            "p50Ms": 9.627039,
+            "p95Ms": 20.238751,
+            "p99Ms": 24.323232,
+            "maxMs": 52.703071,
+            "aboveMs": {
+              "4": 937,
+              "5.56": 910,
+              "7": 864,
+              "16.7": 84,
+              "33": 2,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 15.475232,
+            "p95Ms": 24.209024,
+            "p99Ms": 30.842911,
+            "maxMs": 52.703071,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 84,
+              "33": 2,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 21.5732,
+            "p95Ms": 25.2937,
+            "p99Ms": 29.5922,
+            "maxMs": 48.9369,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 164,
+              "33": 1,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 93.33437100169425,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 39 %, 3289 MiB, 70.82 W, 1650 MHz, 9001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-stream-d11be00ca66df6ae-analysis.json"
+        },
+        {
+          "round": "B2",
+          "scenario": "stream",
+          "fullGpu": {
+            "samples": 937,
+            "p50Ms": 9.089663,
+            "p95Ms": 22.743552,
+            "p99Ms": 27.110047,
+            "maxMs": 48.983745,
+            "aboveMs": {
+              "4": 937,
+              "5.56": 925,
+              "7": 824,
+              "16.7": 118,
+              "33": 3,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 18.170431,
+            "p95Ms": 26.936031,
+            "p99Ms": 33.000353,
+            "maxMs": 48.983745,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 118,
+              "33": 3,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 22.6081,
+            "p95Ms": 26.6375,
+            "p99Ms": 32.487,
+            "maxMs": 48.1643,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 147,
+              "33": 2,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 93.39174653180979,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 49 %, 3333 MiB, 77.57 W, 1897 MHz, 11001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-stream-d11be00ca66df6ae-analysis.json"
+        },
+        {
+          "round": "A2",
+          "scenario": "stream",
+          "fullGpu": {
+            "samples": 887,
+            "p50Ms": 8.712704,
+            "p95Ms": 23.629439,
+            "p99Ms": 28.56112,
+            "maxMs": 56.069631,
+            "aboveMs": {
+              "4": 887,
+              "5.56": 874,
+              "7": 761,
+              "16.7": 178,
+              "33": 2,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 21.179936,
+            "p95Ms": 27.787839,
+            "p99Ms": 31.948767,
+            "maxMs": 56.069631,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 178,
+              "33": 2,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 24.1689,
+            "p95Ms": 27.2709,
+            "p99Ms": 31.4793,
+            "maxMs": 56.5763,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 200,
+              "33": 1,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 88.53772540075374,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 49 %, 3300 MiB, 74.73 W, 1762 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-stream-f7fd7db8f4b61584-analysis.json"
+        },
+        {
+          "round": "A1",
+          "scenario": "stable",
+          "fullGpu": {
+            "samples": 995,
+            "p50Ms": 9.734624,
+            "p95Ms": 13.709664,
+            "p99Ms": 14.642303,
+            "maxMs": 15.791136,
+            "aboveMs": {
+              "4": 995,
+              "5.56": 979,
+              "7": 961,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 0
+          },
+          "updateCpu": {
+            "samples": 0
+          },
+          "fps": 99.28244436531118,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 43 %, 3346 MiB, 61.88 W, 1402 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-stable-f7fd7db8f4b61584-analysis.json"
+        },
+        {
+          "round": "B1",
+          "scenario": "stable",
+          "fullGpu": {
+            "samples": 1081,
+            "p50Ms": 9.245792,
+            "p95Ms": 11.551007,
+            "p99Ms": 13.204447,
+            "maxMs": 15.348159,
+            "aboveMs": {
+              "4": 1081,
+              "5.56": 1077,
+              "7": 1015,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 0
+          },
+          "updateCpu": {
+            "samples": 0
+          },
+          "fps": 107.83213527109443,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 48 %, 3331 MiB, 75.41 W, 1830 MHz, 11001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-stable-d11be00ca66df6ae-analysis.json"
+        },
+        {
+          "round": "B2",
+          "scenario": "stable",
+          "fullGpu": {
+            "samples": 1050,
+            "p50Ms": 9.408128,
+            "p95Ms": 11.610528,
+            "p99Ms": 14.670335,
+            "maxMs": 16.146432,
+            "aboveMs": {
+              "4": 1050,
+              "5.56": 1043,
+              "7": 1028,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 0
+          },
+          "updateCpu": {
+            "samples": 0
+          },
+          "fps": 104.8116513662618,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 41 %, 3312 MiB, 70.91 W, 1732 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-stable-d11be00ca66df6ae-analysis.json"
+        },
+        {
+          "round": "A2",
+          "scenario": "stable",
+          "fullGpu": {
+            "samples": 1046,
+            "p50Ms": 9.401631,
+            "p95Ms": 13.245952,
+            "p99Ms": 13.899903,
+            "maxMs": 16.874911,
+            "aboveMs": {
+              "4": 1046,
+              "5.56": 1025,
+              "7": 994,
+              "16.7": 1,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 0
+          },
+          "updateCpu": {
+            "samples": 0
+          },
+          "fps": 104.31880865128048,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 50 %, 3335 MiB, 78.08 W, 2010 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-stable-f7fd7db8f4b61584-analysis.json"
+        },
+        {
+          "round": "A1",
+          "scenario": "local",
+          "fullGpu": {
+            "samples": 1108,
+            "p50Ms": 9.116959,
+            "p95Ms": 11.416896,
+            "p99Ms": 12.266496,
+            "maxMs": 16.790591,
+            "aboveMs": {
+              "4": 1108,
+              "5.56": 1100,
+              "7": 1042,
+              "16.7": 1,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 9.84,
+            "p95Ms": 11.963135,
+            "p99Ms": 13.09136,
+            "maxMs": 16.790591,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 199,
+              "16.7": 1,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 4.8802,
+            "p95Ms": 7.0212,
+            "p99Ms": 8.9508,
+            "maxMs": 12.2543,
+            "aboveMs": {
+              "4": 180,
+              "5.56": 45,
+              "7": 11,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 110.53793665976703,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 40 %, 3286 MiB, 66.15 W, 1620 MHz, 9001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-local-f7fd7db8f4b61584-analysis.json"
+        },
+        {
+          "round": "B1",
+          "scenario": "local",
+          "fullGpu": {
+            "samples": 1002,
+            "p50Ms": 9.915871,
+            "p95Ms": 12.517792,
+            "p99Ms": 14.423968,
+            "maxMs": 17.941184,
+            "aboveMs": {
+              "4": 1002,
+              "5.56": 998,
+              "7": 982,
+              "16.7": 1,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 10.838944,
+            "p95Ms": 14.169503,
+            "p99Ms": 15.610815,
+            "maxMs": 17.941184,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 1,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 5.0531,
+            "p95Ms": 7.0114,
+            "p99Ms": 9.1587,
+            "maxMs": 11.5276,
+            "aboveMs": {
+              "4": 192,
+              "5.56": 62,
+              "7": 11,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 99.92942110647002,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 43 %, 3270 MiB, 75.81 W, 1972 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-local-d11be00ca66df6ae-analysis.json"
+        },
+        {
+          "round": "B2",
+          "scenario": "local",
+          "fullGpu": {
+            "samples": 1003,
+            "p50Ms": 9.687456,
+            "p95Ms": 12.732768,
+            "p99Ms": 17.245408,
+            "maxMs": 25.54496,
+            "aboveMs": {
+              "4": 1003,
+              "5.56": 991,
+              "7": 970,
+              "16.7": 12,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 10.670623,
+            "p95Ms": 14.959071,
+            "p99Ms": 22.567136,
+            "maxMs": 25.54496,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 199,
+              "7": 198,
+              "16.7": 6,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 4.6846,
+            "p95Ms": 6.556,
+            "p99Ms": 8.1114,
+            "maxMs": 8.3309,
+            "aboveMs": {
+              "4": 166,
+              "5.56": 30,
+              "7": 6,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 100.0310345536714,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 49 %, 3271 MiB, 77.87 W, 1920 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-local-d11be00ca66df6ae-analysis.json"
+        },
+        {
+          "round": "A2",
+          "scenario": "local",
+          "fullGpu": {
+            "samples": 1003,
+            "p50Ms": 9.892383,
+            "p95Ms": 14.241119,
+            "p99Ms": 15.062879,
+            "maxMs": 21.051423,
+            "aboveMs": {
+              "4": 1003,
+              "5.56": 991,
+              "7": 968,
+              "16.7": 3,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 10.425535,
+            "p95Ms": 15.062879,
+            "p99Ms": 17.868671,
+            "maxMs": 21.051423,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 195,
+              "16.7": 3,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 4.7883,
+            "p95Ms": 7.8126,
+            "p99Ms": 8.4934,
+            "maxMs": 13.6437,
+            "aboveMs": {
+              "4": 176,
+              "5.56": 56,
+              "7": 18,
+              "16.7": 0,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 99.86100304174823,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 51 %, 3427 MiB, 61.07 W, 1470 MHz, 11001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-local-f7fd7db8f4b61584-analysis.json"
+        }
+      ],
+      "comparisons": {
+        "stream": {
+          "pooled": {
+            "old": {
+              "gpu": {
+                "samples": 1750,
+                "p50Ms": 8.806175,
+                "p95Ms": 24.504704,
+                "p99Ms": 29.521536
+              },
+              "updateGpu": {
+                "samples": 400,
+                "p50Ms": 21.408991,
+                "p95Ms": 29.0536,
+                "p99Ms": 33.754687
+              },
+              "updateCpu": {
+                "samples": 400,
+                "p50Ms": 24.1494,
+                "p95Ms": 28.7632,
+                "p99Ms": 33.3274
+              },
+              "allCpu": {
+                "samples": 1750,
+                "p50Ms": 2.0108,
+                "p95Ms": 25.6288,
+                "p99Ms": 29.0738
+              }
+            },
+            "new": {
+              "gpu": {
+                "samples": 1874,
+                "p50Ms": 9.334336,
+                "p95Ms": 21.61104,
+                "p99Ms": 26.406304
+              },
+              "updateGpu": {
+                "samples": 400,
+                "p50Ms": 16.788063,
+                "p95Ms": 26.292895,
+                "p99Ms": 33.000353
+              },
+              "updateCpu": {
+                "samples": 400,
+                "p50Ms": 22.0803,
+                "p95Ms": 26.1922,
+                "p99Ms": 32.1001
+              },
+              "allCpu": {
+                "samples": 1874,
+                "p50Ms": 1.8242,
+                "p95Ms": 23.6626,
+                "p99Ms": 26.2753
+              }
+            }
+          },
+          "p95": {
+            "gpu": {
+              "oldMs": 24.504704,
+              "newMs": 21.61104,
+              "deltaMs": -2.893664000000001,
+              "changePercent": -11.8086062169941
+            },
+            "updateGpu": {
+              "oldMs": 29.0536,
+              "newMs": 26.292895,
+              "deltaMs": -2.760704999999998,
+              "changePercent": -9.502109893438327
+            },
+            "updateCpu": {
+              "oldMs": 28.7632,
+              "newMs": 26.1922,
+              "deltaMs": -2.5710000000000015,
+              "changePercent": -8.938504756077215
+            },
+            "allCpu": {
+              "oldMs": 25.6288,
+              "newMs": 23.6626,
+              "deltaMs": -1.966199999999997,
+              "changePercent": -7.67183793232612
+            }
+          }
+        },
+        "stable": {
+          "pooled": {
+            "old": {
+              "gpu": {
+                "samples": 2041,
+                "p50Ms": 9.548735,
+                "p95Ms": 13.54992,
+                "p99Ms": 14.555679
+              },
+              "updateGpu": {
+                "samples": 0
+              },
+              "updateCpu": {
+                "samples": 0
+              },
+              "allCpu": {
+                "samples": 2041,
+                "p50Ms": 1.9703,
+                "p95Ms": 3.0013,
+                "p99Ms": 3.9846
+              }
+            },
+            "new": {
+              "gpu": {
+                "samples": 2131,
+                "p50Ms": 9.35888,
+                "p95Ms": 11.589855,
+                "p99Ms": 14.049087
+              },
+              "updateGpu": {
+                "samples": 0
+              },
+              "updateCpu": {
+                "samples": 0
+              },
+              "allCpu": {
+                "samples": 2131,
+                "p50Ms": 2.0499,
+                "p95Ms": 2.9339,
+                "p99Ms": 3.917
+              }
+            }
+          },
+          "p95": {
+            "gpu": {
+              "oldMs": 13.54992,
+              "newMs": 11.589855,
+              "deltaMs": -1.9600650000000002,
+              "changePercent": -14.46550975946722
+            },
+            "allCpu": {
+              "oldMs": 3.0013,
+              "newMs": 2.9339,
+              "deltaMs": -0.06740000000000013,
+              "changePercent": -2.245693532802462
+            }
+          }
+        },
+        "local": {
+          "pooled": {
+            "old": {
+              "gpu": {
+                "samples": 2111,
+                "p50Ms": 9.495007,
+                "p95Ms": 12.18592,
+                "p99Ms": 14.704671
+              },
+              "updateGpu": {
+                "samples": 400,
+                "p50Ms": 10.232607,
+                "p95Ms": 14.460256,
+                "p99Ms": 15.814848
+              },
+              "updateCpu": {
+                "samples": 400,
+                "p50Ms": 4.838,
+                "p95Ms": 7.5246,
+                "p99Ms": 8.9508
+              },
+              "allCpu": {
+                "samples": 2111,
+                "p50Ms": 2.0734,
+                "p95Ms": 5.4955,
+                "p99Ms": 7.5246
+              }
+            },
+            "new": {
+              "gpu": {
+                "samples": 2005,
+                "p50Ms": 9.787456,
+                "p95Ms": 12.636319,
+                "p99Ms": 15.723103
+              },
+              "updateGpu": {
+                "samples": 400,
+                "p50Ms": 10.812127,
+                "p95Ms": 14.423968,
+                "p99Ms": 17.941184
+              },
+              "updateCpu": {
+                "samples": 400,
+                "p50Ms": 4.8731,
+                "p95Ms": 6.7411,
+                "p99Ms": 8.3946
+              },
+              "allCpu": {
+                "samples": 2005,
+                "p50Ms": 2.1435,
+                "p95Ms": 5.4927,
+                "p99Ms": 6.7411
+              }
+            }
+          },
+          "p95": {
+            "gpu": {
+              "oldMs": 12.18592,
+              "newMs": 12.636319,
+              "deltaMs": 0.4503990000000009,
+              "changePercent": 3.6960606995614764
+            },
+            "updateGpu": {
+              "oldMs": 14.460256,
+              "newMs": 14.423968,
+              "deltaMs": -0.03628799999999899,
+              "changePercent": -0.2509499140264104
+            },
+            "updateCpu": {
+              "oldMs": 7.5246,
+              "newMs": 6.7411,
+              "deltaMs": -0.7835000000000001,
+              "changePercent": -10.412513621986552
+            },
+            "allCpu": {
+              "oldMs": 5.4955,
+              "newMs": 5.4927,
+              "deltaMs": -0.0027999999999996916,
+              "changePercent": -0.050950777909197775
+            }
+          }
+        }
+      },
+      "inputSha256": {
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-stream-f7fd7db8f4b61584-analysis.json": "581ab1c7259b77c136716b92d36b14b1629d5e08a074ede715ee618309ab069b",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-stream-f7fd7db8f4b61584.csv": "8166e036012f596b14108c3bb9795142f5621f6c859727ddf96a1da9b637eaaa",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-stream-f7fd7db8f4b61584-full-gpu.csv": "bfa77aaf64f69d72900b8af7980bd4c398557b83776aa0f52d36b3b7b32faa75",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-stream-d11be00ca66df6ae-analysis.json": "ec386b3a4d5a1167fe152739909ebeca264dccfe1d919146e0b2b339bac94f15",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-stream-d11be00ca66df6ae.csv": "c9b20a19f71ca2bd803f797a1db048557a181350d83379c9a833eb88aa6e09db",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-stream-d11be00ca66df6ae-full-gpu.csv": "1bdb7960b85994513a82a68ca3c7ba85feaf6866ec5c2486f3fe9c74f4f3cb93",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-stream-d11be00ca66df6ae-analysis.json": "ffe799d2f8310cac45e7f43fae7ff755e8658b7be48eeb15471bed5313146672",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-stream-d11be00ca66df6ae.csv": "8b2aa1fc9c4a215a9215c7d34e2624560e33678ae7f999fd3525ce5805a4f0c8",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-stream-d11be00ca66df6ae-full-gpu.csv": "071eb36d3af820da6c835ce6f02237e79d772281936f838121c4c90a3563bdd5",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-stream-f7fd7db8f4b61584-analysis.json": "7e3ce4d83c6b7306a60a37c83f63f887511cab5bae07c40e7c1553c61b2f867c",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-stream-f7fd7db8f4b61584.csv": "cf90bad26fbe48b1c714623b3bd8ce536d97bdb1abc84f6dc8f3f02576f00356",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-stream-f7fd7db8f4b61584-full-gpu.csv": "32381f70c730a5658c87a38aba3b86ef1b2a28251a36460e8e2c02125056a3b8",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-stable-f7fd7db8f4b61584-analysis.json": "34d4d27c162b69ebde082fa3aa07e01d9b9a9f8d681e7177aead08263d012f11",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-stable-f7fd7db8f4b61584.csv": "07f6a6bcd21e4682ab701726ef16149411ed1932c8f1e8e32dd2cda7852043a7",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-stable-f7fd7db8f4b61584-full-gpu.csv": "1cc87277e2f0c6c5ca8c5c47f158221b1174709b43cfbbbcf83c133440fc0e50",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-stable-d11be00ca66df6ae-analysis.json": "32309b7f9f287fdb67600aaaf137b7359e066ceff9d302d170004fb239d96414",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-stable-d11be00ca66df6ae.csv": "d0f320d49398f626e0fae1978e99be3adc43b7a28f168fbdaa8345b476142dc1",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-stable-d11be00ca66df6ae-full-gpu.csv": "39dba7839c547014457caeef8a5ba55d24dd2cfe1d6efa3597932bde6e2c9acb",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-stable-d11be00ca66df6ae-analysis.json": "8e79aab91d2a74d8e71c97792554df69bb14f27b8f4194388234f07fd20435b5",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-stable-d11be00ca66df6ae.csv": "76e08c5f1c77fe944a656ec8269d60a1755356b52dee2c9a91667558c1cefefe",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-stable-d11be00ca66df6ae-full-gpu.csv": "0593231d66e90433f8f4a2b0551654972c1659db20c75fea14b8ff56f3fa6af9",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-stable-f7fd7db8f4b61584-analysis.json": "1761b1ab8913cdaf349b0c958ade97499b007a43ed028be2250c6a036d99bf27",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-stable-f7fd7db8f4b61584.csv": "d2cd63100f04c07b1b476a10d32b753d05933e19f4e0efe7dde5bfb6d5c68f85",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-stable-f7fd7db8f4b61584-full-gpu.csv": "7d5776f035d1c29ac680e187f698714574c44a41c241055d7a04e1e538b61dce",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-local-f7fd7db8f4b61584-analysis.json": "4957b0a861ebf308ce5715ea68e7bd0645dfb81ccbc88e0df24e593263453f39",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-local-f7fd7db8f4b61584.csv": "c9266103249b652402dcf0e237cc9b0fb1fbd0e09ae0b4459c5579549aba79ac",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A1\\production-4096-SUMMARY-local-f7fd7db8f4b61584-full-gpu.csv": "a4d63350bb6902f59803f31b60147a5915cf9c4822c7f7e23ad17fad3e164a3c",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-local-d11be00ca66df6ae-analysis.json": "35fef0d01e26625ecf986248eb374c92fe27d19ace1224d2d0de9a0bc7c4698e",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-local-d11be00ca66df6ae.csv": "e89b819762f70ff3e38579e64f816c47ea6c710c94d5b5560b784bc621e3c76c",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B1\\production-4096-SUMMARY-local-d11be00ca66df6ae-full-gpu.csv": "d042ba3a3930551d9ef372cef7d4d41504b1e26a3416238e33f65e921aaff171",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-local-d11be00ca66df6ae-analysis.json": "8d6e3e42fa28fa4a3bf01ecec846fe5a389924e4fc38456c8a2083ca9deaeacf",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-local-d11be00ca66df6ae.csv": "0952881549381ec2c2fcc68456f154dd33b136fa0df4ac2ca2cd199e79d13b54",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-B2\\production-4096-SUMMARY-local-d11be00ca66df6ae-full-gpu.csv": "42f45a610fb9c55d802091ffacd5444b5f3e8a3f6272aa43f330d8003d3476e8",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-local-f7fd7db8f4b61584-analysis.json": "8ea5424ecb27d1943b0a98597e12e1c313b3faff7c137b5b07b974a0595b611d",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-local-f7fd7db8f4b61584.csv": "4d96ed9b131f3200fb3ef880708ed4a723c2444d463d6389af128fa68a866131",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-tables-A2\\production-4096-SUMMARY-local-f7fd7db8f4b61584-full-gpu.csv": "da9794df9f1aaff54504c4569c923a227b2f48842885fdf40b55e8a57816d04a"
+      },
+      "absoluteTargetEligible": false,
+      "targetReached": false
+    },
+    "incrementalTopologyIndex": {
+      "experiment": "scene-index",
+      "roundOrder": [
+        "A1",
+        "B1",
+        "A2"
+      ],
+      "level": "SUMMARY",
+      "meshes": 4096,
+      "secondsPerWindow": 10,
+      "boundary": "request-before-admission-through-output",
+      "windows": [
+        {
+          "round": "A1",
+          "scenario": "stream",
+          "fullGpu": {
+            "samples": 982,
+            "p50Ms": 8.679039,
+            "p95Ms": 23.136639,
+            "p99Ms": 28.537536,
+            "maxMs": 52.688062,
+            "aboveMs": {
+              "4": 982,
+              "5.56": 918,
+              "7": 781,
+              "16.7": 116,
+              "33": 2,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 18.225856,
+            "p95Ms": 28.285376,
+            "p99Ms": 32.48611,
+            "maxMs": 52.688062,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 197,
+              "16.7": 116,
+              "33": 2,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 23.2907,
+            "p95Ms": 26.8212,
+            "p99Ms": 33.4754,
+            "maxMs": 53.0497,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 144,
+              "33": 3,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 97.87840093803788,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 42 %, 3169 MiB, 76.69 W, 2107 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A1\\production-4096-SUMMARY-stream-35b2d963c694a255-analysis.json"
+        },
+        {
+          "round": "B1",
+          "scenario": "stream",
+          "fullGpu": {
+            "samples": 1086,
+            "p50Ms": 8.714079,
+            "p95Ms": 14.814208,
+            "p99Ms": 23.4216,
+            "maxMs": 34.92739,
+            "aboveMs": {
+              "4": 1086,
+              "5.56": 1004,
+              "7": 904,
+              "16.7": 42,
+              "33": 1,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 12.358464,
+            "p95Ms": 23.4216,
+            "p99Ms": 25.641247,
+            "maxMs": 34.92739,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 193,
+              "16.7": 42,
+              "33": 1,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 13.3174,
+            "p95Ms": 22.7766,
+            "p99Ms": 23.634,
+            "maxMs": 31.74,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 57,
+              "33": 0,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 108.39281796773646,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 42 %, 3287 MiB, 76.53 W, 2167 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-B1\\production-4096-SUMMARY-stream-f7e43f005663e79b-analysis.json"
+        },
+        {
+          "round": "A2",
+          "scenario": "stream",
+          "fullGpu": {
+            "samples": 921,
+            "p50Ms": 8.64832,
+            "p95Ms": 24.151775,
+            "p99Ms": 28.225919,
+            "maxMs": 49.895774,
+            "aboveMs": {
+              "4": 921,
+              "5.56": 883,
+              "7": 703,
+              "16.7": 170,
+              "33": 1,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateGpu": {
+            "samples": 200,
+            "p50Ms": 20.893407,
+            "p95Ms": 27.576416,
+            "p99Ms": 31.633567,
+            "maxMs": 49.895774,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 170,
+              "33": 1,
+              "50": 0,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "updateCpu": {
+            "samples": 200,
+            "p50Ms": 23.4883,
+            "p95Ms": 27.2301,
+            "p99Ms": 31.1019,
+            "maxMs": 52.4447,
+            "aboveMs": {
+              "4": 200,
+              "5.56": 200,
+              "7": 200,
+              "16.7": 200,
+              "33": 1,
+              "50": 1,
+              "100": 0,
+              "1000": 0
+            }
+          },
+          "fps": 92.00706917984559,
+          "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 42 %, 3215 MiB, 75.38 W, 2055 MHz, 14001 MHz",
+          "absoluteTargetEligible": false,
+          "evidence": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A2\\production-4096-SUMMARY-stream-35b2d963c694a255-analysis.json"
+        }
+      ],
+      "comparisons": {
+        "stream": {
+          "pooled": {
+            "old": {
+              "gpu": {
+                "samples": 1903,
+                "p50Ms": 8.669631,
+                "p95Ms": 23.671424,
+                "p99Ms": 28.285376
+              },
+              "updateGpu": {
+                "samples": 400,
+                "p50Ms": 20.288096,
+                "p95Ms": 28.225919,
+                "p99Ms": 32.416928
+              },
+              "updateCpu": {
+                "samples": 400,
+                "p50Ms": 23.4339,
+                "p95Ms": 27.2301,
+                "p99Ms": 32.8843
+              },
+              "allCpu": {
+                "samples": 1903,
+                "p50Ms": 1.9464,
+                "p95Ms": 24.7915,
+                "p99Ms": 27.2311
+              }
+            },
+            "new": {
+              "gpu": {
+                "samples": 1086,
+                "p50Ms": 8.714079,
+                "p95Ms": 14.814208,
+                "p99Ms": 23.4216
+              },
+              "updateGpu": {
+                "samples": 200,
+                "p50Ms": 12.358464,
+                "p95Ms": 23.4216,
+                "p99Ms": 25.641247
+              },
+              "updateCpu": {
+                "samples": 200,
+                "p50Ms": 13.3174,
+                "p95Ms": 22.7766,
+                "p99Ms": 23.634
+              },
+              "allCpu": {
+                "samples": 1086,
+                "p50Ms": 1.5613,
+                "p95Ms": 19.3566,
+                "p99Ms": 22.7766
+              }
+            }
+          },
+          "p95": {
+            "gpu": {
+              "oldMs": 23.671424,
+              "newMs": 14.814208,
+              "deltaMs": -8.857215999999998,
+              "changePercent": -37.41733492670317
+            },
+            "updateGpu": {
+              "oldMs": 28.225919,
+              "newMs": 23.4216,
+              "deltaMs": -4.804319,
+              "changePercent": -17.02094801589985
+            },
+            "updateCpu": {
+              "oldMs": 27.2301,
+              "newMs": 22.7766,
+              "deltaMs": -4.453500000000002,
+              "changePercent": -16.355062963411815
+            },
+            "allCpu": {
+              "oldMs": 24.7915,
+              "newMs": 19.3566,
+              "deltaMs": -5.434899999999999,
+              "changePercent": -21.92243309198717
+            }
+          }
+        }
+      },
+      "inputSha256": {
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A1\\production-4096-SUMMARY-stream-35b2d963c694a255-analysis.json": "7ec8d02f8ef2c765628b11d20ff92e6a9a115f5474d70e3bc83fddab1430dd97",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A1\\production-4096-SUMMARY-stream-35b2d963c694a255.csv": "6adc354e263bfc32397217d3e47b21eef0002106d92cd71aae7fa9b892a8da4f",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A1\\production-4096-SUMMARY-stream-35b2d963c694a255-full-gpu.csv": "c0b28de06102ddc5dee38227e6ad9329a707f824970ac93150518faccc978dd9",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-B1\\production-4096-SUMMARY-stream-f7e43f005663e79b-analysis.json": "0a2446fbf5da0c430ece91c210c5763ad3827cf082cc0a6563f20feab6821fa5",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-B1\\production-4096-SUMMARY-stream-f7e43f005663e79b.csv": "69ee338554d946e302f722014a2c81b12b276b7337dc527c12480b2e840bb99a",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-B1\\production-4096-SUMMARY-stream-f7e43f005663e79b-full-gpu.csv": "127b922cf5bf0f7ce3ed4ed7193d43c4c6955b9e201c2f45776096f88022614f",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A2\\production-4096-SUMMARY-stream-35b2d963c694a255-analysis.json": "e39763934c1647dd0d38ab027d28ee202d285e1699502140b63cbd4a16fb9726",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A2\\production-4096-SUMMARY-stream-35b2d963c694a255.csv": "ec7f49262c25be64a8a15c6bd1c20cdfa5a69e4369a98063288b4cd9eb16acb1",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A2\\production-4096-SUMMARY-stream-35b2d963c694a255-full-gpu.csv": "d48443ee6a67d8ac455b37b6abe071bb533fc15dea0571fcd3c487aaec6f4da8",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A1\\production-4096-SUMMARY-stream-35b2d963c694a255-cpu.json": "2a02c42d996cd49698ecd7042a5ae82bd9411e60c2be61764687569b09b4d430",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-B1\\production-4096-SUMMARY-stream-f7e43f005663e79b-cpu.json": "3fdf4486b47a23898379da97c1500fb7adc4de11c5f2eacbd2e2b139f62249b8",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\scene-index-A2\\production-4096-SUMMARY-stream-35b2d963c694a255-cpu.json": "2fb339d437d95c3d02162c298a914d69c6ffe0c04fd75e0583178ba44f12e3a8"
+      },
+      "absoluteTargetEligible": false,
+      "targetReached": false,
+      "indexScopeCpu": {
+        "oldSamples": 94,
+        "newSamples": 58,
+        "oldP95Ms": 4.117,
+        "newP95Ms": 0.108,
+        "deltaMs": -4.009,
+        "changePercent": -97.37673062909886,
+        "scope": "INDEX_REBUILD selfNanos from the retained CPU event windows"
+      }
+    }
+  },
+  "originalConsumerBaseline": {
+    "version": "7.1.4",
+    "commit": "cb4f314c2d164fec0a954296ef1a40f4d989791a",
+    "finalDllSha256": "53fe20a6218e2ec669a51e7bbb2c1d87a1d381ea3bb30fed13d63c34f5cb8321",
+    "consumerDeepGpuP50Ms": 7.2064,
+    "consumerDeepGpuP95Ms": 9.27056,
+    "consumerMovingUpdateP50Ms": 2.9819,
+    "consumerMovingUpdateP95Ms": 35.5332,
+    "consumerMovingUpdateP99Ms": 55.3106,
+    "consumerMovingUpdateMaxMs": 98.817,
+    "retirementMaxMs": 34.8667,
+    "boundary": "Historical MC workload differs from this generic fixture. These numbers do not establish a same-content speedup. The old 290.63 FPS candidate is neither the final native DLL nor a reuse-disabled baseline.",
+    "evidence": "D:/Engineering/code/MCVulkanRT/validation/rtxpt-714-audit-evidence/terrain-analysis.json"
+  },
+  "historicalMatrix": {
+    "record": "docs/quality/data/resource-latency.json",
+    "sha256": "ebea5255166240e921c1165ddc599dbfdbeff8f7ed1955cd44077b084697e158",
+    "windowCount": 36,
+    "current808DllFullMatrixRerun": false
+  },
+  "restorationCorrectness": {
+    "rrMain": {
+      "exit": 0,
+      "passed": true,
+      "utc": "2026-11-05T05:31:09.7462148Z",
+      "log": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\final-rollback-check\\RtxptNativeLightingReconstructionNativeSelfTest.log",
+      "retryReason": "",
+      "identity": "5781F17D7EF6A593EAC6B5163B647215B35061475849D548E4212994CA476823"
+    },
+    "rrLifecycle": {
+      "passed": true,
+      "identity": "F9389995285A1697BB9EEC4DE29C023A985737246A5BF1B149416DCCA3FE8262",
+      "retryReason": "",
+      "utc": "2026-11-05T05:36:01.3314063Z",
+      "log": "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\final-rollback-lifecycle-check\\rr-lifecycle.log",
+      "exit": 0
+    },
+    "lifecycleResult": {
+      "passed": true,
+      "frames": 25,
+      "evaluations": 20,
+      "sizes": 4,
+      "previousGenerationLeased": true,
+      "disableEnable": true,
+      "deferrals": 0
+    },
+    "originalFixtureFailure": "build/reports/resource-critical-path/final-rollback-check/rr-lifecycle.log",
+    "fixtureCorrection": "Use bounded trySubmit retries for legal producer/output backpressure. Keep the same immutable request and previous-generation lease; no per-frame awaitIdle; all assertions unchanged."
+  },
+  "localArtifactAudit": {
+    "newReleaseCreated": false,
+    "currentLocalDllPackaged": false,
+    "existingPackagedDllSha256": "d32209b43152eb85a0af66e5c8caea2569fbdc3d2aa4fac41afcf8d93606d450",
+    "existingJarRuntimeZipSha256": "7da72d5a1a4fe4f9b11a3e7ba6138a5f3dcc5464fab70152a00566246401f858",
+    "existingNvidiaJarHasNativeBridge": false,
+    "historicalReleaseRecordSha256": "24000962494668940453afb2be7b3ae255891d18cabaffff71ba22486c5b6180",
+    "deliveryStatus": "Do not deliver existing build JARs as the current retained runtime. Current 808 DLL is local only; packaging and publication not performed in this closeout."
+  },
+  "remaining": [
+    "Complete-request GPU P95 <= 4 ms not reached",
+    "Stable CPU request budget not reached; current local-update/stream CPU and GPU matrix not measured",
+    "Original MC moving-tail same-content replay and native subcause not closed",
+    "Current-DLL 719/977/4096 x modes x scenarios full matrix not run",
+    "Current four-module distribution, final commit and publication not completed",
+    "Consumer MC 180 FPS and same-content OFF/SUMMARY acceptance not completed"
+  ],
+  "inputSha256": {
+    "build/reports/resource-critical-path/rr-handoff-A1/production-4096-SUMMARY-stable-rr-handoff-A1.csv": "04e6a157bda768fe84c5d17f65a519186529d197c1350304d22b343aa11e08f6",
+    "build/reports/resource-critical-path/rr-handoff-A1/production-4096-SUMMARY-stable-rr-handoff-A1-full-gpu.csv": "46842a8358fb3b6fdc2f45902bd4e11c8c9b4a935097ef3beabf3b539bb0a5ed",
+    "build/reports/resource-critical-path/rr-handoff-A1/production-4096-SUMMARY-stable-rr-handoff-A1-analysis.json": "edcfe410d5dc8e20fb7022cca6b21894c14007ddacf4e4c4d9f6bfe3d61b528d",
+    "build/reports/resource-critical-path/rr-handoff-A1/production-4096-SUMMARY-stable-rr-handoff-A1-runtime.json": "d58b195ca37b81ba3659b1201a42fc7bff5ebce778a1210c06cc27834c1ab8df",
+    "build/reports/resource-critical-path/rr-handoff-B1/production-4096-SUMMARY-stable-rr-handoff-B1.csv": "4b48d71b2b9052b3838eeb4b33f740a3afd9a8e19802930ada5b711ed4b70caa",
+    "build/reports/resource-critical-path/rr-handoff-B1/production-4096-SUMMARY-stable-rr-handoff-B1-full-gpu.csv": "27bb270f57580e9328c5b3701703c457c0a917511eedbc606269d568f67b0e36",
+    "build/reports/resource-critical-path/rr-handoff-B1/production-4096-SUMMARY-stable-rr-handoff-B1-analysis.json": "f1cc3caea758a3bd97789bd97c8681a8d88264806cd9bc44301f87617f4ab4cf",
+    "build/reports/resource-critical-path/rr-handoff-B1/production-4096-SUMMARY-stable-rr-handoff-B1-runtime.json": "8338cc7550f3b8dc5593fe3ff885bc5ed2163ea1a2016a74a9effb0fd8da5ee7",
+    "build/reports/resource-critical-path/rr-handoff-B2/production-4096-SUMMARY-stable-rr-handoff-B2.csv": "ac3a4aa273f38c356a75bcfc06319409498b7d34f7fa80bc0a018378120faacd",
+    "build/reports/resource-critical-path/rr-handoff-B2/production-4096-SUMMARY-stable-rr-handoff-B2-full-gpu.csv": "3f6be1544bb07bce0b719fffec4b041a58764eb29cabfd5ccdbf3d5486235c21",
+    "build/reports/resource-critical-path/rr-handoff-B2/production-4096-SUMMARY-stable-rr-handoff-B2-analysis.json": "625061bdab6631efdb5ec96d74c034787c83ea05ac7f0181c4172f58d8cd3a6e",
+    "build/reports/resource-critical-path/rr-handoff-B2/production-4096-SUMMARY-stable-rr-handoff-B2-runtime.json": "9fb2c41cfa553d4654791329540a97778bc746db74045488dc048d6f78161c9d",
+    "build/reports/resource-critical-path/rr-handoff-A2/production-4096-SUMMARY-stable-rr-handoff-A2.csv": "b2a46eb385d94202126ff29bcf2ad0366396f5e6e22dc6dfe944819c1d19fe2f",
+    "build/reports/resource-critical-path/rr-handoff-A2/production-4096-SUMMARY-stable-rr-handoff-A2-full-gpu.csv": "babcd8e35a9ccaacf9ddd0b20b438d0120c75f853b8a207792891d0501317b3e",
+    "build/reports/resource-critical-path/rr-handoff-A2/production-4096-SUMMARY-stable-rr-handoff-A2-analysis.json": "d43a1d5e3d05801195c248e9ce79d6eb67196a2fa4bb75b3db67ae86b9498ee7",
+    "build/reports/resource-critical-path/rr-handoff-A2/production-4096-SUMMARY-stable-rr-handoff-A2-runtime.json": "d7860c84894ac16fbd0c2bc55b2ad03a99605e9d85c5f76b57ebe5bdc622879f",
+    "build/reports/resource-critical-path/closeout-tail-frequency.json": "267516ecaeb54ca049d1b23163a5659fcec07620a0527be0160e170fc93940ef"
+  },
+  "priorGpuP95Ms": 5.422623,
+  "latestStableComparison": {
+    "date": "2026-11-05",
+    "status": "stopped-by-user-no-production-change",
+    "performanceOptimizationStopped": true,
+    "repairVerified": false,
+    "targetReached": false,
+    "conditions": {
+      "meshes": 4096,
+      "triangles": 3145728,
+      "sources": 26000,
+      "textures": 63,
+      "width": 1280,
+      "height": 800,
+      "dualHdr": true,
+      "gi": "2/6/0.35",
+      "diagnostics": "SUMMARY",
+      "scenario": "stable",
+      "realRR": true,
+      "reuseDisabled": true,
+      "secondsPerWindow": 30,
+      "order": [
+        "A1",
+        "B1",
+        "B2",
+        "A2"
+      ],
+      "aggregation": "Merge raw samples per version; nearest-rank percentiles. FPS = total frames / total wall seconds.",
+      "gpuBoundary": "request-before-admission-through-output",
+      "cpuBoundary": "apply plus all submission attempts and defer wall time, through acceptance"
+    },
+    "receipt": {
+      "order": [
+        "A1",
+        "B1",
+        "B2",
+        "A2"
+      ],
+      "secondsPerWindow": 30,
+      "oldDll": "97A2B681E0CE6B6FB01943F379F5D7719663C5531C31D26316522EB9E18C80CD",
+      "currentDll": "80803215305918E7113E043CD365CC5714F2EE96564BBF42BEEF823F7470C749",
+      "dependencies": {
+        "NRD.dll": "62ECA2966D60171F185D0640A6927DB09D6AA9762ADE25D984EC40E17AB08225",
+        "NvLowLatencyVk.dll": "2A77DC3E1C724B7EEA5755BE0AE7423752E79A2459FAE72181A9F00E3507E5D6",
+        "nvngx_dlss.dll": "D00B5B0AB29C3CA101B70C3A5ECB3A01B7EF33766A3383A28A18623083E6123E",
+        "nvngx_dlssd.dll": "B49435AE346F227FEAFE7BBE937D88277EA0EE7323975EC06488F377FDB46CEE",
+        "nvngx_dlssg.dll": "8D59D49B36410DD6B62FEF2503A5871D347415BD85D943FA0848563A95DD50C7",
+        "omm-lib.dll": "7445252A750FC2DE1DB8E7F67EC35337B5072ABF518B55C3C2A13790E963CA9B",
+        "sl.common.dll": "38EEA3B4209AFC455636EA372B5933D65FCC13BECEC6C84D101DCFC4D8648F75",
+        "sl.dlss_d.dll": "8DFF36FD063094EB1F659E8D4DCD52C7423859A9C4A3DF3796084C48412D60AC",
+        "sl.dlss_g.dll": "3ED9538DF724993BEA8A050195A6A78B9C8C8A566D5B05ADE477AAB3C390E90F",
+        "sl.dlss.dll": "18871EEA87C90345DA97D8109FAA81EA7D5840E8D99B51B55B0E46CFA177F84E",
+        "sl.interposer.dll": "B1D7395AEBD7B9722841D64DCF7433680020B6A8E421F851C16D5BA0C2182EDF",
+        "sl.nis.dll": "F9F3873C00E2737B22DF1BF7605D4FDC7978DBF2955DF4E152C5B52AADA13B79",
+        "sl.pcl.dll": "5698C38E722318681F215C9FE68E45B9BEDD51378ACC699D8EEE26E961E57770",
+        "sl.reflex.dll": "443577E869352436FF7EC8F4D9C90418D3E95368436CE219261E0F4F07A38122"
+      },
+      "traceTails": false,
+      "jfr": false,
+      "profileStride": 16,
+      "profileWarmup": 240,
+      "productionSourceChanged": false,
+      "currentRuntimeRestored": true,
+      "utc": "2026-11-05T05:58:36.1700605Z"
+    },
+    "versions": {
+      "old": {
+        "gpu": {
+          "samples": 11548,
+          "p50Ms": 5.173344,
+          "p95Ms": 5.498399,
+          "p99Ms": 6.545376,
+          "p999Ms": 7.628319,
+          "maxMs": 8.147551,
+          "aboveMs": {
+            "7": {
+              "count": 69,
+              "percent": 0.597506061655698
+            },
+            "8": {
+              "count": 4,
+              "percent": 0.034638032559750606
+            },
+            "10": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "cpu": {
+          "samples": 11548,
+          "p50Ms": 5.1281,
+          "p95Ms": 6.3251,
+          "p99Ms": 7.1063,
+          "p999Ms": 8.4207,
+          "maxMs": 13.457,
+          "aboveMs": {
+            "7": {
+              "count": 142,
+              "percent": 1.2296501558711466
+            },
+            "8": {
+              "count": 20,
+              "percent": 0.17319016279875304
+            },
+            "10": {
+              "count": 3,
+              "percent": 0.025978524419812955
+            },
+            "12": {
+              "count": 1,
+              "percent": 0.008659508139937652
+            }
+          }
+        },
+        "fps": 192.34193580642525,
+        "fastGpu": {
+          "5": {
+            "count": 1304,
+            "percent": 11.291998614478697
+          },
+          "5.1": {
+            "count": 2518,
+            "percent": 21.804641496363004
+          },
+          "5.2": {
+            "count": 7216,
+            "percent": 62.487010737790094
+          }
+        }
+      },
+      "new": {
+        "gpu": {
+          "samples": 11728,
+          "p50Ms": 5.096959,
+          "p95Ms": 5.400128,
+          "p99Ms": 6.602784,
+          "p999Ms": 7.335199,
+          "maxMs": 8.391167,
+          "aboveMs": {
+            "7": {
+              "count": 64,
+              "percent": 0.5457025920873124
+            },
+            "8": {
+              "count": 1,
+              "percent": 0.008526603001364257
+            },
+            "10": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "cpu": {
+          "samples": 11728,
+          "p50Ms": 5.0362,
+          "p95Ms": 6.1908,
+          "p99Ms": 7.0151,
+          "p999Ms": 8.1151,
+          "maxMs": 10.3668,
+          "aboveMs": {
+            "7": {
+              "count": 123,
+              "percent": 1.0487721691678036
+            },
+            "8": {
+              "count": 16,
+              "percent": 0.1364256480218281
+            },
+            "10": {
+              "count": 1,
+              "percent": 0.008526603001364257
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "fps": 195.36332955910194,
+        "fastGpu": {
+          "5": {
+            "count": 1789,
+            "percent": 15.254092769440655
+          },
+          "5.1": {
+            "count": 6381,
+            "percent": 54.40825375170532
+          },
+          "5.2": {
+            "count": 10410,
+            "percent": 88.7619372442019
+          }
+        }
+      }
+    },
+    "windows": {
+      "A1": {
+        "gpu": {
+          "samples": 5824,
+          "p50Ms": 5.130847,
+          "p95Ms": 5.441504,
+          "p99Ms": 6.650399,
+          "p999Ms": 7.1784,
+          "maxMs": 7.884928,
+          "aboveMs": {
+            "7": {
+              "count": 32,
+              "percent": 0.5494505494505495
+            },
+            "8": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "10": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "cpu": {
+          "samples": 5824,
+          "p50Ms": 5.072,
+          "p95Ms": 6.2599,
+          "p99Ms": 7.0736,
+          "p999Ms": 8.4222,
+          "maxMs": 13.457,
+          "aboveMs": {
+            "7": {
+              "count": 62,
+              "percent": 1.0645604395604396
+            },
+            "8": {
+              "count": 12,
+              "percent": 0.20604395604395606
+            },
+            "10": {
+              "count": 3,
+              "percent": 0.051510989010989015
+            },
+            "12": {
+              "count": 1,
+              "percent": 0.017170329670329672
+            }
+          }
+        },
+        "fps": 194.00772884952158,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 8.41 W, 180 MHz, 405 MHz",
+        "runtimeDll": "97A2B681E0CE6B6FB01943F379F5D7719663C5531C31D26316522EB9E18C80CD"
+      },
+      "A2": {
+        "gpu": {
+          "samples": 5724,
+          "p50Ms": 5.213759,
+          "p95Ms": 5.535935,
+          "p99Ms": 6.523871,
+          "p999Ms": 7.674496,
+          "maxMs": 8.147551,
+          "aboveMs": {
+            "7": {
+              "count": 37,
+              "percent": 0.6464011180992313
+            },
+            "8": {
+              "count": 4,
+              "percent": 0.06988120195667365
+            },
+            "10": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "cpu": {
+          "samples": 5724,
+          "p50Ms": 5.2178,
+          "p95Ms": 6.3759,
+          "p99Ms": 7.1414,
+          "p999Ms": 8.3851,
+          "maxMs": 8.8512,
+          "aboveMs": {
+            "7": {
+              "count": 80,
+              "percent": 1.397624039133473
+            },
+            "8": {
+              "count": 8,
+              "percent": 0.1397624039133473
+            },
+            "10": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "fps": 190.6761463091649,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 17.57 W, 210 MHz, 9001 MHz",
+        "runtimeDll": "97A2B681E0CE6B6FB01943F379F5D7719663C5531C31D26316522EB9E18C80CD"
+      },
+      "B1": {
+        "gpu": {
+          "samples": 5876,
+          "p50Ms": 5.09712,
+          "p95Ms": 5.38656,
+          "p99Ms": 6.311967,
+          "p999Ms": 7.219584,
+          "maxMs": 8.391167,
+          "aboveMs": {
+            "7": {
+              "count": 24,
+              "percent": 0.4084411164057182
+            },
+            "8": {
+              "count": 1,
+              "percent": 0.017018379850238255
+            },
+            "10": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "cpu": {
+          "samples": 5876,
+          "p50Ms": 5.0269,
+          "p95Ms": 6.148,
+          "p99Ms": 6.9902,
+          "p999Ms": 8.1198,
+          "maxMs": 10.3668,
+          "aboveMs": {
+            "7": {
+              "count": 57,
+              "percent": 0.9700476514635807
+            },
+            "8": {
+              "count": 7,
+              "percent": 0.1191286589516678
+            },
+            "10": {
+              "count": 1,
+              "percent": 0.017018379850238255
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "fps": 195.76829962171675,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 16.10 W, 187 MHz, 9001 MHz",
+        "runtimeDll": "80803215305918E7113E043CD365CC5714F2EE96564BBF42BEEF823F7470C749"
+      },
+      "B2": {
+        "gpu": {
+          "samples": 5852,
+          "p50Ms": 5.09472,
+          "p95Ms": 5.43024,
+          "p99Ms": 6.778847,
+          "p999Ms": 7.464543,
+          "maxMs": 7.738399,
+          "aboveMs": {
+            "7": {
+              "count": 40,
+              "percent": 0.683526999316473
+            },
+            "8": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "10": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "cpu": {
+          "samples": 5852,
+          "p50Ms": 5.0445,
+          "p95Ms": 6.228,
+          "p99Ms": 7.0894,
+          "p999Ms": 8.1151,
+          "maxMs": 9.6281,
+          "aboveMs": {
+            "7": {
+              "count": 66,
+              "percent": 1.1278195488721803
+            },
+            "8": {
+              "count": 9,
+              "percent": 0.15379357484620643
+            },
+            "10": {
+              "count": 0,
+              "percent": 0.0
+            },
+            "12": {
+              "count": 0,
+              "percent": 0.0
+            }
+          }
+        },
+        "fps": 194.95838093314498,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 16.58 W, 180 MHz, 9001 MHz",
+        "runtimeDll": "80803215305918E7113E043CD365CC5714F2EE96564BBF42BEEF823F7470C749"
+      }
+    },
+    "changes": {
+      "gpu": {
+        "p50Ms": {
+          "old": 5.173344,
+          "new": 5.096959,
+          "delta": -0.07638500000000015,
+          "changePercent": -1.4765111309048875
+        },
+        "p95Ms": {
+          "old": 5.498399,
+          "new": 5.400128,
+          "delta": -0.09827100000000044,
+          "changePercent": -1.7872657113461654
+        },
+        "p99Ms": {
+          "old": 6.545376,
+          "new": 6.602784,
+          "delta": 0.05740799999999968,
+          "changePercent": 0.8770771915929608
+        },
+        "p999Ms": {
+          "old": 7.628319,
+          "new": 7.335199,
+          "delta": -0.29312000000000005,
+          "changePercent": -3.842524152437779
+        },
+        "maxMs": {
+          "old": 8.147551,
+          "new": 8.391167,
+          "delta": 0.2436159999999994,
+          "changePercent": 2.9900518573004256
+        }
+      },
+      "cpu": {
+        "p50Ms": {
+          "old": 5.1281,
+          "new": 5.0362,
+          "delta": -0.09189999999999987,
+          "changePercent": -1.792086737778122
+        },
+        "p95Ms": {
+          "old": 6.3251,
+          "new": 6.1908,
+          "delta": -0.13429999999999964,
+          "changePercent": -2.1232865883543286
+        },
+        "p99Ms": {
+          "old": 7.1063,
+          "new": 7.0151,
+          "delta": -0.09119999999999973,
+          "changePercent": -1.2833682788511565
+        },
+        "p999Ms": {
+          "old": 8.4207,
+          "new": 8.1151,
+          "delta": -0.3056000000000001,
+          "changePercent": -3.6291519707387763
+        },
+        "maxMs": {
+          "old": 13.457,
+          "new": 10.3668,
+          "delta": -3.090200000000001,
+          "changePercent": -22.963513413093565
+        }
+      },
+      "fps": {
+        "old": 192.34193580642525,
+        "new": 195.36332955910194,
+        "delta": 3.021393752676687,
+        "changePercent": 1.5708450369957005
+      },
+      "fastGpuPercent": {
+        "5": {
+          "old": 11.291998614478697,
+          "new": 15.254092769440655,
+          "delta": 3.9620941549619584,
+          "changePercent": 35.08762523121219
+        },
+        "5.1": {
+          "old": 21.804641496363004,
+          "new": 54.40825375170532,
+          "delta": 32.60361225534231,
+          "changePercent": 149.52601839741584
+        },
+        "5.2": {
+          "old": 62.487010737790094,
+          "new": 88.7619372442019,
+          "delta": 26.27492650641181,
+          "changePercent": 42.04862129934085
+        }
+      }
+    },
+    "diagnosticOnly": {
+      "earlySlowdownScopeMedians": {
+        "NativeLightingDispatch": {
+          "old": 1.59616,
+          "new": 2.471584,
+          "delta": 0.875424,
+          "changePercent": 54.84562951082598
+        },
+        "NativeDiffuseGiDLSSRR": {
+          "old": 2.858304,
+          "new": 4.3824000000000005,
+          "delta": 1.5240960000000006,
+          "changePercent": 53.32169006515755
+        },
+        "SharedSignalCopy": {
+          "old": 0.029424,
+          "new": 0.03984,
+          "delta": 0.010416000000000002,
+          "changePercent": 35.39967373572595
+        }
+      },
+      "slowRequestsWithParkTiming": [
+        {
+          "sequence": 142,
+          "wallNanos": 8586700,
+          "attemptNanos": 834000,
+          "startEpochNanos": 1793858025166940800,
+          "parkNanos": 7711300,
+          "maxParkNanos": 1494900,
+          "threadCpuNanos": 0,
+          "deferrals": 6,
+          "events": [
+            {
+              "stage": "COMPLETION_POLL",
+              "inclusiveNanos": 500,
+              "selfNanos": 500,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 100,
+              "selfNanos": 100,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 100,
+              "selfNanos": 100,
+              "completed": true
+            },
+            {
+              "stage": "SUBMIT",
+              "inclusiveNanos": 3700,
+              "selfNanos": 3000,
+              "completed": true
+            },
+            {
+              "stage": "COMPLETION_POLL",
+              "inclusiveNanos": 3900,
+              "selfNanos": 3900,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 400,
+              "selfNanos": 400,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 400,
+              "selfNanos": 400,
+              "completed": true
+            },
+            {
+              "stage": "SUBMIT",
+              "inclusiveNanos": 15000,
+              "selfNanos": 10300,
+              "completed": true
+            },
+            {
+              "stage": "COMPLETION_POLL",
+              "inclusiveNanos": 1500,
+              "selfNanos": 1500,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 200,
+              "selfNanos": 200,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 200,
+              "selfNanos": 200,
+              "completed": true
+            },
+            {
+              "stage": "SUBMIT",
+              "inclusiveNanos": 5900,
+              "selfNanos": 4000,
+              "completed": true
+            },
+            {
+              "stage": "COMPLETION_POLL",
+              "inclusiveNanos": 1700,
+              "selfNanos": 1700,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 100,
+              "selfNanos": 100,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 100,
+              "selfNanos": 100,
+              "completed": true
+            },
+            {
+              "stage": "SUBMIT",
+              "inclusiveNanos": 6600,
+              "selfNanos": 4700,
+              "completed": true
+            },
+            {
+              "stage": "COMPLETION_POLL",
+              "inclusiveNanos": 900,
+              "selfNanos": 900,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 200,
+              "selfNanos": 200,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 200,
+              "selfNanos": 200,
+              "completed": true
+            },
+            {
+              "stage": "SUBMIT",
+              "inclusiveNanos": 4500,
+              "selfNanos": 3200,
+              "completed": true
+            },
+            {
+              "stage": "COMPLETION_POLL",
+              "inclusiveNanos": 2900,
+              "selfNanos": 2900,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 400,
+              "selfNanos": 400,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 400,
+              "selfNanos": 400,
+              "completed": true
+            },
+            {
+              "stage": "SUBMIT",
+              "inclusiveNanos": 11700,
+              "selfNanos": 8000,
+              "completed": true
+            },
+            {
+              "stage": "COMPLETION_POLL",
+              "inclusiveNanos": 1300,
+              "selfNanos": 1300,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 200,
+              "selfNanos": 200,
+              "completed": true
+            },
+            {
+              "stage": "RESOURCE_RETIREMENT",
+              "inclusiveNanos": 100,
+              "selfNanos": 100,
+              "completed": true
+            },
+            {
+              "stage": "SUBMIT_VALIDATION",
+              "inclusiveNanos": 57000,
+              "selfNanos": 57000,
+              "completed": true
+            },
+            {
+              "stage": "TRANSLATION",
+              "inclusiveNanos": 5500,
+              "selfNanos": 5500,
+              "completed": true
+            },
+            {
+              "stage": "ATTRIBUTE_PREPARATION",
+              "inclusiveNanos": 7300,
+              "selfNanos": 7300,
+              "completed": true
+            },
+            {
+              "stage": "LIGHTING_POLICY",
+              "inclusiveNanos": 6000,
+              "selfNanos": 6000,
+              "completed": true
+            },
+            {
+              "stage": "ACCELERATION",
+              "inclusiveNanos": 2600,
+              "selfNanos": 2600,
+              "completed": true
+            },
+            {
+              "stage": "FRAME",
+              "inclusiveNanos": 585700,
+              "selfNanos": 577100,
+              "completed": true
+            },
+            {
+              "stage": "SUBMIT",
+              "inclusiveNanos": 687100,
+              "selfNanos": 30000,
+              "completed": true
+            }
+          ]
+        }
+      ],
+      "clockEvidence": "build/reports/resource-critical-path/tail-regression/clock-and-park/gpu-clock.csv",
+      "limits": "JFR, stride-1 scopes and slow-event snapshots perturb these runs; not performance acceptance. GPU clock ticks were not calibrated to CPU wall time, so no exact per-frame hardware correlation or unique power/driver cause is claimed."
+    },
+    "conclusion": "Fast-frame distribution and P50/P95 improve in the locked-dependency comparison. GPU P99 and max increase, while >7/>8 ms GPU rates fall. CPU tail metrics improve in this repeat. The original two maxima do not establish a stable code regression; no production repair was implemented or verified, and rare stalls remain unresolved.",
+    "inputSha256": {
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A1.csv": "d9491064007fd200e0e3cfd04aa77a4e9cb7dd32a4edbcc0d3ab8e5a4f9690c8",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A1-full-gpu.csv": "e1d589cbc78419f4f5ed6db595aca9e6b69113e6cc269b2a83419a8b231fdc53",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A1.json": "4e16b41f603484bc81abc7796b92671cd8c42f4a5d60c9207d05a787da0054a4",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A1-runtime.json": "f0c83c2db037c64c436694864b62835a75f439c8361cd93812929d5d3e234d5b",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A1-timing-status.json": "410ff2a6cf6e81fdb87b31213e5bd5cbed3bbfef186d3e006c2e8b6ba67b5850",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A2.csv": "5cb07c2ed63e5b7ae579782531b41073bf3a2add70d4bd0abd7651ecbd90c874",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A2-full-gpu.csv": "0879e38b5b149585e921e83177dcf829347db8134e3f0f379fe9145e002111e0",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A2.json": "3fd3583f3f66b273c7e484544115dfdc1d9ad6600c6003088e9610a1d731ef0a",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A2-runtime.json": "e2bf7c205c7f698d694cc14236d395a84f4819554ae36a0a7302c6700f2058a9",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-A2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-A2-timing-status.json": "9b08e963209cb60b3e9f4edba1080838fe57af3d829a28b9d2b837eb9bc44d5f",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B1.csv": "1d33aad200a20df0ac1545cb8d967d4255f9fbbf68a52784d972a24656282333",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B1-full-gpu.csv": "3bd7d724e02d7a374cac960daa6e0bea6c0a7cec898852803827b6b91da75599",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B1.json": "7490b068d2b8e8afe17b2ac7f61fa0447ced18bc418700b0d22c97af0f990a7c",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B1-runtime.json": "54c3e657cf9fe28d68bcf0ce20b1a084ddad9a6c7f5de99f4272e26f93bf79e7",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B1/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B1-timing-status.json": "1689ac8d2360e056c7ca990211a5ff8d3c8ad16903dd239656c1eaf693b75bd3",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B2.csv": "61f956f162a3ce29e1d3ec926ed997123615001bfe309cc21b3a182945f67d5f",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B2-full-gpu.csv": "72f6cf2137be17a49f8533abda941902dd89a4085e785111259055cbd8f252bd",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B2.json": "ce0bd5d7905190ede4f2d46f714f3b378fe62a6c680c9c24a6e6ad244bb2753c",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B2-runtime.json": "d399500a09390885e6bf41eb6dfcc6bdbbf6129b9bf8b55e9ae2545c7da516a6",
+      "build/reports/resource-critical-path/rr-handoff-tail-locked-B2/production-4096-SUMMARY-stable-rr-handoff-tail-locked-B2-timing-status.json": "33ce4a9966f6885c858edc103e7f73493db452667f98bc29a0a1d9a735737890"
+    }
+  },
+  "tailLatencyReview": {
+    "id": "tail-latency-regression-repair",
+    "status": "stopped-by-user-no-production-change",
+    "authorization": "User explicitly reopened targeted repair for GPU max 8.103456 ms and CPU request max 14.1558 ms. No blanket 4 ms optimization restart.",
+    "baselineDllSha256": "80803215305918e7113e043cd365cc5714f2ee96564bbf42beef823f7470c749",
+    "priorRejectedCandidatesRemainRejected": true,
+    "qualityAndBoundaryUnchanged": true,
+    "performanceOptimizationStopped": true,
+    "scope": "Targeted CPU/GPU tail regression only",
+    "utc": "2026-11-05T05:46:09.551534+00:00",
+    "productionSourceChanged": false,
+    "repairVerified": false,
+    "closedUtc": "2026-11-05T06:02:37.558078+00:00",
+    "review": "docs/quality/data/tail-latency-review.json"
+  },
+  "investigationCloseoutSha256": {
+    "rtxpt_jni.cpp": "f96e675aac1ba0e60b77acdf04184003ac61b5cc5dcc582a289654a46ef41036",
+    "rtxpt_native_lighting.h": "26102beb4ae01e7392548df69e0a36fbfbd4c569ba60bfa01537c73354042469",
+    "rtxpt_native_rr.h": "f41b995fc8a71b69c41bc03513aa34fa070de993b5754818806daa5c8b531d8e",
+    "RtxptRenderer.java": "37e8e75d28b68e2a95ef95da5993ee8e2d7d8b570d320362dc1bfcd1163d6a62",
+    "rtrenderer_rtxpt.dll": "80803215305918e7113e043cd365cc5714f2ee96564bbf42beef823f7470c749",
+    "rtrenderer_rtxpt.pdb": "ae3482f3af27bdbce5f839499b6ef6c92ad20c1abe976434ea377b6da067dca3",
+    "NRD.dll": "62eca2966d60171f185d0640a6927db09d6aa9762ade25d984ec40e17ab08225"
+  },
+  "tailRepairVerified": false,
+  "documentCloseoutComplete": true,
+  "historicalSnapshot": true,
+  "snapshotMeaning": "Frozen state when optimization stopped, before the user subsequently authorized final 7.1.5 build, acceptance and publication. Runtime/default match statements refer only to that snapshot.",
+  "supersededBy": "docs/quality/data/resource-latency.json"
+}

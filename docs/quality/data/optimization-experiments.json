@@ -1,0 +1,1245 @@
+{
+  "date": "2026-11-05",
+  "completeGpuTargetMs": 4,
+  "targetReached": false,
+  "comparisonLimits": "10 second sequential screening, not interleaved repeated formal A/B. Candidate stable idle GPU was 19% SUMMARY /11% DEEP; those windows are ineligible for absolute acceptance. No regression is blamed on unproven interference. Old streaming variance is retained.",
+  "baselineDllSha256": "58c8b181ed8c8f01317a9b2cd2da2723aab250eea5785055f703ebcf8169dc6e",
+  "rejectedExperiments": [
+    {
+      "id": "candidate",
+      "status": "rejected-and-reverted",
+      "strategies": [
+        "Six per-thread counters flushed once per entry point with wave sums",
+        "Winner seeds for the first two GI samples, no radiance reuse"
+      ],
+      "dllSha256": "c57b424f70cba6007b1da3ef62691873270c07f6784a33c5b62855efc1950135",
+      "runtimeArchive": "build/reports/resource-search/candidate-runtime",
+      "sourceArchive": "build/reports/resource-search/candidate-source",
+      "screenSeconds": 10,
+      "correctness": "passed; performance rejected",
+      "reason": "Steady and dispatch regressions; no complete-path 4 ms acceptance. Streaming results vary strongly and do not establish an isolated causal gain.",
+      "fullGpuComparisons": [
+        {
+          "mode": "DEEP",
+          "scenario": "stable",
+          "oldP95Ms": 7.337567,
+          "newP95Ms": 7.628319,
+          "deltaMs": 0.29075200000000034,
+          "changePercent": 3.9625123695633757,
+          "oldFps": 163.34387517029424,
+          "newFps": 150.85114087290196,
+          "oldSamples": 1636,
+          "newSamples": 1511,
+          "oldIdleGpuPercent": 0.0,
+          "newIdleGpuPercent": 11.0,
+          "oldEvidence": "build/reports/resource-search/paired-before/production-4096-DEEP-stable-e207f011b26a303b-analysis.json",
+          "newEvidence": "build/reports/resource-search/candidate/production-4096-DEEP-stable-ea82173a95bdb52f-analysis.json",
+          "oldEvidenceSha256": "0f8210896d0cf92fdb0870b0ba7d69c66d409a3206f0d2417866de833dfc267c",
+          "newEvidenceSha256": "813a5f9def6aa7a0edaf2005c6e5ae5372ab19443f6d9f551b1958da661ba8c3"
+        },
+        {
+          "mode": "DEEP",
+          "scenario": "stream",
+          "oldP95Ms": 17.048832,
+          "newP95Ms": 8.331071,
+          "deltaMs": -8.717761000000001,
+          "changePercent": -51.134065958301434,
+          "oldFps": 102.3312986676425,
+          "newFps": 146.43593646884383,
+          "oldSamples": 1025,
+          "newSamples": 1467,
+          "oldIdleGpuPercent": 0.0,
+          "newIdleGpuPercent": 0.0,
+          "oldEvidence": "build/reports/resource-search/paired-before/production-4096-DEEP-stream-e207f011b26a303b-analysis.json",
+          "newEvidence": "build/reports/resource-search/candidate/production-4096-DEEP-stream-ea82173a95bdb52f-analysis.json",
+          "oldEvidenceSha256": "8b1200e89b67ccd24759e620063e8e58023dd5919af04eb12f64ba702e8e1415",
+          "newEvidenceSha256": "1bdee2698f3654c3d8020706645f5c02314a556ef24442341c94109c832745f7"
+        },
+        {
+          "mode": "SUMMARY",
+          "scenario": "stable",
+          "oldP95Ms": 5.59792,
+          "newP95Ms": 6.372543,
+          "deltaMs": 0.7746230000000001,
+          "changePercent": 13.837693286077691,
+          "oldFps": 208.29223988388196,
+          "newFps": 186.3042209999839,
+          "oldSamples": 2086,
+          "newSamples": 1864,
+          "oldIdleGpuPercent": 0.0,
+          "newIdleGpuPercent": 19.0,
+          "oldEvidence": "build/reports/resource-search/paired-before/production-4096-SUMMARY-stable-e207f011b26a303b-analysis.json",
+          "newEvidence": "build/reports/resource-search/candidate/production-4096-SUMMARY-stable-ea82173a95bdb52f-analysis.json",
+          "oldEvidenceSha256": "df6156e02af01391bfa3ce5bd6e4323a56bb66721e75a5be5b9f76f42a52bef9",
+          "newEvidenceSha256": "101d2d5e7bee662d65b83c2a90edc3823396c3aca618ec2e7c89045218b810de"
+        },
+        {
+          "mode": "SUMMARY",
+          "scenario": "stream",
+          "oldP95Ms": 13.606144,
+          "newP95Ms": 7.674464,
+          "deltaMs": -5.93168,
+          "changePercent": -43.595599164612686,
+          "oldFps": 139.85929595389854,
+          "newFps": 179.74863052763862,
+          "oldSamples": 1400,
+          "newSamples": 1800,
+          "oldIdleGpuPercent": 1.0,
+          "newIdleGpuPercent": 0.0,
+          "oldEvidence": "build/reports/resource-search/paired-before/production-4096-SUMMARY-stream-e207f011b26a303b-analysis.json",
+          "newEvidence": "build/reports/resource-search/candidate/production-4096-SUMMARY-stream-ea82173a95bdb52f-analysis.json",
+          "oldEvidenceSha256": "071f3bab7edfeb91e11997657f400241302f5526c1b48f6dae0c81d729024dba",
+          "newEvidenceSha256": "b0a6131500d7da2d820675b2ca7f456492fad0f29118f405804dd0448658b994"
+        }
+      ],
+      "dispatchComparisons": [
+        {
+          "scenario": "stable",
+          "metric": "NativeLightingDispatch P50",
+          "oldMs": 2.766048,
+          "newMs": 3.645424,
+          "deltaMs": 0.8793760000000002,
+          "changePercent": 31.791783801293395,
+          "oldSamples": 1641,
+          "newSamples": 1516
+        },
+        {
+          "scenario": "stream",
+          "metric": "NativeLightingDispatch P50",
+          "oldMs": 2.619408,
+          "newMs": 3.584848,
+          "deltaMs": 0.9654400000000001,
+          "changePercent": 36.85718299707415,
+          "oldSamples": 1030,
+          "newSamples": 1472
+        }
+      ],
+      "mustNotReapplyUnchanged": true
+    },
+    {
+      "id": "grouped",
+      "status": "rejected-and-reverted",
+      "strategies": [
+        "Two source traversal counters accumulated per query with wave sums",
+        "Group-first bulk sparse tree partitioning for small visible-max groups"
+      ],
+      "dllSha256": "536d7e405731bb0365af0361d832b407aa186c17ae50cd247dc059a15065b84e",
+      "runtimeArchive": "build/reports/resource-search/grouped-runtime",
+      "sourceArchive": "build/reports/resource-search/grouped-source",
+      "screenSeconds": 10,
+      "correctness": "passed; performance rejected",
+      "reason": "Steady and dispatch regressions; no complete-path 4 ms acceptance. Streaming results vary strongly and do not establish an isolated causal gain.",
+      "fullGpuComparisons": [
+        {
+          "mode": "DEEP",
+          "scenario": "stable",
+          "oldP95Ms": 7.337567,
+          "newP95Ms": 7.959679,
+          "deltaMs": 0.6221120000000004,
+          "changePercent": 8.478450690808014,
+          "oldFps": 163.34387517029424,
+          "newFps": 151.19721095337266,
+          "oldSamples": 1636,
+          "newSamples": 1515,
+          "oldIdleGpuPercent": 0.0,
+          "newIdleGpuPercent": 0.0,
+          "oldEvidence": "build/reports/resource-search/paired-before/production-4096-DEEP-stable-e207f011b26a303b-analysis.json",
+          "newEvidence": "build/reports/resource-search/grouped/production-4096-DEEP-stable-389143bd98a4cdd6-analysis.json",
+          "oldEvidenceSha256": "0f8210896d0cf92fdb0870b0ba7d69c66d409a3206f0d2417866de833dfc267c",
+          "newEvidenceSha256": "504332d6305ab5766768144ced7834ac07dcf0c9b2f9a9465352fc5c59a3b8e5"
+        },
+        {
+          "mode": "DEEP",
+          "scenario": "stream",
+          "oldP95Ms": 17.048832,
+          "newP95Ms": 7.884159,
+          "deltaMs": -9.164673,
+          "changePercent": -53.75543028402181,
+          "oldFps": 102.3312986676425,
+          "newFps": 149.399277182944,
+          "oldSamples": 1025,
+          "newSamples": 1497,
+          "oldIdleGpuPercent": 0.0,
+          "newIdleGpuPercent": 0.0,
+          "oldEvidence": "build/reports/resource-search/paired-before/production-4096-DEEP-stream-e207f011b26a303b-analysis.json",
+          "newEvidence": "build/reports/resource-search/grouped/production-4096-DEEP-stream-389143bd98a4cdd6-analysis.json",
+          "oldEvidenceSha256": "8b1200e89b67ccd24759e620063e8e58023dd5919af04eb12f64ba702e8e1415",
+          "newEvidenceSha256": "aa2c1e0766b40f0071ad6344bbaebe87c63dd5c3dbd9d118e5d57c40f56e106c"
+        },
+        {
+          "mode": "SUMMARY",
+          "scenario": "stable",
+          "oldP95Ms": 5.59792,
+          "newP95Ms": 5.999519,
+          "deltaMs": 0.40159900000000004,
+          "changePercent": 7.17407537085204,
+          "oldFps": 208.29223988388196,
+          "newFps": 191.1286870948083,
+          "oldSamples": 2086,
+          "newSamples": 1914,
+          "oldIdleGpuPercent": 0.0,
+          "newIdleGpuPercent": 0.0,
+          "oldEvidence": "build/reports/resource-search/paired-before/production-4096-SUMMARY-stable-e207f011b26a303b-analysis.json",
+          "newEvidence": "build/reports/resource-search/grouped/production-4096-SUMMARY-stable-389143bd98a4cdd6-analysis.json",
+          "oldEvidenceSha256": "df6156e02af01391bfa3ce5bd6e4323a56bb66721e75a5be5b9f76f42a52bef9",
+          "newEvidenceSha256": "e1fa7c56e803e9182c00ff5797b093c0b01e2ad8fe4206381c083718e8721a9b"
+        },
+        {
+          "mode": "SUMMARY",
+          "scenario": "stream",
+          "oldP95Ms": 13.606144,
+          "newP95Ms": 8.061279,
+          "deltaMs": -5.544865,
+          "changePercent": -40.75265556501533,
+          "oldFps": 139.85929595389854,
+          "newFps": 176.19097336608402,
+          "oldSamples": 1400,
+          "newSamples": 1765,
+          "oldIdleGpuPercent": 1.0,
+          "newIdleGpuPercent": 0.0,
+          "oldEvidence": "build/reports/resource-search/paired-before/production-4096-SUMMARY-stream-e207f011b26a303b-analysis.json",
+          "newEvidence": "build/reports/resource-search/grouped/production-4096-SUMMARY-stream-389143bd98a4cdd6-analysis.json",
+          "oldEvidenceSha256": "071f3bab7edfeb91e11997657f400241302f5526c1b48f6dae0c81d729024dba",
+          "newEvidenceSha256": "2384c7312d9b145d370bc8d7b8813d064134d0e39b9a13d5069c37637e211f0b"
+        }
+      ],
+      "dispatchComparisons": [
+        {
+          "scenario": "stable",
+          "metric": "NativeLightingDispatch P50",
+          "oldMs": 2.766048,
+          "newMs": 3.519616,
+          "deltaMs": 0.753568,
+          "changePercent": 27.243489628524166,
+          "oldSamples": 1641,
+          "newSamples": 1520
+        },
+        {
+          "scenario": "stream",
+          "metric": "NativeLightingDispatch P50",
+          "oldMs": 2.619408,
+          "newMs": 3.442976,
+          "deltaMs": 0.8235679999999999,
+          "changePercent": 31.440997355127575,
+          "oldSamples": 1030,
+          "newSamples": 1502
+        }
+      ],
+      "mustNotReapplyUnchanged": true
+    },
+    {
+      "id": "instrumented-max",
+      "status": "reverted-unaccepted",
+      "strategy": "Instrumented max-composition pipelines for DEEP with immediate atomics; no deferred counters, no GI seeds, no group-first tree",
+      "dllSha256": "8f0395b6223df36d1f11d69308c5f6c73d03ab66d8ec8a7325855e01175f9f2d",
+      "sourceArchive": "build/reports/resource-search/instrumented-max-source",
+      "runtimeArchive": "build/reports/resource-search/instrumented-max-runtime",
+      "correctness": "Raw lighting, source oracle and exact traversal counters passed; RR motion guide bit-exact check failed at variant 2",
+      "failureEvidence": "build/reports/resource-search/instrumented-max/rr-instrumentation.log",
+      "controlEvidence": "build/reports/resource-search/control/rr-instrumentation.log",
+      "controlResult": "The unchanged baseline DLL also failed the same motion comparison. The two modes had different one-shot previous-geometry inputs; test is being corrected to warm the input first without changing zero tolerance.",
+      "maximumMotionDifference": 1.7881393432617188e-07,
+      "performance": "Not measured; no benefit claim",
+      "mustNotReapplyUnchanged": true
+    },
+    {
+      "id": "selective-topology-preparation",
+      "status": "rejected-and-reverted-masked-alpha-correction-retained",
+      "baselineDllSha256": "92f3fe2b3e76ecc22b4330d27566f85576bc8c40bb689559ec5fb4f004139e01",
+      "sourceBackup": "build/reports/resource-critical-path/topology-preparation-before",
+      "purpose": "Avoid repacking unchanged SDK geometry/material rows after a small memory topology transaction",
+      "difference": "Authoritative changed meshes plus weak identity, geometry range and material-index migration checks; full graph/instance refresh retained. Initial/invalidated/skinned paths retain full preparation.",
+      "quality": "No shader/sampling/resolution/GI RR/output reuse/timing-boundary change. Masked alpha factor is corrected for API inputs; benchmark base-color factors are all opaque white, so benchmark coverage is unchanged.",
+      "targetReached": false,
+      "candidateDllSha256": "31e1fe62fff4e055da996acb3e9e2bf3781c18a3197e68e49a06b49377f03966",
+      "sourceArchive": "build/reports/resource-critical-path/topology-final-source",
+      "runtimeArchive": "build/reports/resource-critical-path/topology-final-runtime",
+      "performanceComparison": "build/reports/resource-critical-path/topology-final-comparison.json",
+      "performance": {
+        "stream": {
+          "gpu": {
+            "oldMs": 14.541343,
+            "newMs": 12.816607,
+            "deltaMs": -1.724736,
+            "changePercent": -11.860912709369419
+          },
+          "updateGpu": {
+            "oldMs": 17.927743,
+            "newMs": 15.15008,
+            "deltaMs": -2.7776629999999987,
+            "changePercent": -15.493656953917723
+          },
+          "updateCpu": {
+            "oldMs": 18.1187,
+            "newMs": 17.7365,
+            "deltaMs": -0.382200000000001,
+            "changePercent": -2.1094228614635724
+          },
+          "allCpu": {
+            "oldMs": 15.1932,
+            "newMs": 14.3738,
+            "deltaMs": -0.8193999999999999,
+            "changePercent": -5.3932022220467
+          }
+        },
+        "stable": {
+          "gpu": {
+            "oldMs": 13.7256,
+            "newMs": 6.908928,
+            "deltaMs": -6.816672,
+            "changePercent": -49.66392726001049
+          },
+          "allCpu": {
+            "oldMs": 2.7888,
+            "newMs": 1.702,
+            "deltaMs": -1.0868000000000002,
+            "changePercent": -38.97016637980494
+          }
+        }
+      },
+      "preparationCpu": {
+        "scope": "PREPARATION selfNanos in bounded CPU event histories",
+        "limit": "Retained event suffixes, not all transactions",
+        "windows": [
+          {
+            "window": "A1",
+            "samples": 35,
+            "p95Ms": 4.8373
+          },
+          {
+            "window": "B1",
+            "samples": 28,
+            "p95Ms": 2.5708
+          },
+          {
+            "window": "B2",
+            "samples": 34,
+            "p95Ms": 3.4905
+          },
+          {
+            "window": "A2",
+            "samples": 34,
+            "p95Ms": 4.6906
+          }
+        ],
+        "inputSha256": {
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\topology-final-A1\\production-4096-SUMMARY-stream-f2c10764deaebfc8-cpu.json": "d1280f81d5e75b2ed8b75699dc8c03694016f38c45f2441e1fd577022dd64aca",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\topology-final-B1\\production-4096-SUMMARY-stream-f43de4312d856c3f-cpu.json": "3622dfc8401df1e9c9130540b1fc9e34a2c080ba7f3312cebdf445db0ade5156",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\topology-final-B2\\production-4096-SUMMARY-stream-f43de4312d856c3f-cpu.json": "88a44476f295a863dcbe41bbe7a9492e1006a912609bec2b7ba4488ded4d5bfc",
+          "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\topology-final-A2\\production-4096-SUMMARY-stream-f2c10764deaebfc8-cpu.json": "ca284a1cb9181e1785f7f2c4a21329351bf7fc6c329f6d69c25435b2097a2985"
+        },
+        "old": {
+          "samples": 69,
+          "p50Ms": 3.4186,
+          "p95Ms": 4.7684
+        },
+        "new": {
+          "samples": 62,
+          "p50Ms": 2.5771,
+          "p95Ms": 3.1335
+        },
+        "p95": {
+          "oldMs": 4.7684,
+          "newMs": 3.1335,
+          "deltaMs": -1.6348999999999996,
+          "changePercent": -34.28613371361462
+        }
+      },
+      "correctnessEvidence": "build/reports/resource-critical-path/topology-preparation-corrected/receipts.json",
+      "correctnessCases": [
+        "RtxptHostAugmentationNativeSelfTest",
+        "RtxptResourceRemovalNativeSelfTest",
+        "RtxptAttributeTopologyNativeSelfTest",
+        "RtxptTopologyPreparationNativeSelfTest",
+        "retained-rr",
+        "topology-coverage",
+        "matrix-4096"
+      ],
+      "measurementLimits": "4096 meshes, SUMMARY, 1280x800, GI2/6/0.35, real GI RR, no signal reuse; final A1/B1/B2/A2 each stream/stable 10 seconds. GPU before and clocks vary; stable GPU changes are observations, not attributed architectural gains. CPU event histories are bounded suffixes (old 69/new 62 preparation samples). No absolute 4 ms acceptance.",
+      "initialScreening": {
+        "candidateDllSha256": "0ab31ea87a639c1bee8a2027bb11508c71deae6bf9d8b58a65b8931b05c58fb1",
+        "evidence": "build/reports/resource-critical-path/topology-preparation-comparison.json",
+        "performance": {
+          "stream": {
+            "gpu": {
+              "oldMs": 17.801791,
+              "newMs": 14.782943,
+              "deltaMs": -3.018848000000002,
+              "changePercent": -16.958113933592422
+            },
+            "updateGpu": {
+              "oldMs": 22.495808,
+              "newMs": 21.615168,
+              "deltaMs": -0.8806399999999996,
+              "changePercent": -3.91468490484983
+            },
+            "updateCpu": {
+              "oldMs": 22.2785,
+              "newMs": 22.4458,
+              "deltaMs": 0.16729999999999734,
+              "changePercent": 0.7509482236236709
+            },
+            "allCpu": {
+              "oldMs": 20.685,
+              "newMs": 19.075,
+              "deltaMs": -1.6099999999999994,
+              "changePercent": -7.783417935702197
+            }
+          },
+          "stable": {
+            "gpu": {
+              "oldMs": 10.867647,
+              "newMs": 12.444991,
+              "deltaMs": 1.577344,
+              "changePercent": 14.514126194934374
+            },
+            "allCpu": {
+              "oldMs": 2.6721,
+              "newMs": 2.9384,
+              "deltaMs": 0.2663000000000002,
+              "changePercent": 9.965944388308824
+            }
+          },
+          "local": {
+            "gpu": {
+              "oldMs": 12.124191,
+              "newMs": 11.621535,
+              "deltaMs": -0.502656,
+              "changePercent": -4.145893115672628
+            },
+            "updateGpu": {
+              "oldMs": 13.549439,
+              "newMs": 12.743775,
+              "deltaMs": -0.8056640000000002,
+              "changePercent": -5.946105960549364
+            },
+            "updateCpu": {
+              "oldMs": 7.6025,
+              "newMs": 7.1945,
+              "deltaMs": -0.40800000000000036,
+              "changePercent": -5.366655705360079
+            },
+            "allCpu": {
+              "oldMs": 5.6374,
+              "newMs": 5.2194,
+              "deltaMs": -0.41800000000000015,
+              "changePercent": -7.414765672118351
+            }
+          }
+        },
+        "status": "superseded-by-final-corrected-DLL; original stable regression retained",
+        "runtimeArchive": null
+      },
+      "maskedAlphaCorrection": {
+        "cause": "Donut Material::FillConstantBuffer forces AlphaTested/TransmissiveAlphaTested opacity to 1, ignoring the public base-color alpha factor.",
+        "baselineFailure": "build/reports/resource-critical-path/topology-preparation-alpha-control/RtxptTopologyPreparationNativeSelfTest.log",
+        "initialCandidateFailure": "build/reports/resource-critical-path/topology-preparation-alpha/RtxptTopologyPreparationNativeSelfTest.log",
+        "fix": "Scene::UpdateMaterial preserves material.opacity for both masked domains. Reference has visible masked holes and an opaque region; unchanged numerical/bit-exact assertions now pass through slot reuse, mixed geometry migration, growth and shrink.",
+        "correctedEvidence": "build/reports/resource-critical-path/topology-preparation-corrected/RtxptTopologyPreparationNativeSelfTest.log",
+        "thresholdsRelaxed": false
+      },
+      "remainingFullScans": [
+        "SDK scene graph refresh and dense identity/migration checks",
+        "SDK instance preparation and scene-table row comparison",
+        "Dense mesh membership inventory for retirement",
+        "Material/texture inventory reconciliation",
+        "Native lighting topology metadata reconciliation"
+      ],
+      "sourceSha256": {
+        "renderer-rtxpt/src/main/cpp/rtxpt_retained_scene.inl": "7ad4a8493b19c87f10c8e617707472584718584c03504b6f729b1dc410b09bfd",
+        "renderer-rtxpt/src/test/java/top/ceroxe/rt/renderer/rtxpt/RtxptTopologyPreparationNativeSelfTest.java": "85c46a33dabb0bdbcc54337d9c3ef5a9070d8b4b50e5f5eac62b3677229f4cdf",
+        "tools/patches/rtxpt-topology-preparation.patch": "ebb2aa0794e1ec3de6a19564cdce6d5d33c5365623b220369b8cda75a673eaf0",
+        "tools/Build-RtxptBridge.ps1": "a41afe2932224a33857d9964cb1b0d2d8695774bbf931b52b248bb784f56ef98",
+        "tools/Test-ResourceLatency.ps1": "e9cd8a15bbcef1eb9a6fc6ea43394066b9e6c499abeffdb402ccdd952de923e9",
+        "build/rtxpt-sdk/External/Donut/src/engine/Scene.cpp": "4a18235326f51752335b710291a6d97f4cb717ad04d661c0ee5673faea42e44a",
+        "build/rtxpt-sdk/External/Donut/include/donut/engine/Scene.h": "ed173689c71b8f05366a21eeb47c53fb783bd93c3f8d09b8e83a753e13179847"
+      },
+      "unchangedShaderPackages": {
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\AccumulationPass.bin": "74fa08aa52bd1d5a3bd27ab4358d9dc423335a2d97543ca28abc885ebcf6c9a0",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\DenoisingGuidesBaker_ComputeAvgLayerRadiance.bin": "689d648e067e0ac74cdf447f12578de58433b8606e0b00eb71a40c8d2ef97f1c",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\DenoisingGuidesBaker_DebugViz.bin": "dca48e42b9939bbf0f8057a144595a0aa07d878148143a154fa175f29bd1d2bc",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\DenoisingGuidesBaker_DenoiseSpecHitT.bin": "4c5f1ab27477a6ff5633b73b5003e1a9bbedbb8f5c1a5da2fb2df2c06a4f9488",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\DenoisingGuidesBaker_PrepareDLSSRRGuides.bin": "5b88a4a64e6c3e74f4d1e989224ba519d3f26d9a42cef73a2c9a912705efb1d6",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\ExportVisibilityBuffer.bin": "cec0ab3dabbb3a87244e6e5da6ac8ef24f33b3a486379973f0d8f65c188248b3",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\PostProcess.bin": "8f46f1aef721196428395560b687b6e552d62937e9fc522c7157cdf86229566b",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrHostAugmentation.bin": "a8690f4ac1caa3d9422160cd2993e39c40ed40ea321fdefa941566a4e60efb82",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrHostResolve.bin": "2fb2e669336412e13c2a0284bd7e2668c9fa9132aed42b89aa8ffede07a370ca",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrLegacySrHistory.bin": "7b26faf6fcd4a552ac4ce5257db8b021f9227a53c66281c2874156810e19c143",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeDynamicLighting.bin": "937136650be55e9bb6b343e5fc01318ebd3ce28e2e915e1b2784eddfbc2cca43",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeDynamicLightingReconstruct.bin": "fd337309878b4e58a0dd5d571c6f7adbae71b61882a2ccb91066262eb281005e",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeLighting.bin": "e5e8a8ebca480ef1e734da64bb533d57f5dc8df9c344a976f16e1838f550253c",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeLightingDeep.bin": "ff7527f6c6ab1533b17ec1ecea08f8346134d87c49029341892fe5774c03a9e1",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeLightingEncode.bin": "b56e5018cbc52a4f5828de1cc5c7a633cbe097f6ba3213c441aa838f9623a0ef",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeLightingReconstruct.bin": "d057bacb38edf4c39a210b4f5a399626c4e1fe96c651d4fc1ca0929ac5debc62",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeLightingResolve.bin": "6e7bd8e0be360a0ec1c9e99d544827487c18e248aabe551e4e76e9a513245078",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrPreSrHistory.bin": "e63f633461eec8d0326542e170ffa0a810b736b287e607e6bf0caa61c136bc03",
+        "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\rtxpt-sdk\\bin\\ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\SubSamplingCompaction.bin": "8f2f78b8d91fc0ce221e0d78e734512a8a338f35756cc974d4574a1a34065bc0"
+      },
+      "previousDecision": "Originally retained using noisy 10-second data; superseded by clean 30-second B1/A1/A2/B2 retest.",
+      "cleanRetest": {
+        "comparison": "build/reports/resource-critical-path/topology-clean-comparison.json",
+        "cpuComparison": "build/reports/resource-critical-path/topology-clean-cpu-comparison.json",
+        "roundOrder": [
+          "B1",
+          "A1",
+          "A2",
+          "B2"
+        ],
+        "secondsPerWindow": 30,
+        "conditions": "4096 meshes, SUMMARY, 1280x800, real GI RR, GI2/6/0.35, no signal reuse; request-before-admission-through-output",
+        "absoluteTargetEligible": true,
+        "targetReached": false,
+        "comparisons": {
+          "stream": {
+            "gpu": {
+              "oldMs": 9.158239,
+              "newMs": 20.70688,
+              "deltaMs": 11.548641000000002,
+              "changePercent": 126.10110961288518
+            },
+            "updateGpu": {
+              "oldMs": 25.061087,
+              "newMs": 29.79248,
+              "deltaMs": 4.731393000000001,
+              "changePercent": 18.879440464813047
+            },
+            "updateCpu": {
+              "oldMs": 24.5207,
+              "newMs": 28.6082,
+              "deltaMs": 4.087499999999999,
+              "changePercent": 16.669589367350834
+            },
+            "allCpu": {
+              "oldMs": 11.5374,
+              "newMs": 20.155,
+              "deltaMs": 8.617600000000001,
+              "changePercent": 74.69273839859936
+            }
+          },
+          "stable": {
+            "gpu": {
+              "oldMs": 6.390368,
+              "newMs": 6.878944,
+              "deltaMs": 0.4885760000000001,
+              "changePercent": 7.645506487263343
+            },
+            "allCpu": {
+              "oldMs": 3.425,
+              "newMs": 3.8775,
+              "deltaMs": 0.4525000000000001,
+              "changePercent": 13.211678832116803
+            }
+          },
+          "local": {
+            "gpu": {
+              "oldMs": 7.039391,
+              "newMs": 8.169055,
+              "deltaMs": 1.129664,
+              "changePercent": 16.047751858079764
+            },
+            "updateGpu": {
+              "oldMs": 8.598208,
+              "newMs": 10.841599,
+              "deltaMs": 2.243391000000001,
+              "changePercent": 26.0913785756288
+            },
+            "updateCpu": {
+              "oldMs": 7.4387,
+              "newMs": 9.2433,
+              "deltaMs": 1.8045999999999998,
+              "changePercent": 24.25961525535376
+            },
+            "allCpu": {
+              "oldMs": 4.4561,
+              "newMs": 4.6606,
+              "deltaMs": 0.20449999999999946,
+              "changePercent": 4.589214784228357
+            }
+          }
+        },
+        "preparationCpu": {
+          "scope": "PREPARATION selfNanos in bounded CPU event histories",
+          "limit": "Retained event suffixes, not all transactions",
+          "windows": [
+            {
+              "window": "A1",
+              "samples": 56,
+              "p95Ms": 8.2954
+            },
+            {
+              "window": "B1",
+              "samples": 52,
+              "p95Ms": 5.9274
+            },
+            {
+              "window": "B2",
+              "samples": 54,
+              "p95Ms": 8.1992
+            },
+            {
+              "window": "A2",
+              "samples": 29,
+              "p95Ms": 3.8215
+            }
+          ],
+          "inputSha256": {
+            "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\topology-clean-A1\\production-4096-SUMMARY-stream-f2c10764deaebfc8-cpu.json": "418a3b729ade1f6734fc8c53c44084e2e127b5bac025e9ae592c0039f7527361",
+            "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\topology-clean-B1\\production-4096-SUMMARY-stream-f43de4312d856c3f-cpu.json": "62559a291af729bb44bff145891d2914cb0232ae025a208c4793915b8da40711",
+            "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\topology-clean-B2\\production-4096-SUMMARY-stream-f43de4312d856c3f-cpu.json": "ecc1fe1cdd0cbe8617e7128a9f468d057a31881da011a19e07eb840b9498bf2b",
+            "D:\\Engineering\\code\\APIs\\RTRendererAPI\\build\\reports\\resource-critical-path\\topology-clean-A2\\production-4096-SUMMARY-stream-f2c10764deaebfc8-cpu.json": "95da82dfbb97ce514384dc7e32fe0800c0edf651f161a9457c9c2c4b07b319c7"
+          },
+          "old": {
+            "samples": 85,
+            "p50Ms": 3.953,
+            "p95Ms": 7.3711
+          },
+          "new": {
+            "samples": 106,
+            "p50Ms": 3.1874,
+            "p95Ms": 7.5813
+          },
+          "p95": {
+            "oldMs": 7.3711,
+            "newMs": 7.5813,
+            "deltaMs": 0.2101999999999995,
+            "changePercent": 2.851677497252769
+          }
+        },
+        "gpuBefore": [
+          {
+            "round": "B1",
+            "scenario": "stream",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 18.11 W, 187 MHz, 9001 MHz"
+          },
+          {
+            "round": "A1",
+            "scenario": "stream",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 18.29 W, 187 MHz, 810 MHz"
+          },
+          {
+            "round": "A2",
+            "scenario": "stream",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 18.66 W, 202 MHz, 9001 MHz"
+          },
+          {
+            "round": "B2",
+            "scenario": "stream",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 19.04 W, 180 MHz, 9001 MHz"
+          },
+          {
+            "round": "B1",
+            "scenario": "stable",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 11.08 W, 180 MHz, 405 MHz"
+          },
+          {
+            "round": "A1",
+            "scenario": "stable",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 9.13 W, 180 MHz, 405 MHz"
+          },
+          {
+            "round": "A2",
+            "scenario": "stable",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 9.29 W, 180 MHz, 405 MHz"
+          },
+          {
+            "round": "B2",
+            "scenario": "stable",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 18.93 W, 180 MHz, 9001 MHz"
+          },
+          {
+            "round": "B1",
+            "scenario": "local",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 16.49 W, 232 MHz, 810 MHz"
+          },
+          {
+            "round": "A1",
+            "scenario": "local",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 1 %, 109 MiB, 13.58 W, 180 MHz, 810 MHz"
+          },
+          {
+            "round": "A2",
+            "scenario": "local",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 18.81 W, 187 MHz, 9001 MHz"
+          },
+          {
+            "round": "B2",
+            "scenario": "local",
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 19.30 W, 210 MHz, 9001 MHz"
+          }
+        ],
+        "repeatabilityLimit": "Same control DLL stream P95 was 19.090976 ms in A1 and 6.821472 ms in A2. Idle baseline does not establish fixed clocks or repeatable CPU conditions. Pooled percentiles are observations; no causal claim that the code alone caused 126.10% regression. Candidate has no established whole-path gain and is rejected."
+      },
+      "mustNotReapplyUnchanged": true,
+      "reason": "Clean retest showed no established complete-path benefit: stream pooled GPU P95 9.158239 -> 20.706880 ms (+11.548641, +126.10%); preparation CPU P95 7.3711 -> 7.5813 ms (+0.2102, +2.85%). Remove performance overlay; retain independent masked-alpha correctness fix and all original assertions.",
+      "rollback": {
+        "sourceManifest": "build/reports/resource-critical-path/topology-clean-rollback-source.json",
+        "sourceArchive": "build/reports/resource-critical-path/topology-clean-rejected-source",
+        "runtimeArchive": "build/reports/resource-critical-path/topology-final-runtime",
+        "retainedCorrectnessPatch": "tools/patches/rtxpt-masked-alpha.patch",
+        "validationEvidence": "build/reports/resource-critical-path/topology-rollback-corrected/receipts.json",
+        "validationStatus": "passed",
+        "correctnessReceipts": {
+          "native-build": "8C8E6A8F5DFF1F07A58E3FB1CC97E4D2E6C5BAC81B88CB5E2C538F59964C9A7C",
+          "java-build": "C317BC554B231148DC5394407E06FCEE1B136F9FF7937945CF35D465411C5329",
+          "RtxptHostAugmentationNativeSelfTest": "50785FB3932F2040840594A7AAB4E9B9C35112389827629A5B623D91AAFFE54B",
+          "RtxptResourceRemovalNativeSelfTest": "12704FCD5662344EDEBBCE07D2FD165A03A583E06FE6A6F0516B43DA53101CAF",
+          "RtxptAttributeTopologyNativeSelfTest": "B6D82665A92ABE2FDE44F080F3BD2CC7D76E50B90D2E898B7AFF27CDD24BA71C",
+          "RtxptTopologyPreparationNativeSelfTest": "4EBE6F315613766022C9848C668AD785A9DA1957E891C1149A2C3747FB43EE20",
+          "retained-rr": "FC56D46964B73259FFD0EB30B8D15E0146FAD335B498823300F63F29D4CD259F",
+          "topology-coverage": "612C4D2E994686F916691022CB8039F782430C9A89A614716DDBC024765DB27C",
+          "matrix-4096": "724132988BADD93F15654C08CDC07D1D91606DBEA0F2D940611AF81913E26EA5"
+        },
+        "postRollbackPerformance30s": {
+          "local": {
+            "p95Ms": 5.909023,
+            "samples": 5633,
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 17.26 W, 195 MHz, 9001 MHz",
+            "errors": [],
+            "evidence": "topology-rollback-corrected\\production-4096-SUMMARY-local-9a53303a6711b0b4-analysis.json"
+          },
+          "stable": {
+            "p95Ms": 5.545951,
+            "samples": 5746,
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 16.49 W, 180 MHz, 9001 MHz",
+            "errors": [],
+            "evidence": "topology-rollback-corrected\\production-4096-SUMMARY-stable-9a53303a6711b0b4-analysis.json"
+          },
+          "stream": {
+            "p95Ms": 6.679072,
+            "samples": 5588,
+            "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 16.88 W, 202 MHz, 9001 MHz",
+            "errors": [],
+            "evidence": "topology-rollback-corrected\\production-4096-SUMMARY-stream-9a53303a6711b0b4-analysis.json"
+          }
+        }
+      }
+    },
+    {
+      "id": "conservative-emitter-hemisphere",
+      "status": "rejected-and-reverted",
+      "baselineDllSha256": "97a2b681e0ce6b6fb01943f379f5d7719663c5531c31d26316522eb9e18c80cd",
+      "sourceBackup": "build/reports/resource-critical-path/hemisphere-before",
+      "controlRuntime": "build/reports/resource-critical-path/hemisphere-control-runtime",
+      "purpose": "Reject a complete maximum-composition source subtree when its emitting AABB lies conservatively behind the receiver normal",
+      "difference": "A new geometric node predicate, not source ordering, wave counters, source seeds, group-first trees, concurrent queues or topology preparation. General diagnostic traversal is retained as an independent output reference.",
+      "quality": "Unchanged resolutions, rays, samples, source visibility/selection, GI/RR model, output reuse setting and complete-request timing boundaries",
+      "newCorrectnessCoverage": "Exhaustive source oracle includes behind-plane origins, positive/negative grazing origins, and BOX volumes spanning the receiver. Existing tolerances unchanged.",
+      "targetReached": false,
+      "reason": "No established architectural or whole-request benefit. One ten-second A/B screen has lower candidate P95 but higher P50 and lower throughput. Primary source origins in this heightfield scene are all above the receiver, so the new facing predicate offers little useful subtree rejection; do not attribute noisy P95 tail reduction to this code. User explicitly requested immediate rollback and macro architecture investigation.",
+      "correctness": "Five targeted cases passed after one recorded external-native JVM crash and a bounded retry with changed JVM flags; original assertions unchanged.",
+      "sourceArchive": "build/reports/resource-critical-path/hemisphere-rejected-source",
+      "runtimeArchive": "build/reports/resource-critical-path/hemisphere-rejected-runtime",
+      "comparison": "build/reports/resource-critical-path/hemisphere-comparison.json",
+      "correctnessEvidence": "build/reports/resource-critical-path/hemisphere-check/receipts.json",
+      "restoredRuntimeDllSha256": "97a2b681e0ce6b6fb01943f379f5d7719663c5531c31d26316522eb9e18c80cd",
+      "restoredFiles": [
+        {
+          "path": "NRD.dll",
+          "restoredSha256": "3b20ab61abca160403daaae2ca822b533f57d057d1025bfbaed7b6c347e5df27",
+          "rejectedSha256": "f7dfde2a78e446d15967c40bbb0e096303a9eb68f1659176ee2d85aa49e48eaa"
+        },
+        {
+          "path": "rtrenderer_rtxpt.dll",
+          "restoredSha256": "97a2b681e0ce6b6fb01943f379f5d7719663c5531c31d26316522eb9e18c80cd",
+          "rejectedSha256": "087a91feac53df3e74304e3eb04239a847a9d3fdebb5b0616bc5a0ee9274249a"
+        },
+        {
+          "path": "ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeDynamicLighting.bin",
+          "restoredSha256": "937136650be55e9bb6b343e5fc01318ebd3ce28e2e915e1b2784eddfbc2cca43",
+          "rejectedSha256": "da081e8a44dbcc1f60bffc5a003144e8fb3d0a9931f4b0e571b58f8c40aa3571"
+        },
+        {
+          "path": "ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeDynamicLightingReconstruct.bin",
+          "restoredSha256": "fd337309878b4e58a0dd5d571c6f7adbae71b61882a2ccb91066262eb281005e",
+          "rejectedSha256": "fbc9907d048825e58fb386c6e945c0b8372b237e69699eccfeb63903a82258db"
+        },
+        {
+          "path": "ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeLighting.bin",
+          "restoredSha256": "e5e8a8ebca480ef1e734da64bb533d57f5dc8df9c344a976f16e1838f550253c",
+          "rejectedSha256": "cf75585b326d50f8f42b0e5713c577959b1e309756c26332bb2e1a0655aafb7e"
+        },
+        {
+          "path": "ShaderPrecompiled\\Rtxpt\\dxil\\ProcessingPasses\\RtrNativeLightingReconstruct.bin",
+          "restoredSha256": "d057bacb38edf4c39a210b4f5a399626c4e1fe96c651d4fc1ca0929ac5debc62",
+          "rejectedSha256": "b83a1817ba466b10262e4f7305739b920d2f4585d85fca65cc870e7a9f2699d0"
+        }
+      ],
+      "mustNotReapplyUnchanged": true,
+      "observedComparison": {
+        "stable": {
+          "pooled": {
+            "old": {
+              "gpu": {
+                "samples": 1844,
+                "p50Ms": 5.02128,
+                "p95Ms": 7.347104,
+                "p99Ms": 13.315616
+              },
+              "updateGpu": {
+                "samples": 0
+              },
+              "updateCpu": {
+                "samples": 0
+              },
+              "allCpu": {
+                "samples": 1844,
+                "p50Ms": 1.6236,
+                "p95Ms": 3.2393,
+                "p99Ms": 5.4822
+              }
+            },
+            "new": {
+              "gpu": {
+                "samples": 1804,
+                "p50Ms": 5.478975,
+                "p95Ms": 6.425663,
+                "p99Ms": 7.870463
+              },
+              "updateGpu": {
+                "samples": 0
+              },
+              "updateCpu": {
+                "samples": 0
+              },
+              "allCpu": {
+                "samples": 1804,
+                "p50Ms": 0.8644,
+                "p95Ms": 1.4319,
+                "p99Ms": 1.8629
+              }
+            }
+          },
+          "p95": {
+            "gpu": {
+              "oldMs": 7.347104,
+              "newMs": 6.425663,
+              "deltaMs": -0.9214409999999997,
+              "changePercent": -12.541553787723704
+            },
+            "allCpu": {
+              "oldMs": 3.2393,
+              "newMs": 1.4319,
+              "deltaMs": -1.8074000000000001,
+              "changePercent": -55.79600530978915
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "gi-first-rr-direct-overlap-final",
+      "status": "rejected-and-reverted",
+      "lastAuthorizedPerformanceCandidate": true,
+      "baselineDllSha256": "80803215305918E7113E043CD365CC5714F2EE96564BBF42BEEF823F7470C749",
+      "differenceFromRejectedConcurrentStates": "Do not start direct and GI simultaneously. Complete GI/guides first on graphics. RR alone borrows its own textures on compute; only then start independent direct on graphics. Scene/AS reads remain graphics-only, constants and unused UAVs are isolated, resolve/output wait for both stages.",
+      "quality": "Same samples, RR mode/model, outputs, shaders, complete-request boundary. Deep and reused-signal paths keep existing fused behavior.",
+      "acceptance": "All affected correctness passes; complete-request P50/P95 and throughput improve in two 30s windows per version. Any failure or unproven benefit: archive candidate, restore source plus default DLL, stop performance optimization. No next candidate.",
+      "after": "Re-read N01-N09 handoff and finish release-state/documentation/affected verification without further performance candidates",
+      "utc": "2026-11-05T05:27:45.2268990Z",
+      "correctnessPassed": false,
+      "performanceMeasured": false,
+      "candidateDllSha256": "5f299f45d09c1376a7164b7ac46f225252d8bdcf1149666069d856705aa2008e",
+      "reason": "Actual RR first frame returned DXGI_ERROR_INVALID_CALL (0x887A0001); no performance test and no gain claim. Exact native subcause unproven; do not attribute to driver. User last-attempt rule stops all performance work.",
+      "nativeSubcause": "unknown",
+      "sourceAndRuntimeRestored": true,
+      "rollbackEvidence": "build/reports/resource-critical-path/gi-first-final-rollback.json",
+      "failureEvidence": "build/reports/resource-critical-path/rr-handoff-gi-first-final-check",
+      "rejectedArchive": "build/reports/resource-critical-path/gi-first-final-rejected",
+      "retryAllowed": false,
+      "performanceOptimizationStopped": true,
+      "macroFailuresSinceLatestUserRule": 1
+    }
+  ],
+  "earlierRejectedExperiments": [
+    {
+      "id": "per-call-wave-counters",
+      "status": "rejected-and-reverted",
+      "reason": "Earlier per-call wave aggregation had no measured gain; do not repeat it as a new idea.",
+      "evidence": "docs/quality/resource-optimization.md"
+    },
+    {
+      "id": "packed-order",
+      "status": "rejected-and-reverted",
+      "oldFullGpuP95Ms": 5.606112,
+      "newFullGpuP95Ms": 5.936096,
+      "reason": "Throughput and full-path regression",
+      "evidence": "docs/quality/high-framerate-resources.md"
+    },
+    {
+      "id": "concurrent-states",
+      "status": "rejected-and-reverted",
+      "oldFullGpuP95Ms": 5.606112,
+      "newFullGpuP95Ms": 6.28304,
+      "reason": "Direct/GI dual-queue scheduling regressed; removed after correctness/lifetime repair.",
+      "evidence": "docs/quality/high-framerate-resources.md"
+    }
+  ],
+  "rollbackChecks": {
+    "rtxpt_light_tree.h": {
+      "restoredExactBeforeCandidate": true
+    },
+    "rtxpt_retained_light_tree.h": {
+      "restoredExactBeforeCandidate": true
+    },
+    "rtxpt_sparse_lighting.h": {
+      "restoredExactBeforeCandidate": true
+    }
+  },
+  "removedCodeMarkers": [
+    "RTR_DEFER_WORK_STATISTICS",
+    "rtrWorkCounts",
+    "RTR_QUERY_WORK_STATISTICS",
+    "RtrFlushSource",
+    "bounceSeed",
+    "sourceHistoryBounceSeeds"
+  ],
+  "retryRule": "Do not repeat unchanged failed code or rerun identical failed inputs. A materially different method or demonstrated changed cause requires an explicit recorded difference before a new test; old failures remain visible.",
+  "legacyGpuBoundaryCorrection": "All recorded historical fullGpu comparisons actually cover render-to-output and exclude earlier native resource-build submissions. Retain them as legacy render comparisons only; never use them for complete-request 4 ms acceptance or compare them as gains against new request-wide timers.",
+  "correctnessInvestigation": {
+    "totalMotionValues": 122880,
+    "differentMotionValues": 7912,
+    "status": "resolved-for-tested-fixtures",
+    "warmupOnlyFix": "failed; variant 0 signal 6 still differs",
+    "maximumDifference": 1.7881393432617188e-07,
+    "currentTrial": "passed input-aligned static/camera/object trajectories in OFF/SUMMARY/DEEP; no shader change and no added tolerance",
+    "evidence": "build/reports/resource-critical-path/baseline/rr-instrumentation.log",
+    "toleranceUnchanged": true,
+    "hypothesis": "Specialized shaders may use different floating-point projection arithmetic; previous-geometry warmup alone does not explain the failure",
+    "rejectedTrial": {
+      "maximumDifference": 1.7881393432617188e-07,
+      "result": "failed variant 0 signal 6; reverted source; runtime will be rebuilt before further tests",
+      "differentValues": 15702,
+      "name": "precise projection arithmetic",
+      "evidence": "build/reports/resource-critical-path/motion-precise/rr-instrumentation.log",
+      "performanceMeasured": false
+    },
+    "directInputEvidence": {
+      "projectionMatricesBitExact": true,
+      "offFlags": 30,
+      "deepFlags": 7,
+      "directory": "build/reports/resource-critical-path/input-trace/native-gi-reconstruction",
+      "geometryTransitionBit": 16
+    },
+    "validation": {
+      "cameraAndObjectMotion": true,
+      "passedCases": [
+        "rr-instrumentation",
+        "RtxptNativeLightingReconstructionNativeSelfTest",
+        "RtxptHostAugmentationNativeSelfTest"
+      ],
+      "semanticInputsBitExact": true,
+      "signalsAndGuidesBitExact": true,
+      "inputWarmups": 27,
+      "evidenceDirectory": "build/reports/resource-critical-path/rr-input-aligned",
+      "sdkEvaluations": 51,
+      "comparedVariants": 24,
+      "signalsPerVariant": 8
+    },
+    "productAcceptance": "docs/quality/correctness-criteria.md; bitwise equivalence is an internal check, not a blanket user requirement"
+  },
+  "activeExperiment": null,
+  "specializedReassessment": {
+    "status": "correctness-passed-withdrawn-from-mainline",
+    "evidence": "build/reports/resource-critical-path/specialized",
+    "reason": "DEEP-only optimization does not address ordinary rendering; user prioritized core path",
+    "performanceMeasured": false,
+    "runtimeArchive": "build/reports/resource-critical-path/specialized-validated-runtime",
+    "sourceRestored": true
+  },
+  "sceneTableExperiment": {
+    "id": "stable-scene-table-rows",
+    "status": "retained-user-accepted",
+    "purpose": "Core resource update path in OFF/SUMMARY/DEEP, not fixture or diagnostic overhead",
+    "changes": [
+      "Dense stable resource iteration with swap removal instead of hash-order renumbering",
+      "Swap-remove instance slots without shifting the remaining vector",
+      "Upload only changed scene-table rows; bounded full-write fallback and synchronized partial-write shadows"
+    ],
+    "baseline": "build/reports/resource-critical-path/validated-baseline",
+    "sourceBackup": "build\\reports\\resource-critical-path\\scene-tables-before",
+    "patch": "tools/patches/rtxpt-scene-tables.patch",
+    "quality": "No ray, sampling, resolution, GI/RR or output reuse changes",
+    "retainedTestCorrection": {
+      "originalCandidateFailure": "build/reports/resource-critical-path/scene-tables/retained-rr.log",
+      "originalBaselineFailure": "build/reports/resource-critical-path/scene-tables-control-correctness/retained-rr.log",
+      "sameFailure": "One mesh replacement builds one BLAS",
+      "cause": "The existing mutable BLAS path performs one refit, while the older retained test required one new build and did not count refits.",
+      "change": "Require exactly one build-or-refit and one exported variant; resident mesh instancing must add neither builds nor refits. Pixel reference thresholds unchanged.",
+      "originalSource": "build/reports/resource-critical-path/scene-tables-before/RtxptRetainedNativeSelfTest.java"
+    },
+    "candidateDllSha256": "fdbe614cb6e2bfff41c2cc21c555174e981888b99d3fe25fc8d538d2ca3a7dba",
+    "correctnessEvidence": "build/reports/resource-critical-path/scene-tables/receipts.json",
+    "performanceComparison": "build/reports/resource-critical-path/scene-tables-comparison.json",
+    "measuredResult": "ABBA: stream complete GPU P95 24.504704 -> 21.611040 ms (-2.893664 ms, -11.81%); local overall 12.185920 -> 12.636319 ms (+0.450399 ms, +3.70%), local update P95 essentially unchanged. All idle GPU baselines 39-51%; no absolute acceptance.",
+    "targetReached": false,
+    "decision": "User accepted the measured resource optimization; small local regression can be external GPU variation, not established as a code regression."
+  },
+  "retainedIndexExperiment": {
+    "id": "incremental-topology-index",
+    "status": "retained-core-resource-improvement-target-not-met",
+    "purpose": "Avoid rebuilding mesh/instance reverse edges for every small resource topology transaction",
+    "difference": "Maintain detached/attached instance edges and only added/retired mesh-material edges. Dense mesh membership is validated once; material/texture inventory remains a full reconciliation. Initialization and file-scene path retain full indexing.",
+    "sourceBackup": "build/reports/resource-critical-path/scene-index-before",
+    "baselineDllSha256": "fdbe614cb6e2bfff41c2cc21c555174e981888b99d3fe25fc8d538d2ca3a7dba",
+    "quality": "No shader, resolution, sampling, ray, GI/RR or output-reuse changes",
+    "correctnessAddition": "11 real-pixel alpha/shadow cases after replacement, shared detach, material replacement and last-instance retirement",
+    "correctnessEvidence": "build/reports/resource-critical-path/scene-index/receipts.json",
+    "candidateDllSha256": "92f3fe2b3e76ecc22b4330d27566f85576bc8c40bb689559ec5fb4f004139e01",
+    "performanceComparison": "build/reports/resource-critical-path/scene-index-comparison.json",
+    "performance": {
+      "gpu": {
+        "oldMs": 23.671424,
+        "newMs": 14.814208,
+        "deltaMs": -8.857215999999998,
+        "changePercent": -37.41733492670317
+      },
+      "updateGpu": {
+        "oldMs": 28.225919,
+        "newMs": 23.4216,
+        "deltaMs": -4.804319,
+        "changePercent": -17.02094801589985
+      },
+      "updateCpu": {
+        "oldMs": 27.2301,
+        "newMs": 22.7766,
+        "deltaMs": -4.453500000000002,
+        "changePercent": -16.355062963411815
+      },
+      "allCpu": {
+        "oldMs": 24.7915,
+        "newMs": 19.3566,
+        "deltaMs": -5.434899999999999,
+        "changePercent": -21.92243309198717
+      }
+    },
+    "indexScopeCpu": {
+      "oldSamples": 94,
+      "newSamples": 58,
+      "oldP95Ms": 4.117,
+      "newP95Ms": 0.108,
+      "deltaMs": -4.009,
+      "changePercent": -97.37673062909886,
+      "scope": "INDEX_REBUILD selfNanos from the retained CPU event windows"
+    },
+    "measurementLimits": "4096 meshes, SUMMARY, real GI RR, unchanged signals/quality, no output reuse. A1/B1/A2 each 10 seconds. GPU before every window 42%; absolute 4 ms acceptance is ineligible. The retained CPU histories are bounded subsets, not all transaction samples.",
+    "targetReached": false,
+    "remainingFullScans": [
+      "SDK scene graph refresh and geometry/instance preparation",
+      "One dense mesh membership inventory during topology retirement",
+      "Material/texture inventory reconciliation",
+      "Native lighting topology metadata reconciliation"
+    ],
+    "sourceSha256": "d8cac2e8787d489979e4fbca634d43d482abf2ed5c6f7956bcfbf4ac2da9421a"
+  },
+  "bestCandidateSelection": {
+    "criterion": "Largest historically observed reduction in complete-request stream GPU P95 among retained architecture stages; not a cross-baseline causal ranking and not a 4 ms pass. Earlier stages used loaded GPU baselines. Only the strongest candidate is presented; stable-scene-table-rows remains its retained prerequisite.",
+    "candidates": [
+      {
+        "id": "incremental-topology-index",
+        "status": "retained-best-historical-observation",
+        "includes": [
+          "stable-scene-table-rows",
+          "incremental-topology-index"
+        ],
+        "performance": {
+          "gpu": {
+            "oldMs": 23.671424,
+            "newMs": 14.814208,
+            "deltaMs": -8.857215999999998,
+            "changePercent": -37.41733492670317
+          },
+          "updateGpu": {
+            "oldMs": 28.225919,
+            "newMs": 23.4216,
+            "deltaMs": -4.804319,
+            "changePercent": -17.02094801589985
+          },
+          "updateCpu": {
+            "oldMs": 27.2301,
+            "newMs": 22.7766,
+            "deltaMs": -4.453500000000002,
+            "changePercent": -16.355062963411815
+          },
+          "allCpu": {
+            "oldMs": 24.7915,
+            "newMs": 19.3566,
+            "deltaMs": -5.434899999999999,
+            "changePercent": -21.92243309198717
+          }
+        },
+        "comparison": "build/reports/resource-critical-path/scene-index-comparison.json",
+        "correctnessEvidence": "build/reports/resource-critical-path/scene-index/receipts.json",
+        "limits": "4096 meshes, SUMMARY, real GI RR, unchanged signals/quality, no output reuse. A1/B1/A2 each 10 seconds. GPU before every window 42%; absolute 4 ms acceptance is ineligible. The retained CPU histories are bounded subsets, not all transaction samples."
+      }
+    ],
+    "excludedCandidateIds": [
+      "selective-topology-preparation"
+    ],
+    "failedRecordsPreserved": true
+  },
+  "currentRuntime": {
+    "composition": [
+      "stable-scene-table-rows",
+      "incremental-topology-index",
+      "masked-alpha-correctness-fix",
+      "evaluate-local-rr-handoff"
+    ],
+    "dllSha256": "190f107aec92100823589730b323372d02fe812dafecb3a262651e753eb89409",
+    "validationStatus": "13-current-correctness-passed-3-scale-cases-reused-no-final-performance-rerun",
+    "evidence": "docs/quality/data/resource-latency.json",
+    "performanceMeasured": false,
+    "targetReached": false
+  },
+  "rrHandoffExperiment": {
+    "id": "evaluate-local-rr-handoff",
+    "classification": "architecture-resource-ownership",
+    "status": "retained-ownership-fix-small-latency-improvement",
+    "sourceBefore": "build/reports/resource-critical-path/rr-handoff-before",
+    "record": "build/reports/resource-critical-path/rr-handoff-experiment.json",
+    "difference": "Borrow the eight RR resources through evaluation-local tags instead of publishing volatile global tags. Keep NVRHI command-list references through GPU completion; no Present lifetime promise for the offscreen host.",
+    "auditedSdkCommit": "625db07d4bca5abc67d781c42af7e7fb0761f1b6",
+    "qualityUnchanged": true,
+    "macroFailuresSinceLatestUserRule": 0,
+    "candidateDllSha256": "80803215305918e7113e043cd365cc5714f2ee96564bbf42beef823f7470c749",
+    "performanceComparison": "build\\reports\\resource-critical-path\\rr-handoff-comparison.json",
+    "performanceChanges": {
+      "p50Ms": {
+        "old": 5.1584,
+        "new": 5.099072,
+        "delta": -0.059328000000000713,
+        "changePercent": -1.150124069478922
+      },
+      "p95Ms": {
+        "old": 5.466272,
+        "new": 5.422623,
+        "delta": -0.04364900000000027,
+        "changePercent": -0.7985149659585229
+      },
+      "p99Ms": {
+        "old": 6.751903,
+        "new": 6.767807,
+        "delta": 0.015903999999999918,
+        "changePercent": 0.23554840761189724
+      },
+      "fps": {
+        "old": 192.8907630675134,
+        "new": 195.14181915884157,
+        "delta": 2.2510560913281665,
+        "changePercent": 1.167010828061413
+      }
+    },
+    "targetReached": false,
+    "outputFilesBitExact": 19,
+    "allocationComparison": "build\\reports\\resource-critical-path\\rr-handoff-allocation-comparison.json",
+    "correctnessEvidence": "build\\reports\\resource-critical-path\\rr-handoff-candidate-check",
+    "limits": "Two 30s windows per version, complete samples merged. Small latency improvement, P99 +0.24%. Callback allocation totals are not SDK peak VRAM.",
+    "auditedReleaseSourceNotExactBinaryBuild": true,
+    "closeoutComparisonLimits": "Historical A1 NRD differed from B1/B2/A2. Original measurements remain; later locked-dependency review is separate: docs/quality/data/tail-latency-review.json."
+  },
+  "finalAttempt": {
+    "id": "gi-first-rr-direct-overlap-final",
+    "status": "rejected-and-reverted",
+    "lastAuthorizedPerformanceCandidate": true,
+    "baselineDllSha256": "80803215305918E7113E043CD365CC5714F2EE96564BBF42BEEF823F7470C749",
+    "differenceFromRejectedConcurrentStates": "Do not start direct and GI simultaneously. Complete GI/guides first on graphics. RR alone borrows its own textures on compute; only then start independent direct on graphics. Scene/AS reads remain graphics-only, constants and unused UAVs are isolated, resolve/output wait for both stages.",
+    "quality": "Same samples, RR mode/model, outputs, shaders, complete-request boundary. Deep and reused-signal paths keep existing fused behavior.",
+    "acceptance": "All affected correctness passes; complete-request P50/P95 and throughput improve in two 30s windows per version. Any failure or unproven benefit: archive candidate, restore source plus default DLL, stop performance optimization. No next candidate.",
+    "after": "Re-read N01-N09 handoff and finish release-state/documentation/affected verification without further performance candidates",
+    "utc": "2026-11-05T05:27:45.2268990Z",
+    "correctnessPassed": false,
+    "performanceMeasured": false,
+    "candidateDllSha256": "5f299f45d09c1376a7164b7ac46f225252d8bdcf1149666069d856705aa2008e",
+    "reason": "Actual RR first frame returned DXGI_ERROR_INVALID_CALL (0x887A0001); no performance test and no gain claim. Exact native subcause unproven; do not attribute to driver. User last-attempt rule stops all performance work.",
+    "nativeSubcause": "unknown",
+    "sourceAndRuntimeRestored": true,
+    "rollbackEvidence": "build/reports/resource-critical-path/gi-first-final-rollback.json",
+    "failureEvidence": "build/reports/resource-critical-path/rr-handoff-gi-first-final-check",
+    "rejectedArchive": "build/reports/resource-critical-path/gi-first-final-rejected",
+    "retryAllowed": false,
+    "performanceOptimizationStopped": true,
+    "macroFailuresSinceLatestUserRule": 1
+  },
+  "performanceOptimizationStopped": true,
+  "macroFailuresSinceLatestUserRule": 1,
+  "activeScope": null,
+  "tailLatencyReview": {
+    "id": "tail-latency-regression-repair",
+    "status": "stopped-by-user-no-production-change",
+    "authorization": "User explicitly reopened targeted repair for GPU max 8.103456 ms and CPU request max 14.1558 ms. No blanket 4 ms optimization restart.",
+    "baselineDllSha256": "80803215305918e7113e043cd365cc5714f2ee96564bbf42beef823f7470c749",
+    "priorRejectedCandidatesRemainRejected": true,
+    "qualityAndBoundaryUnchanged": true,
+    "performanceOptimizationStopped": true,
+    "scope": "Targeted CPU/GPU tail regression only",
+    "utc": "2026-11-05T05:46:09.551534+00:00",
+    "productionSourceChanged": false,
+    "repairVerified": false,
+    "closedUtc": "2026-11-05T06:02:37.558078+00:00",
+    "review": "docs/quality/data/tail-latency-review.json"
+  },
+  "releaseCompletion": {
+    "status": "release-inputs-frozen-package-verification-and-publication-tracked-separately",
+    "authorization": "User explicitly requested complete 7.1.5 repair and publication on 2026-11-05. Final-identity acceptance measurements are authorized; performance candidates remain stopped.",
+    "evidenceDirectory": "build/reports/release-715-final",
+    "productionOptimizationResumed": false,
+    "newNativeSha256": "190f107aec92100823589730b323372d02fe812dafecb3a262651e753eb89409",
+    "note": "Relinked retained source after removing rejected candidate object; this is a new release identity, not a new optimization.",
+    "passedTestsMustNotBeRerun": true,
+    "currentCorrectnessPassed": 13,
+    "scaleCasesReused": 3,
+    "finalNativePerformanceWindows": 0,
+    "historicalPerformanceWindowsReused": 36,
+    "artifactRecord": "docs/quality/data/resource-latency-release.json",
+    "timeoutCause": "unknown; first 300s timeout preserved, single JFR diagnostic retry passed without production change",
+    "githubDelivery": "source-code-and-version-tag-only-no-binary-assets",
+    "mavenDelivery": "four-modules-to-Maven-Local",
+    "cleanup": "Removed one-off report generator, obsolete closeout/tail collectors; local temporary drivers removed after packaging. Formal build/acceptance/verifier retained."
+  },
+  "retainedRuntimeBeforeRelease": {
+    "composition": [
+      "stable-scene-table-rows",
+      "incremental-topology-index",
+      "masked-alpha-correctness-fix",
+      "evaluate-local-rr-handoff"
+    ],
+    "dllSha256": "80803215305918e7113e043cd365cc5714f2ee96564bbf42beef823f7470c749",
+    "validationStatus": "affected-paths-passed-restoration-verified-full-matrix-not-rerun",
+    "evidence": "build\\reports\\resource-critical-path\\rr-handoff-candidate-check",
+    "correctnessPassed": [
+      "native-build",
+      "java-build",
+      "RtxptNativeLightingReconstructionNativeSelfTest",
+      "RtxptHostAugmentationNativeSelfTest",
+      "rr-instrumentation",
+      "rr-lifecycle",
+      "rr-temporal",
+      "19-control-candidate-pfm-bit-exact"
+    ],
+    "targetReached": false,
+    "priorRuntimePerformance30s": {
+      "local": {
+        "p95Ms": 5.909023,
+        "samples": 5633,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 17.26 W, 195 MHz, 9001 MHz",
+        "errors": [],
+        "evidence": "topology-rollback-corrected\\production-4096-SUMMARY-local-9a53303a6711b0b4-analysis.json"
+      },
+      "stable": {
+        "p95Ms": 5.545951,
+        "samples": 5746,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 16.49 W, 180 MHz, 9001 MHz",
+        "errors": [],
+        "evidence": "topology-rollback-corrected\\production-4096-SUMMARY-stable-9a53303a6711b0b4-analysis.json"
+      },
+      "stream": {
+        "p95Ms": 6.679072,
+        "samples": 5588,
+        "gpuBefore": "NVIDIA GeForce RTX 5080 Laptop GPU, 621.01, 0 %, 109 MiB, 16.88 W, 202 MHz, 9001 MHz",
+        "errors": [],
+        "evidence": "topology-rollback-corrected\\production-4096-SUMMARY-stream-9a53303a6711b0b4-analysis.json"
+      }
+    },
+    "latestStablePerformanceABBA": "docs/quality/data/tail-latency-review.json",
+    "restorationVerification": "docs/quality/data/optimization-closeout.json"
+  }
+}

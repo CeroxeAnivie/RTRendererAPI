@@ -138,7 +138,7 @@ public final class RtxptHostAugmentationNativeSelfTest {
                     check(renderer.hostSurfaceAugmentation().equals(initial),"Three-argument public factory retains full augmentation configuration");
                     check(renderer.extension(HostSurfaceControl.class).orElseThrow().hostSurfaceAugmentation().equals(initial),"Public extension exposes the same configuration");
                     renderer.hostSurfaceWorkStatisticsEnabled(true);
-                    renderer.lightingWorkStatisticsEnabled(true);
+                    renderer.diagnosticLevel(RtxptDiagnostics.Level.DEEP);renderer.lightingWorkStatisticsEnabled(true);
                     renderer.apply(SceneTransaction.builder(1).resetScene().upsert(MaterialAsset.builder(1).roughness(.8f).build())
                         .upsert(RtxptFramePreparationNativeSelfTest.card(1)).upsert(SceneInstance.builder(1,1).build()).build());
                     runFrame(renderer,writer,"black-host",0,1,FrameClock.of(-100,0),inputs(0,.5f,1,0),false);

@@ -17,7 +17,7 @@ public final class RtxptNativeLightingNativeSelfTest {
     public static void main(String[] args)throws Exception {
         Files.createDirectories(OUT);
         try(var r=new RtxptRenderer(RtxptLightTreeNativeSelfTest.config(4),true)) {
-            r.nativeLightingPlan(NativeLightingPlan.defaults(48,32));r.lightingWorkStatisticsEnabled(true);r.apply(scene());r.submit(frame(0,1));
+            r.nativeLightingPlan(NativeLightingPlan.defaults(48,32));r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);r.lightingWorkStatisticsEnabled(true);r.apply(scene());r.submit(frame(0,1));
             var direct=OUT.resolve("baseline-direct.pfm");var indirect=OUT.resolve("baseline-indirect.pfm");
             r.captureNativeLighting(direct,0);r.captureNativeLighting(indirect,1);
             var a=RtxptLightTreeNativeSelfTest.linear(direct);var b=RtxptLightTreeNativeSelfTest.linear(indirect);

@@ -232,10 +232,16 @@ float3 RtrShadow(RtrReceiver receiver,float3 direction,float distance)
     if(query.CommittedStatus()==COMMITTED_TRIANGLE_HIT)return 0;
     return visibility;
 }
-bool RtrSupport(RtrNode node,float3 position)
+bool RtrSupport(RtrNode node,float3 position,bool linearL1)
 {
     float3 delta=max(max(node.lower.xyz-position,position-node.left.xyz),0);float radius=node.upper.z;
-    return radius>0&&all(delta<=radius)&&dot(delta/radius,delta/radius)<=1;
+    // The expanded squared bound is conservative, including near-boundary
+    // roundoff. Actual source shape/radius/attenuation is still evaluated at leaves.
+    // An all-L1 subtree has the tighter taxicab support of its emitting AABB.
+    // The header enables this only when every represented source uses L1;
+    // mixed and inverse-square fields keep their original Euclidean bound.
+    if(linearL1)return radius>0&&dot(delta,float3(1,1,1))<=radius*1.000004;
+    return radius>0&&all(delta<=radius)&&dot(delta,delta)<=radius*radius*1.000004;
 }
 #ifndef RTR_LIGHT_GROUP_CAPACITY
 #define RTR_LIGHT_GROUP_CAPACITY 32
@@ -314,16 +320,20 @@ float3 RtrGroupTotal(RtrSourceGroups groups)
 #endif
     return result;
 }
-float RtrNodeScoreBound(RtrNode node,float3 position)
+float RtrNodeScoreBound(RtrNode node,float3 position,bool linearL1)
 {
     // Bounds contain maximum radiance, emitting volume and support radius,
     // and the smallest falloff exponent. They overestimate every descendant,
     // including spot cones, colored transmission and visibility in [0,1].
     float3 delta=max(max(node.lower.xyz-position,position-node.left.xyz),0);
-    float distance=length(delta);
-    float attenuation=saturate(1-distance/node.upper.z),exponent=abs(node.right.y);
-    attenuation=RtrFalloff(attenuation,exponent);
-    if(node.right.y>0)attenuation/=max(distance*distance,1);
+    float distance=linearL1?dot(delta,float3(1,1,1)):length(delta);
+    float attenuation=saturate(1-distance/node.upper.z);
+    // LINEAR_L1 ignores the declared falloff exponent and inverse-square term.
+    // Mixed trees retain the existing conservative exponent/radial bound.
+    [branch]if(!linearL1){
+        attenuation=RtrFalloff(attenuation,abs(node.right.y));
+        if(node.right.y>0)attenuation/=max(distance*distance,1);
+    }
     float3 upper=float3(node.upper.xy,node.right.x)*attenuation*1.00001+1e-12;
     return dot(upper,float3(.2126,.7152,.0722));
 }
@@ -342,6 +352,13 @@ bool RtrNodeCanImprove(uint mask,float score,RtrSourceGroups groups)
         if(score>=groups.scores[group])return true;}
     return false;
 #endif
+}
+bool RtrNodeHasUnseenGroup(uint mask,RtrSourceGroups groups)
+{
+#if RTR_LIGHT_GROUP_CAPACITY == 1
+    mask=mask!=0?1:0;
+#endif
+    return (mask&~groups.mask)!=0;
 }
 // Each declared composition/group is independent, including the dynamic-only
 // subset used by the default baseline correction. Visibility precedes selection.
@@ -365,7 +382,7 @@ void RtrEvaluateSource(RtrReceiver receiver,uint slot,bool separateDynamic,inout
     float3 contribution=source.color.rgb*source.color.w*attenuation;
     if(!isLinear||source.position.w==2)
         if(!RtrCanImprove(allSources,source,contribution)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,contribution)))return;
-    if(source.identity.x>0&&distance>1e-5)contribution*=RtrShadow(receiver,direction,distance);
+    if(source.identity.x>0&&distance>1e-5&&any(contribution!=0))contribution*=RtrShadow(receiver,direction,distance);
     RtrAccumulate(allSources,source,contribution,slot);if(isDynamic)RtrAccumulate(dynamicSources,source,contribution,slot);
 }
 void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool needDynamic=true,bool primary=false)
@@ -389,21 +406,27 @@ void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,boo
     // nearer child first to establish a useful winner before testing far bounds.
     // Additive/mixed composition retains its original accumulation order.
     bool bounded=t_Sources[0].position.w!=0;
+    // Empty/older headers leave this reserved field zero and retain L2 bounds.
+    bool linearL1=t_Sources[0].extent.x!=0;
 #if RTR_MAX_COMPOSITION
     // Only the branch choice and pending bits need per-ray storage. Parent
     // indices live in the retained tree, avoiding a dynamically indexed local
     // 32-entry stack across each shadow RayQuery.
     uint next=uint(t_Sources[0].position.y),depth=0,pending=0,deferredLeft=0;
     while(next!=0xffffffff){
-        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position);
-        if(supported&&bounded){float score=RtrNodeScoreBound(node,receiver.position);uint mask=asuint(node.right.w);
-            supported=RtrNodeCanImprove(mask,score,allSources)||(separateDynamic&&RtrNodeCanImprove(mask,score,dynamicSources));}
+        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position,linearL1);
+        if(supported&&bounded){uint mask=asuint(node.right.w);
+            // A missing winner accepts the node regardless of its score. Avoid
+            // sqrt/falloff/division until both queried subsets have winners.
+            [branch]if(!RtrNodeHasUnseenGroup(mask,allSources)&&(!separateDynamic||!RtrNodeHasUnseenGroup(mask,dynamicSources))){
+                float score=RtrNodeScoreBound(node,receiver.position,linearL1);
+                supported=RtrNodeCanImprove(mask,score,allSources)||(separateDynamic&&RtrNodeCanImprove(mask,score,dynamicSources));}}
         if(supported&&node.upper.w<0){
             uint left=uint(node.lower.w),right=uint(node.left.w);bool leftFirst=false;
             if(bounded){RtrNode a=t_SourceTree[left],b=t_SourceTree[right];
                 float3 da=max(max(a.lower.xyz-receiver.position,receiver.position-a.left.xyz),0);
                 float3 db=max(max(b.lower.xyz-receiver.position,receiver.position-b.left.xyz),0);
-                leftFirst=dot(da,da)<dot(db,db);}
+                leftFirst=(linearL1?dot(da,float3(1,1,1)):dot(da,da))<(linearL1?dot(db,float3(1,1,1)):dot(db,db));}
             uint bit=1u<<depth;pending|=bit;deferredLeft=(deferredLeft&~bit)|(leftFirst?0:bit);++depth;
             next=leftFirst?left:right;continue;
         }
@@ -419,15 +442,17 @@ void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,boo
     uint stack[32],pending=0,next=uint(t_Sources[0].position.y);
     while(next!=0xffffffff)
     {
-        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position);
-        if(supported&&bounded){float score=RtrNodeScoreBound(node,receiver.position);uint mask=asuint(node.right.w);
-            supported=RtrNodeCanImprove(mask,score,allSources)||(separateDynamic&&RtrNodeCanImprove(mask,score,dynamicSources));}
+        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position,linearL1);
+        if(supported&&bounded){uint mask=asuint(node.right.w);
+            [branch]if(!RtrNodeHasUnseenGroup(mask,allSources)&&(!separateDynamic||!RtrNodeHasUnseenGroup(mask,dynamicSources))){
+                float score=RtrNodeScoreBound(node,receiver.position,linearL1);
+                supported=RtrNodeCanImprove(mask,score,allSources)||(separateDynamic&&RtrNodeCanImprove(mask,score,dynamicSources));}}
         if(supported&&node.upper.w<0){
             uint deferred=uint(node.lower.w),first=uint(node.left.w);
             if(bounded){RtrNode a=t_SourceTree[deferred],b=t_SourceTree[first];
                 float3 da=max(max(a.lower.xyz-receiver.position,receiver.position-a.left.xyz),0);
                 float3 db=max(max(b.lower.xyz-receiver.position,receiver.position-b.left.xyz),0);
-                if(dot(da,da)<dot(db,db)){uint swap=deferred;deferred=first;first=swap;}}
+                if((linearL1?dot(da,float3(1,1,1)):dot(da,da))<(linearL1?dot(db,float3(1,1,1)):dot(db,db))){uint swap=deferred;deferred=first;first=swap;}}
             stack[pending++]=deferred;next=first;continue;
         }
         if(pending>0)next=stack[--pending];else next=0xffffffff;

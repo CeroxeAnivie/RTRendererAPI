@@ -24,8 +24,9 @@ final class RtxptNative {
         for(String dependency:new String[]{"sl.interposer.dll","NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
         System.load(dll.toString()); loaded=true;
     }
-    static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,boolean gpuTimingsEnabled,int maxFramesInFlight,int workerThreads,int shaderCompilerThreads,String[] options,int[] qualityInts,float[] qualityFloats);
+    static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,boolean gpuTimingsEnabled,int maxFramesInFlight,int workerThreads,int shaderCompilerThreads,String[] options,int[] qualityInts,float[] qualityFloats,int diagnosticLevel);
     static native void prepare(String runtime);
+    static native void prepareDiagnostics(int level);
     static native void diagnosticContext(long handle,long sequence,long revision);
     static native void diagnosticSubmitBegin(long handle,long sequence,long revision,long elapsedNanos);
     static native void diagnosticSubmitDeferred();
@@ -110,6 +111,12 @@ final class RtxptNative {
     static native void resourcesMemory(long handle,long revision,java.nio.ByteBuffer packet);
     static native long[] dynamicResourceStatistics(long handle);
     static native boolean resourcesCanUpdate(long handle);
+    static native int resourcesAdmission(long handle);
+    static native long[] resourcePressure(long handle);
+    static native long[] benchmarkGpuSnapshot(long handle);
+    static native void benchmarkGpuBegin(long handle,long sequence,long revision);
+    static native long[] nativeLightingInputSnapshot(long handle);
+    static native long[] sceneTableUploadStatistics(long handle);
     static native boolean deviceRemoved(long handle);
     static native long[] resourceMaintenance(long handle);
     static native void nativeLightingVertexColors(long handle,String geometry,int[] colors);

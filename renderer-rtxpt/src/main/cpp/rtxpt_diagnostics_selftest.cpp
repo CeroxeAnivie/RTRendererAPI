@@ -17,7 +17,7 @@ void operator delete(void* p,std::size_t) noexcept{std::free(p);}
 using namespace RtrDiagnostics;
 static void require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
 static Event eventAt(const std::vector<uint64_t>& snapshot,size_t index){
-    Event event{};std::copy_n(snapshot.begin()+13+index*Width,Width,event.begin());return event;
+    Event event{};std::copy_n(snapshot.begin()+Header+index*Width,Width,event.begin());return event;
 }
 static void off(){
     Reset();const auto clocks=clockCalls.load(),ids=nextId.load(),allocated=allocations.load();
@@ -64,7 +64,7 @@ static void workersAndCancellation(){
         if(event[12]==workerId){found=true;require(event[13]==0&&event[12]!=callerId,"Worker batch ID became cross-thread parent");}}
     require(found,"Worker evidence missing");
     BeginSubmit(2,1,0);BeginSubmit(3,1,0);EndSubmit(false,true);
-    snapshot=Snapshot();size_t offset=13+size_t(snapshot[3]+snapshot[5]+snapshot[7])*Width;
+    snapshot=Snapshot();size_t offset=Header+size_t(snapshot[3]+snapshot[5]+snapshot[7])*Width;
     unsigned cancelled=0;for(size_t i=0;i<snapshot[9];++i,offset+=6)cancelled+=(snapshot[offset+3]&Cancelled)!=0;
     require(cancelled==2,"Interrupted and explicit cancellation not retained");
     std::puts("RTXPT_DIAGNOSTICS_WORKERS PASS sharedBatch uniqueScopes noCrossThreadSelf cancellation=2");
@@ -73,19 +73,20 @@ static void activeAndFailure(){
     Reset();Configure(2);const auto token=MonitorToken();
     std::promise<void> entered,released;auto release=released.get_future();
     std::thread owner([&]{BeginSubmit(21,31,60'000'000);
-        try{Scope lighting(Lighting,160000,18);entered.set_value();release.wait();throw std::runtime_error("Expected failure before frame");}
+        try{Scope lighting(BlasAllocate,160000,18,1,0,0xaabbccdd,31,CapacityGrowth,4096);entered.set_value();release.wait();throw std::runtime_error("Expected failure before frame");}
         catch(const std::runtime_error&){EndSubmit(true);}
     });
     entered.get_future().wait();const auto snapshot=Snapshot(token);
     require(snapshot[7]==2,"Watchdog cannot observe active submit and lighting scopes");
-    size_t offset=13+size_t(snapshot[3]+snapshot[5])*Width;bool lighting=false,submit=false;
+    size_t offset=Header+size_t(snapshot[3]+snapshot[5])*Width;bool lighting=false,submit=false;
     for(size_t i=0;i<snapshot[7];++i,offset+=Width){require(snapshot[offset+11]&Active,"Live sample not marked incomplete");
         require(snapshot[offset+7]==0,"Live sample exposed speculative CPU self");
-        lighting|=snapshot[offset+4]==Lighting;submit|=snapshot[offset+4]==Submit;
+        lighting|=snapshot[offset+4]==BlasAllocate;submit|=snapshot[offset+4]==Submit;
+        if(snapshot[offset+4]==BlasAllocate)require(snapshot[offset+18]==0xaabbccdd&&snapshot[offset+19]==31&&snapshot[offset+20]==CapacityGrowth&&snapshot[offset+21]==4096&&snapshot[offset+22]>0&&snapshot[offset+23]==2,"Live resource identity, generation, reason, bytes, attempt and mode missing");
         require(snapshot[offset]==21&&snapshot[offset+1]==31,"Watchdog lost frame/revision context");}
     require(lighting&&submit,"Active stage names missing");released.set_value();owner.join();
     const auto done=Snapshot(token);require(done[7]==0&&done[9]==1&&done[4]>=1,"Failure recording missing");
-    const size_t sample=13+size_t(done[3]+done[5])*Width;
+    const size_t sample=Header+size_t(done[3]+done[5])*Width;
     require((done[sample+3]&Failed)&&!(done[sample+3]&EnteredNativeFrame),"Failure before native FRAME was misrepresented");
     require(done[5]>=2,"Slow/failed submit did not retain lighting before frame");
     std::puts("RTXPT_DIAGNOSTICS_WATCHDOG PASS liveSubmitAndLighting=2 failedBeforeFrame=1");
@@ -98,7 +99,7 @@ static void switchAndReset(){
         Configure(1);require(MonitorToken()==token,"Level change expired the session monitor");
     }
     EndSubmit(true);auto snapshot=Snapshot(token);require(snapshot[9]==1,"Close lost live submit");
-    const size_t sample=13+size_t(snapshot[3]+snapshot[5]+snapshot[7])*Width;
+    const size_t sample=Header+size_t(snapshot[3]+snapshot[5]+snapshot[7])*Width;
     require((snapshot[sample+3]&(Failed|Truncated))==(Failed|Truncated),"Close/finally lost failure or truncation");
     require(snapshot[4]>=1,"Failed close did not retain diagnostic evidence");
     {Scope old(Lighting);Reset();Configure(1);{Scope current(Frame);}const auto clocks=clockCalls.load();
@@ -116,7 +117,7 @@ static std::vector<uint64_t> categories(){
     BeginSubmit(4,2,0);{Scope frameScope(Frame);}EndSubmit(false);
     BeginSubmit(5,3,70'000'000);{Scope update(Lighting);}EndSubmit(true);
     const auto snapshot=Snapshot();require(snapshot[9]==6,"Missing independently retained submit samples");
-    size_t offset=13+size_t(snapshot[3]+snapshot[5]+snapshot[7])*Width;
+    size_t offset=Header+size_t(snapshot[3]+snapshot[5]+snapshot[7])*Width;
     const uint64_t expected[]={Initial,Update,Resized,Waited,Steady,Update};
     for(size_t i=0;i<6;++i,offset+=6)require(snapshot[offset+4]==expected[i],"Submit work category mismatch");
     std::puts("RTXPT_DIAGNOSTICS_CATEGORIES PASS initial update resize wait steady failure");return snapshot;

@@ -111,6 +111,17 @@ public interface RtxptAccess extends RtxptDiagnosticAccess {
     record ResourceMaintenance(long blasBuilds,long blasRefits,long tlasBuilds,long gpuTextureCopyBytes,
         long releasePending,long releaseCompleted,long releaseWallNanos) { }
     default ResourceMaintenance resourceMaintenance(){return new ResourceMaintenance(0,0,0,0,0,0,0);}
+    /** Bounded resident/release ownership. Referenced bytes may overlap shared allocations;
+     * they are not a physical VRAM measurement. Ages are unavailable (zero) at OFF. */
+    record ResourcePressure(long retiredGenerations,long pendingReleases,long referencedReleaseBytes,long peakReleases,long peakReferencedReleaseBytes,
+            long rejectedTransfers,long pooledMeshBytes,long pooledBlasBytes,long oldestReleaseNanos,long oldestGenerationNanos,long pooledTlasBytes) {
+        public ResourcePressure(long retiredGenerations,long pendingReleases,long referencedReleaseBytes,long peakReleases,long peakReferencedReleaseBytes,
+                long rejectedTransfers,long pooledMeshBytes,long pooledBlasBytes,long oldestReleaseNanos,long oldestGenerationNanos){
+            this(retiredGenerations,pendingReleases,referencedReleaseBytes,peakReleases,peakReferencedReleaseBytes,
+                rejectedTransfers,pooledMeshBytes,pooledBlasBytes,oldestReleaseNanos,oldestGenerationNanos,0);
+        }
+    }
+    default ResourcePressure resourcePressure(){return new ResourcePressure(0,0,0,0,0,0,0,0,0,0);}
     default NativePreparationStatistics nativePreparationStatistics(){return new NativePreparationStatistics(false,0,0,0);}
     /** Cumulative inclusive Java scopes and native CPU subscopes; native subscopes overlap the
      * Java resource/lighting scopes. Fence waits and GPU queue intervals remain in retainedUpdateTimings. */

@@ -2,17 +2,31 @@
 
 本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
 
-当前批次为 **7.1.4**。本批将 coverage 与几何 AS 失效分离，兼容变形 clone/refit，未变共享纹理只传引用，patch 校验父 generation，主线程有界维护并后台释放完成资源。新增 `resourceMaintenance()` 和可独立线程读取的 `protocolMonitor()`，设备移除标记不代表完成。少量分组使用精简光照状态，保留真实 GI RR。详见[本批修复](release-high-framerate-resources.md)和[量化证据](quality/high-framerate-resources.md)。渠道为 GitHub 和 Maven Local，不发布 Central；性能达标、未测边界和制品身份均以量化报告为准。
+当前交付版本为 **7.1.5**。性能候选与长尾调查已停止，最后失败方案已回退。随后按用户明确要求完成修复收尾、最终身份验收与发布；N01～N09 结果、完整请求 GPU/CPU 的逐格预算及制品身份见[最终验收](quality/resource-latency.md)。[历史前后对照](quality/optimization-closeout.md)保留收益、尾部退化与未知原因，不能用通用夹具代签 MC 180 FPS。
+
+本批诊断格式为 5，兼容解码 2／3／4；现有构造器保留。首次提交前即可在 owner 线程取得 `diagnosticMonitor()`，随后交给独立观察线程；它可见设备／场景／光照初始化以及尚未返回的资源子调用。事件记录 stable native ID 的 FNV64、资源发布 revision、原因位、字节、attempt、OS 线程 ID、所属诊断模式和 ordinal。CPU 与 protocol monitor 各自报告注册位置与注册后的漏读，`overwritten` 不是观察者漏读。
+
+SUMMARY 保留 CPU 子调用和有界状态，不执行逐射线原子。`lightingWorkStatisticsEnabled(true)` 只保留请求意图，**DEEP 才 effective**；OFF 停止新诊断，已有样本有界收尾。原生信号协议、不可变 request 重试、所有 graphics／compute reader 和真实 consumer GPU completion 契约不变。池满时及时 defer，不能释放还在使用的资源。`resourcePressure()` 的引用字节可能重叠，不是物理 VRAM。
+
+正式比较显式禁用 signal reuse，固定相机／内容／GI2、距离6、强度0.35 和真实 RR。独立 benchmark 计时只由验收进程显式启用，OFF 不打开产品统计。API 通用夹具不能代签 MC 180 FPS，也不将未复现的 GL 长调用归因于驱动。
+
+本批追加修复实例删除／替换的所有权：旧实例、网格、BLAS 和 bindless descriptor 保留到 graphics／compute 都完成；仍被其他实例共享的网格不能进入复用池。持续流入的首次失败和重启后失败均保留，修复后另立 DLL 身份验收。设备失败后的清理不再从析构函数抛出完成查询异常；这不表示已证明所有驱动异常的底层原因。
+
+GPU CSV 中资源身份是无符号 64 位，Java `long` 保存原始位；转回文本使用 `Long.toUnsignedString`。修复了 DEEP 遇到高位为 1 的 FNV64 时的解析异常。原有 11 列 GPU 记录仍兼容，15 列格式携带 mode／resource／generation／reason。
+
+四模块最终发布身份见[发布记录](quality/data/resource-latency-release.json)，全部正式窗口在[量化证据](quality/data/resource-latency.json)。[历史矩阵](quality/data/resource-latency-historical.json)的旧渲染计时边界不得与新完整请求区间混算收益。普通运行使用 OFF；CPU 资源阶段用 SUMMARY；逐射线工作量与细 GPU scope 用 DEEP。`resourcePressure()` 由 renderer owner 线程读取，跨线程观察使用单独取得的 monitor。CPU 完整请求包含 apply、所有 admission/trySubmit 和 defer 暂停；不能把同步尝试的低耗时当作完整请求预算已过。
+
+最终制品记录含 runtime ZIP 自身哈希，只保存在 Git 仓库；ZIP 内不再嵌入这份记录，避免循环自校验。ZIP 内提供量化数据和 SDK 文件清单。
 
 此前 2026-11-04 的光源遍历优化使用本地坐标 7.1.1，按用户要求删除旧 Maven Local 包后重新发布。消费方重新解析同版本依赖时使用 `--refresh-dependencies`，并核对发布记录中的 JAR/runtime hash，不能仅凭版本号认定已更新。新 native DLL SHA-256 为 `b8b4bca550f2dce38fc169e3edb4f8249e5a3a5f78695556396acd7337f2fd57`；内置 raw shader 为 `6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57`。扩展使用新包内 SDK 重编译。432 张信号／guide 逐位一致，36 次真实 RR 通过；性能数据见 [最新报告](quality/native-lighting-performance.md)。该次交付已发布 GitHub 和 Maven Local。
 
-## 本批保留候选与复验口径
+## 7.1.4 历史候选与复验口径
 
 最终保留 falloff-branch：串行 fused 双信号、真实 GI RR、bitstack 近先遍历、全动态源专用 shader、提前写 guides 和 falloff 常用指数分支。已撤回性能较差的 packed-order 和双队列实验。普通入口不需要新增开关，专家诊断保留现有明确配置。
 
 977 mesh、750,336 三角形、22,000 BOX 源、63 纹理的正式 30 秒场景：290.63 FPS，更新帧完整 GPU P50/P95 为 5.010016/5.606112 ms，复用帧 P50/P95 为 3.234208/3.451584 ms；超过 7 ms 为 16/8,722 帧（0.1834%），全部位于更新帧。更新帧未达到 4 ms，按用户决定停止继续优化。
 
-F01–F10 的完整 719/977/4096 增长矩阵和完整 OFF/DEEP 对照尚未全部执行，不代表消费方 MC 180 FPS 或 GL 长调用已经闭环。已通过测试不重跑，不运行 FG/MFG。旧性能证据保留原制品 hash，最终恢复构建与归档核对不记成新的 GPU 跑分。
+该历史批次 F01–F10 的完整 719/977/4096 增长矩阵和完整 OFF/DEEP 对照未全部执行，不代表消费方 MC 180 FPS 或 GL 长调用已经闭环。已通过测试不重跑，不运行 FG/MFG。旧性能证据保留原制品 hash，最终恢复构建与归档核对不记成新的 GPU 跑分。
 
 升级时四个 renderer 模块统一使用 gradle.properties 中的版本，从 Maven Local 重新解析依赖；离线扩展使用当前包内 SDK 重编译。检查 runtime ZIP、DLL 和 shader 的真实身份；后文的 7.1.1 hash 仅属于历史交付。资源 generation、ready/completion fence 和纹理 patch 父 generation 契约继续生效，禁止用宿主特例绕过。
 

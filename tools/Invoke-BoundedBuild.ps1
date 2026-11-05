@@ -11,6 +11,7 @@ param(
     [string[]]$ArgumentList = @(),
     [string]$WorkingDirectory = '',
     [ValidateRange(1, 1024)][double]$MemoryLimitGB = 10,
+    [ValidateRange(0, 86400)][int]$TimeoutSeconds = 0,
     [switch]$CheckPaths
 )
 $ErrorActionPreference = 'Stop'
@@ -99,7 +100,7 @@ public static class RendererBoundedBuild {
         }
         return text.Append('\\', slashes * 2).Append('"').ToString();
     }
-    public static int Run(string executable, string[] arguments, string directory, double memoryLimitGB) {
+    public static int Run(string executable, string[] arguments, string directory, double memoryLimitGB, int timeoutSeconds) {
         IntPtr job = CreateJobObject(IntPtr.Zero, null);
         if (job == IntPtr.Zero) throw new Win32Exception();
         var process = new ProcessInfo();
@@ -126,10 +127,19 @@ public static class RendererBoundedBuild {
             Console.WriteLine("Bounded build root PID={0}", process.ProcessId);
             var timer = Stopwatch.StartNew();
             if (ResumeThread(process.Thread) == uint.MaxValue) throw new Win32Exception();
-            while (WaitForSingleObject(process.Process, 1000) == 258) { }
+            bool timedOut = false;
+            while (WaitForSingleObject(process.Process, 1000) == 258) {
+                if (timeoutSeconds > 0 && timer.Elapsed.TotalSeconds >= timeoutSeconds) {
+                    timedOut = true;
+                    Console.Error.WriteLine("Process-tree timeout after {0}s; stopping owned processes.", timeoutSeconds);
+                    TerminateProcess(process.Process, 124);
+                    break;
+                }
+            }
             timer.Stop();
             uint exit;
             if (!GetExitCodeProcess(process.Process, out exit)) throw new Win32Exception();
+            if (timedOut) exit = 124;
             if (QueryInformationJobObject(job, 9, ref limits, size, IntPtr.Zero))
                 Console.WriteLine("Bounded build peak process-tree commit: {0:F3} GB; exit={1}",
                     limits.PeakJobMemory.ToUInt64() / 1e9, exit);
@@ -148,4 +158,4 @@ public static class RendererBoundedBuild {
     }
 }
 '@
-exit [RendererBoundedBuild]::Run($buildExecutable, $ArgumentList, $buildDirectory, $MemoryLimitGB)
+exit [RendererBoundedBuild]::Run($buildExecutable, $ArgumentList, $buildDirectory, $MemoryLimitGB, $TimeoutSeconds)

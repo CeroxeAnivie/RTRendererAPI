@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
+#include <string_view>
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -29,14 +30,22 @@ enum Stage : uint64_t { Frame=1, InstanceCache, SubInstances, Dispatch, Caller,
     Pipeline, ShaderTable, Import, Textures, Materials, Acceleration, Retirement,
     SharedPublish, SharedReuseWait, Resize, PoolWait, Lighting, Preparation, Upload, Submit,
     LightValidation, LightObjects, LightGraph, LightTree, LightUpload, LightingPolicy,
-    SubmitValidation, Translation, Resources, SubmitRetirement, AttributePreparation, AttributeValidation, ResourceStaging, ResourceIndex, ResourceRetirement };
+    SubmitValidation, Translation, Resources, SubmitRetirement, AttributePreparation, AttributeValidation, ResourceStaging, ResourceIndex, ResourceRetirement,
+    ResourcePlan, BufferAllocate, DescriptorAllocate, PayloadPack, BufferUpload, BlasAllocate, BlasClone, BlasBuild, BlasRefit,
+    CommandAcquire, CommandSubmit, CompletionPoll, ReclaimEnqueue, DriverRelease, IndexRebuild, TextureAllocate, TextureUpload,
+    RuntimeInitialize, DeviceInitialize, SceneInitialize, LightingInitialize, PoolAcquire, TlasAllocate };
 enum Flag : uint64_t { QueueWaitEnqueue=1, Failed=2, CacheHit=4, CacheMiss=8,
     Active=256, Truncated=512, Cancelled=1024, EnteredNativeFrame=2048 };
 enum SubmissionKind : uint64_t { Initial=0, Update, Steady, Resized, Waited, KindCount };
-constexpr size_t Capacity=8192, Width=18, ActiveCapacity=512, SubmissionCapacity=1024;
+constexpr size_t Capacity=8192, Width=25, Header=15, ActiveCapacity=512, SubmissionCapacity=1024;
 using Event=std::array<uint64_t,Width>;
 using SubmissionSample=std::array<uint64_t,6>;
 enum Trait : uint64_t { HasFrame=1, HasUpdate=2, HasResize=4, HasWait=8, IsInitial=16 };
+// Bit mask shared by planned and executed resource events. Generation is the
+// immutable transaction revision; identity hashes the stable native resource ID.
+enum ResourceReason : uint64_t { Inflow=1, Deformation=2, Topology=4, BuildFlags=8,
+    Pose=16, Coverage=32, Material=64, Removal=128, Texture=256,
+    PoolHit=512, CapacityGrowth=1024, RefitRefresh=2048, IndexMigration=4096 };
 struct Live { Event event{};uint64_t children=0,traits=0;bool occupied=false;uint64_t cpuChildren=0; };
 inline std::atomic<unsigned> level{0};
 inline std::atomic<uint64_t> frame{0},revision{0},inputGeneration{0},outputGeneration{0},nextId{1},generation{1},monitorGeneration{1};
@@ -51,6 +60,11 @@ inline std::array<SubmissionSample,SubmissionCapacity> submissions{};
 inline uint64_t submissionCount=0,submissionDropped=0;
 inline bool seenSubmission=false;
 inline thread_local uint64_t parentId=0,parentGeneration=0;
+inline thread_local uint64_t attempt=0;
+inline uint64_t Identity(std::string_view value){
+    if(!level.load(std::memory_order_relaxed))return 0;uint64_t hash=14695981039346656037ull;
+    for(unsigned char c:value){hash^=c;hash*=1099511628211ull;}return hash;
+}
 #ifdef RTR_DIAGNOSTICS_SELFTEST
 inline std::atomic<uint64_t> clockCalls{0};
 #endif
@@ -70,6 +84,13 @@ inline uint64_t ThreadCpuNow(){
     return uint64_t(value.tv_sec)*1000000000+value.tv_nsec;
 #endif
 }
+inline uint64_t ThreadIdentity(){
+#ifdef _WIN32
+    return GetCurrentThreadId();
+#else
+    return uint64_t(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+#endif
+}
 inline Live* Find(uint64_t id){
     if(!id)return nullptr;
     auto& entry=live[id%ActiveCapacity];
@@ -85,6 +106,7 @@ inline void RetainTriggerLocked(const Event& event){
     }
 }
 inline void RecordLocked(Event event,uint64_t traits=0){
+    event[24]=written+1;
     if(event[4]==Submit){
         if(traits&HasFrame)event[11]|=EnteredNativeFrame;
         const uint64_t kind=traits&IsInitial?Initial:traits&HasResize?Resized:traits&HasUpdate?Update:traits&HasWait?Waited:Steady;
@@ -156,15 +178,18 @@ inline void Record(Event event){
 }
 inline uint64_t MonitorToken(){return monitorGeneration.load(std::memory_order_acquire);}
 inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0){
+    // Allocate outside the recording lock. Capacity bounds every possible copy,
+    // including scopes that enter while this observer allocates its storage.
+    std::vector<uint64_t> result;
+    result.reserve(Header+(Capacity+slowEvents.size()+ActiveCapacity)*Width+SubmissionCapacity*6);
     std::lock_guard lock(mutex);
     if(expectedGeneration&&expectedGeneration!=monitorGeneration.load())throw std::runtime_error("Diagnostic monitor generation expired; acquire a monitor from the current session");
     const uint64_t count=std::min<uint64_t>(written,Capacity),retainedSlow=std::min<uint64_t>(slowCount,slowEvents.size());
     const uint64_t retainedSubmissions=std::min<uint64_t>(submissionCount,SubmissionCapacity);
     uint64_t activeCount=0;for(const auto& entry:live)activeCount+=entry.occupied;
     const uint64_t now=activeCount?Now():0;
-    std::vector<uint64_t> result;result.reserve(13+size_t(count+retainedSlow+activeCount)*Width+size_t(retainedSubmissions)*6);
-    result.insert(result.end(),{4,Width,dropped,count,slowTriggers,retainedSlow,slowCount-retainedSlow,
-        activeCount,activeDropped,retainedSubmissions,submissionDropped,monitorGeneration.load(),level.load()});
+    result.insert(result.end(),{5,Width,dropped,count,slowTriggers,retainedSlow,slowCount-retainedSlow,
+        activeCount,activeDropped,retainedSubmissions,submissionDropped,monitorGeneration.load(),level.load(),written-count+1,written+1});
     for(uint64_t i=written-count;i<written;++i)result.insert(result.end(),events[i%Capacity].begin(),events[i%Capacity].end());
     for(uint64_t i=slowCount-retainedSlow;i<slowCount;++i)result.insert(result.end(),slowEvents[i%slowEvents.size()].begin(),slowEvents[i%slowEvents.size()].end());
     for(const auto& entry:live)if(entry.occupied){auto event=entry.event;event[6]=now-event[5];event[7]=0;event[11]|=Active;
@@ -174,7 +199,9 @@ inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0){
 }
 struct Scope {
     Event event{};uint64_t previousId=0,epoch=0,cpuBegin=UINT64_MAX;int slot=-1,exceptions=0;bool enabled=false;
-    Scope(Stage stage,uint64_t items=0,uint64_t tasks=0,unsigned minimum=1,uint64_t batch=0){
+    Scope(Stage stage,uint64_t items=0,uint64_t tasks=0,unsigned minimum=1,uint64_t batch=0,
+            uint64_t resource=0,uint64_t resourceGeneration=0,uint64_t reason=0,uint64_t bytes=0,
+            uint64_t sequence=UINT64_MAX,uint64_t rev=UINT64_MAX){
         if(level.load(std::memory_order_acquire)<minimum)return;
         std::lock_guard lock(mutex);if(level.load(std::memory_order_relaxed)<minimum)return;
         for(size_t i=0;i<live.size();++i)if(!live[i].occupied){slot=int(i);break;}
@@ -182,9 +209,10 @@ struct Scope {
         enabled=true;epoch=generation.load();exceptions=std::uncaught_exceptions();
         previousId=parentGeneration==epoch&&Find(parentId)?parentId:0;
         const uint64_t id=nextId.fetch_add(1)*ActiveCapacity+uint64_t(slot);
-        event={frame.load(),revision.load(),batch?batch:id,uint64_t(std::hash<std::thread::id>{}(std::this_thread::get_id())),
+        event={sequence==UINT64_MAX?frame.load():sequence,rev==UINT64_MAX?revision.load():rev,batch?batch:id,ThreadIdentity(),
             uint64_t(stage),Now(),0,0,items,tasks,previousId?Find(previousId)->event[2]:0,0,
-            id,previousId,inputGeneration.load(),outputGeneration.load(),UINT64_MAX,UINT64_MAX};
+            id,previousId,inputGeneration.load(),outputGeneration.load(),UINT64_MAX,UINT64_MAX,
+            resource,resourceGeneration,reason,bytes,attempt,uint64_t(level.load()),0};
         cpuBegin=ThreadCpuNow();
         auto traits=Traits(stage);if(stage==Submit&&!seenSubmission){traits|=IsInitial;seenSubmission=true;}
         live[slot]={event,0,traits,true};MarkAncestors(previousId,traits);
@@ -215,7 +243,7 @@ inline thread_local std::optional<Scope> submission;
 inline void BeginSubmit(uint64_t sequence,uint64_t rev,uint64_t elapsed){
     if(submission)submission->event[11]|=Cancelled;
     submission.reset();if(!level.load(std::memory_order_acquire))return;
-    Context(sequence,rev);submission.emplace(Submit);
+    Context(sequence,rev);++attempt;submission.emplace(Submit);
     if(submission->enabled){std::lock_guard lock(mutex);
         submission->event[5]-=std::min(submission->event[5],elapsed);
         if(submission->epoch==generation.load()&&submission->slot>=0)live[submission->slot].event=submission->event;
@@ -244,7 +272,8 @@ inline void SubmitStage(Stage stage,uint64_t offset,uint64_t duration,uint64_t i
     std::lock_guard lock(mutex);
     if(submission->epoch!=generation.load()||submission->slot<0||!live[submission->slot].occupied)return;
     const auto& outer=submission->event;const auto id=nextId.fetch_add(1)*ActiveCapacity;
-    Event event={outer[0],outer[1],id,outer[3],uint64_t(stage),outer[5]+offset,duration,duration,items,tasks,outer[2],0,id,outer[12],outer[14],outer[15],UINT64_MAX,UINT64_MAX};
+    Event event={outer[0],outer[1],id,outer[3],uint64_t(stage),outer[5]+offset,duration,duration,items,tasks,outer[2],0,id,outer[12],outer[14],outer[15],UINT64_MAX,UINT64_MAX,
+        0,0,0,0,outer[22],outer[23],0};
     live[submission->slot].children+=duration;RecordLocked(event);
 }
 }

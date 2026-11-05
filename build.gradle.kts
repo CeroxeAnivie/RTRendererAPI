@@ -712,9 +712,10 @@ val runtimeDistributionContents = tasks.register<Sync>("prepareRuntimeDistributi
             "gradle/published-consumer-smoke/**", "buildSrc/build.gradle.kts", "buildSrc/src/**",
             "renderer-api/build.gradle.kts", "renderer-api/abi/**", "renderer-api/src/**",
             "renderer-core/build.gradle.kts", "renderer-core/gradle.lockfile", "renderer-core/src/**",
-            "renderer-nvidia/build.gradle.kts", "renderer-nvidia/src/**", "tools/**",
+            "renderer-nvidia/build.gradle.kts", "renderer-nvidia/src/**", "tools/**", "examples/**",
             "renderer-rtxpt/build.gradle.kts", "renderer-rtxpt/src/**", "renderer-rtxpt/NOTICE-RTXPT.txt",
             "demos/hex-ball/build.gradle.kts", "demos/hex-ball/src/**")
+        exclude("**/__pycache__/**", "**/*.pyc")
         into("source")
     }
     from(layout.projectDirectory.file("LICENSE"))
@@ -839,7 +840,9 @@ tasks.register("verifyRuntimeDistribution") {
                 "source/gradle/verification-metadata.xml", "source/renderer-core/gradle.lockfile",
                 "source/gradle/published-consumer-smoke/build.gradle.kts",
                 "source/gradle/published-consumer-smoke/src/main/java/consumer/PublishedApiRuntimeSelfTest.java",
-                "source/demos/hex-ball/build.gradle.kts")
+                "source/demos/hex-ball/build.gradle.kts",
+                "source/examples/native-lighting-opengl/RtxptNativeLightingGlSelfTest.java",
+                "source/tools/Test-ResourceLatency.ps1", "source/tools/Verify-ResourceLatencyRelease.py")
             check(names.containsAll(required)) { "Distribution lacks required runtime/source metadata: ${required - names.toSet()}" }
             val mavenSums = zip.getEntry("maven/SHA256SUMS") ?: error("Missing Maven SHA256SUMS")
             val mavenExpected = linkedMapOf<String, String>()

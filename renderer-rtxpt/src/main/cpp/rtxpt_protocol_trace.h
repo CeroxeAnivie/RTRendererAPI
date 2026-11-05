@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <Windows.h>
 #include <atomic>
+#include "rtxpt_diagnostics.h"
 
 // State observations only: no driver calls under this mutex, including snapshots.
 namespace RtrProtocolTrace {
@@ -24,11 +25,12 @@ inline void Record(uint64_t kind,uint64_t adapter,uint64_t queue,uint64_t slot,u
     if(!error&&!enabled.load(std::memory_order_relaxed))return;
     std::lock_guard lock(mutex);auto& row=records[written%records.size()];
     row={++written,kind,adapter,queue,slot,generation,sequence,revision,ready,done,observed,flags,error,
-        GetTickCount64(),GetCurrentThreadId(),0};
+        GetTickCount64(),GetCurrentThreadId(),RtrDiagnostics::level.load(std::memory_order_relaxed)};
 }
 inline std::vector<uint64_t> Snapshot(uint64_t expected){
+    std::vector<uint64_t> result;result.reserve(4+records.size()*16);
     std::lock_guard lock(mutex);if(expected!=token)throw std::runtime_error("Protocol monitor session expired");
-    const auto count=std::min<uint64_t>(written,records.size());std::vector<uint64_t> result{token,written-count,count,16};result.reserve(4+count*16);
+    const auto count=std::min<uint64_t>(written,records.size());result.insert(result.end(),{token,written-count,count,16});
     for(uint64_t i=written-count;i<written;++i)result.insert(result.end(),records[i%records.size()].begin(),records[i%records.size()].end());return result;
 }
 }

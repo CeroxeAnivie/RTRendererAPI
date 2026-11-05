@@ -56,17 +56,19 @@ public final class RtxptRetainedLightingRepairNativeSelfTest {
             var afterMaterial=r.lightingAttributeUpdateStatistics();
             require(afterMaterial.baselineCorners()==beforeMaterial.baselineCorners()&&afterMaterial.colorCorners()==beforeMaterial.colorCorners(),"Material edit does not retranslate unrelated attributes");
             require(afterMaterial.layoutBuilds()==beforeMaterial.layoutBuilds(),"Material edit does not rebuild attribute mapping");
-            r.lightingWorkStatisticsEnabled(true);sample(r,6,6,"statistics-on");
+            r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);r.lightingWorkStatisticsEnabled(true);sample(r,6,6,"statistics-on");
             long counted=r.lightingWorkStatistics().sequence();r.diagnosticLevel(RtxptDiagnostics.Level.OFF);
-            r.lightingWorkStatisticsEnabled(true); // must not bypass unified OFF
+            r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);r.lightingWorkStatisticsEnabled(true); // must not bypass unified OFF
             sample(r,7,6,"off-drain");r.lightingWorkStatistics();var drained=r.lightingStatisticsCollection();
             for(long sequence=8;sequence<=13;sequence++){sample(r,sequence,6,"off-"+sequence);r.lightingWorkStatistics();}
             var stopped=r.lightingStatisticsCollection();
             require(stopped.requested()&&!stopped.effective()&&stopped.pending()==0,"OFF requested/effective and bounded pending state");
             require(stopped.copies()==drained.copies()&&stopped.queries()==drained.queries()&&stopped.polls()==drained.polls(),"OFF creates no new statistics copies, queries or polling after drain");
             require(r.lightingWorkStatistics().sequence()==counted,"OFF freezes newly collected frame sequence");
-            r.diagnosticLevel(RtxptDiagnostics.Level.SUMMARY);sample(r,14,6,"statistics-resumed");
-            require(r.lightingWorkStatistics().sequence()==14&&r.lightingStatisticsCollection().effective(),"SUMMARY restores explicit counter intent");
+            r.diagnosticLevel(RtxptDiagnostics.Level.SUMMARY);sample(r,14,6,"summary-uninstrumented");
+            require(!r.lightingStatisticsCollection().effective(),"SUMMARY keeps explicit intent without ray atomics");
+            r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);sample(r,15,6,"statistics-resumed");
+            require(r.lightingWorkStatistics().sequence()==15&&r.lightingStatisticsCollection().effective(),"DEEP restores explicit counter intent");
             System.out.println("RTXPT_REPAIRS PASS meshes=256 tint=receiver,bounce,barycentric,neutral baselineLocal=true unifiedOff=true statistics="+stopped+" attributes="+afterMaterial);
         }
     }

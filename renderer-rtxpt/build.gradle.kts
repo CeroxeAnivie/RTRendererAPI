@@ -555,3 +555,19 @@ tasks.register<JavaExec>("rtxptHighFramerateBenchmark") {
     systemProperties(System.getProperties().stringPropertyNames().filter { it.startsWith("highFramerate.") }.associateWith(System::getProperty))
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
 }
+
+tasks.register("rtxptResourceLatencyClasspath") {
+    group = "verification"
+    dependsOn(tasks.testClasses, configurations.testRuntimeClasspath)
+    doLast { rootProject.file("build/resource-latency-classpath.txt").writeText(sourceSets.test.get().runtimeClasspath.asPath,Charsets.UTF_8) }
+}
+listOf("RtxptResourceLatencyMatrixNativeSelfTest", "RtxptResourceLifecycleNativeSelfTest").forEach { name ->
+    tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
+        group = "verification"; dependsOn(tasks.testClasses)
+        classpath = sourceSets.test.get().runtimeClasspath
+        mainClass.set("top.ceroxe.rt.renderer.rtxpt.$name")
+        jvmArgs("-Xmx2g")
+        environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+        systemProperties(System.getProperties().stringPropertyNames().filter { it.startsWith("resourceMatrix.") }.associateWith(System::getProperty))
+    }
+}

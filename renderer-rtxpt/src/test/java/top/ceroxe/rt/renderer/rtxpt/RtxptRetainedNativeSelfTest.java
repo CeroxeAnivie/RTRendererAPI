@@ -7,7 +7,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Resource identity counters plus pixels compared with an explicit reset reference. */
 public final class RtxptRetainedNativeSelfTest {
-    static final Path OUTPUT=Path.of("build/reports/rtxpt-retained").toAbsolutePath();
+    static final Path OUTPUT=Path.of(System.getProperty("rtxptRetained.output","build/reports/rtxpt-retained")).toAbsolutePath();
     static TextureAsset texture(int red){return TextureAsset.color(7,1,1,new byte[]{(byte)red,(byte)(255-red),32,(byte)255});}
     static RenderFrameRequest frame(long sequence,long revision,EnvironmentState e){return RenderFrameRequest.builder(sequence,320,180,RtxptAcceptanceFixture.camera()).minimumSceneRevision(revision).environment(e).build();}
     static void settle(RtxptAccess host){RtxptLightingNativeSelfTest.settle(host,12);}
@@ -40,6 +40,7 @@ public final class RtxptRetainedNativeSelfTest {
                 r.apply(RtxptAcceptanceFixture.scene());r.submit(frame(seq++,rev,e));settle(host);
                 var initial=host.lightingTimings();
                 var initialResources=host.retainedUpdateTimings();
+                var initialMaintenance=host.resourceMaintenance();
                 r.apply(SceneTransaction.builder(++rev).upsert(texture(255)).upsert(MaterialAsset.builder(1).baseColorTextureId(7).roughness(.8f).build()).build());
                 r.submit(frame(seq++,rev,e));settle(host);
                 var material=host.retainedUpdateTimings();
@@ -55,11 +56,14 @@ public final class RtxptRetainedNativeSelfTest {
                 int[] indices=new int[mesh.triangleIndices().remaining()];mesh.triangleIndices().get(indices);
                 long[] ids=new long[mesh.triangleMaterialIds().remaining()];mesh.triangleMaterialIds().get(ids);
                 r.apply(SceneTransaction.builder(++rev).upsert(MeshAsset.builder(3,positions,indices,ids).build()).build());r.submit(frame(seq++,rev,e));settle(host);
-                var local=host.retainedUpdateTimings();require(local.exportedMeshVariants()==initialResources.exportedMeshVariants()+1&&local.builtBlases()==initialResources.builtBlases()+1,"One mesh replacement builds one BLAS");
-                System.out.println("RTXPT_RETAINED mesh passed route="+route);
+                var local=host.retainedUpdateTimings();var localMaintenance=host.resourceMaintenance();
+                long builds=localMaintenance.blasBuilds()-initialMaintenance.blasBuilds(),refits=localMaintenance.blasRefits()-initialMaintenance.blasRefits();
+                require(local.exportedMeshVariants()==initialResources.exportedMeshVariants()+1&&builds+refits==1,"One mesh replacement builds/refits exactly one BLAS: builds="+builds+" refits="+refits);
+                System.out.println("RTXPT_RETAINED mesh passed route="+route+" builds="+builds+" refits="+refits);
                 r.apply(SceneTransaction.builder(++rev).upsert(SceneInstance.builder(99,3).transform(new AffineTransform(new float[]{1,0,0,2,0,1,0,1,0,0,1,-1})).build()).build());
                 r.submit(frame(seq++,rev,e));settle(host);
-                require(host.retainedUpdateTimings().builtBlases()==initialResources.builtBlases()+1,"New instance of a resident mesh shares its BLAS");
+                var instancedMaintenance=host.resourceMaintenance();
+                require(instancedMaintenance.blasBuilds()==localMaintenance.blasBuilds()&&instancedMaintenance.blasRefits()==localMaintenance.blasRefits(),"New instance of a resident mesh shares its BLAS");
                 r.apply(SceneTransaction.builder(++rev).removeInstance(99).build());r.submit(frame(seq++,rev,e));settle(host);
                 var before=host.retainedUpdateTimings();var updated=OUTPUT.resolve(route+"-updated.png");referenceCapture(host,updated,route);
                 require(host.bridgeTimings().sceneExports()==1&&host.lightingTimings().nativeSceneLoads()==initial.nativeSceneLoads(),"All sparse edits avoid scene reload/export");

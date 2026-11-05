@@ -1,3 +1,17 @@
+# Native diagnostic recorder
+
+Current format is 5. `diagnosticMonitor()` may be acquired before the first submit, after selecting the diagnostic level; it preserves that session token across creation. Register it once on the owner thread, then query it from an independent observer. Snapshot allocation occurs outside the recording mutex and performs no driver calls or owner/lifecycle-lock acquisition.
+
+Resource events add stable-ID FNV64, immutable publication revision, reason mask, byte count, attempt, diagnostic level and event ordinal. Reasons: inflow=1, deformation=2, topology=4, build flags=8, pose=16, coverage=32, material=64, removal=128, texture=256, pool hit=512, capacity growth=1024, refit refresh=2048, index migration=4096. A transaction budget precedes GPU resource allocation/upload; actual BLAS CPU calls and sampled GPU builds carry the same identity. Native internals beneath a driver call remain unknown without an external stack.
+
+GPU CSV serializes resource identity as unsigned decimal. Java preserves all bits in its `long` field, including values above `Long.MAX_VALUE`; use `Long.toUnsignedString(identity)` to reproduce the native text. Resource generation and change reason keep their existing numeric meaning.
+
+CPU snapshots expose first/next retained ordinal; each registered monitor separately tracks registration and missed records. Protocol monitors do the same. Registration does not claim to have observed earlier overwritten records. Active scopes are incomplete, not completed latency samples. Windows thread IDs can be correlated with ETW or a symbolized native stack; use the matching published PDB.
+
+SUMMARY never enables ray atomics. Explicit work-statistics requests become effective only in DEEP. OFF suppresses new normal protocol events, CPU/GPU recording and work-statistics queries; first-fault evidence and functional fences remain. In-flight GPU scope records retain the mode that issued them. Independent OFF benchmark timestamps are a test-only opt-in with their own bounded dropped/overwritten accounting.
+
+Historical recorder contract and evidence follow; references to acquisition after initialization and older formats describe the earlier implementation.
+
 # 7.1.0 diagnostic recorder
 
 The CPU recorder covers `SUBMIT` independently of native `FRAME`. This keeps light and resource preparation visible when it occurs before frame recording, including submissions that fail without entering `FRAME`.

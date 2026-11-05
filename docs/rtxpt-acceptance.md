@@ -1,6 +1,8 @@
 # 实现与累计验收矩阵
 
-本表保留三份原需求的编号映射。当前开发批次为 7.1.4，高帧率动态资源、故障与回收见[本批记录](release-high-framerate-resources.md)及[量化证据](quality/high-framerate-resources.md)；以下保留既有渲染验收结果。此前 7.1.1 新增 H01–H07、最终制品与逐项影响分析见 [修复验收记录](quality/lighting-repair-validation.md)。历史全量、失败补验、本批新覆盖和最终包复验分开累计；遵守不重跑已通过且未受影响项目、不运行 FG/MFG 的约束。`verifyApiClosure` 仍是从零执行完整验收的入口，本批不把累计结果称为一次全量全绿。
+正确性按[通用 API 标准](quality/correctness-criteria.md)判断：身份、规则与生命周期必须准确，浮点误差按信号单位、精度和下游影响验证。逐位一致是部分内部等价检查，不是用户要求所有浮点输出统一满足的产品标准。
+
+本表保留三份原需求的编号映射。7.1.5 性能优化已停止，N01～N09 最终修复、当前二进制的完整验收与未达预算见[最终验收](quality/resource-latency.md)；[原批次记录](release-resource-latency.md)说明实现，[历史量化证据](quality/resource-latency-historical.md)保留原身份。以下既有渲染结果按原二进制保留，不冒签本轮未运行的功能。此前 7.1.1 新增 H01–H07、最终制品与逐项影响分析见 [修复验收记录](quality/lighting-repair-validation.md)。历史全量、失败补验、本批新覆盖和最终包复验分开累计；遵守不重跑已通过且未受影响项目、不运行 FG/MFG 的约束。`verifyApiClosure` 仍是从零执行完整验收的入口，本次不启动它，也不把累计结果称为一次全量全绿。
 
 宿主主表面模式复用有效 primary；独立原生模式使用自己的低分辨率 primary，不依赖宿主 G-buffer。底图增补输出 H×gain＋有限一跳 GI；主表面传输继续反射、折射和完整光照。两者共用常驻 RT 场景。原生 raw 报告 NONE，新 `openReconstructedNativeLighting` 默认对合法漫反射 GI 执行实际 RR，尺寸、guide 和归属见 [重建契约](native-lighting-reconstruction.md)。gain 不送入 RR，不声称各任意 AOV 均可执行 RR。
 

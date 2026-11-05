@@ -67,6 +67,10 @@ Add-Source 'docs/consumer-agent-handoff.md' 'docs/consumer-agent-handoff.md'
 Add-Source 'docs/release-local-scene-preparation.md' 'docs/release-local-scene-preparation.md'
 Add-Source 'docs/release-dynamic-resources.md' 'docs/release-dynamic-resources.md'
 Add-Source 'docs/release-high-framerate-resources.md' 'docs/release-high-framerate-resources.md'
+foreach($name in @('release-resource-latency.md','quality/resource-latency-review.md','quality/resource-latency.md','quality/data/resource-latency.json','quality/data/resource-latency-baseline.json','quality/data/resource-latency-retained.json','quality/data/resource-latency-failures.json',
+    'quality/correctness-criteria.md','quality/optimization-closeout.md','quality/optimization-experiments.md','quality/data/optimization-closeout.json','quality/data/optimization-experiments.json','quality/data/tail-latency-review.json','quality/resource-latency-historical.md','quality/data/resource-latency-historical.json','quality/data/resource-latency-release-historical.json')){
+    Add-Source "docs/$name" "docs/$name"
+}
 Add-Source 'docs/quality/high-framerate-resources.md' 'docs/quality/high-framerate-resources.md'
 Add-Source 'docs/quality/local-scene-preparation.md' 'docs/quality/local-scene-preparation.md'
 foreach($file in Get-ChildItem -LiteralPath (Join-Path $repo 'docs/quality/data/local-scene-preparation') -File){

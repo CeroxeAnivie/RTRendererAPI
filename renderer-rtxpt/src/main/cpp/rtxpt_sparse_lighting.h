@@ -25,8 +25,8 @@ public:
     bool full=true,headerDirty=true;
     std::array<uint32_t,32> groupCounts{};
     uint32_t groupMask=0;
-    size_t visibleMaxCount=0,dynamicCount=0;
-    void Group(const Record& record,bool add){if(uint32_t(record.identity[3])&1){if(add)++dynamicCount;else --dynamicCount;}if(record.cone[3]==1){if(add)++visibleMaxCount;else --visibleMaxCount;}if(record.cone[3]==0)return;const auto group=uint32_t(record.cone[2]);
+    size_t visibleMaxCount=0,dynamicCount=0,linearCount=0;
+    void Group(const Record& record,bool add){if(uint32_t(record.identity[3])&2){if(add)++linearCount;else --linearCount;}if(uint32_t(record.identity[3])&1){if(add)++dynamicCount;else --dynamicCount;}if(record.cone[3]==1){if(add)++visibleMaxCount;else --visibleMaxCount;}if(record.cone[3]==0)return;const auto group=uint32_t(record.cone[2]);
         if(add){++groupCounts[group];groupMask|=1u<<group;}else if(--groupCounts[group]==0)groupMask&=~(1u<<group);}
     bool SmallGroups()const{return (groupMask&~15u)==0;}
     bool PairGroups()const{return (groupMask&~3u)==0;}
@@ -71,7 +71,7 @@ public:
         size_t capacity=std::max<size_t>(64,records.capacity());while(capacity<count)capacity*=2;
         records.reserve(capacity);proxies.reserve(capacity);ids.reserve(capacity);slots.reserve(capacity);tree.Reserve(capacity);
         dirtyRecords.reserve(dirtyRecords.size()+changed.size()+removed.size());dirtyNodes.reserve(dirtyNodes.size()+(changed.size()+removed.size())*128);
-        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;visibleMaxCount=dynamicCount=0;full=true;}
+        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;visibleMaxCount=dynamicCount=linearCount=0;full=true;}
         uint64_t visited=tree.visited;
         for(auto id:removed){uint32_t slot=slots.at(id),last=uint32_t(records.size()-1);Group(records[slot],false);tree.Remove(slot,dirtyNodes);slots.erase(id);
             if(slot!=last){records[slot]=records[last];proxies[slot]=proxies[last];ids[slot]=ids[last];slots.at(ids[slot])=slot;dirtyRecords.push_back(slot);}
@@ -146,6 +146,9 @@ public:
         if(!headerDirty)return;
         Record header{};header.position={float(records.size()),float(tree.root==rtr::RetainedLightTree::None?0:tree.root),1,0};
         header.direction[0]=dynamicCount==records.size()?1.f:0.f;header.direction[1]=dynamicCount==0?1.f:0.f;
+        // Uniform L1 attenuation admits a tighter conservative AABB metric.
+        // Mixed batches retain the general Euclidean support/score bounds.
+        header.extent[0]=!records.empty()&&linearCount==records.size()?1.f:0.f;
         // Bounds are an exact early rejection for max composition only. Mixed
         // and additive compositions retain the general traversal unchanged.
         const char* disable=std::getenv("RTR_RTXPT_DISABLE_SPARSE_NODE_BOUNDS");

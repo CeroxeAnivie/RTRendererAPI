@@ -69,6 +69,7 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
         for(String value:cases)switch(value){
             case "gi"->gi();case "roles"->rolesAndAlpha();case "pose"->poseAndOpaqueReference();
             case "projection"->projection();case "time"->timeAndOrigin();case "cpu"->cpuOracle();
+            case "topology-coverage"->topologyCoverage();
             default->throw new IllegalArgumentException("Unknown native matrix case: "+value);
         }
         System.out.println("RTXPT_NATIVE_MATRIX PASS cases="+cases);
@@ -178,6 +179,51 @@ public final class RtxptNativeLightingMatrixNativeSelfTest {
             near(capture(renderer,"roles-two-sided-receiver",0)[CENTER],.625,.001,"Two-sided receiver accepts the same rear face");
             packet(renderer,11,5,FrameClock.of(0,0));
             System.out.println("RTXPT_NATIVE_ROLE_ALPHA_MATRIX PASS shadow-only excluded single-sided double-sided texture-animation fade offscreen receiver-culling");
+        }
+    }
+
+    static void topologyShadowFrame(RtxptRenderer renderer,long sequence,long revision,double expected,String label)throws Exception {
+        renderer.submit(frame(sequence,revision));
+        near(capture(renderer,"topology-coverage-"+label,0)[CENTER],expected,.001,"Current topology/coverage: "+label);
+        packet(renderer,sequence,revision,FrameClock.of(0,0));
+    }
+    static void topologyCoverage()throws Exception {
+        try(var renderer=new RtxptRenderer(RtxptLightTreeNativeSelfTest.config(4),true)){
+            renderer.nativeLightingPlan(directPlan(SUN_ON));
+            renderer.apply(SceneTransaction.builder(1).resetScene().upsert(material(1,255,255,255)).upsert(alpha(255))
+                .upsert(MaterialAsset.builder(2).blendMode(MaterialAsset.BlendMode.MASKED).baseColorTextureId(7).roughness(.8f).build())
+                .upsert(plane(1,1,2,0,0,1,false)).upsert(plane(2,2,4,1,0,0,false))
+                .upsert(SceneInstance.builder(1,1).build()).upsert(SceneInstance.builder(2,2).build()).build());
+            publication(renderer,1,NativeLightingPublication.Instance.receiver(1),NativeLightingPublication.Instance.shadowOnly(2));
+            topologyShadowFrame(renderer,0,1,.45,"initial");
+            renderer.apply(SceneTransaction.builder(2).removeInstance(2).removeMesh(2)
+                .upsert(plane(3,2,4,1,0,0,false)).upsert(SceneInstance.builder(3,3).build()).build());
+            publication(renderer,2,NativeLightingPublication.Instance.receiver(1),NativeLightingPublication.Instance.shadowOnly(3));
+            topologyShadowFrame(renderer,1,2,.45,"replacement");
+            renderer.apply(SceneTransaction.builder(3).upsert(alpha(0)).build());
+            topologyShadowFrame(renderer,2,3,1,"replacement-transparent");
+            renderer.apply(SceneTransaction.builder(4).upsert(SceneInstance.builder(4,3)
+                .transform(new AffineTransform(new float[]{1,0,0,100,0,1,0,0,0,0,1,0})).build()).build());
+            publication(renderer,3,NativeLightingPublication.Instance.receiver(1),NativeLightingPublication.Instance.shadowOnly(3),NativeLightingPublication.Instance.shadowOnly(4));
+            topologyShadowFrame(renderer,3,4,1,"shared");
+            renderer.apply(SceneTransaction.builder(5).removeInstance(3).build());
+            topologyShadowFrame(renderer,4,5,1,"shared-detach");
+            renderer.apply(SceneTransaction.builder(6).upsert(SceneInstance.builder(4,3).build()).build());
+            topologyShadowFrame(renderer,5,6,1,"shared-moved");
+            renderer.apply(SceneTransaction.builder(7).upsert(alpha(255)).build());
+            topologyShadowFrame(renderer,6,7,.45,"shared-opaque");
+            renderer.apply(SceneTransaction.builder(8).upsert(TextureAsset.color(8,1,1,new byte[]{-1,-1,-1,0}))
+                .upsert(MaterialAsset.builder(3).blendMode(MaterialAsset.BlendMode.MASKED).baseColorTextureId(8).roughness(.8f).build())
+                .upsert(plane(3,3,4,1,0,0,false)).build());
+            topologyShadowFrame(renderer,7,8,1,"changed-material");
+            renderer.apply(SceneTransaction.builder(9).upsert(TextureAsset.color(8,1,1,new byte[]{-1,-1,-1,-1})).build());
+            topologyShadowFrame(renderer,8,9,.45,"changed-material-opaque");
+            renderer.apply(SceneTransaction.builder(10).removeInstance(4).removeMesh(3).build());
+            topologyShadowFrame(renderer,9,10,1,"last-detach");
+            renderer.apply(SceneTransaction.builder(11).upsert(plane(5,3,4,1,0,0,false)).upsert(SceneInstance.builder(5,5).build()).build());
+            publication(renderer,4,NativeLightingPublication.Instance.receiver(1),NativeLightingPublication.Instance.shadowOnly(5));
+            topologyShadowFrame(renderer,10,11,.45,"reintroduced-material");
+            System.out.println("RTXPT_TOPOLOGY_COVERAGE PASS frames=11 replacement=true shared=true materialChange=true lastDetach=true");
         }
     }
 

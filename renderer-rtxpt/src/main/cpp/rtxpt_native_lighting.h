@@ -80,6 +80,7 @@ public:
     nvrhi::ComputePipelineHandle defaultPipeline;
     nvrhi::ComputePipelineHandle singleGroupPipeline;
     nvrhi::ComputePipelineHandle sparseOnlyPipeline,sparseOnlySingleGroupPipeline,smallGroupPipeline,sparseOnlySmallGroupPipeline;
+    nvrhi::ComputePipelineHandle pairGroupPipeline,sparseOnlyPairGroupPipeline;
     std::array<nvrhi::ComputePipelineHandle,8> uninstrumentedPipelines;
     std::array<nvrhi::ComputePipelineHandle,16> maxPipelines;
     std::string extensionIdentity;
@@ -90,8 +91,27 @@ public:
     std::unordered_set<std::string> alphaMeshes;
     std::unordered_map<std::string,uint32_t> instanceSlots;
     std::unordered_map<std::string,GeometryAttributes> geometrySlots;
-    std::unordered_map<std::string,uint32_t> geometryIndices;
+    struct GeometryIndex {uint32_t index;uint64_t epoch;GeometryAttributes* attributes=nullptr;};
+    std::unordered_map<std::string,GeometryIndex> geometryIndices;
+    uint64_t geometryIndexEpoch=0;
+    struct GeometryEntry {std::string name;uint32_t index=0,corners=0;bool indexChanged=false;GeometryIndex* slot=nullptr;};
+    std::vector<GeometryEntry> geometryEntriesScratch;
     std::unordered_set<std::string> dirtyInstances,dirtyBaselines,dirtyColors;
+    std::vector<InstanceAttributes> instanceUploadScratch;
+    std::vector<GeometryAttributes> geometryUploadScratch;
+    std::vector<uint32_t> instanceUploadIndices,geometryUploadIndices;
+    std::vector<const std::string*> instanceNamesScratch;
+    template<class T> static void UploadAttributeRuns(nvrhi::ICommandList* command,nvrhi::IBuffer* buffer,
+            const std::vector<T>& values,std::vector<uint32_t>& indices){
+        std::sort(indices.begin(),indices.end());
+        for(size_t begin=0;begin<indices.size();){
+            size_t end=begin+1;while(end<indices.size()&&indices[end]==indices[end-1]+1)++end;
+            const size_t bytes=(end-begin)*sizeof(T);
+            RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,end-begin,bytes,1,0,0,0,RtrDiagnostics::Topology,bytes);
+            command->writeBuffer(buffer,values.data()+indices[begin],bytes,size_t(indices[begin])*sizeof(T));
+            begin=end;
+        }
+    }
     size_t attributeEnd=0;
     struct FreeAttributeRange{uint32_t offset,count;};
     std::vector<FreeAttributeRange> freeAttributeRanges;
@@ -149,14 +169,19 @@ public:
     nvrhi::IBuffer* previousSceneInstances=nullptr;
     nvrhi::IBuffer* previousSceneGeometry=nullptr;
     size_t previousInstanceCount=0,previousGeometryCount=0;
-    struct Retired {std::vector<nvrhi::BufferHandle> buffers;std::vector<nvrhi::TextureHandle> textures;std::vector<nvrhi::ComputePipelineHandle> pipelines;nvrhi::EventQueryHandle done;};
+    struct Retired {std::vector<nvrhi::BufferHandle> buffers;std::vector<nvrhi::TextureHandle> textures;std::vector<nvrhi::ComputePipelineHandle> pipelines;nvrhi::EventQueryHandle done,computeDone;uint64_t bytes=0;};
     std::vector<Retired> retired;
+    RtrNativeLightingPass(){retired.reserve(64);}
     std::shared_ptr<RtrResourceReclaimer> reclaimer=std::make_shared<RtrResourceReclaimer>();
     void PollRetired(nvrhi::IDevice* device){
         size_t budget=2;
-        for(auto i=retired.begin();i!=retired.end()&&budget&&reclaimer->Available();)if(device->pollEventQuery(i->done)){
-            if(!reclaimer->Enqueue(*i))break;i=retired.erase(i);--budget;
-        }else break;
+        RtrDiagnostics::Scope maintenance(RtrDiagnostics::ResourceRetirement);
+        for(auto i=retired.begin();i!=retired.end()&&budget&&reclaimer->Available();){
+            bool done;{RtrDiagnostics::Scope poll(RtrDiagnostics::CompletionPoll,2);done=device->pollEventQuery(i->done)&&device->pollEventQuery(i->computeDone);}
+            if(!done)break;
+            RtrDiagnostics::Scope transfer(RtrDiagnostics::ReclaimEnqueue,1,0,1,0,0,0,0,i->bytes);
+            if(!reclaimer->Enqueue(*i,i->bytes))break;i=retired.erase(i);--budget;
+        }
     }
     void Configure(const std::vector<float>& parameters){
         if(parameters.size()!=80)throw std::invalid_argument("Native-lighting ABI v1 requires 80 parameter words");
@@ -183,12 +208,15 @@ public:
     }
     void Retire(nvrhi::IDevice* device,std::vector<nvrhi::BufferHandle> buffers,std::vector<nvrhi::TextureHandle> textures={}){
         PollRetired(device);if(retired.size()>=64)throw std::runtime_error("Lighting retirement capacity exhausted");
-        Retired old;old.buffers=std::move(buffers);old.textures=std::move(textures);old.done=device->createEventQuery();
-        device->setEventQuery(old.done,nvrhi::CommandQueue::Graphics);retired.push_back(std::move(old));
+        Retired old;old.buffers=std::move(buffers);old.textures=std::move(textures);
+        for(auto& b:old.buffers)if(b)old.bytes+=b->getDesc().byteSize;
+        old.done=device->createEventQuery();old.computeDone=device->createEventQuery();
+        if(!old.done||!old.computeDone)throw std::runtime_error("Lighting completion query allocation failed");
+        device->setEventQuery(old.done,nvrhi::CommandQueue::Graphics);device->setEventQuery(old.computeDone,nvrhi::CommandQueue::Compute);retired.push_back(std::move(old));
     }
     void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* bindlessLayout,const RtrSparseLighting* sources=nullptr){
-        PollRetired(device);
         if(!pipeline){
+            RtrDiagnostics::Scope initialize(RtrDiagnostics::LightingInitialize);
             nvrhi::BindingLayoutDesc desc;desc.visibility=nvrhi::ShaderType::Compute;
             desc.bindings={nvrhi::BindingLayoutItem::ConstantBuffer(0),nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
                 nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
@@ -215,28 +243,6 @@ public:
                 .setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);
             dummyColor=device->createTexture(td);td.format=nvrhi::Format::RGBA32_UINT;dummyIdentity=device->createTexture(td);
             layout=preparedLayout;pipeline=defaultPipeline=preparedPipeline;
-            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY","1"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
-            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-            singleGroupPipeline=device->createComputePipeline(pso);if(!singleGroupPipeline)throw std::runtime_error("Single-group native lighting pipeline unavailable");
-            macros={{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","0"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
-            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-            sparseOnlyPipeline=device->createComputePipeline(pso);
-            macros[0].definition="1";
-            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-            sparseOnlySingleGroupPipeline=device->createComputePipeline(pso);
-            if(!sparseOnlyPipeline||!sparseOnlySingleGroupPipeline)throw std::runtime_error("Sparse-only native lighting pipeline unavailable");
-            for(unsigned analytic=0;analytic<2;++analytic){
-                macros={{"RTR_LIGHT_GROUP_CAPACITY","4"},{"RTR_ANALYTIC_LIGHTS",analytic?"1":"0"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
-                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-                auto prepared=device->createComputePipeline(pso);if(!prepared)throw std::runtime_error("Small-group lighting pipeline unavailable");
-                (analytic?smallGroupPipeline:sparseOnlySmallGroupPipeline)=prepared;
-            }
-            for(unsigned i=0;i<uninstrumentedPipelines.size();i++){
-                macros={{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},{"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","0"}};
-                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-                uninstrumentedPipelines[i]=device->createComputePipeline(pso);
-                if(!uninstrumentedPipelines[i])throw std::runtime_error("Uninstrumented native lighting pipeline unavailable");
-            }
         }
         if(diagnosticDecomposition&&RtrDiagnostics::level.load()==2&&!deepPipeline){
             auto desc=*layout->getDesc();desc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(5));
@@ -260,6 +266,29 @@ public:
         }
         PrepareCompact(device,factory);
         const unsigned groupVariant=!sources?0:sources->SingleGroup()?1:sources->PairGroups()?6:sources->SmallGroups()?4:0;
+        const unsigned instrumentedCapacity=groupVariant==1?1:groupVariant==6?2:groupVariant==4?4:32;
+        for(unsigned analytic=0;analytic<2;++analytic){
+            auto& target=instrumentedCapacity==1?(analytic?singleGroupPipeline:sparseOnlySingleGroupPipeline):
+                instrumentedCapacity==2?(analytic?pairGroupPipeline:sparseOnlyPairGroupPipeline):
+                instrumentedCapacity==4?(analytic?smallGroupPipeline:sparseOnlySmallGroupPipeline):(analytic?pipeline:sparseOnlyPipeline);
+            if(RtrDiagnostics::level.load()==2&&!target){
+                RtrDiagnostics::Scope prepare(RtrDiagnostics::Pipeline,1);
+                std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",std::to_string(instrumentedCapacity)},
+                    {"RTR_ANALYTIC_LIGHTS",analytic?"1":"0"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
+                nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
+                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+                target=device->createComputePipeline(pso);if(!target)throw std::runtime_error("Diagnostic lighting pipeline unavailable");
+            }
+        }
+        for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!uninstrumentedPipelines[i]){
+            RtrDiagnostics::Scope prepare(RtrDiagnostics::Pipeline,1);
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
+                {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","0"}};
+            nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
+            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+            uninstrumentedPipelines[i]=device->createComputePipeline(pso);
+            if(!uninstrumentedPipelines[i])throw std::runtime_error("Production lighting pipeline unavailable");
+        }
         const bool maximum=sources&&sources->VisibleMax();
         const bool allDynamic=sources&&sources->dynamicCount==sources->records.size();
         const unsigned maxOffset=allDynamic?8:0;
@@ -370,52 +399,74 @@ public:
             UploadPublications(device,command);dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();if(changed)++metadataUploads;return;
         }
         RtrDiagnostics::Scope indexScope(RtrDiagnostics::ResourceIndex);
-        auto oldInstanceSlots=std::move(instanceSlots);instanceSlots.clear();
         EnsureAttributeBuffer(device,command,instances,std::max<size_t>(1,instanceCount)*sizeof(InstanceAttributes),sizeof(InstanceAttributes),"Native receiver roles");
+        instanceUploadScratch.resize(instanceCount);instanceUploadIndices.clear();
+        instanceNamesScratch.assign(instanceCount,nullptr);
         for(const auto& instance:graph->GetMeshInstances()){
-            const auto& name=instance->GetNode()->GetName();auto index=instance->GetInstanceIndex();instanceSlots.emplace(name,index);
-            auto old=oldInstanceSlots.find(name);
-            if(old==oldInstanceSlots.end()||old->second!=index||dirtyInstances.count(name)){
+            const auto& name=instance->GetNode()->GetName();auto index=instance->GetInstanceIndex();
+            if(index>=instanceNamesScratch.size()||instanceNamesScratch[index])throw std::runtime_error("Invalid dense instance index");
+            instanceNamesScratch[index]=&name;
+            auto old=instanceSlots.find(name);
+            const bool changed=old==instanceSlots.end()||old->second!=index||dirtyInstances.count(name);
+            instanceSlots.insert_or_assign(name,index);
+            if(changed){
                 auto found=instanceAttributes.find(name);InstanceAttributes value=found==instanceAttributes.end()?InstanceAttributes{}:found->second;
-                command->writeBuffer(instances,&value,sizeof(value),size_t(index)*sizeof(value));++attributeWork[2];attributeWork[3]+=sizeof(value);
+                if(index>=instanceUploadScratch.size())throw std::runtime_error("Invalid dense instance index");
+                instanceUploadScratch[index]=value;instanceUploadIndices.push_back(index);++attributeWork[2];attributeWork[3]+=sizeof(value);
             }
         }
+        for(auto entry=instanceSlots.begin();entry!=instanceSlots.end();){
+            const auto index=entry->second;
+            if(index>=instanceNamesScratch.size()||!instanceNamesScratch[index]||entry->first!=*instanceNamesScratch[index])entry=instanceSlots.erase(entry);else ++entry;
+        }
+        UploadAttributeRuns(command,instances,instanceUploadScratch,instanceUploadIndices);
         specialRoleCount=0;
         for(auto entry=instanceAttributes.begin();entry!=instanceAttributes.end();)if(!instanceSlots.count(entry->first))entry=instanceAttributes.erase(entry);
             else{specialRoleCount+=entry->second.rolesVisibility.x!=23;++entry;}
-        struct GeometryEntry{std::string name;uint32_t index,corners;};std::vector<GeometryEntry> entries;entries.reserve(geometryCount);
-        std::unordered_set<std::string> live;
+        // Reuse names and map nodes. A dense-index migration must still inspect
+        // the complete table, but it need not allocate a temporary hash set for it.
+        if(++geometryIndexEpoch==0){for(auto& [name,index]:geometryIndices)index.epoch=0;++geometryIndexEpoch;}
+        geometryEntriesScratch.resize(geometryCount);size_t entryCount=0;
         for(const auto& mesh:graph->GetMeshes())for(size_t j=0;j<mesh->geometries.size();j++){
-            const auto& g=mesh->geometries[j];auto name=mesh->name+":"+std::to_string(j);live.insert(name);
-            entries.push_back({std::move(name),uint32_t(g->globalGeometryIndex),g->numIndices});++attributeTableVisits;
+            if(entryCount>=geometryEntriesScratch.size())throw std::runtime_error("Invalid dense geometry count");
+            const auto& g=mesh->geometries[j];auto& entry=geometryEntriesScratch[entryCount++];
+            entry.name=mesh->name;entry.name+=":";entry.name+=std::to_string(j);
+            entry.index=uint32_t(g->globalGeometryIndex);entry.corners=g->numIndices;
+            auto old=geometryIndices.find(entry.name);
+            entry.indexChanged=old==geometryIndices.end()||old->second.index!=entry.index;
+            if(old==geometryIndices.end())old=geometryIndices.emplace(entry.name,GeometryIndex{entry.index,geometryIndexEpoch}).first;
+            else{old->second.index=entry.index;old->second.epoch=geometryIndexEpoch;}
+            entry.slot=&old->second;++attributeTableVisits;
         }
+        if(entryCount!=geometryCount)throw std::runtime_error("Invalid dense geometry count");
         // Release only retired identities. Same-size replacements keep their stable range.
-        for(auto i=geometrySlots.begin();i!=geometrySlots.end();)if(!live.count(i->first)){
-            FreeAttributeRangeAt(i->second.offset,i->second.triangles*3);i=geometrySlots.erase(i);
+        for(auto i=geometryIndices.begin();i!=geometryIndices.end();)if(i->second.epoch!=geometryIndexEpoch){
+            if(auto* attributes=i->second.attributes)FreeAttributeRangeAt(attributes->offset,attributes->triangles*3);
+            meshBaselines.erase(i->first);meshColors.erase(i->first);alphaMeshes.erase(i->first);geometrySlots.erase(i->first);
+            i=geometryIndices.erase(i);
         }else ++i;
         EnsureAttributeBuffer(device,command,geometryBaselines,std::max<size_t>(1,geometryCount)*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
+        geometryUploadScratch.resize(geometryCount);geometryUploadIndices.clear();
         std::unordered_set<std::string> upload=dirtyBaselines;upload.insert(dirtyColors.begin(),dirtyColors.end());
-        for(const auto& entry:entries){auto found=geometrySlots.find(entry.name);
-            bool mappingChanged=found==geometrySlots.end()||found->second.triangles*3!=entry.corners;
+        for(const auto& entry:geometryEntriesScratch){auto*& attributes=entry.slot->attributes;
+            bool mappingChanged=!attributes||attributes->triangles*3!=entry.corners;
             if(mappingChanged){
-                if(found!=geometrySlots.end())FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);
-                geometrySlots[entry.name]={AllocateAttributeRange(entry.corners),entry.corners/3};upload.insert(entry.name);
+                if(attributes)FreeAttributeRangeAt(attributes->offset,attributes->triangles*3);
+                auto [found,inserted]=geometrySlots.insert_or_assign(entry.name,GeometryAttributes{AllocateAttributeRange(entry.corners),entry.corners/3});
+                attributes=&found->second;upload.insert(entry.name);
             }
-            auto oldIndex=geometryIndices.find(entry.name);
-            if(mappingChanged||oldIndex==geometryIndices.end()||oldIndex->second!=entry.index){auto value=geometrySlots.at(entry.name);
-                command->writeBuffer(geometryBaselines,&value,sizeof(value),size_t(entry.index)*sizeof(value));attributeWork[3]+=sizeof(value);}
-            geometryIndices.insert_or_assign(entry.name,entry.index);
+            if(mappingChanged||entry.indexChanged){auto value=*attributes;
+                if(entry.index>=geometryUploadScratch.size())throw std::runtime_error("Invalid dense geometry index");
+                geometryUploadScratch[entry.index]=value;geometryUploadIndices.push_back(entry.index);attributeWork[3]+=sizeof(value);}
         }
+        UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
         EnsureAttributeBuffer(device,command,baselineCoordinates,attributeEnd*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
-        for(auto i=geometryIndices.begin();i!=geometryIndices.end();)if(!live.count(i->first))i=geometryIndices.erase(i);else ++i;
         for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
             auto values=PackVertices(name,size_t(found->second.triangles)*3);
             if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
             attributeWork[3]+=values.size()*sizeof(VertexAttributes);++attributeWork[4];
         }
         ++attributeWork[0];
-        for(auto i=meshBaselines.begin();i!=meshBaselines.end();)if(!geometrySlots.count(i->first))i=meshBaselines.erase(i);else ++i;
-        for(auto i=meshColors.begin();i!=meshColors.end();)if(!geometrySlots.count(i->first)){alphaMeshes.erase(i->first);i=meshColors.erase(i);}else ++i;
         UploadPublications(device,command);
         previousSceneInstances=scene->GetInstanceBuffer();previousSceneGeometry=scene->GetGeometryBuffer();previousInstanceCount=instanceCount;previousGeometryCount=geometryCount;
         metadataDirty=false;dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();++metadataUploads;
@@ -525,11 +576,11 @@ public:
             }
             words[75]=flags;
         }else{if(reconstruction.requested)state.pipeline=lightCount<=1
-                ?(sources.SingleGroup()?reconstruction.sparseOnlySingleGroupPipeline:sources.SmallGroups()?reconstruction.sparseOnlySmallGroupPipeline:reconstruction.sparseOnlyPipeline)
-                :(sources.SingleGroup()?reconstruction.singleGroupPipeline:sources.SmallGroups()?reconstruction.smallGroupPipeline:reconstruction.pipeline);
+                ?(sources.SingleGroup()?reconstruction.sparseOnlySingleGroupPipeline:sources.PairGroups()?reconstruction.sparseOnlyPairGroupPipeline:sources.SmallGroups()?reconstruction.sparseOnlySmallGroupPipeline:reconstruction.sparseOnlyPipeline)
+                :(sources.SingleGroup()?reconstruction.singleGroupPipeline:sources.PairGroups()?reconstruction.pairGroupPipeline:sources.SmallGroups()?reconstruction.smallGroupPipeline:reconstruction.pipeline);
             else if(extensionIdentity.empty())state.pipeline=lightCount<=1
-                ?(sources.SingleGroup()?sparseOnlySingleGroupPipeline:sources.SmallGroups()?sparseOnlySmallGroupPipeline:sparseOnlyPipeline)
-                :(sources.SingleGroup()?singleGroupPipeline:sources.SmallGroups()?smallGroupPipeline:pipeline);
+                ?(sources.SingleGroup()?sparseOnlySingleGroupPipeline:sources.PairGroups()?sparseOnlyPairGroupPipeline:sources.SmallGroups()?sparseOnlySmallGroupPipeline:sparseOnlyPipeline)
+                :(sources.SingleGroup()?singleGroupPipeline:sources.PairGroups()?pairGroupPipeline:sources.SmallGroups()?smallGroupPipeline:pipeline);
             if(!workStatisticsEnabled&&extensionIdentity.empty()){
                 const unsigned variant=sources.SingleGroup()?1+(lightCount<=1?2:0):sources.PairGroups()?6+(lightCount<=1?1:0):sources.SmallGroups()?4+(lightCount<=1?1:0):(lightCount<=1?2:0);
                 const unsigned maxVariant=variant+(sources.dynamicCount==sources.records.size()?8:0);

@@ -58,8 +58,27 @@ public final class RtxptDiagnosticsSelfTest {
         words[13+11]=0;rejected(words);
         System.out.println("RTXPT_DIAGNOSTICS_JAVA_INCOMPLETE PASS truncatedExcluded activeGenerations");
     }
+    private static void resources(){
+        long[] data=new long[40];
+        long[] header={5,25,900,1,0,0,0,0,0,0,0,3,2,901,902};System.arraycopy(header,0,data,0,15);
+        data[15+4]=RtxptDiagnostics.Stage.BLAS_ALLOCATE.ordinal();data[15+18]=0xaabbccddL;
+        data[15+19]=42;data[15+20]=1025;data[15+21]=4096;data[15+22]=7;data[15+23]=2;data[15+24]=901;
+        var snapshot=RtxptDiagnostics.decode(data);var event=snapshot.events().getFirst();
+        require(event.resourceIdentity()==0xaabbccddL&&event.resourceGeneration()==42&&event.bytes()==4096&&event.attempt()==7&&event.diagnosticLevel()==2,"Resource metadata ABI");
+        require(snapshot.firstEventOrdinal()==901&&snapshot.nextEventOrdinal()==902,"Retained ordinal window excludes pre-registration loss");
+        data[15+23]=3;rejected(data);data[15+23]=2;data[14]=903;rejected(data);
+        var gpu=RtxptDiagnostics.decodeGpu(new String[]{"0,0,0,1,1","1,graphics,0,-1,ResourceBlasBuild,1.5,10,25,10000,7,42,2,1234,42,1"});
+        require(gpu.scopes().getFirst().diagnosticLevel()==2&&gpu.scopes().getFirst().resourceIdentity()==1234,"GPU records own mode and resource");
+        for(String identity:new String[]{"9223372036854775808","14358104993958142841","18446744073709551615"}){
+            var highBit=RtxptDiagnostics.decodeGpu(new String[]{"0,0,0,1,1","1,graphics,0,-1,ResourceBlasBuild,1.5,10,25,10000,7,42,2,"+identity+",42,1"});
+            require(Long.toUnsignedString(highBit.scopes().getFirst().resourceIdentity()).equals(identity),"Unsigned GPU resource identity must retain every bit");
+        }
+        var legacyGpu=RtxptDiagnostics.decodeGpu(new String[]{"0,0,0,1,1","1,graphics,0,-1,Legacy,1.5,10,25,10000,7,42"});
+        require(legacyGpu.scopes().getFirst().diagnosticLevel()==-1,"Legacy GPU mode stays unknown");
+        System.out.println("RTXPT_DIAGNOSTICS_RESOURCE_ABI PASS format=5 legacyGpu=true metadata=true ordinals=true");
+    }
     public static void main(String[] args)throws Exception {
-        compatibility();incomplete();if(args.length==1)fixture(Path.of(args[0]));
+        compatibility();incomplete();resources();if(args.length==1)fixture(Path.of(args[0]));
         System.out.println("RTXPT_DIAGNOSTICS_JAVA_ALL PASS");
     }
 }

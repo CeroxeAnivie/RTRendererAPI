@@ -1,0 +1,179 @@
+{
+  "version": "7.1.5",
+  "runtimeZipSha256": "7da72d5a1a4fe4f9b11a3e7ba6138a5f3dcc5464fab70152a00566246401f858",
+  "artifacts": [
+    {
+      "module": "renderer-api",
+      "file": "renderer-api-7.1.5.jar",
+      "bytes": 785589,
+      "sha256": "402899228e201fa4b6511bfe8f336f7dc0c24e48b326c9672f1e98c0e0ebf2f8"
+    },
+    {
+      "module": "renderer-api",
+      "file": "renderer-api-7.1.5-sources.jar",
+      "bytes": 362940,
+      "sha256": "71b7d1745f768ca4bdbeb856e655e8ff9c33be1e0681de3c0409565b9ea55cfd"
+    },
+    {
+      "module": "renderer-api",
+      "file": "renderer-api-7.1.5-javadoc.jar",
+      "bytes": 6486630,
+      "sha256": "8feab715a8534e095e9e4cc4b148d396386f7d27d8b7324011624ede6a7799ec"
+    },
+    {
+      "module": "renderer-api",
+      "file": "renderer-api-7.1.5.pom",
+      "bytes": 2114,
+      "sha256": "abf3d989641e2dceae93bfa017a0c32aa4089ebf852a74c8330d2705597d7044"
+    },
+    {
+      "module": "renderer-api",
+      "file": "renderer-api-7.1.5.module",
+      "bytes": 3842,
+      "sha256": "9b9d31bccb3628f01875aac7786002c0c42ee944b8969b1f93bd6eff49203e00"
+    },
+    {
+      "module": "renderer-core",
+      "file": "renderer-core-7.1.5.jar",
+      "bytes": 14561563,
+      "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69"
+    },
+    {
+      "module": "renderer-core",
+      "file": "renderer-core-7.1.5-sources.jar",
+      "bytes": 12913129,
+      "sha256": "efc4c96aef8401a8a5a5ab05a568a36227ec9a9d26aa9d4362f3838e114c45b3"
+    },
+    {
+      "module": "renderer-core",
+      "file": "renderer-core-7.1.5-javadoc.jar",
+      "bytes": 6229115,
+      "sha256": "d2cd3484b73060fc5466713c141dc18b5f52e000f447e4a824d4b4bd05c93c9c"
+    },
+    {
+      "module": "renderer-core",
+      "file": "renderer-core-7.1.5.pom",
+      "bytes": 3871,
+      "sha256": "c4441b2c19668ebcc9d13b3c4cc0c2c2409dc08c1e3d208d66154f067fcb5450"
+    },
+    {
+      "module": "renderer-core",
+      "file": "renderer-core-7.1.5.module",
+      "bytes": 6988,
+      "sha256": "1ee9edd1a68cd78b6cb43c0ee67ec2f7767c0c09c07de4bcc3ad350f54648e99"
+    },
+    {
+      "module": "renderer-nvidia",
+      "file": "renderer-nvidia-7.1.5.jar",
+      "bytes": 62644784,
+      "sha256": "9d67fcd108bb5dfcba696b4fd8fb8991869411aec57f6f292dd85196421f6121"
+    },
+    {
+      "module": "renderer-nvidia",
+      "file": "renderer-nvidia-7.1.5-sources.jar",
+      "bytes": 57017,
+      "sha256": "2cf97cfaadc9a76b203771086eff4d5711db3e573204de4191a1ae1aa646d62e"
+    },
+    {
+      "module": "renderer-nvidia",
+      "file": "renderer-nvidia-7.1.5-javadoc.jar",
+      "bytes": 4155735,
+      "sha256": "e28b58e9dee0552d3eda441af791dd61d0325a19cca0954eca25b20cac93f394"
+    },
+    {
+      "module": "renderer-nvidia",
+      "file": "renderer-nvidia-7.1.5.pom",
+      "bytes": 1711,
+      "sha256": "3b9df3a7e268f5239ac7845e97be589de5d92808b48212ed4a40711241c26f11"
+    },
+    {
+      "module": "renderer-nvidia",
+      "file": "renderer-nvidia-7.1.5.module",
+      "bytes": 3516,
+      "sha256": "9f8f28978fb4e46a70d4bba6dc9c4b866d90088ba091b48bb127834c2f88a216"
+    },
+    {
+      "module": "renderer-rtxpt",
+      "file": "renderer-rtxpt-7.1.5.jar",
+      "bytes": 768783167,
+      "sha256": "d7e790472a4b6fa3336759c74b9fea3c835666bc0d9928465291424f82c0839b"
+    },
+    {
+      "module": "renderer-rtxpt",
+      "file": "renderer-rtxpt-7.1.5-sources.jar",
+      "bytes": 79552,
+      "sha256": "4509fa84f0ed3ea06ddcfae3cd301a76a37060b418ba43a8fe761a998b0c0947"
+    },
+    {
+      "module": "renderer-rtxpt",
+      "file": "renderer-rtxpt-7.1.5-javadoc.jar",
+      "bytes": 4349662,
+      "sha256": "83e8cace75a5d55817784a2bd2a2fd0cd90b3c93d1774d181dfbb7506d836cf8"
+    },
+    {
+      "module": "renderer-rtxpt",
+      "file": "renderer-rtxpt-7.1.5.pom",
+      "bytes": 1671,
+      "sha256": "796c6020e86cee2f435d66c279ec2eb4bed77b18037bb6558cb30a4165a6e9a3"
+    },
+    {
+      "module": "renderer-rtxpt",
+      "file": "renderer-rtxpt-7.1.5.module",
+      "bytes": 3509,
+      "sha256": "a3207a52c98bbb06c7cd3c2fb08315a1a587f9059877f1c5de4059dfcc7459f2"
+    },
+    {
+      "module": "renderer-rtxpt",
+      "file": "renderer-rtxpt-7.1.5-native-symbols.zip",
+      "bytes": 24515221,
+      "sha256": "8cb91c08776b367b52ea48bd4e831f699c76638411c4bf944850aac2948331da"
+    }
+  ],
+  "measuredRuntimeFilesSha256": {
+    "NRD.dll": "bc3888f6259dcf19f998da1fd0de40162874ccab45f17268fe894958d708e6a0",
+    "NvLowLatencyVk.dll": "2a77dc3e1c724b7eea5755be0ae7423752e79a2459fae72181a9f00e3507e5d6",
+    "nvngx_dlss.dll": "d00b5b0ab29c3ca101b70c3a5ecb3a01b7ef33766a3383a28a18623083e6123e",
+    "nvngx_dlssd.dll": "b49435ae346f227feafe7bbe937d88277ea0ee7323975ec06488f377fdb46cee",
+    "nvngx_dlssg.dll": "8d59d49b36410dd6b62fef2503a5871d347415bd85d943fa0848563a95dd50c7",
+    "omm-lib.dll": "7445252a750fc2de1db8e7f67ec35337b5072abf518b55c3c2a13790e963ca9b",
+    "rtrenderer_rtxpt.dll": "d32209b43152eb85a0af66e5c8caea2569fbdc3d2aa4fac41afcf8d93606d450",
+    "sl.common.dll": "38eea3b4209afc455636ea372b5933d65fcc13becec6c84d101dcfc4d8648f75",
+    "sl.dlss_d.dll": "8dff36fd063094eb1f659e8d4dcd52c7423859a9c4a3df3796084c48412d60ac",
+    "sl.dlss_g.dll": "3ed9538df724993bea8a050195a6a78b9c8c8a566d5b05ade477aab3c390e90f",
+    "sl.dlss.dll": "18871eea87c90345da97d8109faa81ea7d5840e8d99b51b55b0e46cfa177f84e",
+    "sl.interposer.dll": "b1d7395aebd7b9722841d64dcf7433680020b6a8e421f851c16d5ba0c2182edf",
+    "sl.nis.dll": "f9f3873c00e2737b22df1bf7605d4fdc7978dbf2955df4e152c5b52aada13b79",
+    "sl.pcl.dll": "5698c38e722318681f215c9fe68e45b9bedd51378acc699d8eee26e961e57770",
+    "sl.reflex.dll": "443577e869352436ff7ec8f4d9c90418d3e95368436ce219261e0f4f07a38122",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/AccumulationPass.bin": "74fa08aa52bd1d5a3bd27ab4358d9dc423335a2d97543ca28abc885ebcf6c9a0",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/DenoisingGuidesBaker_ComputeAvgLayerRadiance.bin": "689d648e067e0ac74cdf447f12578de58433b8606e0b00eb71a40c8d2ef97f1c",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/DenoisingGuidesBaker_DebugViz.bin": "dca48e42b9939bbf0f8057a144595a0aa07d878148143a154fa175f29bd1d2bc",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/DenoisingGuidesBaker_DenoiseSpecHitT.bin": "4c5f1ab27477a6ff5633b73b5003e1a9bbedbb8f5c1a5da2fb2df2c06a4f9488",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/DenoisingGuidesBaker_PrepareDLSSRRGuides.bin": "5b88a4a64e6c3e74f4d1e989224ba519d3f26d9a42cef73a2c9a912705efb1d6",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/ExportVisibilityBuffer.bin": "cec0ab3dabbb3a87244e6e5da6ac8ef24f33b3a486379973f0d8f65c188248b3",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/PostProcess.bin": "8f46f1aef721196428395560b687b6e552d62937e9fc522c7157cdf86229566b",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrHostAugmentation.bin": "165220957136bf0a01df1073bfe118080a26ea1761da6107ba72949513301ded",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrHostResolve.bin": "2fb2e669336412e13c2a0284bd7e2668c9fa9132aed42b89aa8ffede07a370ca",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrLegacySrHistory.bin": "7b26faf6fcd4a552ac4ce5257db8b021f9227a53c66281c2874156810e19c143",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeDynamicLighting.bin": "2b06f9171824c47d60614ec5fc52fea75e74b880558742de98334974fc132919",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeDynamicLightingReconstruct.bin": "11bfb5613d1334a8af5967e3bb937bed19f0260381088f379158eaaa3d681a55",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeLighting.bin": "7c0b715ec63aa279a6a480b66c2dbf8146e20f73a867fadda99c6a3efe326089",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeLightingDeep.bin": "199d918d01bc2e61a092c874680464d984bba28cca9352e9e2052718b648868f",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeLightingEncode.bin": "b56e5018cbc52a4f5828de1cc5c7a633cbe097f6ba3213c441aa838f9623a0ef",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeLightingReconstruct.bin": "208303aad9ca398f622970fe9bef4fd028b61c42b5a4027a4b9baac47e3d9cd9",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrNativeLightingResolve.bin": "6e7bd8e0be360a0ec1c9e99d544827487c18e248aabe551e4e76e9a513245078",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/RtrPreSrHistory.bin": "e63f633461eec8d0326542e170ffa0a810b736b287e607e6bf0caa61c136bc03",
+    "ShaderPrecompiled/Rtxpt/dxil/ProcessingPasses/SubSamplingCompaction.bin": "8f2f78b8d91fc0ce221e0d78e734512a8a338f35756cc974d4574a1a34065bc0"
+  },
+  "performanceEvidenceSha256": "ebea5255166240e921c1165ddc599dbfdbeff8f7ed1955cd44077b084697e158",
+  "dllPdbGuidBytes": "42b75afe1d929142be32e164448828b6",
+  "dllPdbAge": 210,
+  "correctnessPassed": 13,
+  "performancePassed": 36,
+  "p95Target": {
+    "fullGpuP95Ms": 4,
+    "eligibleWindows": 36,
+    "passedWindows": 0
+  },
+  "gpuBenchmarkRepeatedForPackaging": false
+}

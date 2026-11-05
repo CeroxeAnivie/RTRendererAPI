@@ -18,7 +18,7 @@ if($LASTEXITCODE){throw "Native diagnostics selftest failed: $LASTEXITCODE"}
 $classes=Join-Path $out 'classes'
 $javaSource=Join-Path $repo 'renderer-rtxpt/src/main/java/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics.java'
 $testSource=Join-Path $repo 'renderer-rtxpt/src/test/java/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnosticsSelfTest.java'
-& $runner -FilePath $JavaCompiler -ArgumentList @('-encoding','UTF-8','-d',$classes,$javaSource,$testSource) -MemoryLimitGB 10
+& $runner -FilePath $JavaCompiler -ArgumentList @('-encoding','UTF-8','-sourcepath',(Join-Path $repo 'renderer-rtxpt/src/main/java'),'-d',$classes,$javaSource,$testSource) -MemoryLimitGB 10
 if($LASTEXITCODE){throw "Java diagnostics compile failed: $LASTEXITCODE"}
 & $runner -FilePath $Java -ArgumentList @('-Xmx128m','-cp',$classes,'top.ceroxe.rt.renderer.rtxpt.RtxptDiagnosticsSelfTest',$fixture) -MemoryLimitGB 10
 if($LASTEXITCODE){throw "Java diagnostics selftest failed: $LASTEXITCODE"}

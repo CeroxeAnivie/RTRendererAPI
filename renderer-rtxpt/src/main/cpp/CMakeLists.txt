@@ -80,3 +80,8 @@ endif()
 add_executable(rtxpt_resource_protocol_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_resource_protocol_selftest.cpp")
 target_compile_features(rtxpt_resource_protocol_selftest PRIVATE cxx_std_17)
 target_link_libraries(rtxpt_resource_protocol_selftest PRIVATE d3d12 dxgi)
+add_executable(rtxpt_diagnostics_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_diagnostics_selftest.cpp")
+target_compile_features(rtxpt_diagnostics_selftest PRIVATE cxx_std_17)
+set_target_properties(rtxpt_diagnostics_selftest rtxpt_resource_protocol_selftest PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
