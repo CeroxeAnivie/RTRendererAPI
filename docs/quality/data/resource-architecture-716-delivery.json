@@ -1,18 +1,27 @@
 {
   "version": "7.1.6",
-  "status": "source-and-maven-local-delivered-with-explicit-performance-exceptions",
-  "recordedUtc": "2026-11-05T12:15:04.908686+00:00",
-  "sourceCommit": "38158f88cd6130dcff5de428a787886135aee16f",
-  "sourceTree": "d6d65ba4da2dc752cce0c1670359678c2ec0ff24",
+  "status": "source-and-maven-local-delivered-with-complete-final-evidence-and-failed-budget-targets",
+  "recordedUtc": "2026-11-05T13:02:40.261065+00:00",
+  "sourceCommit": "cedd9085aa991ab228da7359359d5696ce65e9b3",
+  "sourceTree": "99e72bcdba465a6ebf884f13dd71c2bd8f95a174",
+  "retainedProductionSourceCommit": "38158f88cd6130dcff5de428a787886135aee16f",
   "sourceRepository": "https://github.com/CeroxeAnivie/RTRendererAPI",
   "sourcePublication": {
     "branches": [
       "main",
       "codex/7.1.6-resource-architecture"
     ],
+    "acceptanceTag": "v7.1.6-acceptance",
     "codePushSucceeded": true,
     "generatedArtifactsUploaded": false,
-    "ciSkipped": "Latest user requested rapid closeout without rerunning passed tests or expanding performance acceptance."
+    "ciSkipped": "Required matrix and supplemental measurements were completed; do not automatically repeat passed acceptance."
+  },
+  "scopeCorrection": "User stopped performance optimization, not final measurement. The earlier incomplete-matrix exception was an assistant interpretation error and has been corrected. Necessary correctness, test and publication code changes are allowed.",
+  "priorIncompleteDelivery": {
+    "commit": "df789471f1e2ad841bfb660be04e02634eb25556",
+    "originalVersionTag": "v7.1.6",
+    "runtimeZipSha256": "71dc9079ff49356ee0842901802dc0f565c1403230592fb7b5a6832a5de1dbc0",
+    "preservedInHistory": true
   },
   "mavenLocal": {
     "verified": true,
@@ -25,33 +34,52 @@
     ],
     "artifactCount": 21,
     "allFilesMatchReleaseRecord": true,
+    "strictFinalMatrixVerification": true,
+    "packageOnlyExceptionUsed": false,
     "releaseRecord": "docs/quality/data/resource-architecture-716-release.json",
-    "releaseRecordSha256": "cba15a9780f78b1690c18d1d1cd24f94020cebf36a051c1feff7c96a00fb0e3c"
+    "releaseRecordSha256": "1a36740d5ebae6fc952e8fefe2cba85b13ebfac79ccc2fdd22be220d722a8244"
   },
   "evidence": {
     "path": "docs/quality/data/resource-architecture-716.json",
-    "sha256": "f7738ba20654f0200c44269f52baf8174baaef30229096c05da244e7d60f2de8",
+    "sha256": "f4aa377a0edb4bc089c015d101ee00db8d2e9b377589699963f6c47c74b5cef9",
+    "matrixMarkdown": "docs/quality/resource-architecture-matrix.md",
     "functionalRecords": 31,
     "currentNativeFunctionalPasses": 8,
     "retainedEarlierInputPasses": 23,
-    "newPreparationCancellationPassed": true,
-    "strictPrecompiledCancellation": true,
+    "finalNativePerformanceCells": 36,
+    "newCoreCellsMeasured": 33,
+    "existingFinalCellsRetained": 3,
+    "missingFinalNativePerformanceCells": 0,
+    "mixedSupplementalWindows": 1,
+    "lifecycleMeasurementRuns": 5,
+    "strictPrecompiledNewMeasurements": true,
     "existingPassedTestsRerun": false,
-    "finalNativePerformanceCells": 3,
-    "missingFinalNativePerformanceCells": 33,
-    "gpu4msTargetMet": false,
+    "completeRequestBoundariesValidated": true,
+    "realRrValidated": true,
+    "performanceMeasurementComplete": true,
+    "absoluteGpuBudgetEligibleWindows": 35,
+    "gpu4msPassedWindows": 0,
+    "cpuBudgetPassedWindows": 0,
+    "cpuBudgetExpectedWindows": 18,
+    "allPerformanceBudgetTargetsMet": false,
     "performanceOptimizationStopped": true,
     "gpuDebugValidationAvailable": false
   },
   "identity": {
     "nativeDllSha256": "ce9c1c65fd4abf3e851a4f73d206dfc70bcbfce4f4fcbc07e00ff2a4ed281868",
-    "runtimeZipSha256": "71dc9079ff49356ee0842901802dc0f565c1403230592fb7b5a6832a5de1dbc0",
+    "runtimeZipSha256": "5a655eab00f06ba736fce099a529f8b063883faa8e03feef83ca3882889bbdc6",
     "dllPdbGuidBytes": "42b75afe1d929142be32e164448828b6",
     "dllPdbAge": 237,
     "productionSourcesMatched": 115,
     "productionClassesMatched": 1866,
+    "steadyBenchmarkBytecodeUnchanged": true,
     "gitTextEolNormalizationVerified": true
   },
-  "scope": "P01-P09 non-performance implementation, functional evidence, contracts, source and artifact delivery closed. Performance budgets, full 36-cell matrix and startup/resize/cancellation latency distributions remain explicit exceptions. MC integration and 180FPS remain consumer-side responsibilities.",
-  "deliveryMetadata": "This receipt follows the published source commit and is not embedded in the runtime, avoiding recursive hashes. It changes no production source or artifact."
+  "measurementLimits": [
+    "生命周期为5个新JVM重复样本，冷进程不等于清空磁盘/驱动缓存；内部PSO/RR缓存命中不独立暴露。",
+    "保留的3个最终DLL旧窗口与33个新窗口是分时采集，时钟未锁定，不把模式差异当作优化因果。",
+    "D3D debug/GPU-based validation在本机不可用，不能宣称已启用验证层。"
+  ],
+  "scope": "P01-P09 implementation, functional evidence, complete final-DLL matrix, mixed/lifecycle measurements, source and artifact delivery are recorded. GPU/CPU budget failures remain explicit; no performance optimization was resumed. MC integration and 180FPS remain consumer-side responsibilities.",
+  "deliveryMetadata": "Receipt follows the published source commit and is not embedded in runtime, avoiding recursive hashes. It changes no production source or artifact."
 }
