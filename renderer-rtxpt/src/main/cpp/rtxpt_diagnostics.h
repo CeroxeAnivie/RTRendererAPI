@@ -33,7 +33,8 @@ enum Stage : uint64_t { Frame=1, InstanceCache, SubInstances, Dispatch, Caller,
     SubmitValidation, Translation, Resources, SubmitRetirement, AttributePreparation, AttributeValidation, ResourceStaging, ResourceIndex, ResourceRetirement,
     ResourcePlan, BufferAllocate, DescriptorAllocate, PayloadPack, BufferUpload, BlasAllocate, BlasClone, BlasBuild, BlasRefit,
     CommandAcquire, CommandSubmit, CompletionPoll, ReclaimEnqueue, DriverRelease, IndexRebuild, TextureAllocate, TextureUpload,
-    RuntimeInitialize, DeviceInitialize, SceneInitialize, LightingInitialize, PoolAcquire, TlasAllocate };
+    RuntimeInitialize, DeviceInitialize, SceneInitialize, LightingInitialize, PoolAcquire, TlasAllocate,
+    HeapAllocate, ResourcePrebuild, AllocationInfo, PlacedBind, PoolEvict };
 enum Flag : uint64_t { QueueWaitEnqueue=1, Failed=2, CacheHit=4, CacheMiss=8,
     Active=256, Truncated=512, Cancelled=1024, EnteredNativeFrame=2048 };
 enum SubmissionKind : uint64_t { Initial=0, Update, Steady, Resized, Waited, KindCount };

@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <fstream>
 #include <chrono>
+#include <d3d12sdklayers.h>
 #include <donut/engine/TextureCache.h>
 #include <donut/engine/HostSceneTableState.h>
 #include <json/json.h>
@@ -49,6 +50,8 @@
 #include "rtxpt_gpu_profile.h"
 #include "rtxpt_instance_transform.h"
 #include "rtxpt_memory_resources.h"
+#include "rtxpt_resource_arena.h"
+#include <map>
 extern SampleUIData g_sampleUIData;
 
 namespace {
@@ -56,6 +59,18 @@ void CheckRtrDevice(nvrhi::IDevice* device){
         auto* nativeDevice=static_cast<ID3D12Device*>(device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device));
         const auto reason=nativeDevice->GetDeviceRemovedReason();
         if(FAILED(reason)){
+            if(std::getenv("RTR_RTXPT_GPU_VALIDATION")){
+                Microsoft::WRL::ComPtr<ID3D12InfoQueue> messages;
+                if(SUCCEEDED(nativeDevice->QueryInterface(IID_PPV_ARGS(&messages)))){
+                    const auto count=messages->GetNumStoredMessagesAllowedByRetrievalFilter();
+                    for(UINT64 index=count>64?count-64:0;index<count;++index){
+                        SIZE_T bytes=0;if(FAILED(messages->GetMessage(index,nullptr,&bytes))||bytes>65536)continue;
+                        std::vector<uint8_t> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+                        if(SUCCEEDED(messages->GetMessage(index,message,&bytes))&&message->Severity<=D3D12_MESSAGE_SEVERITY_WARNING)
+                            std::fprintf(stderr,"D3D12 validation id=%u severity=%u: %s\n",unsigned(message->ID),unsigned(message->Severity),message->pDescription);
+                    }
+                }
+            }
             RtrLatchDeviceFailure(reason);
             RtrProtocolTrace::Record(4,0,0,0,0,0,0,0,0,0,0,uint32_t(reason));
             Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData1> dred;
@@ -178,7 +193,7 @@ public:
         else{const auto* dimensions=reinterpret_cast<const uint32_t*>(nativeLighting.constants.words.data());m_renderSize=uint2(dimensions[40],dimensions[41]);}
         m_progressLoading.Stop();m_asyncLoadingInProgress=false;
         if(nativePreparedScene!=m_scene.get()){
-            nativePreparedScene=m_scene.get();nativeLighting.metadataDirty=true;nativeTlasDirty=true;
+            nativePreparedScene=m_scene.get();nativeLighting.metadataDirty=true;nativeLighting.metadataInitialized=false;nativeTlasDirty=true;
         }
         if(!augmentation)nativeLighting.Prepare(GetDevice(),*m_shaderFactory,m_bindlessLayout,&sparseLighting);
         if(m_scene->GetSceneGraph()->GetMeshInstances().empty()){
@@ -773,6 +788,7 @@ struct Session {
         RtrDiagnostics::Configure(0);
         RtrMemoryDiagnostics::Checkpoint("shutdown.begin");
         if (app) {
+            static_cast<HostPathTracer*>(app->HostRenderPass())->resourceArena.Stop();
             auto* dm=app->HostDeviceManager();
             auto* nativeDevice=dm->GetDevice()?static_cast<ID3D12Device*>(dm->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)):nullptr;
             const bool deviceRemoved=RtrDeviceRemoved(nativeDevice);
@@ -814,7 +830,7 @@ void indexNodes(Session& s) {
     while (w) { s.nodes.emplace(w->GetName(), w.Get()); w.Next(true); }
     auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());
     host.memoryTextures.clear();host.spareMemoryTextures.clear();host.spareMemoryTextureBytes=0;
-    host.resourceRetirement.clear();host.resourceCommandPool.clear();host.resourceQueryPool.clear();host.resourceBlasAllocationBytes.clear();host.meshUploadScratch.clear();
+    host.resourceRetirement.clear();host.resourceCommandPool.clear();host.resourceQueryPool.clear();host.resourceBlasAllocationBytes.clear();host.resourceBufferAllocations.clear();host.preparedMeshBlases.clear();host.meshUploadScratch.clear();
     host.spareMeshBuffers.clear();host.spareMeshBlases.clear();host.spareMeshBufferBytes=host.spareMeshBlasBytes=0;
     host.spareResourceTlas={};host.spareResourceTlasBytes=0;host.resourceTlasAllocationBytes=0;host.resourceTlasAllocationIdentity=nullptr;
     host.IndexRetainedResources();
@@ -1441,7 +1457,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingClearAttributes(JNIEnv* e,jclass,jlong h){
     try{auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;
         if(RtrDiagnostics::level.load()!=0)++static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->dynamicWork[15];
-        pass.instanceAttributes.clear();pass.meshBaselines.clear();pass.meshColors.clear();pass.alphaMeshes.clear();pass.dirtyInstances.clear();pass.dirtyBaselines.clear();pass.dirtyColors.clear();pass.metadataDirty=true;pass.specialRoleCount=0;
+        pass.instanceAttributes.clear();pass.meshBaselines.clear();pass.meshColors.clear();pass.alphaMeshes.clear();pass.dirtyInstances.clear();pass.dirtyBaselines.clear();pass.dirtyColors.clear();pass.metadataDirty=true;pass.metadataInitialized=false;pass.specialInstances.clear();pass.specialRoleCount=0;
     }catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingClock(JNIEnv* e,jclass,jlong h,jlong time,jlong delta){
@@ -1653,7 +1669,8 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         auto data=e->GetDirectBufferAddress(packet);auto size=e->GetDirectBufferCapacity(packet);
         if(!data||size<=0||size>512LL*1024*1024||revision<0)throw std::invalid_argument("Invalid resource packet");
         static_cast<HostPathTracer*>(s.app->HostRenderPass())->ApplyMemoryResources(data,size,uint64_t(revision),s.nodes);
-    }catch(const std::exception& x){fail(e,x);}
+    }catch(const RtrResourcePending& x){e->ThrowNew(e->FindClass("top/ceroxe/rt/renderer/rtxpt/RtxptResourcePendingException"),x.what());}
+    catch(const std::exception& x){fail(e,x);}
 }
 static jint ResourceAdmission(jlong h){
     auto& p=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
@@ -1689,6 +1706,13 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
         const jlong values[]={jlong(p.resourceBlases),jlong(p.resourceRefits),jlong(p.actualNativeTlasBuilds),jlong(p.textureGpuCopiedBytes),
             jlong(r.pending.load()),jlong(r.released.load()),jlong(r.releaseNanos.load())};
         auto result=e->NewLongArray(7);if(result)e->SetLongArrayRegion(result,0,7,values);return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourceArenaStatistics(JNIEnv* e,jclass,jlong h){
+    try{auto& p=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());const auto arena=p.resourceArena.Snapshot();
+        std::array<jlong,21> values{};std::copy(arena.begin(),arena.end(),values.begin());std::copy(p.arenaWork.begin(),p.arenaWork.end(),values.begin()+11);
+        values[19]=p.spareMeshBuffers.size();values[20]=p.spareMeshBlases.size();
+        auto result=e->NewLongArray(values.size());if(result)e->SetLongArrayRegion(result,0,values.size(),values.data());return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_dynamicResourceStatistics(JNIEnv* e,jclass,jlong h){

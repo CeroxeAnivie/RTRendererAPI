@@ -113,6 +113,7 @@ final class RtxptNative {
     static native boolean resourcesCanUpdate(long handle);
     static native int resourcesAdmission(long handle);
     static native long[] resourcePressure(long handle);
+    static native long[] resourceArenaStatistics(long handle);
     static native long[] benchmarkGpuSnapshot(long handle);
     static native void benchmarkGpuBegin(long handle,long sequence,long revision);
     static native long[] nativeLightingInputSnapshot(long handle);

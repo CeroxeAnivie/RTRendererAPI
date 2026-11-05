@@ -21,6 +21,8 @@ public:
     static_assert(sizeof(Constants)==320&&sizeof(InstanceAttributes)==32&&sizeof(GeometryAttributes)==8);
     Constants constants;
     bool active=false,metadataDirty=true;
+    bool metadataInitialized=false;
+    std::unordered_set<std::string> specialInstances;
     bool instanceCandidates=false;
     bool diagnosticDecomposition=false;
     RtrNativeRR reconstruction;
@@ -380,17 +382,77 @@ public:
         RetirePipeline(device);pipeline=next;extensionIdentity=std::move(nextIdentity);extensionSignals=extension.signals;extensionMinimumBytes=extension.minimumBytes;
     }
     void ResetExtension(nvrhi::IDevice* device){if(!extensionIdentity.empty()){RetirePipeline(device);pipeline=defaultPipeline;extensionIdentity.clear();extensionSignals=15;extensionMinimumBytes=0;}}
-    void RetirePipeline(nvrhi::IDevice* device){Retired old;old.pipelines.push_back(pipeline);old.done=device->createEventQuery();
-        if(!old.done)throw std::runtime_error("Could not allocate lighting pipeline retirement query");
-        device->setEventQuery(old.done,nvrhi::CommandQueue::Graphics);retired.push_back(std::move(old));}
+    void RetirePipeline(nvrhi::IDevice* device){
+        PollRetired(device);if(retired.size()>=64)throw std::runtime_error("Lighting retirement capacity exhausted");
+        Retired old;old.pipelines.push_back(pipeline);
+        old.done=device->createEventQuery();old.computeDone=device->createEventQuery();
+        if(!old.done||!old.computeDone)throw std::runtime_error("Could not allocate lighting pipeline retirement queries");
+        device->setEventQuery(old.done,nvrhi::CommandQueue::Graphics);
+        device->setEventQuery(old.computeDone,nvrhi::CommandQueue::Compute);retired.push_back(std::move(old));
+    }
+    void TrackInstanceRole(const std::string& name,const InstanceAttributes& value){
+        if(value.rolesVisibility.x!=23)specialInstances.insert(name);else specialInstances.erase(name);
+        specialRoleCount=specialInstances.size();
+    }
+    void UploadChangedAttributes(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene){
+        const auto graph=scene->GetSceneGraph();auto& changes=graph->HostDelta;
+        RtrDiagnostics::Scope indexScope(RtrDiagnostics::ResourceIndex,changes.instances.size()+changes.meshes.size());
+        EnsureAttributeBuffer(device,command,instances,std::max<size_t>(1,graph->GetMeshInstances().size())*sizeof(InstanceAttributes),sizeof(InstanceAttributes),"Native receiver roles");
+        EnsureAttributeBuffer(device,command,geometryBaselines,std::max<size_t>(1,graph->GetGeometryCount())*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
+        std::unordered_set<std::string> replacementInstances;
+        std::unordered_map<std::string,size_t> replacementMeshes;
+        for(auto& [identity,instance]:changes.instances)replacementInstances.insert(instance->GetNode()->GetName());
+        for(auto& [identity,mesh]:changes.meshes)replacementMeshes.insert_or_assign(mesh->name,mesh->geometries.size());
+        for(const auto& name:changes.removedInstances){instanceSlots.erase(name);specialInstances.erase(name);
+            if(!replacementInstances.count(name)){instanceAttributes.erase(name);dirtyInstances.erase(name);}}
+        for(auto& [name,count]:changes.removedMeshes)for(size_t group=0;group<count;++group){
+            if(auto replacement=replacementMeshes.find(name);replacement!=replacementMeshes.end()&&group<replacement->second)continue;
+            const auto key=name+":"+std::to_string(group);auto found=geometrySlots.find(key);
+            if(found!=geometrySlots.end()){FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);geometrySlots.erase(found);}
+            geometryIndices.erase(key);meshBaselines.erase(key);meshColors.erase(key);alphaMeshes.erase(key);dirtyBaselines.erase(key);dirtyColors.erase(key);
+        }
+        for(auto& [identity,instance]:changes.instances){
+            const auto& name=instance->GetNode()->GetName();const auto slot=instance->GetInstanceIndex();
+            if(slot<0||size_t(slot)>=graph->GetMeshInstances().size())throw std::runtime_error("Invalid changed instance index");
+            instanceSlots.insert_or_assign(name,uint32_t(slot));dirtyInstances.insert(name);++attributeTableVisits;
+        }
+        std::unordered_set<std::string> upload=dirtyBaselines;upload.insert(dirtyColors.begin(),dirtyColors.end());
+        for(auto& [identity,mesh]:changes.meshes)for(size_t group=0;group<mesh->geometries.size();++group){
+            auto& geometry=mesh->geometries[group];const auto key=mesh->name+":"+std::to_string(group);
+            const auto index=uint32_t(geometry->globalGeometryIndex);++attributeTableVisits;
+            if(index>=graph->GetGeometryCount())throw std::runtime_error("Invalid changed geometry index");
+            auto found=geometrySlots.find(key);
+            if(found==geometrySlots.end()||found->second.triangles*3!=geometry->numIndices){
+                if(found!=geometrySlots.end())FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);
+                found=geometrySlots.insert_or_assign(key,GeometryAttributes{AllocateAttributeRange(geometry->numIndices),geometry->numIndices/3}).first;upload.insert(key);
+            }
+            auto [mapping,inserted]=geometryIndices.insert_or_assign(key,GeometryIndex{index,geometryIndexEpoch,&found->second});
+            command->writeBuffer(geometryBaselines,&found->second,sizeof(GeometryAttributes),size_t(index)*sizeof(GeometryAttributes));attributeWork[3]+=sizeof(GeometryAttributes);
+        }
+        for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found==instanceSlots.end())continue;
+            auto attribute=instanceAttributes.find(name);InstanceAttributes value=attribute==instanceAttributes.end()?InstanceAttributes{}:attribute->second;
+            command->writeBuffer(instances,&value,sizeof(value),size_t(found->second)*sizeof(value));TrackInstanceRole(name,value);++attributeWork[2];attributeWork[3]+=sizeof(value);
+        }
+        specialRoleCount=specialInstances.size();
+        EnsureAttributeBuffer(device,command,baselineCoordinates,attributeEnd*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
+        for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
+            auto values=PackVertices(name,size_t(found->second.triangles)*3);
+            if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
+            attributeWork[3]+=values.size()*sizeof(VertexAttributes);++attributeWork[4];
+        }
+        UploadPublications(device,command);previousSceneInstances=scene->GetInstanceBuffer();previousSceneGeometry=scene->GetGeometryBuffer();
+        previousInstanceCount=graph->GetMeshInstances().size();previousGeometryCount=graph->GetGeometryCount();
+        metadataDirty=false;changes.Clear();dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();++metadataUploads;
+    }
     void UploadAttributes(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene){
         const auto graph=scene->GetSceneGraph();
         const size_t instanceCount=graph->GetMeshInstances().size(),geometryCount=graph->GetGeometryCount();
         if(previousInstanceCount!=instanceCount||previousGeometryCount!=geometryCount)metadataDirty=true;
+        if(metadataDirty&&metadataInitialized){UploadChangedAttributes(device,command,scene);return;}
         if(!metadataDirty){
             bool changed=!dirtyInstances.empty()||!dirtyBaselines.empty()||!dirtyColors.empty()||lookupDirty||applicationDirty||!applicationDirtyRanges.empty();
             for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found!=instanceSlots.end()){
-                const auto& value=instanceAttributes.at(name);command->writeBuffer(instances,&value,sizeof(value),found->second*sizeof(value));++attributeWork[2];attributeWork[3]+=sizeof(value);}}
+                const auto& value=instanceAttributes.at(name);command->writeBuffer(instances,&value,sizeof(value),found->second*sizeof(value));TrackInstanceRole(name,value);++attributeWork[2];attributeWork[3]+=sizeof(value);}}
             auto changedGeometry=dirtyBaselines;changedGeometry.insert(dirtyColors.begin(),dirtyColors.end());
             for(const auto& name:changedGeometry){auto found=geometrySlots.find(name);if(found!=geometrySlots.end()){
                 auto values=PackVertices(name,size_t(found->second.triangles)*3);
@@ -420,9 +482,9 @@ public:
             if(index>=instanceNamesScratch.size()||!instanceNamesScratch[index]||entry->first!=*instanceNamesScratch[index])entry=instanceSlots.erase(entry);else ++entry;
         }
         UploadAttributeRuns(command,instances,instanceUploadScratch,instanceUploadIndices);
-        specialRoleCount=0;
+        specialRoleCount=0;specialInstances.clear();
         for(auto entry=instanceAttributes.begin();entry!=instanceAttributes.end();)if(!instanceSlots.count(entry->first))entry=instanceAttributes.erase(entry);
-            else{specialRoleCount+=entry->second.rolesVisibility.x!=23;++entry;}
+            else{TrackInstanceRole(entry->first,entry->second);++entry;}
         // Reuse names and map nodes. A dense-index migration must still inspect
         // the complete table, but it need not allocate a temporary hash set for it.
         if(++geometryIndexEpoch==0){for(auto& [name,index]:geometryIndices)index.epoch=0;++geometryIndexEpoch;}
@@ -469,7 +531,7 @@ public:
         ++attributeWork[0];
         UploadPublications(device,command);
         previousSceneInstances=scene->GetInstanceBuffer();previousSceneGeometry=scene->GetGeometryBuffer();previousInstanceCount=instanceCount;previousGeometryCount=geometryCount;
-        metadataDirty=false;dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();++metadataUploads;
+        metadataDirty=false;metadataInitialized=true;graph->HostDelta.Clear();dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();++metadataUploads;
     }
     void UploadPublications(nvrhi::IDevice* device,nvrhi::ICommandList* command){
         if(lookupDirty){command->writeBuffer(lookup,baselineLookup.data(),sizeof(baselineLookup));lookupDirty=false;}

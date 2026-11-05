@@ -85,6 +85,7 @@ static auto MaterialTextures(const ResidentMaterial& material) {
 }
 void IndexRetainedResources() {
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::IndexRebuild);
+    resourceArena.Prepare(GetDevice());
     resourceRetirement.reserve(16);resourceCommandPool.reserve(8);resourceQueryPool.reserve(16);
     spareMeshBuffers.reserve(64);spareMeshBlases.reserve(64);resourceGpuQueries.reserve(8);
     candidateLayoutDirty=true;
@@ -226,7 +227,14 @@ void PatchRetainedResourceIndex(
 }
 uint64_t resourceRevision=0;
 std::array<uint64_t,19> dynamicWork{}; // validation records/hits/failures, geometry visits, batches, staging bytes, drains, retirements, pending, peak, packet ns, index ns, migration bytes, texture uploads, geometry uploads, clear calls
-using BlasAllocationIndex=std::unordered_map<nvrhi::rt::IAccelStruct*,uint64_t>;
+struct BlasAllocation {uint64_t bytes=0;RtrResourceArena::Storage storage;};
+using BlasAllocationIndex=std::unordered_map<nvrhi::rt::IAccelStruct*,BlasAllocation>;
+using BufferAllocationIndex=std::unordered_map<nvrhi::IBuffer*,RtrResourceArena::Storage>;
+RtrResourceArena resourceArena;
+bool memoryPreparationPending=false;
+uint64_t memoryPreparationRevision=UINT64_MAX,memoryPreparationSequence=UINT64_MAX;
+// Diagnostic counters freeze at OFF. Arena ownership/capacity is operational.
+std::array<uint64_t,8> arenaWork{}; // recycle attempts, buffer hits, BLAS hits, payload, capacity, evictions, preparations, pool rejects
 struct ResourceTlasStorage {
     nvrhi::rt::AccelStructHandle acceleration;
     nvrhi::BufferHandle subInstances;
@@ -234,6 +242,8 @@ struct ResourceTlasStorage {
 };
 struct RetiredResources {
     std::vector<BlasAllocationIndex::node_type> allocationEntries;
+    std::vector<BufferAllocationIndex::node_type> bufferAllocationEntries;
+    size_t recycleCursor=0;
     bool recycled=false;
     // NVRHI owns raw upload/scratch chunks on the public command-list object.
     // The queue's internal list tracker alone does not retain those pools.
@@ -256,12 +266,15 @@ struct SpareMeshBuffers {
     nvrhi::BufferHandle vertex,index;
     std::shared_ptr<donut::engine::DescriptorHandle> vertexDescriptor,indexDescriptor;
     uint64_t bytes;
+    RtrResourceArena::Storage vertexStorage,indexStorage;
 };
-struct SpareMeshBlas { nvrhi::rt::AccelStructHandle acceleration; uint64_t bytes; };
+struct SpareMeshBlas { nvrhi::rt::AccelStructHandle acceleration; uint64_t bytes;RtrResourceArena::Storage storage; };
 std::vector<SpareMeshBuffers> spareMeshBuffers;
 std::vector<SpareMeshBlas> spareMeshBlases;
 uint64_t spareMeshBufferBytes=0,spareMeshBlasBytes=0;
 BlasAllocationIndex resourceBlasAllocationBytes;
+BufferAllocationIndex resourceBufferAllocations;
+std::unordered_map<std::string,nvrhi::rt::AccelStructHandle> preparedMeshBlases;
 std::unordered_map<std::string,uint64_t> resourceChangeReasons;
 std::array<ResourceTlasStorage,4> spareResourceTlas;
 uint64_t spareResourceTlasBytes=0,resourceTlasAllocationBytes=0;
@@ -323,21 +336,42 @@ static bool CompatibleBlas(const nvrhi::rt::AccelStructDesc& a,const nvrhi::rt::
     return true;
 }
 void RecycleMesh(const ResidentMesh& mesh,RetiredResources& retired){
+    if(RtrDiagnostics::level.load())++arenaWork[0];
     RtrDiagnostics::Scope pool(RtrDiagnostics::PoolAcquire,1,0,1,0,RtrDiagnostics::Identity(mesh->name));
     auto b=mesh->buffers;
-    if(!b||!b->vertexBuffer||!b->indexBuffer||b->vertexBuffer->getDesc().debugName!="Retained mutable vertices")return;
-    uint64_t bytes=b->vertexBuffer->getDesc().byteSize+b->indexBuffer->getDesc().byteSize;
+    uint64_t bytes=0;
+    // A transaction page may still contain live meshes. Never put its buffers
+    // into the independent-object cache; BLAS ownership remains independent.
+    if(b&&b->vertexBuffer&&b->indexBuffer&&b->vertexBuffer->getDesc().debugName=="Retained mutable vertices"){
+    bytes=b->vertexBuffer->getDesc().byteSize+b->indexBuffer->getDesc().byteSize;
     // Cache only reusable vertex/index ownership. Keeping the whole BufferGroup
     // made a later pool erase destroy its instance descriptor on admission.
+    while(!spareMeshBuffers.empty()&&(spareMeshBuffers.size()>=64||spareMeshBufferBytes+bytes>64*1024*1024)){
+        auto& old=spareMeshBuffers.front();auto oldBytes=old.bytes;
+        RtrDiagnostics::Scope evict(RtrDiagnostics::PoolEvict,1,0,1,0,0,0,0,oldBytes);
+        if(!nativeLighting.reclaimer->Enqueue(old,oldBytes))break;
+        if(RtrDiagnostics::level.load())++arenaWork[5];
+        spareMeshBuffers.erase(spareMeshBuffers.begin());spareMeshBufferBytes-=oldBytes;
+    }
     if(spareMeshBuffers.size()<64&&spareMeshBufferBytes+bytes<=64*1024*1024){
-        spareMeshBuffers.push_back({b->vertexBuffer,b->indexBuffer,b->vertexBufferDescriptor,b->indexBufferDescriptor,bytes});spareMeshBufferBytes+=bytes;
+        auto storage=[&](nvrhi::IBuffer* buffer){for(auto& entry:retired.bufferAllocationEntries)if(!entry.empty()&&entry.key()==buffer)return entry.mapped();return RtrResourceArena::Storage{};};
+        spareMeshBuffers.push_back({b->vertexBuffer,b->indexBuffer,b->vertexBufferDescriptor,b->indexBufferDescriptor,bytes,storage(b->vertexBuffer),storage(b->indexBuffer)});spareMeshBufferBytes+=bytes;
+    }else if(RtrDiagnostics::level.load())++arenaWork[7];
     }
     auto as=mesh->accelStruct;
     if(as&&!as->isCompacted()&&as->getDesc().debugName=="Retained mutable BLAS"){
         auto allocation=std::find_if(retired.allocationEntries.begin(),retired.allocationEntries.end(),[&](const auto& entry){return !entry.empty()&&entry.key()==as.Get();});
         if(allocation!=retired.allocationEntries.end()){
-            bytes=allocation->mapped();
-            if(spareMeshBlases.size()<64&&spareMeshBlasBytes+bytes<=64*1024*1024){spareMeshBlases.push_back({as,bytes});spareMeshBlasBytes+=bytes;}
+            bytes=allocation->mapped().bytes;
+            while(!spareMeshBlases.empty()&&(spareMeshBlases.size()>=64||spareMeshBlasBytes+bytes>64*1024*1024)){
+                auto& old=spareMeshBlases.front();auto oldBytes=old.bytes;
+                RtrDiagnostics::Scope evict(RtrDiagnostics::PoolEvict,1,0,1,0,0,0,0,oldBytes);
+                if(!nativeLighting.reclaimer->Enqueue(old,oldBytes))break;
+                if(RtrDiagnostics::level.load())++arenaWork[5];
+                spareMeshBlases.erase(spareMeshBlases.begin());spareMeshBlasBytes-=oldBytes;
+            }
+            if(spareMeshBlases.size()<64&&spareMeshBlasBytes+bytes<=64*1024*1024){spareMeshBlases.push_back({as,bytes,allocation->mapped().storage});spareMeshBlasBytes+=bytes;}
+            else if(RtrDiagnostics::level.load())++arenaWork[7];
         }
     }
 }
@@ -356,10 +390,11 @@ void PollResourceRetirement(){
         bool completed;{RtrDiagnostics::Scope poll(RtrDiagnostics::CompletionPoll,2);completed=GetDevice()->pollEventQuery(i->done)&&GetDevice()->pollEventQuery(i->computeDone);}
         if(!completed)break;
         if(!i->recycled){
-            // A small bounded batch must cover ordinary multi-mesh inflow too;
-            // a four-mesh ceiling discarded one reusable allocation in every
-            // five-mesh transaction despite both pools having free capacity.
-            size_t recycleBudget=8;for(auto& mesh:i->meshes){if(!recycleBudget)break;--recycleBudget;RecycleMesh(mesh,*i);}
+            size_t recycleBudget=8;
+            while(i->recycleCursor<i->meshes.size()&&recycleBudget--){RecycleMesh(i->meshes[i->recycleCursor],*i);++i->recycleCursor;}
+            // Preserve the cursor and this completed generation for the next
+            // observation, including meshes after the first bounded batch.
+            if(i->recycleCursor<i->meshes.size())break;
             if(i->tlas.acceleration&&i->tlas.subInstances){
                 const auto bytes=i->tlas.accelerationBytes+i->tlas.subInstances->getDesc().byteSize;
                 if(spareResourceTlasBytes+bytes<=64*1024*1024)for(auto& slot:spareResourceTlas)if(!slot.acceleration){
@@ -379,18 +414,22 @@ void PollResourceRetirement(){
 }
 void RetireResources(RetiredResources&& value){
     value.allocationEntries.reserve(value.meshes.size());
+    value.bufferAllocationEntries.reserve(value.meshes.size()*2);
     if(!resourceQueryPool.empty()){
         value.done=std::move(resourceQueryPool.back().first);value.computeDone=std::move(resourceQueryPool.back().second);resourceQueryPool.pop_back();
     }else{value.done=GetDevice()->createEventQuery();value.computeDone=GetDevice()->createEventQuery();}
     value.createdNanos=RtrDiagnostics::level.load()!=0?RtrDiagnostics::Now():0;
+    std::unordered_set<nvrhi::IBuffer*> referencedBuffers;
     for(auto& mesh:value.meshes)if(auto& b=mesh->buffers;b){
-        if(b->vertexBuffer)value.referencedBytes+=b->vertexBuffer->getDesc().byteSize;
-        if(b->indexBuffer)value.referencedBytes+=b->indexBuffer->getDesc().byteSize;
+        for(auto* buffer:{b->vertexBuffer.Get(),b->indexBuffer.Get()})if(auto allocation=resourceBufferAllocations.find(buffer);allocation!=resourceBufferAllocations.end())
+            value.bufferAllocationEntries.push_back(resourceBufferAllocations.extract(allocation));
+        for(auto* buffer:{b->vertexBuffer.Get(),b->indexBuffer.Get()})
+            if(buffer&&referencedBuffers.insert(buffer).second)value.referencedBytes+=buffer->getDesc().byteSize;
         auto as=resourceBlasAllocationBytes.find(mesh->accelStruct.Get());if(as!=resourceBlasAllocationBytes.end()){
-            value.referencedBytes+=as->second;value.allocationEntries.push_back(resourceBlasAllocationBytes.extract(as));
+            value.referencedBytes+=as->second.bytes;value.allocationEntries.push_back(resourceBlasAllocationBytes.extract(as));
         }
     }
-    for(auto& buffer:value.buffers)if(buffer)value.referencedBytes+=buffer->getDesc().byteSize;
+    for(auto& buffer:value.buffers)if(buffer&&referencedBuffers.insert(buffer.Get()).second)value.referencedBytes+=buffer->getDesc().byteSize;
     if(!value.done||!value.computeDone)throw std::runtime_error("Resource retirement event allocation failed");
     GetDevice()->setEventQuery(value.done,nvrhi::CommandQueue::Graphics);
     GetDevice()->setEventQuery(value.computeDone,nvrhi::CommandQueue::Compute);resourceRetirement.push_back(std::move(value));
@@ -637,6 +676,12 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
         if(memory){
             // The compactor synchronously reads GPU sizes. Dynamic generations use
             // ordinary AS allocations and stay entirely on the graphics queue.
+            struct BlasJob {
+                ResidentMesh mesh;nvrhi::rt::AccelStructDesc desc;
+                nvrhi::rt::AccelStructHandle next,source;
+                uint64_t allocationBytes,identity,reason;
+            };
+            std::vector<BlasJob> jobs;jobs.reserve(pendingMeshes.size());
             for(auto& mesh:pendingMeshes){
                 bvh::Config cfg={.excludeTransmissive=m_ui.AS.ExcludeTransmissive};
                 auto desc=bvh::GetMeshBlasDesc(cfg,*mesh,nullptr,false);
@@ -648,33 +693,58 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
                 nvrhi::rt::AccelStructHandle next;uint64_t allocationBytes=0;
                 const auto identity=RtrDiagnostics::Identity(mesh->name);
                 uint64_t reason=resourceChangeReasons.count(mesh->name)?resourceChangeReasons.at(mesh->name):RtrDiagnostics::BuildFlags;
-                for(auto i=spareMeshBlases.begin();i!=spareMeshBlases.end();++i)if(CompatibleBlas(i->acceleration->getDesc(),desc)){
-                    next=i->acceleration;allocationBytes=i->bytes;spareMeshBlasBytes-=i->bytes;spareMeshBlases.erase(i);reason|=RtrDiagnostics::PoolHit;break;
+                if(auto prepared=preparedMeshBlases.find(mesh->name);prepared!=preparedMeshBlases.end()){
+                    next=prepared->second;allocationBytes=resourceBlasAllocationBytes.at(next.Get()).bytes;preparedMeshBlases.erase(prepared);
+                }
+                for(auto i=spareMeshBlases.begin();!next&&i!=spareMeshBlases.end();++i)if(CompatibleBlas(i->acceleration->getDesc(),desc)){
+                    next=i->acceleration;allocationBytes=i->bytes;resourceBlasAllocationBytes.insert_or_assign(next.Get(),BlasAllocation{allocationBytes,i->storage});spareMeshBlasBytes-=i->bytes;spareMeshBlases.erase(i);reason|=RtrDiagnostics::PoolHit;break;
                 }
                 if(!next){
                     RtrDiagnostics::Scope allocation(RtrDiagnostics::BlasAllocate,1,mesh->totalIndices/3,1,0,identity,RtrDiagnostics::revision.load(),reason|RtrDiagnostics::CapacityGrowth);
                     next=GetDevice()->createAccelStruct(desc);if(!next)throw std::runtime_error("Dynamic BLAS allocation failed");
                     allocationBytes=GetDevice()->getAccelStructMemoryRequirements(next).size;
                 }
-                resourceBlasAllocationBytes.insert_or_assign(next.Get(),allocationBytes);
+                if(!resourceBlasAllocationBytes.count(next.Get()))resourceBlasAllocationBytes.emplace(next.Get(),BlasAllocation{allocationBytes,{}});
                 auto source=refitSources.find(mesh.get());
                 RtrProtocolTrace::Record(7,0,0,0,0,RtrDiagnostics::frame.load(),resourceRevision,desc.bottomLevelGeometries.size(),
                     source!=refitSources.end()?source->second->getDesc().bottomLevelGeometries.size():0,source!=refitSources.end()&&CompatibleBlas(source->second->getDesc(),desc),source!=refitSources.end());
-                if(source!=refitSources.end()&&CompatibleBlas(source->second->getDesc(),desc)){
-                    {RtrDiagnostics::Scope clone(RtrDiagnostics::BlasClone,1,0,1,0,identity,RtrDiagnostics::revision.load(),reason,allocationBytes);
-                        command->copyRaytracingAccelerationStructure(next,source->second);}
-                    // NVRHI tracks both clone and in-place refit as
-                    // AccelStructWrite. That unchanged state does not emit a UAV
-                    // barrier, but the refit must read the completed clone.
-                    command->commitBarriers();
-                    auto* list=static_cast<ID3D12GraphicsCommandList*>(command->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
-                    D3D12_RESOURCE_BARRIER dependency{};dependency.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
-                    list->ResourceBarrier(1,&dependency);
+                const bool update=source!=refitSources.end()&&CompatibleBlas(source->second->getDesc(),desc);
+                jobs.push_back({mesh,std::move(desc),next,update?source->second:nvrhi::rt::AccelStructHandle{},allocationBytes,identity,reason});
+            }
+            // Prepare dependencies before the first independent build. A state
+            // transition to AS-write synchronizes the build stage, so doing this
+            // inside each build loop unnecessarily orders unrelated BLAS work.
+            // Automatic barriers and scratch reuse barriers remain enabled.
+            for(auto& job:jobs){
+                for(auto& geometry:job.desc.bottomLevelGeometries){auto& triangle=geometry.geometryData.triangles;
+                    command->setBufferState(triangle.indexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
+                    command->setBufferState(triangle.vertexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
+                }
+                command->setAccelStructState(job.next,nvrhi::ResourceStates::AccelStructWrite);
+                if(job.source)command->setAccelStructState(job.source,nvrhi::ResourceStates::AccelStructBuildBlas);
+            }
+            command->commitBarriers();
+            bool cloned=false;
+            for(auto& job:jobs)if(job.source){
+                RtrDiagnostics::Scope clone(RtrDiagnostics::BlasClone,1,0,1,0,job.identity,RtrDiagnostics::revision.load(),job.reason,job.allocationBytes);
+                command->copyRaytracingAccelerationStructure(job.next,job.source);cloned=true;
+            }
+            if(cloned){
+                // All clones complete before any in-place refit reads its target.
+                // Independent targets need one shared phase dependency.
+                auto* list=static_cast<ID3D12GraphicsCommandList*>(command->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
+                D3D12_RESOURCE_BARRIER dependency{};dependency.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                list->ResourceBarrier(1,&dependency);
+            }
+            for(auto& job:jobs){
+                auto& mesh=job.mesh;auto& desc=job.desc;auto& next=job.next;
+                const auto identity=job.identity,reason=job.reason,allocationBytes=job.allocationBytes;
+                if(job.source){
                     {RtrDiagnostics::Scope refit(RtrDiagnostics::BlasRefit,mesh->totalIndices/3,0,1,0,identity,RtrDiagnostics::revision.load(),reason,allocationBytes);
                         auto gpu=RtrGpuProfile::Begin(command,"ResourceBlasRefit",-1,identity,RtrDiagnostics::revision.load(),reason);
                         command->buildBottomLevelAccelStruct(next,desc.bottomLevelGeometries.data(),desc.bottomLevelGeometries.size(),desc.buildFlags|nvrhi::rt::AccelStructBuildFlags::PerformUpdate);RtrGpuProfile::End(command,gpu);}
                     ++resourceRefits;++static_cast<MeshInfoEx*>(mesh.get())->HostRefitFrames;
-                }else{RtrDiagnostics::Scope build(RtrDiagnostics::BlasBuild,mesh->totalIndices/3,0,1,0,identity,RtrDiagnostics::revision.load(),reason|(source==refitSources.end()?0:RtrDiagnostics::BuildFlags),allocationBytes);
+                }else{RtrDiagnostics::Scope build(RtrDiagnostics::BlasBuild,mesh->totalIndices/3,0,1,0,identity,RtrDiagnostics::revision.load(),reason|(refitSources.count(mesh.get())?RtrDiagnostics::BuildFlags:0),allocationBytes);
                     auto gpu=RtrGpuProfile::Begin(command,"ResourceBlasBuild",-1,identity,RtrDiagnostics::revision.load(),reason);
                     nvrhi::utils::BuildBottomLevelAccelStruct(command,next,desc);RtrGpuProfile::End(command,gpu);++resourceBlases;static_cast<MeshInfoEx*>(mesh.get())->HostRefitFrames=0;}
                 mesh->accelStruct=next;

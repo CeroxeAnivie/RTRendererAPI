@@ -2,7 +2,7 @@
 
 本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
 
-当前交付版本为 **7.1.5**。性能候选与长尾调查已停止，最后失败方案已回退。随后按用户明确要求完成修复收尾、最终身份验收与发布；N01～N09 结果、完整请求 GPU/CPU 的逐格预算及制品身份见[最终验收](quality/resource-latency.md)。[历史前后对照](quality/optimization-closeout.md)保留收益、尾部退化与未知原因，不能用通用夹具代签 MC 180 FPS。
+当前交付版本为 **7.1.6**，按P01～P09完成功能修复、全量源码及四模块Maven Local交付。入口为[本版说明](release-resource-architecture.md)与[实施记录](quality/7.1.6-implementation.md)。性能优化已停止；4 ms及完整CPU预算未全部达标，ce9最终矩阵仅归集3个不同格，旧e2f的26格不转签。冷暖／resize／取消的完整性能分布不再扩测，D3D验证层不可用的限制保留。Maven制品身份见 `quality/data/resource-architecture-716-release.json`。历史N01～N09及7.1.5结果保持原身份，不能用通用夹具代签MC 180FPS。
 
 本批诊断格式为 5，兼容解码 2／3／4；现有构造器保留。首次提交前即可在 owner 线程取得 `diagnosticMonitor()`，随后交给独立观察线程；它可见设备／场景／光照初始化以及尚未返回的资源子调用。事件记录 stable native ID 的 FNV64、资源发布 revision、原因位、字节、attempt、OS 线程 ID、所属诊断模式和 ordinal。CPU 与 protocol monitor 各自报告注册位置与注册后的漏读，`overwritten` 不是观察者漏读。
 

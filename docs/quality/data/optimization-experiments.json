@@ -848,6 +848,70 @@
       "retryAllowed": false,
       "performanceOptimizationStopped": true,
       "macroFailuresSinceLatestUserRule": 1
+    },
+    {
+      "candidate": "early-blas-submit-scene-preparation-overlap",
+      "status": "rejected-and-reverted-no-established-whole-path-benefit",
+      "baselineDllSha256": "ce9c1c65fd4abf3e851a4f73d206dfc70bcbfce4f4fcbc07e00ff2a4ed281868",
+      "baselineSnapshot": "build\\reports\\release-716\\macro-blas-batch\\retained-ce9c1c65",
+      "sourceBeforeSha256": "a5f4e825f5f61a73d9f2880b49a486228cdd61c872a5d993fe1c82b3fe7424dd",
+      "theory": [
+        {
+          "source": "build\\reports\\release-716\\macro-blas-batch\\B1\\production-4096-SUMMARY-stream-dad4de1d2d855e0f-cpu.json",
+          "sha256": "860002419a76255a87e821b2ab7c460d7bdf5e1b01d69f287205edd879de0b27",
+          "scope": "bounded suffix PREPARATION selfNanos, not entire window",
+          "samples": 16,
+          "medianMs": 2.8631,
+          "sumMs": 45.985
+        },
+        {
+          "source": "build\\reports\\release-716\\macro-blas-batch\\B2\\production-4096-SUMMARY-stream-dad4de1d2d855e0f-cpu.json",
+          "sha256": "fe0b58d836ab58185bd3f6e9f4069599e1e4a1c517988d3e0a9e83191dcfac9d",
+          "scope": "bounded suffix PREPARATION selfNanos, not entire window",
+          "samples": 16,
+          "medianMs": 2.68335,
+          "sumMs": 42.7496
+        }
+      ],
+      "theoreticalOpportunity": "Overlap unchanged full CPU scene preparation (~2.7-2.9 ms median in two 16-update suffixes) with independently ready GPU BLAS batch. Upper bound is min(CPU preparation, ready GPU work), not a promised whole-window gain. Stable shading/RR cost is unchanged; this cannot promise 4ms.",
+      "scope": "Memory native-lighting structural batches with more than one missing BLAS only; other paths keep late build schedule.",
+      "differenceFromRejected": "Full SDK preparation remains unchanged and still runs every transaction. One original graphics queue, no shading split, no RR/direct dual-queue overlap, no skipping topology packing or quality work.",
+      "ownership": "Both command-list objects retained by the same transaction through existing graphics/compute retirement; failure guard waits before resource owners disappear. First submission cannot publish a partially updated scene.",
+      "timing": "Full request boundary unchanged; resource begin/end timer remains across both same-queue submissions.",
+      "rollback": "Restore only retained_scene.inl plus default DLL/PDB from ce9 snapshot; archive candidate OBJ to avoid later relink. Transaction pages and batched BLAS remain.",
+      "createdUtc": "2026-11-05T11:31:28.337996+00:00",
+      "sourceCandidateSha256": "602e6b2d57b36aa7b53ad963752289c5915edc2802fd5796a940b2592b221e64",
+      "rtrenderer_rtxpt.dllSha256": "833707ed644867042d9838f1741364f55531133c8bf40ffac543a42daa0404f2",
+      "rtrenderer_rtxpt.pdbSha256": "9893592350a3c4eec03c0309f08cafbfb9678f13914d3c71a6a83ff381559e66",
+      "dependenciesLocked": true,
+      "runtimeChangedFiles": [
+        "rtrenderer_rtxpt.dll",
+        "rtrenderer_rtxpt.pdb"
+      ],
+      "nativeDllSha256": "833707ed644867042d9838f1741364f55531133c8bf40ffac543a42daa0404f2",
+      "pdbSha256": "9893592350a3c4eec03c0309f08cafbfb9678f13914d3c71a6a83ff381559e66",
+      "dllPdbGuidBytes": "42b75afe1d929142be32e164448828b6",
+      "dllPdbAge": 238,
+      "pdbContainsDllGuid": true,
+      "validationLimit": "Full requested; ID3D12Debug/ID3D12Debug3 not available in current test logs, no active D3D debug/GPU validation claim",
+      "codeViewMatches": true,
+      "candidateObject": "build/rtxpt-sdk/build-host/rtrenderer_rtxpt.dir/Release/rtxpt_jni.obj",
+      "correctnessInProgress": false,
+      "correctnessChecksPassed": 7,
+      "outputCapturesByteEqual": 13,
+      "reason": "Small update-tail changes but full GPU P95 regressed in both matched pairs and pooled by +0.262271 ms/+4.04%; FPS +0.09%, CPU full P95 +0.13%, update CPU P95 -1.22%. No established overall gain; do not attribute to external fluctuation or assert code causation.",
+      "sourceAndRuntimeRestored": true,
+      "rollbackEvidence": "build\\reports\\release-716\\macro-resource-pipeline\\rollback.json",
+      "retryAllowed": false,
+      "mustNotReapplyUnchanged": true,
+      "performanceEvidence": "build\\reports\\release-716\\macro-resource-pipeline\\comparison.json",
+      "performanceMeasured": true,
+      "scopeNotMeasured": [
+        "stable",
+        "local"
+      ],
+      "performanceOptimizationStopped": false,
+      "id": "early-blas-submit-scene-preparation-overlap"
     }
   ],
   "earlierRejectedExperiments": [
@@ -1075,20 +1139,29 @@
     "excludedCandidateIds": [
       "selective-topology-preparation"
     ],
-    "failedRecordsPreserved": true
+    "failedRecordsPreserved": true,
+    "currentDependencyLockedSelection": {
+      "candidate": "phase-batched-independent-blas",
+      "evidence": "docs/quality/data/independent-blas-batching.json",
+      "comparisonNotAdditiveWithOtherRounds": true
+    }
   },
   "currentRuntime": {
+    "dllSha256": "ce9c1c65fd4abf3e851a4f73d206dfc70bcbfce4f4fcbc07e00ff2a4ed281868",
     "composition": [
-      "stable-scene-table-rows",
-      "incremental-topology-index",
-      "masked-alpha-correctness-fix",
-      "evaluate-local-rr-handoff"
+      "retained-716-resource-arena-and-metadata-fixes",
+      "fused-gpu-lighting",
+      "bounded-transaction-buffer-pages",
+      "phase-batched-independent-blas"
     ],
-    "dllSha256": "190f107aec92100823589730b323372d02fe812dafecb3a262651e753eb89409",
-    "validationStatus": "13-current-correctness-passed-3-scale-cases-reused-no-final-performance-rerun",
-    "evidence": "docs/quality/data/resource-latency.json",
-    "performanceMeasured": false,
-    "targetReached": false
+    "validationStatus": "7-current-affected-checks-and-13-byte-equal-captures; earlier receipts retain actual identities",
+    "evidence": "docs/quality/data/independent-blas-batching.json",
+    "performanceMeasured": true,
+    "targetReached": false,
+    "final36WindowMatrixComplete": false,
+    "latestStreamControlP95Ms": 6.489632,
+    "latestStreamControlEvidence": "docs/quality/data/resource-pipeline-overlap.json",
+    "latestStreamControlDoesNotReplacePriorComparison": true
   },
   "rrHandoffExperiment": {
     "id": "evaluate-local-rr-handoff",
@@ -1159,9 +1232,9 @@
     "performanceOptimizationStopped": true,
     "macroFailuresSinceLatestUserRule": 1
   },
-  "performanceOptimizationStopped": true,
+  "performanceOptimizationStopped": false,
   "macroFailuresSinceLatestUserRule": 1,
-  "activeScope": null,
+  "activeScope": "User-authorized macro architecture optimization; prioritize theoretically large critical-path work.",
   "tailLatencyReview": {
     "id": "tail-latency-regression-repair",
     "status": "stopped-by-user-no-production-change",
@@ -1241,5 +1314,135 @@
     },
     "latestStablePerformanceABBA": "docs/quality/data/tail-latency-review.json",
     "restorationVerification": "docs/quality/data/optimization-closeout.json"
+  },
+  "macroContinuation716": {
+    "authorization": "2026-11-05 after restart: continue macro architecture optimization; real overall throughput and tail gains may justify small local regressions, all regressions remain reported",
+    "candidate": "bounded-transaction-buffer-pages",
+    "status": "retained-verified-capacity-improvement-latency-near-flat",
+    "baselineDllSha256": "e2f45b064c846140ab66384005dc5818097b2c2118bc72318f33c47aa2274021",
+    "baselineSnapshot": "build/reports/release-716/macro-continuation/base-e2f/snapshot.json",
+    "differenceFromRejected": "Batch buffer resources, descriptors and upload operations within a transaction; SDK topology preparation and GPU shaders/queues remain unchanged. This does not reinstate selective-topology-preparation or receiver splitting.",
+    "bounds": "At most 32 meshes and 1 MiB vertex-plus-index payload per shared page pair; standalone large/single meshes use the existing path",
+    "lifetime": "Each participating BufferGroup owns the page leases; partial retirement cannot recycle shared pages, last owner follows existing graphics/compute retirement",
+    "acceptance": "Affected correctness including partial retirement and same-request retry, then dependency-locked ABBA complete-request latency/throughput with identical inflow contribution; archive and restore source/default runtime if incorrect or no established overall gain",
+    "retainedFinalMatrixWindows": 26,
+    "missingFinalMatrixWindows": 10,
+    "performanceValidated": true,
+    "candidateDllSha256": "5b518c7af6320949b71daa8cee5735ce2ca39fb8b02cdb548e838ef03da3736a",
+    "correctness": "7 affected functional checks passed; 13 byte-equal captures; Full requested but D3D debug/GPU validation unavailable",
+    "performanceEvidence": "build/reports/release-716/macro-continuation/comparison.json",
+    "decision": "User explicitly requested retaining any verified optimization; shared heap capacity drops by over half with unchanged payload, seven affected checks and 13 byte-equal captures pass. No material throughput gain is claimed; small regressions remain reported.",
+    "latestAuthorization": "Retain real improvements; search prioritizes theoretically large architectural critical-path gains."
+  },
+  "resourceArchitecture716": {
+    "authorization": "2026-11-05 user authorized 7.1.6 implementation and full regression; all code before tests",
+    "baselineCommit": "729f0e9a352c8fe2ec9cda330028b5c398ce6e6c",
+    "baselineRuntimeZipSha256": "d96b618a782c29530aad947aff9f6936ae2a215ba4f0eb8de77be03eb4a126f8",
+    "candidate": "single-queue-current-receiver-shading",
+    "status": "gpu-candidate-rejected-and-reverted-resource-fixes-under-final-acceptance",
+    "differenceFromRejected": "Same graphics queue and explicit UAV barrier; no cross-queue RR/direct overlap. Current frame primary trace is serialized losslessly as 19 float32/uint32 scalar words; original shading and actual RR evaluation remain. No old-frame signal reuse. The prior diagnostic decomposition is not used as the production kernel.",
+    "correctness": "Earlier full regression passed; final affected checks underway after GPU rollback",
+    "performance": "GPU split candidate rejected; final resource runtime comparison and final matrix underway",
+    "rollbackRule": "Reject and archive if correctness or controlled whole-request performance fails; restore production source and runtime, retaining CPU resource repairs independently.",
+    "candidateDllSha256": "ac3015d12153d4496dc47257ea42188ca20f80ab97092b5873abfbf5021936db",
+    "outputComparison": "build/reports/release-716/output-comparison.json",
+    "evidenceDirectory": "build/reports/release-716",
+    "retryAllowed": false,
+    "rollbackEvidence": "build\\reports\\release-716\\receiver-split-rejected\\rollback.json",
+    "finalNativeDllSha256": "e2f45b064c846140ab66384005dc5818097b2c2118bc72318f33c47aa2274021",
+    "sourceAndRuntimeRestored": true
+  },
+  "release715RuntimeHistorical": {
+    "composition": [
+      "stable-scene-table-rows",
+      "incremental-topology-index",
+      "masked-alpha-correctness-fix",
+      "evaluate-local-rr-handoff"
+    ],
+    "dllSha256": "190f107aec92100823589730b323372d02fe812dafecb3a262651e753eb89409",
+    "validationStatus": "13-current-correctness-passed-3-scale-cases-reused-no-final-performance-rerun",
+    "evidence": "docs/quality/data/resource-latency.json",
+    "performanceMeasured": false,
+    "targetReached": false
+  },
+  "independentBlasBatch716": {
+    "status": "retained-verified-stream-critical-path-gain-with-reported-regressions",
+    "baselineDllSha256": "5b518c7af6320949b71daa8cee5735ce2ca39fb8b02cdb548e838ef03da3736a",
+    "baseline": "build/reports/release-716/macro-blas-batch/base-5b518c7a",
+    "differenceFromRejected": "Batch dependency preparation, clone and build phases for independent BLAS within the original graphics command; no shader split, cross-queue overlap, removed inputs, changed refit compatibility or selective SDK preparation.",
+    "theory": "Per-AS initial build-read to write transitions have build-stage synchronization; moving all independent transitions before any build may remove serial execution edges. Diagnostic per-AS timestamps are a clue, not a production speed claim.",
+    "correctness": "Keep input transitions, clone-to-refit dependency, final BLAS-to-TLAS visibility, NVRHI automatic barriers and scratch allocator barriers.",
+    "rollback": "Restore only this candidate source plus default DLL/PDB; retain verified transaction pages; archive all failed evidence.",
+    "validationLimit": "Full requested; ID3D12Debug and ID3D12Debug3 unavailable. Do not claim active D3D debug/GPU validation.",
+    "initialFixtureFailure": "Identical geometry was correctly filtered as no-op; fixture changed to actual deformations, counts and output assertions retained. Failed log retained, no production change for fixture.",
+    "candidateDllSha256": "ce9c1c65fd4abf3e851a4f73d206dfc70bcbfce4f4fcbc07e00ff2a4ed281868",
+    "performanceEvidence": "docs/quality/data/independent-blas-batching.json",
+    "correctnessChecksPassed": 7,
+    "outputCapturesByteEqual": 13,
+    "retainedSnapshot": "build\\reports\\release-716\\macro-blas-batch\\retained-ce9c1c65",
+    "decision": "Keep verified stream complete-GPU tail and throughput improvement. Stable/local are not claimed faster; all small shifts and isolated maxima remain reported."
+  },
+  "resourcePipelineOverlap716": {
+    "candidate": "early-blas-submit-scene-preparation-overlap",
+    "status": "rejected-and-reverted-no-established-whole-path-benefit",
+    "baselineDllSha256": "ce9c1c65fd4abf3e851a4f73d206dfc70bcbfce4f4fcbc07e00ff2a4ed281868",
+    "baselineSnapshot": "build\\reports\\release-716\\macro-blas-batch\\retained-ce9c1c65",
+    "sourceBeforeSha256": "a5f4e825f5f61a73d9f2880b49a486228cdd61c872a5d993fe1c82b3fe7424dd",
+    "theory": [
+      {
+        "source": "build\\reports\\release-716\\macro-blas-batch\\B1\\production-4096-SUMMARY-stream-dad4de1d2d855e0f-cpu.json",
+        "sha256": "860002419a76255a87e821b2ab7c460d7bdf5e1b01d69f287205edd879de0b27",
+        "scope": "bounded suffix PREPARATION selfNanos, not entire window",
+        "samples": 16,
+        "medianMs": 2.8631,
+        "sumMs": 45.985
+      },
+      {
+        "source": "build\\reports\\release-716\\macro-blas-batch\\B2\\production-4096-SUMMARY-stream-dad4de1d2d855e0f-cpu.json",
+        "sha256": "fe0b58d836ab58185bd3f6e9f4069599e1e4a1c517988d3e0a9e83191dcfac9d",
+        "scope": "bounded suffix PREPARATION selfNanos, not entire window",
+        "samples": 16,
+        "medianMs": 2.68335,
+        "sumMs": 42.7496
+      }
+    ],
+    "theoreticalOpportunity": "Overlap unchanged full CPU scene preparation (~2.7-2.9 ms median in two 16-update suffixes) with independently ready GPU BLAS batch. Upper bound is min(CPU preparation, ready GPU work), not a promised whole-window gain. Stable shading/RR cost is unchanged; this cannot promise 4ms.",
+    "scope": "Memory native-lighting structural batches with more than one missing BLAS only; other paths keep late build schedule.",
+    "differenceFromRejected": "Full SDK preparation remains unchanged and still runs every transaction. One original graphics queue, no shading split, no RR/direct dual-queue overlap, no skipping topology packing or quality work.",
+    "ownership": "Both command-list objects retained by the same transaction through existing graphics/compute retirement; failure guard waits before resource owners disappear. First submission cannot publish a partially updated scene.",
+    "timing": "Full request boundary unchanged; resource begin/end timer remains across both same-queue submissions.",
+    "rollback": "Restore only retained_scene.inl plus default DLL/PDB from ce9 snapshot; archive candidate OBJ to avoid later relink. Transaction pages and batched BLAS remain.",
+    "createdUtc": "2026-11-05T11:31:28.337996+00:00",
+    "sourceCandidateSha256": "602e6b2d57b36aa7b53ad963752289c5915edc2802fd5796a940b2592b221e64",
+    "rtrenderer_rtxpt.dllSha256": "833707ed644867042d9838f1741364f55531133c8bf40ffac543a42daa0404f2",
+    "rtrenderer_rtxpt.pdbSha256": "9893592350a3c4eec03c0309f08cafbfb9678f13914d3c71a6a83ff381559e66",
+    "dependenciesLocked": true,
+    "runtimeChangedFiles": [
+      "rtrenderer_rtxpt.dll",
+      "rtrenderer_rtxpt.pdb"
+    ],
+    "nativeDllSha256": "833707ed644867042d9838f1741364f55531133c8bf40ffac543a42daa0404f2",
+    "pdbSha256": "9893592350a3c4eec03c0309f08cafbfb9678f13914d3c71a6a83ff381559e66",
+    "dllPdbGuidBytes": "42b75afe1d929142be32e164448828b6",
+    "dllPdbAge": 238,
+    "pdbContainsDllGuid": true,
+    "validationLimit": "Full requested; ID3D12Debug/ID3D12Debug3 not available in current test logs, no active D3D debug/GPU validation claim",
+    "codeViewMatches": true,
+    "candidateObject": "build/rtxpt-sdk/build-host/rtrenderer_rtxpt.dir/Release/rtxpt_jni.obj",
+    "correctnessInProgress": false,
+    "correctnessChecksPassed": 7,
+    "outputCapturesByteEqual": 13,
+    "reason": "Small update-tail changes but full GPU P95 regressed in both matched pairs and pooled by +0.262271 ms/+4.04%; FPS +0.09%, CPU full P95 +0.13%, update CPU P95 -1.22%. No established overall gain; do not attribute to external fluctuation or assert code causation.",
+    "sourceAndRuntimeRestored": true,
+    "rollbackEvidence": "build\\reports\\release-716\\macro-resource-pipeline\\rollback.json",
+    "retryAllowed": false,
+    "mustNotReapplyUnchanged": true,
+    "performanceEvidence": "build\\reports\\release-716\\macro-resource-pipeline\\comparison.json",
+    "performanceMeasured": true,
+    "scopeNotMeasured": [
+      "stable",
+      "local"
+    ],
+    "performanceOptimizationStopped": false
   }
 }

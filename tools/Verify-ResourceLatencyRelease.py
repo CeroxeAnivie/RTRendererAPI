@@ -59,14 +59,28 @@ def main():
     parser.add_argument('--evidence', type=Path, default=ROOT / 'docs/quality/data/resource-latency.json')
     parser.add_argument('--record', type=Path, default=ROOT / 'docs/quality/data/resource-latency-release.json')
     parser.add_argument('--local', action='store_true')
+    parser.add_argument('--package-only', action='store_true',
+                        help='Verify package bytes with explicitly incomplete performance coverage; never a full acceptance pass')
     parser.add_argument('--allow-reused-acceptance', action='store_true',
                         help='Package-only verification with explicitly recorded historical test reuse; never a final-DLL performance pass')
     args = parser.parse_args()
+    require(not (args.package_only and args.allow_reused_acceptance), 'Choose one package verification policy')
     evidence = read(args.evidence)
     version = next(line.split('=', 1)[1] for line in (ROOT / 'gradle.properties').read_text(encoding='utf-8').splitlines() if line.startswith('project_version='))
     require(evidence['version'] == version, 'Performance evidence version mismatch')
     require(evidence['correctnessPassed'] == 13, 'Incomplete correctness evidence')
-    if args.allow_reused_acceptance:
+    if args.package_only:
+        require(evidence.get('acceptancePolicy', {}).get('mode') == 'package-only-incomplete-final-matrix',
+                'Missing explicit incomplete-matrix delivery policy')
+        require(bool(evidence['deliveryScope']['authorization']), 'Missing package-only authorization')
+        require(evidence['performancePassed'] == evidence['finalNativePerformanceWindows'] == len(evidence['windows'])
+                and evidence['retainedPredecessorPerformanceWindows'] == 0, 'Incorrect final-identity coverage counts')
+        require(all(window.get('gpuBoundaryComplete') for window in evidence['windows']), 'Incomplete recorded GPU boundary')
+        runtime_inputs = evidence['packagedRuntimeFilesSha256']
+        require(bool(runtime_inputs), 'Missing package input identities')
+        for name, sha in evidence['finalProductionSourceSha256'].items():
+            require(digest(ROOT / name) == sha, f'Production source changed after identity freeze: {name}')
+    elif args.allow_reused_acceptance:
         require(evidence.get('acceptancePolicy', {}).get('mode') == 'passed-tests-not-rerun', 'Missing explicit no-rerun policy')
         previous = evidence['historicalEvidence']
         historical_path = ROOT / previous['path']
@@ -85,6 +99,8 @@ def main():
                 'Incomplete request GPU boundary in final release')
         runtime_inputs = evidence['measuredRuntimeFilesSha256']
     require(all(not window['evidenceErrors'] for window in evidence['windows']), 'Invalid performance evidence')
+    for check in (evidence['correctness'] | evidence.get('additionalCorrectness', {})).values():
+        require(check['passed'] and digest(Path(check['log'])) == check['logSha256'], 'Changed or failed correctness evidence')
     require(all(check['passed'] for check in evidence.get('additionalCorrectness', {}).values()),
             'Additional correctness check failed')
     for name, sha in evidence['productionClassesBeforeFinalBuildSha256'].items():
@@ -147,7 +163,8 @@ def main():
             require(entry_digest(archive, item['path']) == item['sha256'], f'SDK manifest hash mismatch: {item["path"]}')
             require(archive.getinfo(item['path']).file_size == item['bytes'], f'SDK manifest size mismatch: {item["path"]}')
         require(entry_digest(archive, 'sdk/backend/RtrNativeLighting.hlsl') == digest(ROOT / 'renderer-rtxpt/src/main/cpp/RtrNativeLighting.hlsl'), 'SDK shader source mismatch')
-        require(entry_digest(archive, 'docs/quality/data/resource-latency.json') == digest(args.evidence), 'SDK performance evidence mismatch')
+        evidence_entry = args.evidence.resolve().relative_to(ROOT).as_posix()
+        require(entry_digest(archive, evidence_entry) == digest(args.evidence), 'SDK performance evidence mismatch')
     with zipfile.ZipFile(ROOT / f'renderer-nvidia/build/libs/renderer-nvidia-{version}.jar') as archive:
         prefix = 'META-INF/native/windows-x86_64/'
         require(prefix + 'sl.interposer.dll' in archive.namelist(), 'Missing NVIDIA runtime payload')
@@ -169,6 +186,10 @@ def main():
               'performanceEvidenceSha256': digest(args.evidence), 'dllPdbGuidBytes': guid.hex(), 'dllPdbAge': age,
               'correctnessPassed': evidence['correctnessPassed'], 'performancePassed': evidence['performancePassed'],
               'p95Target': evidence['target'], 'gpuBenchmarkRepeatedForPackaging': False}
+    record['finalNativePerformanceWindows'] = evidence['finalNativePerformanceWindows']
+    record['fullPerformanceAcceptanceComplete'] = (evidence['finalNativePerformanceWindows'] == 36
+        and not evidence['missing'])
+    record['finalProductionSourceSha256'] = evidence.get('finalProductionSourceSha256', {})
     if args.local:
         require(read(args.record) == record, 'Artifacts changed after release record')
         repository = Path.home() / '.m2/repository/top/ceroxe/rt'

@@ -151,6 +151,7 @@ public final class RtxptHostSurfaceTransportNativeSelfTest {
                 glfwWindowHint(GLFW_OPENGL_PROFILE,GLFW_OPENGL_CORE_PROFILE);window=glfwCreateWindow(W,H,"Hidden host transport acceptance",0,0);check(window!=0,"Create hidden GL context");
                 glfwMakeContextCurrent(window);GL.createCapabilities();
                 try(var renderer=(RtxptRenderer)RtxptRenderers.openHostSurface(configuration(),new HostSurfacePlan(W,H).withOutputSignals(HostSurfacePlan.ALL_SIGNALS));var writer=new GlHostSurfaceWriter()){
+                    renderer.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
                     renderer.hostSurfaceWorkStatisticsEnabled(true);var run=new Run(renderer,writer);
                     for(String value:cases)switch(value){case "optics"->run.optics();case "alpha"->run.alpha();case "ownership"->run.ownership();default->throw new IllegalArgumentException("Unknown host transport case: "+value);}
                     check(renderer.hostSurfaceStatus().hostReservations()==0&&renderer.hostSurfaceStatus().publishedInputs()==0,"All directed host inputs are released");

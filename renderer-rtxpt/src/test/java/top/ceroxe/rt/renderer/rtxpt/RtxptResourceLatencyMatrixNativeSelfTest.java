@@ -47,9 +47,11 @@ public final class RtxptResourceLatencyMatrixNativeSelfTest {
             require(!r.lightingStatisticsCollection().effective(),"SUMMARY does not execute ray atomics");
             for(int batch=0;batch<4;batch++){
                 var before=r.resourceMaintenance();tx=SceneTransaction.builder(++revision);
+                long visits=r.dynamicResourceStatistics().attributeTableVisits();
                 int changed=batch+1;for(long id=1;id<=changed;id++)tx.upsert(RtxptDynamicResourcesNativeSelfTest.mesh(id,.001f*(batch+1)));
                 r.apply(tx.build());render(r,sequence++,revision);r.awaitIdle();var after=r.resourceMaintenance();
                 require(after.blasBuilds()-before.blasBuilds()+after.blasRefits()-before.blasRefits()==changed,"Only changed BLAS are built/refit");
+                require(r.dynamicResourceStatistics().attributeTableVisits()-visits<=changed*8L+8,"Metadata visits follow changed meshes and dense migrations, independently of scene scale");
                 rows.add(RtxptJson.object("case","local","changed",changed,"before",before.toString(),"after",after.toString()));
             }
             var before=r.resourceMaintenance();

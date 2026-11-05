@@ -18,6 +18,10 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     private Map<Long,Path> textureFiles=new RtxptPersistentMap<>();
     private final Map<Long,TextureAsset> memoryTextures=new HashMap<>();
     private final RtxptMemoryResources.PacketPool resourcePackets=new RtxptMemoryResources.PacketPool();
+    private record PreparedResources(RenderFrameRequest frame,RtxptScene scene,List<RtxptScene.Item> items,
+            RtxptDelta.Prepared delta,Path path,boolean rebuild) { }
+    private PreparedResources pendingResources;
+    private boolean pendingResourcesLoaded;
     private boolean fullReset=true;
     private RetainedUpdateMode lastUpdateMode=RetainedUpdateMode.UNCHANGED;
     private long resourceBatches,resourceMeshes,resourceMaterials,resourceTextures;
@@ -448,6 +452,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         return true;
     }
     SceneUpdateResult commitScene(PreparedScene prepared){
+        pendingResources=null;pendingResourcesLoaded=false;
         var tx=prepared.transaction();
         for(var mesh:tx.upserts().meshes()){
             var old=scene.meshes.get(mesh.id());
@@ -477,6 +482,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     @Override public ResourceMaintenance resourceMaintenance(){ready();long[] n=handle==0?new long[7]:RtxptNative.resourceMaintenance(handle);return new ResourceMaintenance(n[0],n[1],n[2],n[3],n[4],n[5],n[6]);}
     @Override public ResourcePressure resourcePressure(){ready();long[] n=handle==0?new long[11]:RtxptNative.resourcePressure(handle);
         return new ResourcePressure(n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8],n[9],n[10]);}
+    @Override public ResourceArenaStatistics resourceArenaStatistics(){ready();long[] n=handle==0?new long[21]:RtxptNative.resourceArenaStatistics(handle);
+        return new ResourceArenaStatistics(n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7],n[8],n[9],n[10],n[11],n[12],n[13],n[14],n[15],n[16],n[17],n[18],n[19],n[20]);}
     @Override public FrameSubmissionResult submit(RenderFrameRequest f){return submitFrame(f,false,diagnosticClock());}
     private FrameSubmissionResult submitFrame(RenderFrameRequest f,boolean admitted,long callBegin){
         ready();Objects.requireNonNull(f);
@@ -485,7 +492,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         if(hostSurfacePlan!=null&&!preparingHostSurface){var host=hostRequests.get(f.sequence());
             if(host==null||host.frame()!=f||host.revision()!=revision)throw new IllegalArgumentException("Submit the exact immutable request used to acquire a published input, at the same resident scene revision");}
         long allocationStart=allocatedBytes();
-        long submitBegin=preparingHostSurface?0:callBegin;boolean submitTracked=!preparingHostSurface&&handle!=0,submitAccepted=false;
+        long submitBegin=preparingHostSurface?0:callBegin;boolean submitTracked=!preparingHostSurface&&handle!=0,submitAccepted=false,preparationDeferred=false;
         if(submitTracked&&!admitted)RtxptNative.diagnosticSubmitBegin(handle,f.sequence(),revision,diagnosticElapsed(callBegin));
         try {
         if(!admitted&&handle!=0&&!RtxptNative.resourcesCanUpdate(handle))throw new IllegalStateException("Resource generation ring is full; retry with trySubmit after GPU retirement");
@@ -503,7 +510,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         else if(hostAugmentationActive())RtxptNativeLightingParameters.pack(hostSurfaceAugmentation().lighting(),f);
         if(nativeContractPending&&nativeScene==null){scene.validate();nativeContractPending=false;}
         if(f.minimumSceneRevision()>revision)throw new IllegalArgumentException("Scene revision is not resident");
-        var items=nativeScene==null?scene.items(f):List.<RtxptScene.Item>of();
+        if(pendingResources!=null&&(pendingResources.frame()!=f||pendingResources.scene()!=scene)){pendingResources=null;pendingResourcesLoaded=false;}
+        var items=pendingResources!=null?pendingResources.items():nativeScene==null?scene.items(f):List.<RtxptScene.Item>of();
         var nextLighting=nativeScene==null?RtxptLighting.of(f.environment(),List.of()):null;
         // Validate the complete batch before scene export or any native mutation.
         boolean sparseLights=lighting!=null&&!fullReset;
@@ -527,7 +535,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         float[] patchRecords=lightPatch!=null?Arrays.copyOfRange(lightPatch.records(),16,(changedLights.size()+1)*16):null;
         long validationDuration=diagnosticElapsed(validationBegin);validationNs+=validationDuration;
         long translationBegin=diagnosticClock();
-        boolean rebuild=nativeScene==null && (handle==0 || fullReset);
+        boolean rebuild=pendingResources!=null?pendingResources.rebuild():nativeScene==null && (handle==0 || fullReset);
         boolean delta=nativeScene==null&&!rebuild&&(dirty||!RtxptScene.sameStructure(items,previous));
         var updateMode=nativeScene!=null?RetainedUpdateMode.NATIVE_SCENE:rebuild
             ?(handle==0?RetainedUpdateMode.INITIAL_PUBLICATION:RetainedUpdateMode.EXPLICIT_RESET)
@@ -535,18 +543,20 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             :sparseSourcesChanged||!sameLights||!Objects.equals(nextLighting,lighting)?RetainedUpdateMode.LIGHTING:RetainedUpdateMode.UNCHANGED;
         if(delta||rebuild)historyCauses.add(HistoryCause.RESOURCE);
         RtxptDelta.Prepared preparedDelta=null;
-        Path path=nativeScene;
-        if(rebuild){long begin=diagnosticClock();try{
+        Path path=pendingResources!=null?pendingResources.path():nativeScene;
+        if(pendingResources!=null)preparedDelta=pendingResources.delta();
+        if(rebuild&&pendingResources==null){long begin=diagnosticClock();try{
             if(directory==null)directory=Files.createTempDirectory("rtrenderer-rtxpt-");
             var generation=Files.createTempDirectory(directory,"full-");var bootstrap=new RtxptScene();path=bootstrap.export(generation,f,List.of());fullDirectory=generation;
             textureFiles=new RtxptPersistentMap<>();
             memoryTextures.clear();preparedDelta=RtxptDelta.prepare(directory,bootstrap,scene,List.of(),items,textureFiles,memoryTextures,resourcePackets);
             if(diagnosticLevel!=RtxptDiagnostics.Level.OFF){preparationModels++;preparationItemReads+=items.size();}
         }catch(IOException e){throw new IllegalStateException("RTXPT asset translation failed",e);}exportNs+=diagnosticElapsed(begin);exports++;}
-        if(delta)try{preparedDelta=RtxptDelta.prepare(directory,residentScene,scene,previous,items,textureFiles,memoryTextures,resourcePackets);
+        if(delta&&pendingResources==null)try{preparedDelta=RtxptDelta.prepare(directory,residentScene,scene,previous,items,textureFiles,memoryTextures,resourcePackets);
             if(diagnosticLevel!=RtxptDiagnostics.Level.OFF){var work=preparedDelta.work();preparationItemReads+=work.itemReads();
                 preparationDependencies+=work.dependencyVisits();preparationMapNodes+=work.inspectedMapNodes();preparationModels+=work.exportedModels();}}
         catch(IOException e){throw new IllegalStateException("RTXPT delta translation failed",e);}
+        if(preparedDelta!=null&&pendingResources==null)pendingResources=new PreparedResources(f,scene,items,preparedDelta,path,rebuild);
         long translationDuration=diagnosticElapsed(translationBegin);translationNs+=translationDuration;
         try {
         if(handle==0){
@@ -558,7 +568,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             if(title!=null)RtxptNative.title(handle,title);
             applyNativeSettings();
             if(nativeScene==null)scene.uploadInteriors(handle);
-        }else if(rebuild){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();scene.uploadInteriors(handle);}
+        }else if(rebuild&&!pendingResourcesLoaded){RtxptNative.loadScene(handle,path.toString());applyNativeSettings();scene.uploadInteriors(handle);}
+        if(pendingResources!=null)pendingResourcesLoaded=true;
         RtxptNative.diagnosticContext(handle,f.sequence(),revision);
         // Select native AS semantics before the first memory transaction builds
         // geometry; otherwise alpha meshes inherit beauty-only build flags.
@@ -569,7 +580,17 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             RtxptNative.diagnosticSubmitStage(RtxptDiagnostics.Stage.TRANSLATION.ordinal(),translationBegin-submitBegin,translationDuration,items.size(),0);
         }
         if(preparedDelta!=null&&preparedDelta.hasWork()){
-            long begin=diagnosticClock();RtxptNative.resourcesMemory(handle,revision,preparedDelta.memory());nativeResourceNs+=diagnosticElapsed(begin);preparedDelta.translated().uploadInteriors(handle);
+            long begin=diagnosticClock();long deadline=0;
+            for(;;)try{RtxptNative.resourcesMemory(handle,revision,preparedDelta.memory());break;}
+            catch(RtxptResourcePendingException deferred){
+                if(admitted)throw deferred;
+                // submit/host preparation are synchronous APIs; trySubmit returns
+                // a retryable deferral and reuses this exact immutable packet.
+                if(deadline==0)deadline=System.nanoTime()+30_000_000_000L;
+                if(Thread.currentThread().isInterrupted()||System.nanoTime()>=deadline)throw new IllegalStateException("GPU heap preparation did not finish within the synchronous admission budget",deferred);
+                RtxptNative.resourcesAdmission(handle);java.util.concurrent.locks.LockSupport.parkNanos(1_000_000);
+            }
+            nativeResourceNs+=diagnosticElapsed(begin);preparedDelta.translated().uploadInteriors(handle);
             for(var entry:preparedDelta.translated().textures.entrySet())memoryTextures.put(entry.getKey(),entry.getValue());
             scene.textures.forEachChanged(residentScene==null?new RtxptPersistentMap<>():residentScene.textures,(id,value)->{if(value==null)memoryTextures.remove(id);});
             textureFiles=preparedDelta.textureFiles();resourceBatches++;resourceMeshes+=preparedDelta.meshes();
@@ -610,7 +631,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         pendingGeometryVariants=preparedDelta==null?List.of():preparedDelta.changedVariants();
         prepareNativeLighting(f,items,rebuild);
         prepareHostSurface(f,items,mappingsChanged);
-        previous=items;dirty=false;fullReset=false;residentScene=scene;pendingLightIds.clear();pendingSparseIds.clear();
+        previous=items;dirty=false;fullReset=false;residentScene=scene;pendingLightIds.clear();pendingSparseIds.clear();pendingResources=null;pendingResourcesLoaded=false;
         if(preparingHostSurface){
             preparedHostHistory.addAll(historyCauses);
             if(updateMode!=RetainedUpdateMode.UNCHANGED)preparedHostUpdateMode=updateMode;
@@ -644,8 +665,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             if(lastHistoryFrame.pathAccumulationResets()>0||lastHistoryFrame.reconstructionResets()>0||lastHistoryFrame.denoiserResets()>0)reasons.add(HistoryInvalidationReason.FRAME_SHADING_CHANGED);
         for(var reason:f.temporalHistoryResets())reasons.add(HistoryInvalidationReason.valueOf(reason.name()));
         submitAccepted=true;return FrameSubmissionResult.accepted(submitted,revision,reasons);
+        }catch(RtxptResourcePendingException deferred){preparationDeferred=true;throw deferred;
         }catch(RuntimeException|Error failure){try{close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;}
-        }finally{if(submitTracked)RtxptNative.diagnosticSubmitEnd(!submitAccepted);
+        }finally{if(submitTracked){if(preparationDeferred)RtxptNative.diagnosticSubmitDeferred();else RtxptNative.diagnosticSubmitEnd(!submitAccepted);}
             if(diagnosticLevel!=RtxptDiagnostics.Level.OFF){preparationSubmissions++;if(allocationStart>=0){long end=allocatedBytes();if(end>=allocationStart)preparationAllocatedBytes+=end-allocationStart;}}}
     }
     long[] benchmarkGpuSnapshot(){ready();return RtxptNative.benchmarkGpuSnapshot(handle);}
@@ -901,6 +923,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         if(hostSurfacePlan!=null&&handle!=0&&!RtxptNative.hostSurfaceCanPublish(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"All host-surface HDR slots await consumer completion");
         if(nativeLightingPlan!=null&&handle!=0&&!RtxptNative.nativeLightingCanPublish(handle))return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"All HDR lighting slots await consumer completion");
         delegated=true;return new FrameSubmitted(submitFrame(f,true,callBegin));
+        }catch(RtxptResourcePendingException deferred){delegated=true;return new FrameSubmissionDeferred(SubmissionDeferralReason.SCENE_UPDATE_BACKLOG,deferred.getMessage());
         }catch(RuntimeException|Error failure){if(tracked)RtxptNative.diagnosticSubmitEnd(true);delegated=true;throw failure;
         }finally{if(tracked&&!delegated)RtxptNative.diagnosticSubmitDeferred();}}
     @Override public DynamicResourceStatistics dynamicResourceStatistics(){ready();var n=handle==0?new long[19]:RtxptNative.dynamicResourceStatistics(handle);
@@ -917,7 +940,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         try{if(handle!=0)RtxptNative.close(handle);}
         catch(RuntimeException|Error e){failure=e;throw e;}
         finally {
-            handle=0;closed=true;
+            handle=0;closed=true;pendingResources=null;pendingResourcesLoaded=false;
             // A caller may retain a closed renderer; do not keep its entire scene or
             // a compositor closure (and its owner's Vulkan resources) alive with it.
             scene=new RtxptScene();residentScene=null;textureFiles.clear();memoryTextures.clear();resourcePackets.clear();pendingLightIds.clear();visibleBackground=null;previous=List.of();camera=null;lighting=null;compositor=null;nativeScene=null;

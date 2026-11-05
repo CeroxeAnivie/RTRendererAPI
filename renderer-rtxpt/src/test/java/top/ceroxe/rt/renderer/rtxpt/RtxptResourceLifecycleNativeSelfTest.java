@@ -10,6 +10,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 public final class RtxptResourceLifecycleNativeSelfTest {
     public static void main(String[] args)throws Exception{
         var output=Path.of(System.getProperty("resourceMatrix.output","build/reports/resource-latency"));Files.createDirectories(output);
+        if(args.length==1&&args[0].equals("cancellation")){cancellation(output);return;}
         var rows=new ArrayList<Object>();var cpu=ManagementFactory.getThreadMXBean();
         for(int session=0;session<2;session++){
             long start=System.nanoTime(),cpuStart=cpu.getCurrentThreadCpuTime();
@@ -35,5 +36,31 @@ public final class RtxptResourceLifecycleNativeSelfTest {
         require(rows.size()==4,"Separate startup and shutdown observations");
         Files.writeString(output.resolve("lifecycle.json"),RtxptJson.encode(rows));
         System.out.println("RESOURCE_LIFECYCLE PASS processCold=true warmReopen=true unimportedOutput=true");
+    }
+    static void cancellation(Path output)throws Exception{
+        var rows=new ArrayList<Object>();
+        for(boolean observe:new boolean[]{false,true}){
+            var r=new RtxptRenderer(RtxptLightTreeNativeSelfTest.config(4),true);
+            r.nativeLightingPlan(NativeLightingPlan.defaults(49,33));
+            r.diagnosticLevel(RtxptDiagnostics.Level.SUMMARY);
+            r.apply(RtxptNativeLightingNativeSelfTest.scene());
+            if(observe)r.diagnosticMonitor().snapshot();
+            r.close();r.close();
+            require(r.status()==Renderer.Status.CLOSED,"Cancelled preparation closes idempotently");
+            boolean rejected=false;
+            try{r.trySubmit(RtxptNativeLightingNativeSelfTest.frame(0,1));}
+            catch(IllegalStateException expected){rejected=true;}
+            require(rejected,"Cancelled preparation cannot accept a frame");
+            rows.add(RtxptJson.object("case","cancel-before-first-submit","observerPrepared",observe,"passed",true));
+        }
+        try(var r=new RtxptRenderer(RtxptLightTreeNativeSelfTest.config(4),true)){
+            r.nativeLightingPlan(NativeLightingPlan.defaults(49,33));
+            r.diagnosticLevel(RtxptDiagnostics.Level.SUMMARY);r.diagnosticMonitor();
+            r.apply(RtxptNativeLightingNativeSelfTest.scene());
+            RtxptResourceLatencyMatrixNativeSelfTest.render(r,0,1);r.awaitIdle();
+            rows.add(RtxptJson.object("case","reopen-after-cancel-fresh-output","passed",true));
+        }
+        Files.writeString(output.resolve("lifecycle-cancellation.json"),RtxptJson.encode(rows));
+        System.out.println("RESOURCE_LIFECYCLE_CANCELLATION PASS noAcceptedCancelledFrame=true reopenFreshOutput=true");
     }
 }

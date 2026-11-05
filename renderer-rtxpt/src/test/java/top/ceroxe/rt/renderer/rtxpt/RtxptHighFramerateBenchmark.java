@@ -14,6 +14,7 @@ public final class RtxptHighFramerateBenchmark {
     static final int COUNT=Integer.getInteger("highFramerate.meshes",719);
     static final RtxptDiagnostics.Level LEVEL=RtxptDiagnostics.Level.valueOf(System.getProperty("highFramerate.level","SUMMARY"));
     static final String SCENARIO=System.getProperty("highFramerate.scenario","animation");
+    static final int[] INFLOW=Arrays.stream(System.getProperty("highFramerate.inflow","5").split(",")).mapToInt(Integer::parseInt).toArray();
     static final boolean INDEPENDENT="1".equals(System.getenv("RTR_RTXPT_BENCHMARK_TIMING"));
     // Architecture probe only: isolate the unavoidable GI -> RR chain. This
     // reduced output selection is never a production dual-HDR acceptance run.
@@ -50,6 +51,7 @@ public final class RtxptHighFramerateBenchmark {
     }
     public static void main(String[] args)throws Exception{
         require(SECONDS>=1&&SECONDS<=300,"Bounded measurement window");require(Set.of("stable","animation","local","stream","mixed").contains(SCENARIO),"Known scenario");Files.createDirectories(OUT);
+        require(INFLOW.length>0&&Arrays.stream(INFLOW).allMatch(n->n>0&&n<=Math.min(256,COUNT-4)),"Inflow batches fit the retained trace");
         String stem="production-"+COUNT+"-"+LEVEL+"-"+SCENARIO+"-"+System.getProperty("highFramerate.identity","current");long sequence=0,revision=1;
         var fullGpu=new TreeMap<Long,long[]>();var rows=new ArrayList<String>();var gpu=new LinkedHashMap<String,RtxptDiagnostics.GpuScope>();
         int sourceCount=COUNT>=4096?26000:COUNT>=977?22000:17408;
@@ -62,7 +64,8 @@ public final class RtxptHighFramerateBenchmark {
             var tx=SceneTransaction.builder(1).resetScene();for(long id=1;id<=63;id++)tx.upsert(texture(id,1)).upsert(MaterialAsset.builder(id).baseColorTextureId(id).roughness(.8f).build());
             for(long id=1;id<=COUNT;id++)tx.upsert(RtxptDynamicResourcesNativeSelfTest.mesh(id,0)).upsert(SceneInstance.builder(id,id).build());
             r.apply(tx.build(),sources,LongBuffer.allocate(0));
-            var streamIds=new ArrayDeque<Long>();var streamSlots=new HashMap<Long,Long>();for(long id=Math.max(5,COUNT-63);id<=COUNT;id++){streamIds.add(id);streamSlots.put(id,id);}
+            int streamCapacity=Math.max(64,Arrays.stream(INFLOW).max().orElseThrow());
+            var streamIds=new ArrayDeque<Long>();var streamSlots=new HashMap<Long,Long>();for(long id=Math.max(5,COUNT-streamCapacity+1);id<=COUNT;id++){streamIds.add(id);streamSlots.put(id,id);}
             long nextStreamId=COUNT+1;
             for(int i=0;i<12;i++){warmup(r,RtxptDynamicResourcesNativeSelfTest.request(sequence,revision,0));release(r,sequence++,revision);}r.awaitIdle();
             var before=maintenance(r);var tablesBefore=tableUploads(r);var pressure=new ArrayList<Object>();long start=System.nanoTime(),nextUpdate=start,end=start+SECONDS*1_000_000_000L;int animation=0;long deferrals=0;
@@ -76,7 +79,7 @@ public final class RtxptHighFramerateBenchmark {
                         meshes=1+(animation/4)%4;for(int k=0;k<meshes;k++)update.upsert(RtxptDynamicResourcesNativeSelfTest.mesh(1+k,.001f*animation));
                     }
                     if(SCENARIO.equals("stream")||SCENARIO.equals("mixed")){
-                        added=removed=5;
+                        added=removed=INFLOW[(animation-1)%INFLOW.length];
                         for(int k=0;k<added;k++){long old=streamIds.removeFirst(),id=nextStreamId++,slot=streamSlots.remove(old);update.removeInstance(old).removeMesh(old)
                             .upsert(streamMesh(id,slot)).upsert(SceneInstance.builder(id,id).build());streamIds.addLast(id);streamSlots.put(id,slot);}
                     }
@@ -104,6 +107,10 @@ public final class RtxptHighFramerateBenchmark {
             for(var e:fullGpu.entrySet())if(formal.contains(e.getKey())){var v=e.getValue();timing.add(v[0]+","+v[1]+","+v[2]+","+v[3]+","+v[4]+","+v[5]+","+v[6]);}
             Files.write(OUT.resolve(stem+"-full-gpu.csv"),timing);
             Files.writeString(OUT.resolve(stem+"-pressure.json"),RtxptJson.encode(pressure));
+            Object arena;try{arena=r.resourceArenaStatistics().toString();}catch(LinkageError baseline){arena="unavailable in baseline";}
+            Files.writeString(OUT.resolve(stem+"-resource-trace.json"),RtxptJson.encode(RtxptJson.object("inflowBatches",INFLOW,"targetUpdatesPerSecond",20,
+                "delayedInputTicks",SCENARIO.equals("stable")?0:Math.max(0,(end-nextUpdate)/50_000_000L),"arena",arena,
+                "offSampling","Explicit end-of-window allocator snapshot only; no periodic OFF collection")));
             if(LEVEL!=RtxptDiagnostics.Level.OFF){var snapshot=r.diagnosticMonitor().snapshot();
                 Files.writeString(OUT.resolve(stem+"-cpu.json"),RtxptJson.encode(RtxptJson.object("overwritten",snapshot.overwrittenEvents(),
                     "events",snapshot.events().stream().map(e->RtxptJson.object("stage",e.stage().name(),"sequence",e.sequence(),"revision",e.revision(),

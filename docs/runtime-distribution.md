@@ -1,12 +1,12 @@
 # RTRendererAPI Windows 制品布局
 
-本文说明 7.1.5 制品布局；最终四模块 JAR、sources、Javadoc、POM、Gradle metadata、runtime 和匹配符号的核对结果见[最终验收](quality/resource-latency.md)及[制品记录](quality/data/resource-latency-release.json)。历史停止优化时的包缺项保留在[历史记录](quality/optimization-closeout.md)，不能用旧身份校验新包。
+当前交付版本为7.1.6。四模块JAR、sources、Javadoc、POM、Gradle metadata、runtime和匹配符号见 `quality/data/resource-architecture-716-release.json`；[本版范围](release-resource-architecture.md)区分功能交付和未完成性能验收。7.1.5的[最终验收](quality/resource-latency.md)及旧制品记录保留原身份。
 
 普通 Vulkan 路径由 renderer-api、renderer-core、renderer-nvidia 提供。renderer-rtxpt 是显式可选的 D3D12 全场景／透明介质托管后端，包含原生最终呈现和 Vulkan GPU 组合入口；发行目录同时携带这个模块，但 renderer-api 不默认依赖它。
 
 ## 使用
 
-需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.1.5 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
+需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.1.6 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
 
 ```powershell
 java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow `

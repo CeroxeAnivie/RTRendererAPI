@@ -122,6 +122,14 @@ public interface RtxptAccess extends RtxptDiagnosticAccess {
         }
     }
     default ResourcePressure resourcePressure(){return new ResourcePressure(0,0,0,0,0,0,0,0,0,0);}
+    /** Explicit owner-thread snapshot. Heap/lease bytes are allocator capacity, not physical
+     * VRAM. Free minus largest-free describes fragmentation; payload/capacity and pool work
+     * are cumulative and freeze at OFF. No driver call or GPU wait is made by this query. */
+    record ResourceArenaStatistics(long budgetBytes,long heapBytes,long leasedBytes,long peakLeasedBytes,
+            long freeBytes,long largestFreeBytes,long heapCreates,long heapCreateNanos,long reservations,long deferrals,
+            long capacityRejections,long recycleAttempts,long bufferPoolHits,long blasPoolHits,long payloadBytes,
+            long bufferCapacityBytes,long evictions,long preparations,long poolRejections,long pooledBuffers,long pooledBlases) { }
+    default ResourceArenaStatistics resourceArenaStatistics(){throw new UnsupportedOperationException("Resource arena telemetry unavailable");}
     default NativePreparationStatistics nativePreparationStatistics(){return new NativePreparationStatistics(false,0,0,0);}
     /** Cumulative inclusive Java scopes and native CPU subscopes; native subscopes overlap the
      * Java resource/lighting scopes. Fence waits and GPU queue intervals remain in retainedUpdateTimings. */

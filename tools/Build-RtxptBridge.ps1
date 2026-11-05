@@ -34,6 +34,13 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+[IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/rtxpt_scene_delta.h'),(Join-Path $sdk 'External/Donut/include/donut/engine/rtxpt_scene_delta.h'),$true)
+$metadataDeltaPatch=Join-Path $PSScriptRoot 'patches/rtxpt-metadata-delta.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $metadataDeltaPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $metadataDeltaPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT metadata-delta overlay could not be removed'}
+}
 $maskedAlphaPatch=Join-Path $PSScriptRoot 'patches/rtxpt-masked-alpha.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $maskedAlphaPatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -133,6 +140,13 @@ function Patch-Once([string]$Relative,[string]$Anchor,[string]$Replacement,[stri
     if(!$text.Contains($Anchor)){throw "Pinned host integration anchor changed: $Relative :: $Anchor"}
     [IO.File]::WriteAllText($path,$text.Replace($Anchor,$Replacement),$utf8)
 }
+Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-buffer.cpp' "        if (d.isVirtual)`r`n        {" @'
+        // RTR virtual AS storage needs the same flags before the early return.
+        if (d.isAccelStructStorage)
+            resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
+        if (d.isVirtual)
+        {
+'@ 'RTR virtual AS storage needs the same flags'
 # Retain the upstream pipeline baker; make its binaries relocatable for the JAR
 # and optionally export the exact upstream command for offline six-budget builds.
 # Keep the census inert unless RTR_RTXPT_MEMORY_DIAGNOSTICS=1 is explicitly set.
@@ -1644,6 +1658,10 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT scene-table overlay could not be applied'}
 if($LASTEXITCODE -ne 0){throw 'RTXPT masked-alpha correction does not match its base'}
 & git -C $sdk apply --ignore-space-change $maskedAlphaPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT masked-alpha correction failed'}
+& git -C $sdk apply --check --ignore-space-change $metadataDeltaPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT metadata-delta overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $metadataDeltaPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT metadata-delta overlay could not be applied'}
 Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-device.cpp' "    void Device::runGarbageCollection()`r`n    {" @'
     void Device::runGarbageCollection()
     {

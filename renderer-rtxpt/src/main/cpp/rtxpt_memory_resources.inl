@@ -23,47 +23,245 @@ nvrhi::TextureHandle PatchStaging(const nvrhi::TextureDesc& desc){
 }
 size_t spareMemoryTextureBytes=0;
 std::vector<uint8_t> meshUploadScratch;
-void UploadMemoryMesh(const ResidentMesh& mesh,nvrhi::ICommandList* command){
-    static_cast<MeshInfoEx*>(mesh.get())->HostIndices=std::make_shared<const std::vector<uint32_t>>(mesh->buffers->indexData);
-    static_cast<MeshInfoEx*>(mesh.get())->HostDynamicCoverage=true;
+std::map<std::pair<uint64_t,bool>,nvrhi::MemoryRequirements> memoryBufferRequirements;
+std::map<std::vector<uint64_t>,nvrhi::MemoryRequirements> memoryBlasRequirements;
+struct MemoryMeshBufferPage {
+    RtrResourceArena::Storage vertexStorage,indexStorage;
+    nvrhi::BufferHandle vertex,index;
+    std::shared_ptr<donut::engine::DescriptorHandle> vertexDescriptor,indexDescriptor;
+    uint64_t vertexBytes=0,indexBytes=0;
+    size_t remaining=0;
+    std::array<size_t,2> allocation{};
+    std::vector<uint8_t> vertexUpload,indexUpload;
+};
+// The shared_ptr conversion preserves this derived deleter. Every live or
+// retired mesh owns its page, even after another mesh from that page is removed.
+struct MemoryMeshBufferGroup : donut::engine::BufferGroup {
+    std::shared_ptr<MemoryMeshBufferPage> page;
+    uint64_t vertexBase=0;
+};
+static uint64_t MemoryBufferCapacity(uint64_t bytes){return (std::max<uint64_t>(bytes,16)+4095)&~uint64_t(4095);}
+static uint64_t LayoutMemoryMesh(const ResidentMesh& mesh){
     using donut::engine::VertexAttribute;
     auto& b=*mesh->buffers;
-    uint64_t vertexBytes=0;auto range=[&](VertexAttribute attribute,size_t bytes){
+    const auto base=static_cast<MemoryMeshBufferGroup&>(b).vertexBase;
+    uint64_t vertexBytes=base;auto range=[&](VertexAttribute attribute,size_t bytes){
         auto& r=b.getVertexBufferRange(attribute);r.byteOffset=vertexBytes;r.byteSize=(bytes+15)&~size_t(15);vertexBytes+=r.byteSize;
     };
     range(VertexAttribute::Position,b.positionData.size()*sizeof(float3));
     range(VertexAttribute::Normal,b.normalData.size()*4);
     range(VertexAttribute::Tangent,b.tangentData.size()*4);
     range(VertexAttribute::TexCoord1,b.texcoord1Data.size()*sizeof(float2));
-    uint64_t indexBytes=b.indexData.size()*4;
-    for(auto i=spareMeshBuffers.begin();i!=spareMeshBuffers.end();++i)
-        if(i->vertex->getDesc().byteSize==vertexBytes&&i->index->getDesc().byteSize==indexBytes){
-            b.vertexBuffer=i->vertex;b.indexBuffer=i->index;
-            b.vertexBufferDescriptor=i->vertexDescriptor;b.indexBufferDescriptor=i->indexDescriptor;
-            spareMeshBufferBytes-=i->bytes;spareMeshBuffers.erase(i);break;
+    return vertexBytes-base;
+}
+nvrhi::rt::AccelStructDesc MemoryBlasDesc(const ResidentMesh& mesh){
+    // Preflight runs before material baking and must not call the SDK helper,
+    // which requires every new MaterialEx to already own a PTMaterial.
+    nvrhi::rt::AccelStructDesc desc;desc.isTopLevel=false;
+    for(auto& geometry:mesh->geometries){
+        nvrhi::rt::GeometryDesc entry;entry.geometryType=nvrhi::rt::GeometryType::Triangles;
+        auto& triangles=entry.geometryData.triangles;
+        triangles.indexBuffer=mesh->buffers->indexBuffer;
+        triangles.indexOffset=(mesh->indexOffset+geometry->indexOffsetInMesh)*sizeof(uint32_t);
+        triangles.indexFormat=nvrhi::Format::R32_UINT;triangles.indexCount=geometry->numIndices;
+        triangles.vertexBuffer=mesh->buffers->vertexBuffer;
+        triangles.vertexOffset=(mesh->vertexOffset+geometry->vertexOffsetInMesh)*sizeof(float3)
+            +mesh->buffers->getVertexBufferRange(donut::engine::VertexAttribute::Position).byteOffset;
+        triangles.vertexFormat=nvrhi::Format::RGB32_FLOAT;triangles.vertexStride=sizeof(float3);triangles.vertexCount=geometry->numVertices;
+        entry.flags=nvrhi::rt::GeometryFlags::Opaque;
+        if(!nativeLighting.active){
+            auto pt=static_cast<MaterialEx&>(*geometry->material).PTMaterial;
+            const auto domain=geometry->material->domain;
+            const bool alpha=pt?pt->EnableAlphaTesting:
+                domain==donut::engine::MaterialDomain::AlphaTested||domain==donut::engine::MaterialDomain::TransmissiveAlphaTested;
+            if(alpha||(pt&&pt->ExcludeFromNEE))entry.flags=nvrhi::rt::GeometryFlags::None;
+            if((m_ui.AS.ExcludeTransmissive&&domain==donut::engine::MaterialDomain::Transmissive)||(pt&&pt->SkipRender)){
+                constexpr float nan=std::numeric_limits<float>::quiet_NaN();
+                entry.setTransform(nvrhi::rt::AffineTransform{nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan});
+            }
         }
-    if(!b.vertexBuffer){
-        RtrDiagnostics::Scope allocation(RtrDiagnostics::BufferAllocate,2,0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),1,vertexBytes+indexBytes);
-        nvrhi::BufferDesc desc;desc.byteSize=vertexBytes;desc.debugName="Retained mutable vertices";
-        desc.isVertexBuffer=true;desc.canHaveTypedViews=true;desc.canHaveRawViews=true;desc.isAccelStructBuildInput=true;
-        desc.initialState=nvrhi::ResourceStates::VertexBuffer|nvrhi::ResourceStates::ShaderResource|nvrhi::ResourceStates::AccelStructBuildInput;desc.keepInitialState=true;
-        b.vertexBuffer=GetDevice()->createBuffer(desc);
-        desc.byteSize=indexBytes;desc.debugName="Retained mutable indices";desc.isVertexBuffer=false;desc.isIndexBuffer=true;desc.format=nvrhi::Format::R32_UINT;
-        desc.initialState=nvrhi::ResourceStates::IndexBuffer|nvrhi::ResourceStates::ShaderResource|nvrhi::ResourceStates::AccelStructBuildInput;
-        b.indexBuffer=GetDevice()->createBuffer(desc);
-        if(!b.vertexBuffer||!b.indexBuffer)throw std::runtime_error("Dynamic mesh buffer allocation failed");
-        RtrDiagnostics::Scope descriptors(RtrDiagnostics::DescriptorAllocate,2,0,1,0,RtrDiagnostics::Identity(mesh->name));
-        b.vertexBufferDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,b.vertexBuffer)));
-        b.indexBufferDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,b.indexBuffer)));
+        desc.bottomLevelGeometries.push_back(entry);
     }
+    desc.buildFlags=nvrhi::rt::AccelStructBuildFlags::PreferFastTrace|nvrhi::rt::AccelStructBuildFlags::AllowUpdate;
+    desc.debugName="Retained mutable BLAS";desc.isVirtual=true;return desc;
+}
+void PrepareMemoryAllocations(const std::vector<ResidentMesh>& meshes){
+    if(meshes.empty())return;
+    if(RtrDiagnostics::level.load())++arenaWork[6];
+    struct Plan {ResidentMesh mesh;size_t buffers=SIZE_MAX,blas=SIZE_MAX;std::array<size_t,3> allocation{SIZE_MAX,SIZE_MAX,SIZE_MAX};nvrhi::rt::AccelStructHandle acceleration;};
+    std::vector<Plan> plans;plans.reserve(meshes.size());
+    std::vector<bool> usedBuffers(spareMeshBuffers.size()),usedBlases(spareMeshBlases.size());
+    std::vector<nvrhi::MemoryRequirements> requirements;requirements.reserve(meshes.size()*3);
+    std::vector<std::shared_ptr<MemoryMeshBufferPage>> pages;
+    // Small resources from one immutable transaction share bounded page pairs.
+    // An isolated survivor can retain at most this payload, never the whole scene.
+    for(size_t first=0;first<meshes.size();){
+        uint64_t vertices=0,indices=0;size_t end=first;
+        while(end<meshes.size()&&end-first<32){
+            const auto v=LayoutMemoryMesh(meshes[end]),i=meshes[end]->buffers->indexData.size()*sizeof(uint32_t);
+            if(v+i>1024*1024||vertices+indices+v+i>1024*1024)break;
+            vertices+=v;indices+=i;++end;
+        }
+        if(end-first<2){first=std::max(first+1,end);continue;}
+        auto page=std::make_shared<MemoryMeshBufferPage>();page->vertexBytes=vertices;page->indexBytes=indices;page->remaining=end-first;
+        nvrhi::BufferDesc desc;desc.byteSize=MemoryBufferCapacity(vertices);desc.debugName="Retained transaction vertices";
+        desc.isVirtual=true;desc.isVertexBuffer=true;desc.canHaveTypedViews=true;desc.canHaveRawViews=true;desc.isAccelStructBuildInput=true;
+        desc.initialState=nvrhi::ResourceStates::VertexBuffer|nvrhi::ResourceStates::ShaderResource|nvrhi::ResourceStates::AccelStructBuildInput;desc.keepInitialState=true;
+        page->vertex=GetDevice()->createBuffer(desc);
+        desc.byteSize=MemoryBufferCapacity(indices);desc.debugName="Retained transaction indices";desc.isVertexBuffer=false;desc.isIndexBuffer=true;desc.format=nvrhi::Format::R32_UINT;
+        desc.initialState=nvrhi::ResourceStates::IndexBuffer|nvrhi::ResourceStates::ShaderResource|nvrhi::ResourceStates::AccelStructBuildInput;
+        page->index=GetDevice()->createBuffer(desc);
+        if(!page->vertex||!page->index)throw std::runtime_error("Virtual transaction buffer preparation failed");
+        size_t slot=0;for(auto buffer:{page->vertex,page->index}){
+            const auto key=std::make_pair(buffer->getDesc().byteSize,slot==1);auto found=memoryBufferRequirements.find(key);
+            if(found==memoryBufferRequirements.end()){
+                RtrDiagnostics::Scope info(RtrDiagnostics::AllocationInfo);
+                if(memoryBufferRequirements.size()>=256)memoryBufferRequirements.erase(memoryBufferRequirements.begin());
+                found=memoryBufferRequirements.emplace(key,GetDevice()->getBufferMemoryRequirements(buffer)).first;
+            }
+            page->allocation[slot++]=requirements.size();requirements.push_back(found->second);
+        }
+        uint64_t vertexOffset=0,indexOffset=0;
+        for(size_t i=first;i<end;++i){auto& mesh=meshes[i];auto& b=static_cast<MemoryMeshBufferGroup&>(*mesh->buffers);
+            const auto bytes=LayoutMemoryMesh(mesh);b.page=page;b.vertexBase=vertexOffset;mesh->indexOffset=uint32_t(indexOffset/sizeof(uint32_t));
+            b.vertexBuffer=page->vertex;b.indexBuffer=page->index;LayoutMemoryMesh(mesh);
+            vertexOffset+=bytes;indexOffset+=b.indexData.size()*sizeof(uint32_t);
+        }
+        pages.push_back(std::move(page));first=end;
+    }
+    for(auto& mesh:meshes){
+        Plan plan;plan.mesh=mesh;auto& b=*mesh->buffers;
+        const auto vertexBytes=LayoutMemoryMesh(mesh),indexBytes=b.indexData.size()*4;
+        const bool shared=bool(static_cast<MemoryMeshBufferGroup&>(b).page);
+        uint64_t bestBytes=UINT64_MAX;
+        for(size_t i=0;!shared&&i<spareMeshBuffers.size();++i){auto& spare=spareMeshBuffers[i];
+            if(!usedBuffers[i]&&spare.vertex->getDesc().byteSize>=vertexBytes&&spare.index->getDesc().byteSize>=indexBytes&&spare.bytes<bestBytes){plan.buffers=i;bestBytes=spare.bytes;}}
+        if(plan.buffers!=SIZE_MAX){auto& spare=spareMeshBuffers[plan.buffers];usedBuffers[plan.buffers]=true;
+            b.vertexBuffer=spare.vertex;b.indexBuffer=spare.index;b.vertexBufferDescriptor=spare.vertexDescriptor;b.indexBufferDescriptor=spare.indexDescriptor;
+        }else if(!shared){
+            nvrhi::BufferDesc desc;desc.byteSize=MemoryBufferCapacity(vertexBytes);desc.debugName="Retained mutable vertices";
+            desc.isVirtual=true;desc.isVertexBuffer=true;desc.canHaveTypedViews=true;desc.canHaveRawViews=true;desc.isAccelStructBuildInput=true;
+            desc.initialState=nvrhi::ResourceStates::VertexBuffer|nvrhi::ResourceStates::ShaderResource|nvrhi::ResourceStates::AccelStructBuildInput;desc.keepInitialState=true;
+            b.vertexBuffer=GetDevice()->createBuffer(desc);
+            desc.byteSize=MemoryBufferCapacity(indexBytes);desc.debugName="Retained mutable indices";desc.isVertexBuffer=false;desc.isIndexBuffer=true;desc.format=nvrhi::Format::R32_UINT;
+            desc.initialState=nvrhi::ResourceStates::IndexBuffer|nvrhi::ResourceStates::ShaderResource|nvrhi::ResourceStates::AccelStructBuildInput;
+            b.indexBuffer=GetDevice()->createBuffer(desc);
+            if(!b.vertexBuffer||!b.indexBuffer)throw std::runtime_error("Virtual mesh buffer preparation failed");
+            size_t slot=0;for(auto buffer:{b.vertexBuffer,b.indexBuffer}){
+                const auto key=std::make_pair(buffer->getDesc().byteSize,slot==1);auto found=memoryBufferRequirements.find(key);
+                if(found==memoryBufferRequirements.end()){
+                    RtrDiagnostics::Scope info(RtrDiagnostics::AllocationInfo,1,0,1,0,RtrDiagnostics::Identity(mesh->name));
+                    auto value=GetDevice()->getBufferMemoryRequirements(buffer);
+                    if(memoryBufferRequirements.size()>=256)memoryBufferRequirements.erase(memoryBufferRequirements.begin());
+                    found=memoryBufferRequirements.emplace(key,value).first;
+                }
+                plan.allocation[slot++]=requirements.size();requirements.push_back(found->second);
+            }
+        }
+        auto desc=MemoryBlasDesc(mesh);
+        for(size_t i=0;i<spareMeshBlases.size();++i)if(!usedBlases[i]&&CompatibleBlas(spareMeshBlases[i].acceleration->getDesc(),desc)){
+            plan.blas=i;usedBlases[i]=true;plan.acceleration=spareMeshBlases[i].acceleration;break;
+        }
+        if(!plan.acceleration){
+            {RtrDiagnostics::Scope prebuild(RtrDiagnostics::ResourcePrebuild,1,mesh->totalIndices/3,1,0,RtrDiagnostics::Identity(mesh->name));plan.acceleration=GetDevice()->createAccelStruct(desc);}
+            if(!plan.acceleration)throw std::runtime_error("Virtual BLAS preparation failed");
+            std::vector<uint64_t> key{uint64_t(desc.buildFlags)};
+            for(auto& geometry:desc.bottomLevelGeometries){auto& t=geometry.geometryData.triangles;
+                key.insert(key.end(),{uint64_t(geometry.geometryType),uint64_t(geometry.flags),uint64_t(t.indexFormat),uint64_t(t.vertexFormat),t.indexCount,t.vertexCount,t.vertexStride});}
+            auto found=memoryBlasRequirements.find(key);
+            if(found==memoryBlasRequirements.end()){
+                RtrDiagnostics::Scope info(RtrDiagnostics::AllocationInfo,1,0,1,0,RtrDiagnostics::Identity(mesh->name));
+                auto value=GetDevice()->getAccelStructMemoryRequirements(plan.acceleration);
+                if(memoryBlasRequirements.size()>=256)memoryBlasRequirements.erase(memoryBlasRequirements.begin());
+                found=memoryBlasRequirements.emplace(std::move(key),value).first;
+            }
+            plan.allocation[2]=requirements.size();requirements.push_back(found->second);
+        }
+        plans.push_back(std::move(plan));
+    }
+    std::vector<RtrResourceArena::Storage> storage;
+    if(!resourceArena.Reserve(requirements,storage)){
+        memoryPreparationPending=true;
+        // Relinquish unused cache ownership through the bounded release worker.
+        // Live/retired readers keep their own leases; admission never destroys them.
+        unsigned budget=8;for(size_t i=spareMeshBuffers.size();i--&&budget;)if(!usedBuffers[i]){auto bytes=spareMeshBuffers[i].bytes;
+            if(!nativeLighting.reclaimer->Enqueue(spareMeshBuffers[i],bytes))break;
+            spareMeshBuffers.erase(spareMeshBuffers.begin()+i);spareMeshBufferBytes-=bytes;--budget;if(RtrDiagnostics::level.load())++arenaWork[5];}
+        budget=8;for(size_t i=spareMeshBlases.size();i--&&budget;)if(!usedBlases[i]){auto bytes=spareMeshBlases[i].bytes;
+            if(!nativeLighting.reclaimer->Enqueue(spareMeshBlases[i],bytes))break;
+            spareMeshBlases.erase(spareMeshBlases.begin()+i);spareMeshBlasBytes-=bytes;--budget;if(RtrDiagnostics::level.load())++arenaWork[5];}
+        throw RtrResourcePending();
+    }
+    memoryPreparationPending=false;
+    // No resident graph, pool membership, or GPU command has changed above.
+    // Bind all new placed resources before transferring any pool ownership.
+    for(auto& page:pages){
+        page->vertexStorage=storage[page->allocation[0]];page->indexStorage=storage[page->allocation[1]];
+        {RtrDiagnostics::Scope bind(RtrDiagnostics::PlacedBind,2);
+            if(!GetDevice()->bindBufferMemory(page->vertex,page->vertexStorage->Heap(),page->vertexStorage->Offset())
+                ||!GetDevice()->bindBufferMemory(page->index,page->indexStorage->Heap(),page->indexStorage->Offset()))throw std::runtime_error("Placed transaction buffer binding failed");}
+        RtrDiagnostics::Scope descriptors(RtrDiagnostics::DescriptorAllocate,2);
+        page->vertexDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,page->vertex)));
+        page->indexDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,page->index)));
+        if(RtrDiagnostics::level.load())arenaWork[4]+=page->vertex->getDesc().byteSize+page->index->getDesc().byteSize;
+    }
+    for(auto& plan:plans){auto& b=*plan.mesh->buffers;
+        auto page=static_cast<MemoryMeshBufferGroup&>(b).page;
+        if(RtrDiagnostics::level.load()){
+            arenaWork[1]+=plan.buffers!=SIZE_MAX;arenaWork[2]+=plan.blas!=SIZE_MAX;
+            arenaWork[3]+=LayoutMemoryMesh(plan.mesh)+b.indexData.size()*4;
+            if(!page)arenaWork[4]+=b.vertexBuffer->getDesc().byteSize+b.indexBuffer->getDesc().byteSize;
+        }
+        if(page){b.vertexBufferDescriptor=page->vertexDescriptor;b.indexBufferDescriptor=page->indexDescriptor;}
+        else if(plan.buffers==SIZE_MAX){
+            RtrDiagnostics::Scope bind(RtrDiagnostics::PlacedBind,2,0,1,0,RtrDiagnostics::Identity(plan.mesh->name));
+            auto& vertex=storage[plan.allocation[0]];auto& index=storage[plan.allocation[1]];
+            if(!GetDevice()->bindBufferMemory(b.vertexBuffer,vertex->Heap(),vertex->Offset())||!GetDevice()->bindBufferMemory(b.indexBuffer,index->Heap(),index->Offset()))throw std::runtime_error("Placed mesh buffer binding failed");
+            RtrDiagnostics::Scope descriptors(RtrDiagnostics::DescriptorAllocate,2,0,1,0,RtrDiagnostics::Identity(plan.mesh->name));
+            b.vertexBufferDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,b.vertexBuffer)));
+            b.indexBufferDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,b.indexBuffer)));
+        }
+        if(plan.blas==SIZE_MAX){auto& lease=storage[plan.allocation[2]];
+            RtrDiagnostics::Scope bind(RtrDiagnostics::PlacedBind,1,0,1,0,RtrDiagnostics::Identity(plan.mesh->name));
+            if(!GetDevice()->bindAccelStructMemory(plan.acceleration,lease->Heap(),lease->Offset()))throw std::runtime_error("Placed BLAS binding failed");}
+    }
+    for(auto& plan:plans){auto& b=*plan.mesh->buffers;
+        if(!static_cast<MemoryMeshBufferGroup&>(b).page){
+            auto vertex=plan.buffers==SIZE_MAX?storage[plan.allocation[0]]:spareMeshBuffers[plan.buffers].vertexStorage;
+            auto index=plan.buffers==SIZE_MAX?storage[plan.allocation[1]]:spareMeshBuffers[plan.buffers].indexStorage;
+            resourceBufferAllocations.insert_or_assign(b.vertexBuffer.Get(),vertex);resourceBufferAllocations.insert_or_assign(b.indexBuffer.Get(),index);
+        }
+        auto lease=plan.blas==SIZE_MAX?storage[plan.allocation[2]]:spareMeshBlases[plan.blas].storage;
+        auto bytes=plan.blas==SIZE_MAX?lease->Capacity():spareMeshBlases[plan.blas].bytes;
+        resourceBlasAllocationBytes.insert_or_assign(plan.acceleration.Get(),BlasAllocation{bytes,lease});preparedMeshBlases.insert_or_assign(plan.mesh->name,plan.acceleration);
+    }
+    for(size_t i=usedBuffers.size();i--;)if(usedBuffers[i]){spareMeshBufferBytes-=spareMeshBuffers[i].bytes;spareMeshBuffers.erase(spareMeshBuffers.begin()+i);}
+    for(size_t i=usedBlases.size();i--;)if(usedBlases[i]){spareMeshBlasBytes-=spareMeshBlases[i].bytes;spareMeshBlases.erase(spareMeshBlases.begin()+i);}
+}
+void UploadMemoryMesh(const ResidentMesh& mesh,nvrhi::ICommandList* command){
+    static_cast<MeshInfoEx*>(mesh.get())->HostIndices=std::make_shared<const std::vector<uint32_t>>(mesh->buffers->indexData);
+    static_cast<MeshInfoEx*>(mesh.get())->HostDynamicCoverage=true;
+    using donut::engine::VertexAttribute;auto& b=*mesh->buffers;
+    const auto vertexBytes=LayoutMemoryMesh(mesh),indexBytes=b.indexData.size()*4;
     // Owner-thread staging capacity is reused across meshes and transactions.
     // writeBuffer copies into the command list's own retained upload chunks.
     RtrDiagnostics::Scope packScope(RtrDiagnostics::PayloadPack,b.positionData.size(),0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes);
     std::vector<uint8_t> oversized;
     auto& packed=vertexBytes<=64*1024*1024?meshUploadScratch:oversized;packed.resize(vertexBytes);
-    auto pack=[&](VertexAttribute attribute,const auto& data){std::memcpy(packed.data()+b.getVertexBufferRange(attribute).byteOffset,data.data(),data.size()*sizeof(data[0]));};
+    auto& memory=static_cast<MemoryMeshBufferGroup&>(b);
+    auto pack=[&](VertexAttribute attribute,const auto& data){if(!data.empty())std::memcpy(packed.data()+b.getVertexBufferRange(attribute).byteOffset-memory.vertexBase,data.data(),data.size()*sizeof(data[0]));};
     pack(VertexAttribute::Position,b.positionData);pack(VertexAttribute::Normal,b.normalData);pack(VertexAttribute::Tangent,b.tangentData);pack(VertexAttribute::TexCoord1,b.texcoord1Data);
-    {RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,2,0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes+indexBytes);
+    if(auto& page=memory.page;page){
+        if(page->vertexUpload.empty()){page->vertexUpload.resize(page->vertexBytes);page->indexUpload.resize(page->indexBytes);}
+        std::memcpy(page->vertexUpload.data()+memory.vertexBase,packed.data(),vertexBytes);
+        std::memcpy(page->indexUpload.data()+size_t(mesh->indexOffset)*4,b.indexData.data(),indexBytes);
+        if(--page->remaining==0){
+            RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,2,0,1,0,0,RtrDiagnostics::revision.load(),0,page->vertexBytes+page->indexBytes);
+            command->writeBuffer(page->vertex,page->vertexUpload.data(),page->vertexUpload.size());
+            command->writeBuffer(page->index,page->indexUpload.data(),page->indexUpload.size());
+            std::vector<uint8_t>().swap(page->vertexUpload);std::vector<uint8_t>().swap(page->indexUpload);
+        }
+    }else{RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,2,0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes+indexBytes);
         command->writeBuffer(b.vertexBuffer,packed.data(),packed.size());command->writeBuffer(b.indexBuffer,b.indexData.data(),indexBytes);}
     std::vector<float3>().swap(b.positionData);std::vector<float2>().swap(b.texcoord1Data);
     std::vector<uint32_t>().swap(b.normalData);std::vector<uint32_t>().swap(b.tangentData);std::vector<uint32_t>().swap(b.indexData);
@@ -72,6 +270,13 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
         std::unordered_map<std::string,donut::engine::SceneGraphNode*>& nodes){
     if(!managedLighting||!m_scene||revision<resourceRevision)throw std::invalid_argument("Invalid resource transaction revision");
     if(resourceRetirement.size()>=16)throw std::runtime_error("Resource generation ring is full; retry after GPU completion");
+    const auto sequence=RtrDiagnostics::frame.load();
+    if(memoryPreparationRevision!=revision||memoryPreparationSequence!=sequence){
+        // A cancelled transaction must not prevent a later delete-only request
+        // from freeing the capacity that the earlier request was waiting for.
+        memoryPreparationPending=false;memoryPreparationRevision=revision;memoryPreparationSequence=sequence;
+    }
+    if(memoryPreparationPending&&!resourceArena.PreparationReady())throw RtrResourcePending();
     RtrDiagnostics::Scope stagingScope(RtrDiagnostics::ResourceStaging);
     std::optional<RtrDiagnostics::Scope> part;part.emplace(RtrDiagnostics::Import);
     RtrResourceReader r(bytes,size);if(r.value<uint32_t>()!=0x52445254)throw std::invalid_argument("Unknown resource transport");
@@ -127,13 +332,12 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
         if((i&63)==63&&RtrHostResources::eventPump)RtrHostResources::eventPump();
         auto mesh=std::make_shared<MeshInfoEx>();mesh->name=r.text();auto p=r.floats(),normal=r.floats(),tangent=r.floats(),uv=r.floats();
         if(p.empty()||p.size()%3||normal.size()!=p.size()||(!tangent.empty()&&tangent.size()!=p.size()/3*4)||(!uv.empty()&&uv.size()!=p.size()/3*2))throw std::invalid_argument("Invalid mesh attributes");
-        const size_t vertices=p.size()/3;mesh->buffers=std::make_shared<donut::engine::BufferGroup>();auto& b=*mesh->buffers;
+        const size_t vertices=p.size()/3;mesh->buffers=std::make_shared<MemoryMeshBufferGroup>();auto& b=*mesh->buffers;
         b.positionData.resize(vertices);std::memcpy(b.positionData.data(),p.data(),p.size()*4);
-        b.normalData.resize(vertices);b.texcoord1Data.resize(vertices);b.tangentData.resize(vertices);
+        b.normalData.resize(vertices);b.texcoord1Data.resize(vertices);
         for(size_t v=0;v<vertices;v++){
             b.normalData[v]=donut::math::vectorToSnorm8(float3(normal[v*3],normal[v*3+1],normal[v*3+2]));
             if(!uv.empty())b.texcoord1Data[v]=float2(uv[v*2],uv[v*2+1]);
-            if(!tangent.empty())b.tangentData[v]=donut::math::vectorToSnorm8(float4(tangent[v*4],tangent[v*4+1],tangent[v*4+2],tangent[v*4+3]));
             mesh->objectSpaceBounds|=b.positionData[v];
         }
         auto groups=r.count();if(!groups)throw std::invalid_argument("Mesh requires geometry groups");
@@ -146,7 +350,14 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
             for(uint32_t k=0;k<geometry->numIndices;k++){auto index=r.value<uint32_t>();if(index>=vertices)throw std::invalid_argument("Triangle index exceeds vertices");b.indexData.push_back(index);}
             mesh->geometries.push_back(geometry);
         }
-        if(tangent.empty()){
+        bool needsTangent=false;
+        for(auto& geometry:mesh->geometries){
+            auto input=std::find_if(materialInputs.begin(),materialInputs.end(),[&](const auto& value){return value.material->name==geometry->material->name;});
+            needsTangent|=input!=materialInputs.end()?input->textures[1]>=0:bool(geometry->material->normalTexture);
+        }
+        if(needsTangent)b.tangentData.resize(vertices);
+        if(needsTangent&&!tangent.empty())for(size_t v=0;v<vertices;v++)b.tangentData[v]=donut::math::vectorToSnorm8(float4(tangent[v*4],tangent[v*4+1],tangent[v*4+2],tangent[v*4+3]));
+        if(needsTangent&&tangent.empty()){
             std::vector<float3> tangents(vertices),bitangents(vertices);
             for(size_t k=0;k<b.indexData.size();k+=3){auto a=b.indexData[k],c=b.indexData[k+1],d=b.indexData[k+2];
                 auto e1=b.positionData[c]-b.positionData[a],e2=b.positionData[d]-b.positionData[a];auto u1=b.texcoord1Data[c]-b.texcoord1Data[a],u2=b.texcoord1Data[d]-b.texcoord1Data[a];
@@ -157,7 +368,7 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
                 if(l>0)t/=l;else{auto axis=std::abs(normalValue.x)<.9f?float3(1,0,0):float3(0,1,0);auto fallback=cross(normalValue,axis);float magnitude=length(fallback);t=magnitude>0?fallback/magnitude:float3(1,0,0);}
                 float sign=dot(cross(normalValue,t),bitangents[v])<0?-1.f:1.f;b.tangentData[v]=donut::math::vectorToSnorm8(float4(t,sign));}
         }
-        mesh->totalVertices=uint32_t(vertices);mesh->totalIndices=uint32_t(b.indexData.size());if(RtrDiagnostics::level.load()!=0)dynamicWork[14]+=vertices*28+b.indexData.size()*4;newMeshes.push_back(mesh);
+        mesh->totalVertices=uint32_t(vertices);mesh->totalIndices=uint32_t(b.indexData.size());newMeshes.push_back(mesh);
     }
     Json::Value json;json["removeNodes"]=Json::Value(Json::arrayValue);json["nodes"]=Json::Value(Json::arrayValue);json["coverageChangedMaterials"]=Json::Value(Json::arrayValue);
     n=r.count();for(uint32_t i=0;i<n;i++)json["removeNodes"].append(r.text());
@@ -179,7 +390,7 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
             if(same&&prior->HostRefitFrames>=16)reason|=RtrDiagnostics::RefitRefresh;
         }
         resourceChangeReasons.emplace(mesh->name,reason);
-        uint64_t payload=uint64_t(mesh->totalVertices)*28+uint64_t(mesh->totalIndices)*4;
+        uint64_t payload=uint64_t(mesh->totalVertices)*24+mesh->buffers->tangentData.size()*4+uint64_t(mesh->totalIndices)*4;
         plannedBytes+=payload;plannedTriangles+=mesh->totalIndices/3;
         RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,mesh->totalIndices/3,1,0,RtrDiagnostics::Identity(mesh->name),revision,reason,payload);
     }
@@ -191,8 +402,28 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
     for(auto& m:imported.materials){RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,0,1,0,RtrDiagnostics::Identity(m->name),revision,RtrDiagnostics::Material|(coverageMaterials.count(m->name)?RtrDiagnostics::Coverage:0));}
     {RtrDiagnostics::Scope budget(RtrDiagnostics::ResourcePlan,newMeshes.size(),plannedTriangles,1,0,0,revision,0,plannedBytes);}
     // All references and byte ranges are validated before staging or graph mutation.
+    PrepareMemoryAllocations(newMeshes);
+    if(RtrDiagnostics::level.load())for(auto& mesh:newMeshes)dynamicWork[14]+=uint64_t(mesh->totalVertices)*24+mesh->buffers->tangentData.size()*4+uint64_t(mesh->totalIndices)*4;
     part.reset();part.emplace(RtrDiagnostics::Upload);
     auto command=ResourceCommand();command->open();
+    if(!newMeshes.empty()){
+        // Every lease is obtained after all readers of its previous owner have
+        // retired. Activate placed-resource aliases before their first use.
+        command->commitBarriers();
+        auto* list=static_cast<ID3D12GraphicsCommandList*>(command->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
+        if(GetDevice()->queryFeatureSupport(nvrhi::Feature::EnhancedBarriers)){
+            // Enhanced buffers have no legacy alias activation state. Order
+            // memory reuse with their native global barrier model instead.
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList7> enhanced;
+            if(FAILED(list->QueryInterface(IID_PPV_ARGS(&enhanced))))throw std::runtime_error("Enhanced resource alias barrier unavailable");
+            D3D12_GLOBAL_BARRIER alias{};alias.SyncBefore=D3D12_BARRIER_SYNC_ALL;alias.SyncAfter=D3D12_BARRIER_SYNC_ALL;
+            alias.AccessBefore=D3D12_BARRIER_ACCESS_COMMON;alias.AccessAfter=D3D12_BARRIER_ACCESS_COMMON;
+            D3D12_BARRIER_GROUP group{};group.Type=D3D12_BARRIER_TYPE_GLOBAL;group.NumBarriers=1;group.pGlobalBarriers=&alias;
+            enhanced->Barrier(1,&group);
+        }else{
+            D3D12_RESOURCE_BARRIER alias{};alias.Type=D3D12_RESOURCE_BARRIER_TYPE_ALIASING;list->ResourceBarrier(1,&alias);
+        }
+    }
     size_t uploadedMeshes=0;for(auto& mesh:newMeshes){
         auto* extended=static_cast<MeshInfoEx*>(mesh.get());
         for(auto& geometry:mesh->geometries)extended->HostCoverageCandidates|=coverageMaterials.count(geometry->material->name)!=0||geometry->material->domain!=donut::engine::MaterialDomain::Opaque||geometry->material->opacity<1;

@@ -67,6 +67,13 @@ Add-Source 'docs/consumer-agent-handoff.md' 'docs/consumer-agent-handoff.md'
 Add-Source 'docs/release-local-scene-preparation.md' 'docs/release-local-scene-preparation.md'
 Add-Source 'docs/release-dynamic-resources.md' 'docs/release-dynamic-resources.md'
 Add-Source 'docs/release-high-framerate-resources.md' 'docs/release-high-framerate-resources.md'
+Add-Source 'docs/release-resource-architecture.md' 'docs/release-resource-architecture.md'
+Add-Source 'docs/quality/7.1.6-implementation.md' 'docs/quality/7.1.6-implementation.md'
+Add-Source 'docs/quality/data/resource-architecture-716.json' 'docs/quality/data/resource-architecture-716.json'
+foreach($name in @('transaction-buffer-pages.md','independent-blas-batching.md','resource-pipeline-overlap.md',
+    'data/independent-blas-batching.json','data/resource-pipeline-overlap.json')){
+    Add-Source "docs/quality/$name" "docs/quality/$name"
+}
 foreach($name in @('release-resource-latency.md','quality/resource-latency-review.md','quality/resource-latency.md','quality/data/resource-latency.json','quality/data/resource-latency-baseline.json','quality/data/resource-latency-retained.json','quality/data/resource-latency-failures.json',
     'quality/correctness-criteria.md','quality/optimization-closeout.md','quality/optimization-experiments.md','quality/data/optimization-closeout.json','quality/data/optimization-experiments.json','quality/data/tail-latency-review.json','quality/resource-latency-historical.md','quality/data/resource-latency-historical.json','quality/data/resource-latency-release-historical.json')){
     Add-Source "docs/$name" "docs/$name"

@@ -27,6 +27,7 @@ public final class RtxptHostSurfaceNativeSelfTest {
                 glfwWindowHint(GLFW_OPENGL_PROFILE,GLFW_OPENGL_CORE_PROFILE);window=glfwCreateWindow(96,64,"Hidden host surface acceptance",0,0);
                 require(window!=0,"Create GL input context");glfwMakeContextCurrent(window);GL.createCapabilities();
                 try(var renderer=(RtxptRenderer)RtxptRenderers.openHostSurface(configuration(route),new HostSurfacePlan(96,64).withOutputSignals(HostSurfacePlan.ALL_SIGNALS));var writer=new GlHostSurfaceWriter()){
+                    renderer.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
                     renderer.hostSurfaceWorkStatisticsEnabled(true);
                     renderer.apply(SceneTransaction.builder(1).resetScene().upsert(MaterialAsset.builder(1).roughness(.8f).build())
                         .upsert(RtxptFramePreparationNativeSelfTest.card(1)).upsert(SceneInstance.builder(1,1).build())

@@ -63,6 +63,15 @@ final class RtxptDelta {
             if(!prior.contains(item))meshItems.putIfAbsent(RtxptScene.meshName(item),item);
         }
         for(long mesh:changedGeometry)for(var item:current.variants(mesh))meshItems.putIfAbsent(RtxptScene.meshName(item),item);
+        // Native memory meshes omit unused tangent storage. A later normal-map
+        // enable prepares only this material's immutable mesh variants before
+        // publishing the material; no CPU copy of every imported mesh is kept.
+        for(long id:changedMaterials){
+            var material=scene.materials.get(id);var before=old.materials.get(id);
+            if(material==null||material.normalTextureId()<0||(before!=null&&before.normalTextureId()>=0))continue;
+            for(long mesh:scene.meshesUsingMaterial(id)){current.dependencies++;
+                for(var item:current.variants(mesh))meshItems.putIfAbsent(RtxptScene.meshName(item),item);}
+        }
         // Geometry replacement must reattach exactly its users, including frame primitives.
         for(var item:meshItems.values()){
             for(long id:scene.instancesUsingMesh(item.mesh())){current.dependencies++;var user=scene.item(id);if(RtxptScene.meshName(user).equals(RtxptScene.meshName(item)))updates.put(user.name(),user);}

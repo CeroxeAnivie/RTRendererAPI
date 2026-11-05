@@ -561,7 +561,7 @@ tasks.register("rtxptResourceLatencyClasspath") {
     dependsOn(tasks.testClasses, configurations.testRuntimeClasspath)
     doLast { rootProject.file("build/resource-latency-classpath.txt").writeText(sourceSets.test.get().runtimeClasspath.asPath,Charsets.UTF_8) }
 }
-listOf("RtxptResourceLatencyMatrixNativeSelfTest", "RtxptResourceLifecycleNativeSelfTest").forEach { name ->
+listOf("RtxptResourceLatencyMatrixNativeSelfTest", "RtxptResourceLifecycleNativeSelfTest", "RtxptResourceArenaNativeSelfTest").forEach { name ->
     tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
         group = "verification"; dependsOn(tasks.testClasses)
         classpath = sourceSets.test.get().runtimeClasspath
