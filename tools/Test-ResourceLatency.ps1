@@ -30,6 +30,10 @@ $cmake=(Get-ChildItem -Path (Join-Path $repo 'build/native-build-tools/cmake-*/b
 $java=(Get-Command java.exe -CommandType Application|Select-Object -First 1).Source
 $python=(Get-Command python.exe -CommandType Application|Select-Object -First 1).Source
 function Quote([string]$v){"'"+$v.Replace("'","''")+"'"}
+function Batch-Quote([string]$v){
+    if($v.Contains('"') -or $v.Contains("`r") -or $v.Contains("`n")){throw 'Stage arguments require literal, single-line Windows arguments'}
+    '"'+$v.Replace('%','%%')+'"'
+}
 function Digest([string[]]$paths,[string[]]$arguments){
     $inventory=[Collections.Generic.List[string]]::new();foreach($a in $arguments){$inventory.Add($a)}
     foreach($p in ($paths|Sort-Object -Unique)){if(Test-Path -LiteralPath $p -PathType Leaf){$inventory.Add($p+'='+(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash)}}
@@ -42,13 +46,17 @@ function Run([string]$name,[string]$executable,[string[]]$arguments,[string[]]$i
         if($receipts[$name].passed){Write-Output "Retained pass: $name";return}
         if([string]::IsNullOrWhiteSpace($RetryReason)){throw "This exact failed input is already recorded: $name. Fix the cause or record a changed environment with RetryReason before repeating it."}
     }
-    $log=Join-Path $output "$name.log";$driver=Join-Path $output 'run-stage.ps1'
+    $log=Join-Path $output "$name.log";$driver=Join-Path $output 'run-stage.ps1';$batch=Join-Path $output 'run-stage.cmd'
     if($receipts[$name] -and -not $receipts[$name].passed -and (Test-Path -LiteralPath $log)){
         $stamp=([DateTime]$receipts[$name].utc).ToUniversalTime().ToString('yyyyMMddTHHmmss')
         Copy-Item -LiteralPath $log -Destination (Join-Path $output ($name+'-failed-'+$receipts[$name].identity.Substring(0,12).ToLowerInvariant()+'-'+$stamp+'.log'))
         $receipts[$name]|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $output ($name+'-failed-'+$stamp+'.json')) -Encoding utf8
     }
-    $command='& '+(Quote $executable)+' @('+ (($arguments|ForEach-Object {Quote $_}) -join ',') +') *> '+(Quote $log)
+    # Redirect native handles to the log itself. A runtime helper inheriting an
+    # anonymous PowerShell output pipe must not delay an already-exited JVM.
+    $native=(Batch-Quote $executable)+' '+(($arguments|ForEach-Object {Batch-Quote $_}) -join ' ')+' > '+(Batch-Quote $log)+' 2>&1'
+    [IO.File]::WriteAllText($batch,"@echo off`r`nchcp 65001 >nul`r`n"+$native+"`r`nexit /b %errorlevel%`r`n",[Text.UTF8Encoding]::new($false))
+    $command='& $env:ComSpec /d /v:off /c '+(Quote $batch)
     [IO.File]::WriteAllText($driver,('$ErrorActionPreference=''Stop'''+[Environment]::NewLine+'[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding'+[Environment]::NewLine+'try {'+[Environment]::NewLine+$command+[Environment]::NewLine+'exit $LASTEXITCODE'+[Environment]::NewLine+'} catch { $_ | Out-String | Set-Content -LiteralPath '+(Quote $log)+' -Encoding utf8; exit 1 }'),[Text.UTF8Encoding]::new($false))
     Write-Output "Running $name"
     $timeout=if($name -like '*-build'){0}else{$StageTimeoutSeconds}
@@ -109,7 +117,7 @@ if($Phase -in @('All','Correctness')){
     if(-not $CorrectnessCases -or 'java-diagnostics' -in $CorrectnessCases){
     Run 'java-diagnostics' $java ($common+@('top.ceroxe.rt.renderer.rtxpt.RtxptDiagnosticsSelfTest',$fixture)) ($classInputs+@($fixture))
     }
-    foreach($case in @('RtxptHighFramerateResourcesSelfTest','RtxptLightingInstrumentationNativeSelfTest','RtxptSparseQueryOrderingNativeSelfTest','RtxptNativeLightingReconstructionNativeSelfTest','RtxptHostAugmentationNativeSelfTest','RtxptHighFramerateCompositionNativeSelfTest','RtxptResourceLifecycleNativeSelfTest','RtxptNativeLightingGlSelfTest','RtxptResourceRemovalNativeSelfTest','RtxptAttributeTopologyNativeSelfTest','RtxptTopologyPreparationNativeSelfTest','RtxptResourceArenaNativeSelfTest')){
+    foreach($case in @('RtxptHighFramerateResourcesSelfTest','RtxptLightingInstrumentationNativeSelfTest','RtxptSparseQueryOrderingNativeSelfTest','RtxptNativeLightingReconstructionNativeSelfTest','RtxptHostAugmentationNativeSelfTest','RtxptHighFramerateCompositionNativeSelfTest','RtxptResourceLifecycleNativeSelfTest','RtxptNativeLightingGlSelfTest','RtxptResourceRemovalNativeSelfTest','RtxptAttributeTopologyNativeSelfTest','RtxptTopologyPreparationNativeSelfTest','RtxptResourceArenaNativeSelfTest','RtxptTlasCapacityNativeSelfTest')){
         if($CorrectnessCases -and $case -notin $CorrectnessCases){continue}
         Run $case $java ($common+@("top.ceroxe.rt.renderer.rtxpt.$case")) ($binaryInputs+$classInputs)
     }

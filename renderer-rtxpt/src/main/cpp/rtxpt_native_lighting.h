@@ -399,6 +399,8 @@ public:
         RtrDiagnostics::Scope indexScope(RtrDiagnostics::ResourceIndex,changes.instances.size()+changes.meshes.size());
         EnsureAttributeBuffer(device,command,instances,std::max<size_t>(1,graph->GetMeshInstances().size())*sizeof(InstanceAttributes),sizeof(InstanceAttributes),"Native receiver roles");
         EnsureAttributeBuffer(device,command,geometryBaselines,std::max<size_t>(1,graph->GetGeometryCount())*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
+        instanceUploadScratch.resize(graph->GetMeshInstances().size());instanceUploadIndices.clear();
+        geometryUploadScratch.resize(graph->GetGeometryCount());geometryUploadIndices.clear();
         std::unordered_set<std::string> replacementInstances;
         std::unordered_map<std::string,size_t> replacementMeshes;
         for(auto& [identity,instance]:changes.instances)replacementInstances.insert(instance->GetNode()->GetName());
@@ -427,12 +429,14 @@ public:
                 found=geometrySlots.insert_or_assign(key,GeometryAttributes{AllocateAttributeRange(geometry->numIndices),geometry->numIndices/3}).first;upload.insert(key);
             }
             auto [mapping,inserted]=geometryIndices.insert_or_assign(key,GeometryIndex{index,geometryIndexEpoch,&found->second});
-            command->writeBuffer(geometryBaselines,&found->second,sizeof(GeometryAttributes),size_t(index)*sizeof(GeometryAttributes));attributeWork[3]+=sizeof(GeometryAttributes);
+            geometryUploadScratch[index]=found->second;geometryUploadIndices.push_back(index);attributeWork[3]+=sizeof(GeometryAttributes);
         }
         for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found==instanceSlots.end())continue;
             auto attribute=instanceAttributes.find(name);InstanceAttributes value=attribute==instanceAttributes.end()?InstanceAttributes{}:attribute->second;
-            command->writeBuffer(instances,&value,sizeof(value),size_t(found->second)*sizeof(value));TrackInstanceRole(name,value);++attributeWork[2];attributeWork[3]+=sizeof(value);
+            instanceUploadScratch[found->second]=value;instanceUploadIndices.push_back(found->second);TrackInstanceRole(name,value);++attributeWork[2];attributeWork[3]+=sizeof(value);
         }
+        UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
+        UploadAttributeRuns(command,instances,instanceUploadScratch,instanceUploadIndices);
         specialRoleCount=specialInstances.size();
         EnsureAttributeBuffer(device,command,baselineCoordinates,attributeEnd*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
         for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;

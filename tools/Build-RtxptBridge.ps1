@@ -35,6 +35,12 @@ if($CheckPaths){
 }
 $utf8=[Text.UTF8Encoding]::new($false)
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/rtxpt_scene_delta.h'),(Join-Path $sdk 'External/Donut/include/donut/engine/rtxpt_scene_delta.h'),$true)
+$tlasCapacityPatch=Join-Path $PSScriptRoot 'patches/rtxpt-tlas-capacity.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $tlasCapacityPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $tlasCapacityPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT TLAS capacity overlay could not be removed'}
+}
 $metadataDeltaPatch=Join-Path $PSScriptRoot 'patches/rtxpt-metadata-delta.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $metadataDeltaPatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -1662,6 +1668,11 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT masked-alpha correction failed'}
 if($LASTEXITCODE -ne 0){throw 'RTXPT metadata-delta overlay does not match its pinned base'}
 & git -C $sdk apply --ignore-space-change $metadataDeltaPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT metadata-delta overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $tlasCapacityPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT TLAS capacity overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $tlasCapacityPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT TLAS capacity overlay could not be applied'}
+
 Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-device.cpp' "    void Device::runGarbageCollection()`r`n    {" @'
     void Device::runGarbageCollection()
     {
@@ -1705,7 +1716,7 @@ if($StreamlineSdk){
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $cmake `
-    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','rtxpt_memory_diagnostics_selftest','rtxpt_task_batch_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
+    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','rtxpt_memory_diagnostics_selftest','rtxpt_task_batch_selftest','rtxpt_capacity_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
     -WorkingDirectory $sdk -MemoryLimitGB $MemoryLimitGB
 if($LASTEXITCODE -ne 0){throw 'RTXPT JNI bridge build failed'}
 if(!$SkipSelfTests){
@@ -1718,6 +1729,8 @@ if($LASTEXITCODE -ne 0){throw 'Disabled memory diagnostics self-test failed'}
 & (Join-Path $sdk 'bin/rtxpt_memory_diagnostics_selftest.exe') enabled
 if($LASTEXITCODE -ne 0){throw 'Enabled memory diagnostics self-test failed'}
 }
+& (Join-Path $sdk 'bin/rtxpt_capacity_selftest.exe')
+if($LASTEXITCODE -ne 0){throw 'Resource capacity self-test failed'}
 # Runtime redistribution keeps the exact upstream notices alongside the native payload.
 $licenses=Join-Path $sdk 'bin/ThirdPartyLicenses'
 New-Item -ItemType Directory -Path $licenses -Force | Out-Null

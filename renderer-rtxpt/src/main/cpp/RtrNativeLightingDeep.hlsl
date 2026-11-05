@@ -26,4 +26,5 @@ void main(uint2 pixel:SV_DispatchThreadID)
             u_Indirect[pixel]=float4(gi,coverage);
         }
     }
+    RtrFlushWork();
 }

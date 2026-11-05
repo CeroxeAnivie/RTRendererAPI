@@ -8,6 +8,11 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Both compile-time counter modes produce identical lighting, including all selector variants. */
 public final class RtxptLightingInstrumentationNativeSelfTest {
+    static final List<Object> counterRecords=new ArrayList<>();
+    static void record(String label,NativeLightingControl.WorkStatistics counts){
+        counterRecords.add(RtxptJson.object("case",label,"primary",counts.primaryRays(),"receivers",counts.receivers(),
+            "shadow",counts.shadowRays(),"bounce",counts.bounceRays(),"nodes",counts.sourceNodes(),"candidates",counts.sourceCandidates()));
+    }
     static void verifySourceTraversal()throws Exception{
         long sequence=0,revision=0;var current=new LinkedHashMap<Long,SparseLightSource>();
         try(var r=new RtxptRenderer(RtxptLightTreeNativeSelfTest.config(4),true)){
@@ -44,6 +49,7 @@ public final class RtxptLightingInstrumentationNativeSelfTest {
                 for(int signal=0;signal<3;signal++)require(Arrays.equals(reference.get(signal),capture(r,"unseeded-"+phase+"-"+signal,signal)),
                     "Current-source GI matches independent unseeded traversal phase="+phase+" samples="+samples+" signal="+signal);
                 packet(r,s,revision,FrameClock.of(0,0));var counts=r.lightingWorkStatistics();
+                record("source-phase-"+phase,counts);
                 require(counts.primaryRays()==W*H&&counts.bounceRays()==counts.receivers()*samples,"Counters preserve divergent GI sample counts");
             }
             for(int mode=0;mode<2;mode++){
@@ -58,6 +64,7 @@ public final class RtxptLightingInstrumentationNativeSelfTest {
                 r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);r.lightingWorkStatisticsEnabled(true);
                 long s=sequence++;r.submit(frame(s,revision));capture(r,"exact-traversal-counts-"+mode,0);packet(r,s,revision,FrameClock.of(0,0));
                 var counts=r.lightingWorkStatistics();
+                record("exhaustive-"+mode,counts);
                 require(counts.receivers()>0&&counts.sourceNodes()==counts.receivers()*(2*lights-1)&&counts.sourceCandidates()==counts.receivers()*lights,
                     "Exact node and candidate counters for an exhaustive supported tree mode="+mode+" counts="+counts);
                 require(counts.shadowRays()==0&&counts.bounceRays()==0,"No fabricated shadow or bounce counts");
@@ -87,6 +94,7 @@ public final class RtxptLightingInstrumentationNativeSelfTest {
                 r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);r.lightingWorkStatisticsEnabled(true);s=sequence++;r.submit(frame(s,revision));
                 for(int signal=0;signal<3;signal++)require(Arrays.equals(reference.get(signal),capture(r,"counter-on-"+variant+"-"+signal,signal)),"Counter shader equivalence variant="+variant+" signal="+signal);
                 packet(r,s,revision,FrameClock.of(0,0));var counts=r.lightingWorkStatistics();
+                record("selector-"+variant,counts);
                 require(counts.primaryRays()==W*H,"Wave counters preserve every primary lane");
                 require(counts.receivers()>0&&counts.receivers()<=W*H,"Receiver counters include exactly the hit lanes");
                 require(counts.bounceRays()==counts.receivers()*2,"Wave counters preserve every divergent bounce lane");
@@ -98,5 +106,6 @@ public final class RtxptLightingInstrumentationNativeSelfTest {
             System.out.println("LIGHTING_INSTRUMENTATION PASS variants=10 signals=3 bitExact=true actualCounters=true pairGroups=true unifiedOff=true");
         }
         verifySourceTraversal();
+        Files.writeString(OUT.resolve("lighting-instrumentation-counts.json"),RtxptJson.encode(counterRecords));
     }
 }

@@ -2,7 +2,7 @@
 
 本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
 
-当前交付版本为 **7.1.6**，按P01～P09完成功能修复、全量源码及四模块Maven Local交付。入口为[本版说明](release-resource-architecture.md)与[实施记录](quality/7.1.6-implementation.md)。性能优化已停止；4 ms及完整CPU预算未全部达标，ce9最终矩阵36/36、mixed补充1格及独立JVM生命周期5次已完成；旧e2f的26格不转签。见[完整矩阵](quality/resource-architecture-matrix.md)。D3D验证层不可用的限制保留。Maven制品身份见 `quality/data/resource-architecture-716-release.json`。历史N01～N09及7.1.5结果保持原身份，不能用通用夹具代签MC 180FPS。
+本页保留 **7.1.6** 的历史交付记录；当前7.1.7范围见[本版说明](release-7.1.7.md)。7.1.6按P01～P09完成功能修复、全量源码及四模块Maven Local交付，入口为[历史说明](release-resource-architecture.md)与[实施记录](quality/7.1.6-implementation.md)。4 ms及完整CPU预算未全部达标，ce9最终矩阵36/36、mixed补充1格及独立JVM生命周期5次已完成；旧e2f的26格不转签。见[完整矩阵](quality/resource-architecture-matrix.md)。D3D验证层不可用的限制保留。旧Maven制品身份见 `quality/data/resource-architecture-716-release.json`。历史N01～N09及7.1.5结果保持原身份，不能用通用夹具代签MC 180FPS。
 
 本批诊断格式为 5，兼容解码 2／3／4；现有构造器保留。首次提交前即可在 owner 线程取得 `diagnosticMonitor()`，随后交给独立观察线程；它可见设备／场景／光照初始化以及尚未返回的资源子调用。事件记录 stable native ID 的 FNV64、资源发布 revision、原因位、字节、attempt、OS 线程 ID、所属诊断模式和 ordinal。CPU 与 protocol monitor 各自报告注册位置与注册后的漏读，`overwritten` 不是观察者漏读。
 

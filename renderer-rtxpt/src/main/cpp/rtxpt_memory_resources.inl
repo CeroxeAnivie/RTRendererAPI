@@ -274,6 +274,8 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
     if(memoryPreparationRevision!=revision||memoryPreparationSequence!=sequence){
         // A cancelled transaction must not prevent a later delete-only request
         // from freeing the capacity that the earlier request was waiting for.
+        // These preparations have never been submitted and own no GPU readers.
+        preparedResourceTlas={};preparedTlasTables={};preparedTlasTableStorage={};preparedTlasAliases=false;
         memoryPreparationPending=false;memoryPreparationRevision=revision;memoryPreparationSequence=sequence;
     }
     if(memoryPreparationPending&&!resourceArena.PreparationReady())throw RtrResourcePending();
@@ -402,11 +404,54 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
     for(auto& m:imported.materials){RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,0,1,0,RtrDiagnostics::Identity(m->name),revision,RtrDiagnostics::Material|(coverageMaterials.count(m->name)?RtrDiagnostics::Coverage:0));}
     {RtrDiagnostics::Scope budget(RtrDiagnostics::ResourcePlan,newMeshes.size(),plannedTriangles,1,0,0,revision,0,plannedBytes);}
     // All references and byte ranges are validated before staging or graph mutation.
+    if(!json["removeNodes"].empty()||!json["nodes"].empty()){
+        auto graph=m_scene->GetSceneGraph();size_t instanceCapacity=graph->GetMeshInstances().size();
+        size_t subCapacity=graph->GetGeometryInstancesCount();
+        bool topology=false;
+        std::unordered_map<donut::engine::MeshInfo*,int64_t> meshUserChanges;
+        std::unordered_map<std::string,ResidentMesh> plannedMeshes;
+        for(auto& mesh:newMeshes){auto old=residentMeshes.find(mesh->name);
+            plannedMeshes.emplace(mesh->name,old!=residentMeshes.end()&&CompatibleMemoryMesh(old->second,mesh)?old->second:mesh);
+        }
+        std::unordered_set<donut::engine::SceneGraphNode*> removedNodes;
+        auto subtract=[&](auto&& self,donut::engine::SceneGraphNode* node)->void{
+            if(!removedNodes.insert(node).second)return;
+            topology=true;
+            if(auto instance=std::dynamic_pointer_cast<donut::engine::MeshInstance>(node->GetLeaf())){
+                --instanceCapacity;subCapacity-=instance->GetMesh()->geometries.size();
+                --meshUserChanges[instance->GetMesh().get()];
+            }
+            for(uint32_t i=0;i<node->GetNumChildren();++i)self(self,node->GetChild(i));
+        };
+        for(auto& name:json["removeNodes"]){auto found=nodes.find(name.asString());if(found!=nodes.end())subtract(subtract,found->second);}
+        std::unordered_set<std::string> plannedNodes;
+        for(auto& node:json["nodes"]){
+            const auto identity=node["name"].asString();if(!plannedNodes.insert(identity).second)throw std::invalid_argument("Duplicate instance identity");
+            auto previous=nodes.find(identity);
+            const auto name=node["mesh"].asString();
+            auto prepared=plannedMeshes.find(name);auto mesh=prepared!=plannedMeshes.end()?prepared->second:residentMeshes.at(name);
+            std::shared_ptr<donut::engine::MeshInstance> prior;
+            if(previous!=nodes.end()&&!removedNodes.count(previous->second))prior=std::dynamic_pointer_cast<donut::engine::MeshInstance>(previous->second->GetLeaf());
+            if(prior){subCapacity-=prior->GetMesh()->geometries.size();--meshUserChanges[prior->GetMesh().get()];}
+            else ++instanceCapacity;
+            topology|=!prior||prior->GetMesh()!=mesh;
+            ++meshUserChanges[mesh.get()];subCapacity+=mesh->geometries.size();
+        }
+        if(topology){
+            size_t meshCapacity=graph->GetMeshes().size();
+            for(const auto& [mesh,change]:meshUserChanges){auto users=residentMeshNodes.find(mesh);
+                const int64_t before=users==residentMeshNodes.end()?0:int64_t(users->second.size()),after=before+change;
+                if(after<0)throw std::runtime_error("Invalid retained mesh ownership plan");
+                if(before==0&&after>0)++meshCapacity;else if(before>0&&after==0)--meshCapacity;
+            }
+            PrepareResourceTlas(instanceCapacity,subCapacity,meshCapacity);
+        }
+    }
     PrepareMemoryAllocations(newMeshes);
     if(RtrDiagnostics::level.load())for(auto& mesh:newMeshes)dynamicWork[14]+=uint64_t(mesh->totalVertices)*24+mesh->buffers->tangentData.size()*4+uint64_t(mesh->totalIndices)*4;
     part.reset();part.emplace(RtrDiagnostics::Upload);
     auto command=ResourceCommand();command->open();
-    if(!newMeshes.empty()){
+    if(!newMeshes.empty()||preparedTlasAliases){
         // Every lease is obtained after all readers of its previous owner have
         // retired. Activate placed-resource aliases before their first use.
         command->commitBarriers();
@@ -423,6 +468,7 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
         }else{
             D3D12_RESOURCE_BARRIER alias{};alias.Type=D3D12_RESOURCE_BARRIER_TYPE_ALIASING;list->ResourceBarrier(1,&alias);
         }
+        preparedTlasAliases=false;
     }
     size_t uploadedMeshes=0;for(auto& mesh:newMeshes){
         auto* extended=static_cast<MeshInfoEx*>(mesh.get());

@@ -51,6 +51,7 @@
 #include "rtxpt_instance_transform.h"
 #include "rtxpt_memory_resources.h"
 #include "rtxpt_resource_arena.h"
+#include "rtxpt_capacity.h"
 #include <map>
 extern SampleUIData g_sampleUIData;
 
@@ -541,6 +542,16 @@ public:
     }
     nvrhi::ITexture* HostSurfaceHdr() const {return m_renderTargets?m_renderTargets->ProcessedOutputColor.Get():nullptr;}
     nvrhi::ITexture* HostDisplayColor() const { return m_renderTargets ? m_renderTargets->LdrColor.Get() : nullptr; }
+    void SceneUnloading() override {
+        AdvancedPathTracer::SceneUnloading();
+        // Drop the buffers and their binding-set readers together. The existing
+        // BeginLoadingScene idle boundary follows this hook; indexNodes releases
+        // their arena leases only after that boundary, never during an update.
+        m_tlasCullBindingSet=nullptr;
+        m_tlasInstanceBuffer=nullptr;m_tlasInstanceDataBuffer=nullptr;m_tlasMeshBoundsBuffer=nullptr;
+        m_tlasCullBoundInstanceData=m_tlasCullBoundInstanceAccel=m_tlasCullBoundMeshBounds=m_tlasCullBoundOutput=nullptr;
+        m_tlasInstanceCount=0;m_tlasInstanceDataDirty=true;
+    }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();++sceneLoadCount;
         preSrHistoryReset=true;
@@ -833,6 +844,11 @@ void indexNodes(Session& s) {
     host.resourceRetirement.clear();host.resourceCommandPool.clear();host.resourceQueryPool.clear();host.resourceBlasAllocationBytes.clear();host.resourceBufferAllocations.clear();host.preparedMeshBlases.clear();host.meshUploadScratch.clear();
     host.spareMeshBuffers.clear();host.spareMeshBlases.clear();host.spareMeshBufferBytes=host.spareMeshBlasBytes=0;
     host.spareResourceTlas={};host.spareResourceTlasBytes=0;host.resourceTlasAllocationBytes=0;host.resourceTlasAllocationIdentity=nullptr;
+    host.activeResourceTlas={};host.preparedResourceTlas={};host.preparedTlasTables={};host.activeTlasTableStorage={};host.preparedTlasTableStorage={};host.preparedTlasAliases=false;
+    // A complete scene replacement invalidates every borrowed graph-node view.
+    // Incremental commits retain and patch these indices in their existing path.
+    host.residentInstanceNodes.clear();host.residentMeshNodes.clear();
+    host.residentMeshes.clear();host.residentMaterials.clear();host.residentMaterialMeshes.clear();host.residentTextureUsers.clear();
     host.IndexRetainedResources();
 }
 std::mutex lifecycle;

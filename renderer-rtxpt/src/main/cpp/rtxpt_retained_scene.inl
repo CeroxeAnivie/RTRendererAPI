@@ -87,7 +87,7 @@ void IndexRetainedResources() {
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::IndexRebuild);
     resourceArena.Prepare(GetDevice());
     resourceRetirement.reserve(16);resourceCommandPool.reserve(8);resourceQueryPool.reserve(16);
-    spareMeshBuffers.reserve(64);spareMeshBlases.reserve(64);resourceGpuQueries.reserve(8);
+    spareMeshBuffers.reserve(64);spareMeshBlases.reserve(64);spareResourceTlas.reserve(16);resourceGpuQueries.reserve(8);
     candidateLayoutDirty=true;
     if(!m_scene){
         residentMeshes.clear();residentMaterials.clear();residentMaterialMeshes.clear();residentTextureUsers.clear();residentMeshNodes.clear();residentInstanceNodes.clear();return;
@@ -239,12 +239,13 @@ struct ResourceTlasStorage {
     nvrhi::rt::AccelStructHandle acceleration;
     nvrhi::BufferHandle subInstances;
     uint64_t accelerationBytes=0;
+    std::array<RtrResourceArena::Storage,2> storage;
 };
 struct RetiredResources {
     std::vector<BlasAllocationIndex::node_type> allocationEntries;
     std::vector<BufferAllocationIndex::node_type> bufferAllocationEntries;
     size_t recycleCursor=0;
-    bool recycled=false;
+    bool recycled=false,tlasRecycled=false;
     // NVRHI owns raw upload/scratch chunks on the public command-list object.
     // The queue's internal list tracker alone does not retain those pools.
     std::vector<nvrhi::CommandListHandle> commands;
@@ -256,6 +257,7 @@ struct RetiredResources {
     std::vector<nvrhi::rt::AccelStructHandle> acceleration;
     std::vector<nvrhi::rt::OpacityMicromapHandle> opacityMaps;
     ResourceTlasStorage tlas;
+    std::array<RtrResourceArena::Storage,3> tlasTableStorage;
     nvrhi::EventQueryHandle done,computeDone;
     uint64_t referencedBytes=0,createdNanos=0;
 };
@@ -276,9 +278,93 @@ BlasAllocationIndex resourceBlasAllocationBytes;
 BufferAllocationIndex resourceBufferAllocations;
 std::unordered_map<std::string,nvrhi::rt::AccelStructHandle> preparedMeshBlases;
 std::unordered_map<std::string,uint64_t> resourceChangeReasons;
-std::array<ResourceTlasStorage,4> spareResourceTlas;
+std::vector<ResourceTlasStorage> spareResourceTlas;
+ResourceTlasStorage activeResourceTlas,preparedResourceTlas;
+std::array<nvrhi::BufferHandle,3> preparedTlasTables;
+std::array<RtrResourceArena::Storage,3> activeTlasTableStorage,preparedTlasTableStorage;
+bool preparedTlasAliases=false;
 uint64_t spareResourceTlasBytes=0,resourceTlasAllocationBytes=0;
 nvrhi::rt::IAccelStruct* resourceTlasAllocationIdentity=nullptr;
+static bool FitsResourceTlas(const ResourceTlasStorage& value,size_t instances,uint64_t subBytes){
+    return value.acceleration&&value.acceleration->getDesc().topLevelMaxInstances>=std::max<size_t>(1,instances)
+        &&value.subInstances&&value.subInstances->getDesc().byteSize>=subBytes;
+}
+// This is the same identity-preserving update rule used by CommitResources.
+// Preflight must not reserve a replacement TLAS for an in-place mesh or pose edit.
+static bool CompatibleMemoryMesh(const ResidentMesh& a,const ResidentMesh& b){
+    if(a->geometries.size()!=b->geometries.size())return false;
+    for(size_t g=0;g<a->geometries.size();++g){const auto& x=a->geometries[g];const auto& y=b->geometries[g];
+        if(x->numIndices!=y->numIndices||x->numVertices!=y->numVertices||x->material->name!=y->material->name)return false;
+    }
+    return true;
+}
+// Called before any graph or GPU mutation. Heap pressure can defer the complete
+// request here; it must never fail halfway through publishing a scene revision.
+void PrepareResourceTlas(size_t instances,size_t subInstances,size_t meshes){
+    if(instances>=(1u<<19)||subInstances>=(1u<<24))throw std::runtime_error("Retained TLAS instance capacity exceeded");
+    const auto subBytes=sizeof(SubInstanceData)*std::max<size_t>(1,subInstances);
+    ResourceTlasStorage next;size_t pooled=SIZE_MAX;
+    if(!FitsResourceTlas(preparedResourceTlas,instances,subBytes)){
+        uint64_t best=UINT64_MAX;
+        for(size_t i=0;i<spareResourceTlas.size();++i)if(FitsResourceTlas(spareResourceTlas[i],instances,subBytes)
+                &&spareResourceTlas[i].accelerationBytes<best){pooled=i;best=spareResourceTlas[i].accelerationBytes;}
+        if(pooled!=SIZE_MAX)next=spareResourceTlas[pooled];
+    }
+    std::vector<nvrhi::MemoryRequirements> requirements;
+    std::array<size_t,5> allocations;allocations.fill(SIZE_MAX);
+    if(!FitsResourceTlas(preparedResourceTlas,instances,subBytes)&&!next.acceleration){
+        nvrhi::rt::AccelStructDesc desc;desc.isTopLevel=true;desc.isVirtual=true;
+        desc.topLevelMaxInstances=RtrCapacity::Elements(instances,256,1u<<19);
+        desc.buildFlags=nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+        RtrDiagnostics::Scope allocation(RtrDiagnostics::TlasAllocate,1,0,1,0,0,RtrDiagnostics::revision.load(),RtrDiagnostics::Topology|RtrDiagnostics::CapacityGrowth);
+        next.acceleration=GetDevice()->createAccelStruct(desc);
+        if(!next.acceleration)throw std::runtime_error("Virtual retained TLAS preparation failed");
+        allocations[0]=requirements.size();requirements.push_back(GetDevice()->getAccelStructMemoryRequirements(next.acceleration));
+        next.accelerationBytes=requirements.back().size;allocation.event[21]=next.accelerationBytes;
+        nvrhi::BufferDesc buffer;buffer.byteSize=sizeof(SubInstanceData)*RtrCapacity::Elements(subInstances,256,1u<<24);
+        buffer.structStride=sizeof(SubInstanceData);buffer.canHaveUAVs=true;buffer.isVirtual=true;
+        buffer.debugName="Retained sub-instances";buffer.initialState=nvrhi::ResourceStates::Common;buffer.keepInitialState=true;
+        next.subInstances=GetDevice()->createBuffer(buffer);
+        if(!next.subInstances)throw std::runtime_error("Virtual retained sub-instance preparation failed");
+        allocations[1]=requirements.size();requirements.push_back(GetDevice()->getBufferMemoryRequirements(next.subInstances));
+    }
+    std::array<nvrhi::BufferHandle,3> tables;
+    const std::array<nvrhi::BufferHandle,3> current{m_tlasInstanceBuffer,m_tlasInstanceDataBuffer,m_tlasMeshBoundsBuffer};
+    const std::array<size_t,3> counts{instances,instances,meshes};
+    const std::array<size_t,3> strides{sizeof(nvrhi::rt::InstanceDesc),sizeof(TLASInstanceData),sizeof(TLASObjectBounds)};
+    const std::array<const char*,3> names{"TLASInstanceDescs","TLASInstanceData","TLASMeshBounds"};
+    for(size_t i=0;i<3;++i){const auto bytes=strides[i]*std::max<size_t>(1,counts[i]);
+        if(current[i]&&preparedTlasTables[i]&&current[i]->getDesc().byteSize>=preparedTlasTables[i]->getDesc().byteSize){
+            preparedTlasTables[i]=nullptr;preparedTlasTableStorage[i].reset();
+        }
+        if((current[i]&&current[i]->getDesc().byteSize>=bytes)||(preparedTlasTables[i]&&preparedTlasTables[i]->getDesc().byteSize>=bytes))continue;
+        nvrhi::BufferDesc desc;desc.byteSize=strides[i]*RtrCapacity::Elements(counts[i]);desc.structStride=uint32_t(strides[i]);
+        desc.isVirtual=true;desc.debugName=names[i];desc.keepInitialState=true;
+        desc.canHaveUAVs=i==0;desc.isAccelStructBuildInput=i==0;
+        desc.initialState=i==0?nvrhi::ResourceStates::UnorderedAccess:nvrhi::ResourceStates::Common;
+        RtrDiagnostics::Scope allocation(RtrDiagnostics::BufferAllocate,1,0,1,0,0,RtrDiagnostics::revision.load(),RtrDiagnostics::CapacityGrowth,desc.byteSize);
+        tables[i]=GetDevice()->createBuffer(desc);if(!tables[i])throw std::runtime_error("Virtual TLAS table preparation failed");
+        allocations[i+2]=requirements.size();requirements.push_back(GetDevice()->getBufferMemoryRequirements(tables[i]));
+    }
+    std::vector<RtrResourceArena::Storage> storage;
+    if(!requirements.empty()&&!resourceArena.Reserve(requirements,storage)){memoryPreparationPending=true;throw RtrResourcePending();}
+    if(allocations[0]!=SIZE_MAX){next.storage={storage[allocations[0]],storage[allocations[1]]};
+        RtrDiagnostics::Scope bind(RtrDiagnostics::PlacedBind,2);
+        if(!GetDevice()->bindAccelStructMemory(next.acceleration,next.storage[0]->Heap(),next.storage[0]->Offset())
+                ||!GetDevice()->bindBufferMemory(next.subInstances,next.storage[1]->Heap(),next.storage[1]->Offset()))throw std::runtime_error("Placed retained TLAS binding failed");
+        preparedTlasAliases=true;
+    }
+    for(size_t i=0;i<3;++i)if(tables[i]){auto lease=storage[allocations[i+2]];
+        RtrDiagnostics::Scope bind(RtrDiagnostics::PlacedBind,1);
+        if(!GetDevice()->bindBufferMemory(tables[i],lease->Heap(),lease->Offset()))throw std::runtime_error("Placed TLAS table binding failed");
+        preparedTlasAliases=true;
+        preparedTlasTables[i]=std::move(tables[i]);preparedTlasTableStorage[i]=std::move(lease);
+    }
+    if(next.acceleration){preparedResourceTlas=std::move(next);
+        if(pooled!=SIZE_MAX){spareResourceTlasBytes-=spareResourceTlas[pooled].accelerationBytes+spareResourceTlas[pooled].subInstances->getDesc().byteSize;
+            spareResourceTlas.erase(spareResourceTlas.begin()+pooled);}
+    }
+}
 void CreateResourceTlas(RetiredResources& retired){
     const auto& instances=m_scene->GetSceneGraph()->GetMeshInstances();
     const size_t instanceCount=instances.size();
@@ -287,18 +373,19 @@ void CreateResourceTlas(RetiredResources& retired){
     if(instanceCount>=(1u<<19)||subInstanceCount>=(1u<<24))throw std::runtime_error("Retained TLAS instance capacity exceeded");
     const uint64_t subInstanceBytes=sizeof(SubInstanceData)*std::max<uint64_t>(1,subInstanceCount);
     if(m_topLevelAS&&resourceTlasAllocationBytes&&m_topLevelAS.Get()==resourceTlasAllocationIdentity){
-        retired.tlas={m_topLevelAS,m_subInstanceBuffer,resourceTlasAllocationBytes};
+        retired.tlas=activeResourceTlas;
         retired.referencedBytes+=resourceTlasAllocationBytes;
     }
     ResourceTlasStorage next;
-    for(auto& slot:spareResourceTlas)if(slot.acceleration
+    if(FitsResourceTlas(preparedResourceTlas,instanceCount,subInstanceBytes)){next=std::move(preparedResourceTlas);preparedResourceTlas={};}
+    for(auto& slot:spareResourceTlas)if(!next.acceleration&&slot.acceleration
             &&slot.acceleration->getDesc().topLevelMaxInstances>=std::max<size_t>(1,instanceCount)
             &&slot.subInstances&&slot.subInstances->getDesc().byteSize>=subInstanceBytes){
         spareResourceTlasBytes-=slot.accelerationBytes+slot.subInstances->getDesc().byteSize;
         next=std::move(slot);slot={};break;
     }
     if(!next.acceleration){
-        nvrhi::rt::AccelStructDesc desc;desc.isTopLevel=true;desc.topLevelMaxInstances=std::max<size_t>(1,instanceCount);
+        nvrhi::rt::AccelStructDesc desc;desc.isTopLevel=true;desc.topLevelMaxInstances=RtrCapacity::Elements(instanceCount,256,1u<<19);
         desc.buildFlags=nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
         {
             RtrDiagnostics::Scope allocation(RtrDiagnostics::TlasAllocate,1,0,1,0,0,RtrDiagnostics::revision.load(),RtrDiagnostics::Topology|RtrDiagnostics::CapacityGrowth);
@@ -307,7 +394,7 @@ void CreateResourceTlas(RetiredResources& retired){
             next.accelerationBytes=GetDevice()->getAccelStructMemoryRequirements(next.acceleration).size;
             allocation.event[21]=next.accelerationBytes;
         }
-        nvrhi::BufferDesc buffer;buffer.byteSize=subInstanceBytes;buffer.debugName="Retained sub-instances";
+        nvrhi::BufferDesc buffer;buffer.byteSize=sizeof(SubInstanceData)*RtrCapacity::Elements(subInstanceCount,256,1u<<24);buffer.debugName="Retained sub-instances";
         buffer.structStride=sizeof(SubInstanceData);buffer.canHaveUAVs=true;
         buffer.initialState=nvrhi::ResourceStates::Common;buffer.keepInitialState=true;
         {
@@ -319,7 +406,14 @@ void CreateResourceTlas(RetiredResources& retired){
         RtrDiagnostics::Scope hit(RtrDiagnostics::PoolAcquire,2,0,1,0,0,RtrDiagnostics::revision.load(),RtrDiagnostics::Topology|RtrDiagnostics::PoolHit,
             next.accelerationBytes+next.subInstances->getDesc().byteSize);
     }
+    activeResourceTlas=next;
     m_topLevelAS=std::move(next.acceleration);m_subInstanceBuffer=std::move(next.subInstances);
+    std::array<nvrhi::BufferHandle*,3> tables{std::addressof(m_tlasInstanceBuffer),std::addressof(m_tlasInstanceDataBuffer),std::addressof(m_tlasMeshBoundsBuffer)};
+    for(size_t i=0;i<3;++i)if(preparedTlasTables[i]){
+        if(*tables[i])retired.buffers.push_back(*tables[i]);retired.tlasTableStorage[i]=std::move(activeTlasTableStorage[i]);
+        *tables[i]=std::move(preparedTlasTables[i]);activeTlasTableStorage[i]=std::move(preparedTlasTableStorage[i]);
+        m_tlasInstanceDataDirty=true;
+    }
     resourceTlasAllocationBytes=next.accelerationBytes;resourceTlasAllocationIdentity=m_topLevelAS.Get();
     m_subInstanceCount=uint32_t(subInstanceCount);
     m_subInstanceData.assign(m_subInstanceCount,SubInstanceData::Default());
@@ -383,9 +477,25 @@ nvrhi::CommandListHandle ResourceCommand(){
 }
 void PollResourceRetirement(){
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::ResourceRetirement);
+    // The generation ring is bounded to 16. Independently recycle every fence-
+    // ready TLAS, even when an older generation still has hundreds of meshes or
+    // the background destruction queue is full. Queue order permits stopping at
+    // the first incomplete generation; no in-flight resource can enter the pool.
+    for(auto& retired:resourceRetirement){
+        if(retired.tlasRecycled)continue;
+        bool completed;{RtrDiagnostics::Scope poll(RtrDiagnostics::CompletionPoll,2);completed=GetDevice()->pollEventQuery(retired.done)&&GetDevice()->pollEventQuery(retired.computeDone);}
+        if(!completed)break;
+        if(retired.tlas.acceleration&&retired.tlas.subInstances){
+                const auto bytes=retired.tlas.accelerationBytes+retired.tlas.subInstances->getDesc().byteSize;
+                if(spareResourceTlasBytes+bytes<=64*1024*1024){
+                    auto slot=std::find_if(spareResourceTlas.begin(),spareResourceTlas.end(),[](const auto& value){return !value.acceleration;});
+                    if(slot!=spareResourceTlas.end()){*slot=std::move(retired.tlas);spareResourceTlasBytes+=bytes;}
+                    else if(spareResourceTlas.size()<16){spareResourceTlas.push_back(std::move(retired.tlas));spareResourceTlasBytes+=bytes;}
+                }
+        }
+        retired.tlasRecycled=true;
+    }
     size_t budget=2;
-    // Generations are ordered on both producer queues. Inspect only the oldest;
-    // an unfinished predecessor cannot be bypassed by scanning later entries.
     for(auto i=resourceRetirement.begin();i!=resourceRetirement.end()&&budget&&nativeLighting.reclaimer->Available();){
         bool completed;{RtrDiagnostics::Scope poll(RtrDiagnostics::CompletionPoll,2);completed=GetDevice()->pollEventQuery(i->done)&&GetDevice()->pollEventQuery(i->computeDone);}
         if(!completed)break;
@@ -395,12 +505,6 @@ void PollResourceRetirement(){
             // Preserve the cursor and this completed generation for the next
             // observation, including meshes after the first bounded batch.
             if(i->recycleCursor<i->meshes.size())break;
-            if(i->tlas.acceleration&&i->tlas.subInstances){
-                const auto bytes=i->tlas.accelerationBytes+i->tlas.subInstances->getDesc().byteSize;
-                if(spareResourceTlasBytes+bytes<=64*1024*1024)for(auto& slot:spareResourceTlas)if(!slot.acceleration){
-                    slot=std::move(i->tlas);spareResourceTlasBytes+=bytes;break;
-                }
-            }
             i->recycled=true;
         }
         if(i->recycleCommands)for(auto& command:i->commands)if(resourceCommandPool.size()<8)resourceCommandPool.push_back(std::move(command));
@@ -482,11 +586,7 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
             auto mesh=instance->GetMesh();auto old=meshes.find(mesh->name);
             RtrDiagnostics::Scope plan(RtrDiagnostics::ResourceIndex,1,mesh->totalIndices/3,1,0,
                 RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),resourceChangeReasons.count(mesh->name)?resourceChangeReasons.at(mesh->name):(old==meshes.end()?RtrDiagnostics::Inflow:RtrDiagnostics::Topology));
-            bool compatible=memory&&old!=meshes.end()&&old->second->geometries.size()==mesh->geometries.size();
-            if(compatible)for(size_t g=0;g<mesh->geometries.size();g++){
-                auto a=old->second->geometries[g],b=mesh->geometries[g];
-                compatible&=a->numIndices==b->numIndices&&a->numVertices==b->numVertices&&a->material->name==b->material->name;
-            }
+            bool compatible=memory&&old!=meshes.end()&&CompatibleMemoryMesh(old->second,mesh);
             if(compatible){
                 auto target=std::static_pointer_cast<MeshInfoEx>(old->second);
                 auto next=std::static_pointer_cast<MeshInfoEx>(mesh);

@@ -87,4 +87,5 @@ void main(uint2 pixel:SV_DispatchThreadID)
     if((outputs&8)!=0)u_AugIndirect[pixel]=float4(indirect,valid?coverage:0);
     if((outputs&64)!=0)u_AugEmission[pixel]=float4(emission,valid?coverage:0);
     if((outputs&128)!=0)u_AugCoverage[pixel]=coverage.xxxx;
+    RtrFlushWork();
 }

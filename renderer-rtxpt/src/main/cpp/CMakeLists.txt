@@ -18,6 +18,8 @@ add_library(rtrenderer_rtxpt SHARED
 add_executable(rtxpt_native_control "${CMAKE_CURRENT_LIST_DIR}/rtxpt_native_control.cpp")
 add_executable(rtxpt_task_batch_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_task_batch_selftest.cpp")
 add_executable(rtxpt_retained_light_tree_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_retained_light_tree_selftest.cpp")
+add_executable(rtxpt_capacity_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_capacity_selftest.cpp")
+target_compile_features(rtxpt_capacity_selftest PRIVATE cxx_std_17)
 target_compile_features(rtxpt_retained_light_tree_selftest PRIVATE cxx_std_17)
 target_include_directories(rtxpt_task_batch_selftest PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 target_link_libraries(rtxpt_task_batch_selftest PRIVATE donut_engine)

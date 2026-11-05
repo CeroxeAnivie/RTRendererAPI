@@ -68,9 +68,16 @@ Add-Source 'docs/release-local-scene-preparation.md' 'docs/release-local-scene-p
 Add-Source 'docs/release-dynamic-resources.md' 'docs/release-dynamic-resources.md'
 Add-Source 'docs/release-high-framerate-resources.md' 'docs/release-high-framerate-resources.md'
 Add-Source 'docs/release-resource-architecture.md' 'docs/release-resource-architecture.md'
-Add-Source 'docs/quality/7.1.6-implementation.md' 'docs/quality/7.1.6-implementation.md'
+foreach($document in Get-ChildItem -LiteralPath (Join-Path $repo 'docs/quality') -Filter '*-implementation.md' -File){
+    $relative=[IO.Path]::GetRelativePath($repo,$document.FullName).Replace('\','/')
+    Add-Source $relative $relative
+}
 Add-Source 'docs/quality/resource-architecture-matrix.md' 'docs/quality/resource-architecture-matrix.md'
 Add-Source 'docs/quality/data/resource-architecture-716.json' 'docs/quality/data/resource-architecture-716.json'
+$currentRelease=(Get-Content -LiteralPath (Join-Path $repo 'docs/release-index.json') -Raw -Encoding UTF8|ConvertFrom-Json -AsHashtable)[$Version]
+if(!$currentRelease){throw 'Missing current release document'}
+Add-Source $currentRelease $currentRelease
+Add-Source 'docs/quality/data/native-resource-chain.json' 'docs/quality/data/native-resource-chain.json'
 foreach($name in @('transaction-buffer-pages.md','independent-blas-batching.md','resource-pipeline-overlap.md',
     'data/independent-blas-batching.json','data/resource-pipeline-overlap.json')){
     Add-Source "docs/quality/$name" "docs/quality/$name"

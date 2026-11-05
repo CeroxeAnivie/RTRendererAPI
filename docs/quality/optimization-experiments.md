@@ -167,3 +167,9 @@ CPU scope 仅包含有界历史中的旧 85 / 新 106 个事务。相同旧 DLL 
 |fps|194.799052|170.744750|-24.054302|-12.35%|
 
 P50/P95/P99 在两个 Split 窗均退化，单个最大值下降不能代替常态收益。13 份 HDR/guide 文件与原始 7.1.5 runtime 逐字节一致，但性能不成立；不把未独立 profile 的底层原因写成定论。已撤回生产源码、三个候选 shader 和默认运行目录条目，保留资源架构及双 reader 退休正确性修复。禁止原样重试。证据：`build/reports/release-716/receiver-comparison/comparison.json`；候选源码、DLL/PDB、shader 与撤回记录：`build/reports/release-716/receiver-split-rejected/`。
+
+## 7.1.7：剩余TLAS资源链与精确诊断归并
+
+用户重新授权通用修复并要求交付后停止，不接MC或补跑旧版。保留完整SDK场景准备与所有既有BLAS优化，改变TLAS／三张辅助表的容量与placed预留、双fence后独立回收，以及必须发生的属性行上传归并；不恢复已撤回的选择性准备或跨队列／拆shader候选。DEEP六项计数保留原事件语义，改为线程内累加后波内精确汇总。单个已观察请求33.5242ms相关范围仅是机会量，不是收益。
+
+最终DLL `e19ef2868f6c26b32946fcb8caf8102b52fbeadab455cc7054833a684248d35d` 的10项受影响正确性检查实际exit0；同DLL的独立逐事件原子shader参考实际exit0，15个场景六项整数计数一致、80份HDR逐字节相同。容量回归的两轮各删除146与四轮同容量往返均无新TLAS／三表分配，mesh回收积压时已完成双fence的TLAS独立回池212,992字节，旧租约四平面GPU纹理不变。146只是夹具规模。整场景reset的旧graph索引悬空已修；独立参考初次漏空目录导致的初始化失败及既有清理缺口如实保留。详见 `data/native-resource-chain.json` 与 `../release-7.1.7.md`。未运行性能矩阵，机制改善不冒充实测收益。

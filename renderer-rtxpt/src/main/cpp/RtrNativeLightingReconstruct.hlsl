@@ -49,4 +49,5 @@ void main(uint2 pixel:SV_DispatchThreadID) {
     gain=clamp(gain,0,65504);indirect=clamp(indirect,0,65504);
     if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,valid?r.opacity:0);
     u_Indirect[pixel]=float4(indirect,valid?r.opacity:0);
+    RtrFlushWork();
 }

@@ -82,9 +82,25 @@ float RtrFalloff(float value,float exponent){
 #ifndef RTR_WORK_STATISTICS
 #define RTR_WORK_STATISTICS 1
 #endif
+#if RTR_WORK_STATISTICS
+static uint rtrWorkCounts[6]={0,0,0,0,0,0};
+#endif
 void RtrCount(uint index){
 #if RTR_WORK_STATISTICS
-    if((g.publication.w&1)!=0){uint unused;u_Work.InterlockedAdd(index*4,1,unused);}
+    if((g.publication.w&1)!=0)++rtrWorkCounts[index];
+#endif
+}
+// Count the same events locally, then publish once per active wave and counter.
+// No wave operation occurs inside divergent ray/source traversal. Uint overflow
+// retains the original modulo-2^32 global-counter behavior.
+void RtrFlushWork(){
+#if RTR_WORK_STATISTICS
+    if((g.publication.w&1)!=0){
+        [unroll]for(uint index=0;index<6;++index){
+            uint total=WaveActiveSum(rtrWorkCounts[index]);
+            if(WaveIsFirstLane()&&total!=0){uint unused;u_Work.InterlockedAdd(index*4,total,unused);}
+        }
+    }
 #endif
 }
 uint RtrQueryFlags(){return (g.publication.w&4)!=0?RAY_FLAG_NONE:((g.publication.w&2)!=0||g.style.limits.w!=0?RAY_FLAG_FORCE_NON_OPAQUE:RAY_FLAG_NONE);}
@@ -555,5 +571,6 @@ void main(uint2 pixel:SV_DispatchThreadID)
     indirect=float3(isfinite(indirect.x)?clamp(indirect.x,0,65504):0,isfinite(indirect.y)?clamp(indirect.y,0,65504):0,isfinite(indirect.z)?clamp(indirect.z,0,65504):0);
     if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,valid?receiver.opacity:0);
     if((g.grid.z&2)!=0)u_Indirect[pixel]=float4(indirect,valid?receiver.opacity:0);
+    RtrFlushWork();
 }
 #endif // RTR_NATIVE_LIGHTING_LIBRARY
