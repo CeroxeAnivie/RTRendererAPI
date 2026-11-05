@@ -69,6 +69,7 @@ Add-Source 'docs/release-dynamic-resources.md' 'docs/release-dynamic-resources.m
 Add-Source 'docs/release-high-framerate-resources.md' 'docs/release-high-framerate-resources.md'
 Add-Source 'docs/release-resource-architecture.md' 'docs/release-resource-architecture.md'
 Add-Source 'docs/quality/7.1.6-implementation.md' 'docs/quality/7.1.6-implementation.md'
+Add-Source 'docs/quality/resource-architecture-matrix.md' 'docs/quality/resource-architecture-matrix.md'
 Add-Source 'docs/quality/data/resource-architecture-716.json' 'docs/quality/data/resource-architecture-716.json'
 foreach($name in @('transaction-buffer-pages.md','independent-blas-batching.md','resource-pipeline-overlap.md',
     'data/independent-blas-batching.json','data/resource-pipeline-overlap.json')){

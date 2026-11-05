@@ -89,14 +89,15 @@ def collect_reused(directory, historical_path):
             'productionCodeChanged': False, 'firstTimeoutCause': 'unknown'}}
 
 
-def collect(directory, package_only=False):
+def collect(directory, package_only=False, final_identity=False):
+    directory = directory.resolve()
     receipts = read(directory / 'receipts.json')
     results = {}
     retention = ({'windows': [], 'reason': 'Historical native identities cannot certify this package.'}
-                 if package_only else read(ROOT / 'docs/quality/data/resource-latency-retained.json'))
+                 if package_only or final_identity else read(ROOT / 'docs/quality/data/resource-latency-retained.json'))
     runtime_files = None
     for name, receipt in receipts.items():
-        match = re.fullmatch(r'production-(\d+)-(OFF|SUMMARY|DEEP)-(stable|animation|local|stream)-([a-f0-9]+)', name)
+        match = re.fullmatch(r'production-(\d+)-(OFF|SUMMARY|DEEP)-(stable|animation|local|stream|mixed)-([a-f0-9]+)', name)
         if not match or not receipt['passed']:
             continue
         count, level, scenario, identity = match.groups()
@@ -116,7 +117,7 @@ def collect(directory, package_only=False):
             raise ValueError(f'Missing GPU samples or real RR: {name}')
         runtime_root = (next(Path(file).parent for file in runtime['files']
                              if Path(file).name.lower() == 'rtrenderer_rtxpt.dll')
-                        if package_only else ROOT / 'build/rtxpt-sdk/bin')
+                        if package_only or final_identity else ROOT / 'build/rtxpt-sdk/bin')
         files = {Path(file).relative_to(runtime_root).as_posix(): value.lower()
                  for file, value in runtime['files'].items()}
         retained = name in retention['windows']
@@ -173,6 +174,7 @@ def collect(directory, package_only=False):
             'evidenceErrors': analysis['evidenceErrors'], 'rawSha256': {file.name: digest(file) for file in raw}}
     expected = [(count, scenario, level) for count in COUNTS for scenario in SCENARIOS for level in LEVELS]
     windows = [results[key] for key in expected if key in results]
+    supplemental_windows = [value for key, value in results.items() if key not in expected]
     if runtime_files:
         for window in windows:
             measured = window['measuredRuntimeFilesSha256']
@@ -197,7 +199,7 @@ def collect(directory, package_only=False):
                         'gpuP95ChangePercentFromOff': (other['fullGpu']['p95Ms'] / off['fullGpu']['p95Ms'] - 1) * 100})
     checks = {key: dict(receipts.get(key, {'passed': False})) for key in CHECKS}
     additional_checks = {key: dict(value) for key, value in receipts.items()
-                         if key not in CHECKS and not key.startswith('production-')
+                         if key not in CHECKS and not key.startswith(('production-', 'startup-sample-'))
                          and key not in ('native-build', 'java-build', 'extension-build')}
     for name, check in (checks | additional_checks).items():
         if check['passed']:
@@ -232,6 +234,30 @@ def collect(directory, package_only=False):
             'absoluteTargetEligible': window['absoluteTargetEligible'],
             'targetMet': observed and window['absoluteTargetEligible']})
     version = next(line.split('=', 1)[1] for line in (ROOT / 'gradle.properties').read_text(encoding='utf-8').splitlines() if line.startswith('project_version='))
+    lifecycle_runs = []
+    lifecycle_cases = {}
+    for name, receipt in sorted(receipts.items()):
+        if not re.fullmatch(r'startup-sample-\d+', name):
+            continue
+        path = directory / name / 'lifecycle-measurement.json'
+        if not receipt['passed'] or not path.is_file():
+            continue
+        data = read(path)
+        if not data.get('passed') or not data.get('strictPrecompiled') or not data.get('realRr'):
+            raise ValueError(f'Invalid lifecycle measurement: {name}')
+        lifecycle_runs.append({'name': name, 'receipt': receipt, 'path': path.relative_to(ROOT).as_posix(),
+                              'sha256': digest(path), 'logSha256': digest(Path(receipt['log'])), 'data': data})
+        for row in data['cases']:
+            lifecycle_cases.setdefault(row['case'], []).append(row)
+    lifecycle_summary = {}
+    for name, rows in lifecycle_cases.items():
+        stages = [stage for row in rows for stage in row.get('cpuStages', [])]
+        lifecycle_summary[name] = {
+            'wall': ANALYSIS.distribution(row['wallNanos'] / 1e6 for row in rows),
+            'threadCpu': ANALYSIS.distribution(row['threadCpuNanos'] / 1e6 for row in rows if row['threadCpuNanos'] >= 0),
+            'maxHeapUsed': max(row['heapUsed'] for row in rows), 'maxDirectBytes': max(row['directBytes'] for row in rows),
+            'longestObservedScopes': sorted(stages, key=lambda item: item['inclusiveNanos'], reverse=True)[:12],
+            'scopeTimingBoundary': 'Nested and cross-thread scopes overlap; do not add them or infer pure waits from zero thread CPU.'}
     result = {'version': version, 'correctness': checks, 'additionalCorrectness': additional_checks,
         'structuredCorrectnessEvidence': structured_evidence,
         'correctnessPassed': sum(bool(value['passed']) for value in checks.values()),
@@ -243,6 +269,9 @@ def collect(directory, package_only=False):
         'performanceCountMeaning': 'Completed windows with valid evidence; budget targets are reported separately.',
         'missing': [list(key) for key in expected if key not in results],
         'measuredRuntimeFilesSha256': runtime_files or {}, 'windows': windows, 'modeComparisons': comparisons,
+        'supplementalWindows': supplemental_windows,
+        'lifecycleMeasurements': {'runs': lifecycle_runs, 'cases': lifecycle_summary,
+            'statisticalLimit': 'Small repeated sample; report the count. Cold is a new JVM, not an erased disk or driver cache. Internal cache hits remain unexposed.'},
         'productionClassesBeforeFinalBuildSha256': read(directory / 'production-classes-before-final-build.json'),
         'finalNativePerformanceWindows': sum(not window['retainedPredecessorWindow'] for window in windows),
         'retainedPredecessorPerformanceWindows': sum(window['retainedPredecessorWindow'] for window in windows),
@@ -253,8 +282,15 @@ def collect(directory, package_only=False):
         'retainedEvidence': retention,
         'historicalReference': read(ROOT / 'docs/quality/data/resource-latency-baseline.json'),
         'boundary': '1280x800 dual HDR; deterministic GI 2 samples, distance 6, strength .35; real RR; signal reuse disabled. Full-GPU intervals include handoff and possible queue supply gaps. API fixture is not MC acceptance. No FG/MFG.'}
-    if package_only:
+    if package_only or final_identity:
         scope = read(directory / 'delivery-scope.json')
+        process_path = directory / 'startup-process-observations.json'
+        if process_path.is_file():
+            operational = read(process_path)
+            result['lifecycleMeasurements']['processTreeObservations'] = operational
+            result['lifecycleMeasurements']['processTreeObservationsSha256'] = digest(process_path)
+            result['lifecycleMeasurements']['processTreeWall'] = ANALYSIS.distribution(
+                row['wallSeconds'] * 1000 for row in operational['runs'])
         runtime = ROOT / 'build/rtxpt-sdk/bin'
         packaged = {}
         for path in sorted(runtime.rglob('*')):
@@ -272,14 +308,20 @@ def collect(directory, package_only=False):
         for path in sorted(bundle.rglob('*')):
             if path.is_file() and (path.suffix == '.bin' or path.name == 'bundle.json'):
                 packaged['ShaderDynamic/Bin/dxil/' + path.relative_to(bundle).as_posix()] = digest(path)
-        for window in windows:
+        for window in windows + supplemental_windows:
             if any(packaged.get(name) != sha for name, sha in window['measuredRuntimeFilesSha256'].items()):
                 raise ValueError('Historical window does not match the delivered runtime inputs')
-        result.update(acceptancePolicy={'mode': 'package-only-incomplete-final-matrix',
+        result.update(acceptancePolicy={'mode': ('complete-final-DLL-matrix' if final_identity
+                                               else 'package-only-incomplete-final-matrix'),
             'authorization': scope['authorization'], 'performanceOptimizationStopped': True,
             'finalMatrixComplete': len(windows) == len(expected)},
             deliveryScope=scope, packagedRuntimeFilesSha256=packaged,
             finalProductionSourceSha256=read(directory / 'production-source-identity.json'))
+        result['supplementalMissing'] = []
+        if len(lifecycle_runs) < scope.get('lifecycleSamplesPlanned', 0):
+            result['supplementalMissing'].append('Repeated lifecycle measurements')
+        if scope.get('mixedFinalWindowRequired') and not supplemental_windows:
+            result['supplementalMissing'].append('Final-identity mixed window')
     return result
 
 
@@ -290,14 +332,17 @@ def main():
     parser.add_argument('--require-complete', action='store_true')
     parser.add_argument('--package-only', action='store_true',
                         help='Collect actual partial coverage for package verification without claiming a complete matrix')
+    parser.add_argument('--final-identity', action='store_true',
+                        help='Require identical final runtime inputs, including retained windows on that exact identity; no predecessor substitution')
     parser.add_argument('--reuse-reviewed-evidence', type=Path,
                         help='Explicitly preserve historical passes under a user no-rerun instruction; does not certify final-DLL performance')
     args = parser.parse_args()
-    if (args.reuse_reviewed_evidence and args.require_complete) or (args.package_only and (args.require_complete or args.reuse_reviewed_evidence)):
+    if ((args.reuse_reviewed_evidence and (args.require_complete or args.final_identity))
+        or (args.package_only and (args.require_complete or args.reuse_reviewed_evidence or args.final_identity))):
         raise SystemExit('Package-only or reused evidence cannot satisfy --require-complete final-DLL acceptance')
     result = (collect_reused(args.directory, args.reuse_reviewed_evidence.resolve())
-              if args.reuse_reviewed_evidence else collect(args.directory, args.package_only))
-    if args.require_complete and (result['missing'] or result['correctnessPassed'] != len(CHECKS)
+              if args.reuse_reviewed_evidence else collect(args.directory, args.package_only, args.final_identity))
+    if args.require_complete and (result['missing'] or result.get('supplementalMissing') or result['correctnessPassed'] != len(CHECKS)
                                  or any(not check['passed'] for check in result.get('additionalCorrectness', {}).values())):
         raise SystemExit(f"Incomplete: {result['correctnessPassed']}/{len(CHECKS)} correctness; {result['performancePassed']}/36 performance")
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -78,8 +78,6 @@ def main():
         require(all(window.get('gpuBoundaryComplete') for window in evidence['windows']), 'Incomplete recorded GPU boundary')
         runtime_inputs = evidence['packagedRuntimeFilesSha256']
         require(bool(runtime_inputs), 'Missing package input identities')
-        for name, sha in evidence['finalProductionSourceSha256'].items():
-            require(digest(ROOT / name) == sha, f'Production source changed after identity freeze: {name}')
     elif args.allow_reused_acceptance:
         require(evidence.get('acceptancePolicy', {}).get('mode') == 'passed-tests-not-rerun', 'Missing explicit no-rerun policy')
         previous = evidence['historicalEvidence']
@@ -97,8 +95,16 @@ def main():
                 'Final release requires all 36 windows on the final native identity')
         require(all(window.get('gpuBoundaryComplete') for window in evidence['windows']),
                 'Incomplete request GPU boundary in final release')
-        runtime_inputs = evidence['measuredRuntimeFilesSha256']
+        require(not evidence.get('supplementalMissing'), 'Incomplete supplemental evidence')
+        runtime_inputs = evidence.get('packagedRuntimeFilesSha256', evidence['measuredRuntimeFilesSha256'])
+    for name, sha in evidence.get('finalProductionSourceSha256', {}).items():
+        require(digest(ROOT / name) == sha, f'Production source changed after identity freeze: {name}')
     require(all(not window['evidenceErrors'] for window in evidence['windows']), 'Invalid performance evidence')
+    require(all(not window['evidenceErrors'] and window['gpuBoundaryComplete']
+                for window in evidence.get('supplementalWindows', [])), 'Invalid supplemental performance evidence')
+    for run in evidence.get('lifecycleMeasurements', {}).get('runs', []):
+        require(digest(ROOT / run['path']) == run['sha256']
+                and digest(Path(run['receipt']['log'])) == run['logSha256'], 'Changed lifecycle measurement evidence')
     for check in (evidence['correctness'] | evidence.get('additionalCorrectness', {})).values():
         require(check['passed'] and digest(Path(check['log'])) == check['logSha256'], 'Changed or failed correctness evidence')
     require(all(check['passed'] for check in evidence.get('additionalCorrectness', {}).values()),
@@ -189,7 +195,16 @@ def main():
     record['finalNativePerformanceWindows'] = evidence['finalNativePerformanceWindows']
     record['fullPerformanceAcceptanceComplete'] = (evidence['finalNativePerformanceWindows'] == 36
         and not evidence['missing'])
+    record['performanceMeasurementComplete'] = (record['fullPerformanceAcceptanceComplete']
+        and not evidence.get('supplementalMissing'))
+    record['performanceAcceptanceMeaning'] = 'Coverage and evidence completeness; budget pass/fail is reported separately.'
+    record['cpuBudgetPassedWindows'] = sum(target['targetMet'] for target in evidence.get('cpuTargets', []))
+    record['cpuBudgetExpectedWindows'] = len(evidence.get('cpuTargets', []))
+    record['allPerformanceBudgetTargetsMet'] = (evidence['target']['passedWindows'] == 36
+        and bool(evidence.get('cpuTargets')) and all(target['targetMet'] for target in evidence['cpuTargets']))
     record['finalProductionSourceSha256'] = evidence.get('finalProductionSourceSha256', {})
+    record['lifecycleMeasurementRuns'] = len(evidence.get('lifecycleMeasurements', {}).get('runs', []))
+    record['supplementalPerformanceWindows'] = len(evidence.get('supplementalWindows', []))
     if args.local:
         require(read(args.record) == record, 'Artifacts changed after release record')
         repository = Path.home() / '.m2/repository/top/ceroxe/rt'

@@ -1,6 +1,6 @@
 # RTRendererAPI Windows 制品布局
 
-当前交付版本为7.1.6。四模块JAR、sources、Javadoc、POM、Gradle metadata、runtime和匹配符号见 `quality/data/resource-architecture-716-release.json`；[本版范围](release-resource-architecture.md)区分功能交付和未完成性能验收。7.1.5的[最终验收](quality/resource-latency.md)及旧制品记录保留原身份。
+当前交付版本为7.1.6。四模块JAR、sources、Javadoc、POM、Gradle metadata、runtime和匹配符号见 `quality/data/resource-architecture-716-release.json`；[本版范围](release-resource-architecture.md)区分完整取证与未达到的性能预算。7.1.5的[最终验收](quality/resource-latency.md)及旧制品记录保留原身份。
 
 普通 Vulkan 路径由 renderer-api、renderer-core、renderer-nvidia 提供。renderer-rtxpt 是显式可选的 D3D12 全场景／透明介质托管后端，包含原生最终呈现和 Vulkan GPU 组合入口；发行目录同时携带这个模块，但 renderer-api 不默认依赖它。
 

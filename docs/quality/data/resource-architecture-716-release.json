@@ -1,6 +1,6 @@
 {
   "version": "7.1.6",
-  "runtimeZipSha256": "71dc9079ff49356ee0842901802dc0f565c1403230592fb7b5a6832a5de1dbc0",
+  "runtimeZipSha256": "5a655eab00f06ba736fce099a529f8b063883faa8e03feef83ca3882889bbdc6",
   "artifacts": [
     {
       "module": "renderer-api",
@@ -95,8 +95,8 @@
     {
       "module": "renderer-rtxpt",
       "file": "renderer-rtxpt-7.1.6.jar",
-      "bytes": 769274469,
-      "sha256": "e53300e408d04bbe5cfe779283c918e6c199b6021cdd29a71158ba778efbaf38"
+      "bytes": 769376949,
+      "sha256": "5dc45ea34e2f1251184c486638b4b0ae8efd1d1228762bc49b34d7136939bf17"
     },
     {
       "module": "renderer-rtxpt",
@@ -120,7 +120,7 @@
       "module": "renderer-rtxpt",
       "file": "renderer-rtxpt-7.1.6.module",
       "bytes": 3509,
-      "sha256": "7c458bde33e8fa5556251557f8b1e8db949eb99e28ee793a972d03bb22b46145"
+      "sha256": "43d2ade526ccc97bc4fc85bbc9d3e5f1064b1331ceec205fdb73f1cfcc913977"
     },
     {
       "module": "renderer-rtxpt",
@@ -1788,10 +1788,10 @@
     "ShaderDynamic/Bin/dxil/TestRaygenPP_fecfabf21103f501bae20f7d.bin": "2f27e57c7d6c5c9a66863b79376bbbd72888688466f483965a9ecef17b193385"
   },
   "acceptancePolicy": {
-    "mode": "package-only-incomplete-final-matrix",
-    "authorization": "用户要求加速收尾，不再扩跑性能验收；确保需求文档中除性能外的任务完成；全量源码发布GitHub，四模块制品发布Maven Local。",
+    "mode": "complete-final-DLL-matrix",
+    "authorization": "用户澄清只停止性能优化，并非停止最终矩阵验收；可以为正确性、验收和发布修改代码。补齐最终ce9缺失的33格，保留已有3格，不启动性能优化候选。",
     "performanceOptimizationStopped": true,
-    "finalMatrixComplete": false
+    "finalMatrixComplete": true
   },
   "correctnessCurrentPassed": 8,
   "correctnessReused": [
@@ -1820,19 +1820,24 @@
     "cpu-contracts"
   ],
   "performanceReused": 0,
-  "performanceEvidenceSha256": "f7738ba20654f0200c44269f52baf8174baaef30229096c05da244e7d60f2de8",
+  "performanceEvidenceSha256": "f4aa377a0edb4bc089c015d101ee00db8d2e9b377589699963f6c47c74b5cef9",
   "dllPdbGuidBytes": "42b75afe1d929142be32e164448828b6",
   "dllPdbAge": 237,
   "correctnessPassed": 13,
-  "performancePassed": 3,
+  "performancePassed": 36,
   "p95Target": {
     "fullGpuP95Ms": 4,
-    "eligibleWindows": 3,
+    "eligibleWindows": 35,
     "passedWindows": 0
   },
   "gpuBenchmarkRepeatedForPackaging": false,
-  "finalNativePerformanceWindows": 3,
-  "fullPerformanceAcceptanceComplete": false,
+  "finalNativePerformanceWindows": 36,
+  "fullPerformanceAcceptanceComplete": true,
+  "performanceMeasurementComplete": true,
+  "performanceAcceptanceMeaning": "Coverage and evidence completeness; budget pass/fail is reported separately.",
+  "cpuBudgetPassedWindows": 0,
+  "cpuBudgetExpectedWindows": 18,
+  "allPerformanceBudgetTargetsMet": false,
   "finalProductionSourceSha256": {
     "renderer-rtxpt/src/main/cpp/CMakeLists.txt": "e3237700c8e16a4d6c3c23f15a44a24d6fdb5aaa78237d1246200d07a6077d4c",
     "renderer-rtxpt/src/main/cpp/RtrDirectionalNee.hlsli": "aa24621486c5013848910809e4313f650ca378282e4bf78a955c06adc138cb6b",
@@ -1949,5 +1954,7 @@
     "tools/patches/rtxpt-transparent-background.patch": "7cb1e914881c61a0d49f3564ec33fde60adeb51f4ee3554bc86fcae8d2962233",
     "tools/Build-RtxptBridge.ps1": "16fdf2bbd4a4df7af1aa4213c2a9fe44ceed02c3fe80273e7a6dae519f84e3b3",
     "gradle.properties": "4a1166040db0727765ff19248386826f00f906ad6d56f07e1a1207e08f058766"
-  }
+  },
+  "lifecycleMeasurementRuns": 5,
+  "supplementalPerformanceWindows": 1
 }

@@ -1,6 +1,6 @@
 <# Sequential affected-path build and acceptance. Receipts bind each pass to its real inputs. #>
 param(
-    [ValidateSet('All','Build','Correctness','Performance')][string]$Phase='All',
+    [ValidateSet('All','Build','Correctness','Performance','Startup')][string]$Phase='All',
     [string]$RuntimeDirectory='build/rtxpt-sdk/bin',
     [string]$OutputDirectory='build/reports/resource-latency',
     [int[]]$MeshCounts=@(719,977,4096),
@@ -13,7 +13,8 @@ param(
     [ValidatePattern('^\d+(,\d+)*$')][string]$InflowBatches='5',
     [string]$RetryReason='',
     [ValidateRange(30,1800)][int]$StageTimeoutSeconds=300,
-    [ValidateRange(1,300)][int]$Seconds=30
+    [ValidateRange(1,300)][int]$Seconds=30,
+    [ValidateRange(2,20)][int]$StartupSamples=5
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -51,9 +52,11 @@ function Run([string]$name,[string]$executable,[string[]]$arguments,[string[]]$i
     [IO.File]::WriteAllText($driver,('$ErrorActionPreference=''Stop'''+[Environment]::NewLine+'[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding'+[Environment]::NewLine+'try {'+[Environment]::NewLine+$command+[Environment]::NewLine+'exit $LASTEXITCODE'+[Environment]::NewLine+'} catch { $_ | Out-String | Set-Content -LiteralPath '+(Quote $log)+' -Encoding utf8; exit 1 }'),[Text.UTF8Encoding]::new($false))
     Write-Output "Running $name"
     $timeout=if($name -like '*-build'){0}else{$StageTimeoutSeconds}
+    $invocationClock=[Diagnostics.Stopwatch]::StartNew()
     & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $shell -ArgumentList @('-NoProfile','-File',$driver) -WorkingDirectory $repo -MemoryLimitGB 10 -TimeoutSeconds $timeout
     $code=$LASTEXITCODE
-    $receipts[$name]=@{identity=(Digest $inputs (@($executable)+$arguments+$modeInputs));passed=($code -eq 0);exit=$code;utc=[DateTime]::UtcNow.ToString('o');log=$log;retryReason=$RetryReason;receiverMode=$ReceiverMode;validationMode=$ValidationMode}
+    $invocationClock.Stop()
+    $receipts[$name]=@{identity=(Digest $inputs (@($executable)+$arguments+$modeInputs));passed=($code -eq 0);exit=$code;utc=[DateTime]::UtcNow.ToString('o');log=$log;retryReason=$RetryReason;receiverMode=$ReceiverMode;validationMode=$ValidationMode;processTreeInvocationWallSeconds=$invocationClock.Elapsed.TotalSeconds}
     $receipts|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $receiptsFile -Encoding utf8
     Get-Content -LiteralPath $log -Tail 5
     if($code){throw "Stage failed: $name ($code). Evidence: $log"}
@@ -87,6 +90,14 @@ $classInputs=@();foreach($p in $classpath.Split([IO.Path]::PathSeparator)){
 }
 $identity=(Digest ($binaryInputs+$classInputs) @("receiverMode=$ReceiverMode","inflow=$InflowBatches")).Substring(0,16).ToLowerInvariant()
 $common=@('-Xmx2g','-XX:-UseJVMCICompiler')+$JvmOptions+@('--enable-native-access=ALL-UNNAMED','-Dfile.encoding=UTF-8',"-Dtop.ceroxe.rt.rtxpt.runtime=$runtime","-DresourceMatrix.output=$output","-Dtop.ceroxe.rt.rtxpt.testOutput=$output/native-matrix","-DnativeGiReconstruction.output=$output/native-gi-reconstruction","-DrtxptRetained.output=$output/retained-rr",'-cp',$classpath)
+if($Phase -eq 'Startup'){
+    $env:RTR_RTXPT_REQUIRE_PRECOMPILED='1'
+    $env:RTR_RTXPT_BENCHMARK_TIMING=$null
+    for($sample=1;$sample -le $StartupSamples;$sample++){
+        $sampleOutput=Join-Path $output "startup-sample-$sample"
+        Run "startup-sample-$sample" $java ($common+@("-DresourceMatrix.output=$sampleOutput",'top.ceroxe.rt.renderer.rtxpt.RtxptResourceLifecycleNativeSelfTest','measurement')) ($binaryInputs+$classInputs)
+    }
+}
 if($Phase -in @('All','Correctness')){
     $fixture=Join-Path $output 'diagnostics-snapshot.bin'
     if(-not $CorrectnessCases -or 'native-diagnostics' -in $CorrectnessCases){
