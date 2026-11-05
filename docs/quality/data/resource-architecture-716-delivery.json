@@ -1,0 +1,57 @@
+{
+  "version": "7.1.6",
+  "status": "source-and-maven-local-delivered-with-explicit-performance-exceptions",
+  "recordedUtc": "2026-11-05T12:15:04.908686+00:00",
+  "sourceCommit": "38158f88cd6130dcff5de428a787886135aee16f",
+  "sourceTree": "d6d65ba4da2dc752cce0c1670359678c2ec0ff24",
+  "sourceRepository": "https://github.com/CeroxeAnivie/RTRendererAPI",
+  "sourcePublication": {
+    "branches": [
+      "main",
+      "codex/7.1.6-resource-architecture"
+    ],
+    "codePushSucceeded": true,
+    "generatedArtifactsUploaded": false,
+    "ciSkipped": "Latest user requested rapid closeout without rerunning passed tests or expanding performance acceptance."
+  },
+  "mavenLocal": {
+    "verified": true,
+    "root": "C:\\Users\\Administrator\\.m2\\repository\\top\\ceroxe\\rt",
+    "modules": [
+      "renderer-api",
+      "renderer-core",
+      "renderer-nvidia",
+      "renderer-rtxpt"
+    ],
+    "artifactCount": 21,
+    "allFilesMatchReleaseRecord": true,
+    "releaseRecord": "docs/quality/data/resource-architecture-716-release.json",
+    "releaseRecordSha256": "cba15a9780f78b1690c18d1d1cd24f94020cebf36a051c1feff7c96a00fb0e3c"
+  },
+  "evidence": {
+    "path": "docs/quality/data/resource-architecture-716.json",
+    "sha256": "f7738ba20654f0200c44269f52baf8174baaef30229096c05da244e7d60f2de8",
+    "functionalRecords": 31,
+    "currentNativeFunctionalPasses": 8,
+    "retainedEarlierInputPasses": 23,
+    "newPreparationCancellationPassed": true,
+    "strictPrecompiledCancellation": true,
+    "existingPassedTestsRerun": false,
+    "finalNativePerformanceCells": 3,
+    "missingFinalNativePerformanceCells": 33,
+    "gpu4msTargetMet": false,
+    "performanceOptimizationStopped": true,
+    "gpuDebugValidationAvailable": false
+  },
+  "identity": {
+    "nativeDllSha256": "ce9c1c65fd4abf3e851a4f73d206dfc70bcbfce4f4fcbc07e00ff2a4ed281868",
+    "runtimeZipSha256": "71dc9079ff49356ee0842901802dc0f565c1403230592fb7b5a6832a5de1dbc0",
+    "dllPdbGuidBytes": "42b75afe1d929142be32e164448828b6",
+    "dllPdbAge": 237,
+    "productionSourcesMatched": 115,
+    "productionClassesMatched": 1866,
+    "gitTextEolNormalizationVerified": true
+  },
+  "scope": "P01-P09 non-performance implementation, functional evidence, contracts, source and artifact delivery closed. Performance budgets, full 36-cell matrix and startup/resize/cancellation latency distributions remain explicit exceptions. MC integration and 180FPS remain consumer-side responsibilities.",
+  "deliveryMetadata": "This receipt follows the published source commit and is not embedded in the runtime, avoiding recursive hashes. It changes no production source or artifact."
+}
