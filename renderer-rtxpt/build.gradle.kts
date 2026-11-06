@@ -365,7 +365,7 @@ tasks.register<JavaExec>("rtxptPackagedNativeSelfTest") {
 tasks.named("check") { dependsOn("rtxptAdapterSelfTest", "rtxptBudgetContractSelfTest") }
 
 val nativeRuntime = rootProject.layout.buildDirectory.dir("rtxpt-sdk/bin")
-val nativeContractNames = listOf("capacity", "diagnostics", "memory_diagnostics", "resource_protocol",
+val nativeContractNames = listOf("capacity", "diagnostics", "memory_diagnostics", "resource_protocol", "resource_import",
     "retained_light_tree", "sparse_regions", "upload_pool", "streamline_cache", "task_batch", "surface_inputs", "native_application_ranges")
 val buildNativeContracts = tasks.register<Exec>("buildRtxptNativeContracts") {
     group = "verification"
