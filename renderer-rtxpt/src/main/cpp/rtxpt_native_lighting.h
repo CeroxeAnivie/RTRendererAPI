@@ -4,6 +4,8 @@
 #include <unordered_set>
 #include <cstdlib>
 #include "rtxpt_native_application_ranges.h"
+#include "rtxpt_attribute_ranges.h"
+#include "rtxpt_host_response_lookup.h"
 #include "rtxpt_gpu_profile.h"
 #include "rtxpt_native_rr.h"
 #include "rtxpt_resource_reclaimer.h"
@@ -117,30 +119,10 @@ public:
             begin=end;
         }
     }
-    size_t attributeEnd=0;
-    struct FreeAttributeRange{uint32_t offset,count;};
-    std::vector<FreeAttributeRange> freeAttributeRanges;
+    rtr::AttributeRanges attributeRanges;
     uint64_t attributeMigrationBytes=0,attributeTableVisits=0;
-    void FreeAttributeRangeAt(uint32_t offset,uint32_t count){
-        if(!count)return;
-        freeAttributeRanges.push_back({offset,count});
-        std::sort(freeAttributeRanges.begin(),freeAttributeRanges.end(),[](auto a,auto b){return a.offset<b.offset;});
-        size_t out=0;
-        for(auto range:freeAttributeRanges){
-            if(out&&uint64_t(freeAttributeRanges[out-1].offset)+freeAttributeRanges[out-1].count==range.offset)freeAttributeRanges[out-1].count+=range.count;
-            else freeAttributeRanges[out++]=range;
-        }
-        freeAttributeRanges.resize(out);
-        while(!freeAttributeRanges.empty()&&uint64_t(freeAttributeRanges.back().offset)+freeAttributeRanges.back().count==attributeEnd){
-            attributeEnd=freeAttributeRanges.back().offset;freeAttributeRanges.pop_back();
-        }
-    }
-    uint32_t AllocateAttributeRange(uint32_t count){
-        for(auto i=freeAttributeRanges.begin();i!=freeAttributeRanges.end();++i)if(i->count>=count){
-            uint32_t result=i->offset;i->offset+=count;i->count-=count;if(!i->count)freeAttributeRanges.erase(i);return result;}
-        if(attributeEnd+count>uint64_t(UINT32_MAX))throw std::runtime_error("Attribute arena exceeds index capacity");
-        uint32_t result=uint32_t(attributeEnd);attributeEnd+=count;return result;
-    }
+    void FreeAttributeRangeAt(uint32_t offset,uint32_t count){attributeRanges.Release(offset,count);}
+    uint32_t AllocateAttributeRange(uint32_t count){return attributeRanges.Allocate(count);}
     void EnsureAttributeBuffer(nvrhi::IDevice* device,nvrhi::ICommandList* command,nvrhi::BufferHandle& buffer,size_t bytes,size_t stride,const char* name){
         bytes=std::max(bytes,stride);if(buffer&&buffer->getDesc().byteSize>=bytes)return;
         size_t capacity=std::max<size_t>(256,stride);while(capacity<bytes)capacity*=2;
@@ -172,7 +154,7 @@ public:
     }
     // Baseline float2[256], followed by packed host-response RGB[256]. The
     // Java contract requires an explicit table before selecting response mode.
-    std::array<float2,640> baselineLookup=[] {std::array<float2,640> values{};for(int y=0;y<16;y++)for(int x=0;x<16;x++)values[y*16+x]=float2(x/15.f,y/15.f);return values;}();
+    std::array<float2,640> baselineLookup=rtr::DefaultHostResponseLookup<float2>();
     nvrhi::IBuffer* previousSceneInstances=nullptr;
     nvrhi::IBuffer* previousSceneGeometry=nullptr;
     size_t previousInstanceCount=0,previousGeometryCount=0;
@@ -465,7 +447,7 @@ public:
         UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
         UploadAttributeRuns(command,instances,instanceUploadScratch,instanceUploadIndices);
         specialRoleCount=specialInstances.size();
-        EnsureAttributeBuffer(device,command,baselineCoordinates,attributeEnd*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
+        EnsureAttributeBuffer(device,command,baselineCoordinates,attributeRanges.end*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
         for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
             auto values=PackVertices(name,size_t(found->second.triangles)*3);
             if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
@@ -553,7 +535,7 @@ public:
                 geometryUploadScratch[entry.index]=value;geometryUploadIndices.push_back(entry.index);attributeWork[3]+=sizeof(value);}
         }
         UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
-        EnsureAttributeBuffer(device,command,baselineCoordinates,attributeEnd*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
+        EnsureAttributeBuffer(device,command,baselineCoordinates,attributeRanges.end*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
         for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
             auto values=PackVertices(name,size_t(found->second.triangles)*3);
             if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));

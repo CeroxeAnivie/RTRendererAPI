@@ -315,7 +315,7 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
     donut::engine::SceneImportResult imported;imported.rootNode=std::make_shared<donut::engine::SceneGraphNode>();
     struct MaterialInput{std::shared_ptr<MaterialEx> material;std::array<int64_t,4> textures;float ior;bool boundary=false;float3 absorption={};int priority=0;};
     std::vector<MaterialInput> materialInputs;std::unordered_map<std::string,ResidentMaterial> materials;
-    std::unordered_set<std::string> coverageMaterials;
+    std::unordered_set<std::string> coverageMaterials,normalMaterials;
     n=r.count();for(uint32_t i=0;i<n;i++){
         MaterialInput input;auto m=std::make_shared<MaterialEx>();input.material=m;m->name=r.text();auto rgba=r.value<uint32_t>();
         m->baseOrDiffuseColor=float3(float(rgba&255),float((rgba>>8)&255),float((rgba>>16)&255))/255.f;
@@ -331,11 +331,12 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
         if(candidate)coverageMaterials.insert(m->name);
         input.boundary=r.value<uint32_t>()!=0;if(input.boundary){input.absorption.x=r.value<float>();input.absorption.y=r.value<float>();input.absorption.z=r.value<float>();input.priority=r.value<int32_t>();}
         if(!materials.emplace(m->name,m).second)throw std::invalid_argument("Duplicate material identity");
+        if(input.textures[1]>=0)normalMaterials.insert(m->name);
         imported.materials.push_back(m);materialInputs.push_back(std::move(input));
     }
     std::vector<ResidentMesh> newMeshes;n=r.count();for(uint32_t i=0;i<n;i++){
         if((i&63)==63&&RtrHostResources::eventPump)RtrHostResources::eventPump();
-        auto mesh=std::make_shared<MeshInfoEx>();mesh->name=r.text();auto p=r.floats(),normal=r.floats(),tangent=r.floats(),uv=r.floats();
+        auto mesh=std::make_shared<MeshInfoEx>();mesh->name=r.text();auto p=r.floatView(),normal=r.floatView(),tangent=r.floatView(),uv=r.floatView();
         if(p.empty()||p.size()%3||normal.size()!=p.size()||(!tangent.empty()&&tangent.size()!=p.size()/3*4)||(!uv.empty()&&uv.size()!=p.size()/3*2))throw std::invalid_argument("Invalid mesh attributes");
         const size_t vertices=p.size()/3;mesh->buffers=std::make_shared<MemoryMeshBufferGroup>();auto& b=*mesh->buffers;
         b.positionData.resize(vertices);std::memcpy(b.positionData.data(),p.data(),p.size()*4);
@@ -352,13 +353,15 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
             auto geometry=std::make_shared<MeshGeometryEx>();geometry->material=m!=materials.end()?m->second:old->second;
             geometry->indexOffsetInMesh=uint32_t(b.indexData.size());geometry->numIndices=r.count();geometry->numVertices=uint32_t(vertices);geometry->objectSpaceBounds=mesh->objectSpaceBounds;
             if(geometry->numIndices%3)throw std::invalid_argument("Invalid triangle index count");
-            for(uint32_t k=0;k<geometry->numIndices;k++){auto index=r.value<uint32_t>();if(index>=vertices)throw std::invalid_argument("Triangle index exceeds vertices");b.indexData.push_back(index);}
+            const auto first=b.indexData.size();auto indices=r.take(size_t(geometry->numIndices)*4);
+            b.indexData.resize(first+geometry->numIndices);std::memcpy(b.indexData.data()+first,indices,size_t(geometry->numIndices)*4);
+            for(size_t k=first;k<b.indexData.size();++k)if(b.indexData[k]>=vertices)throw std::invalid_argument("Triangle index exceeds vertices");
             mesh->geometries.push_back(geometry);
         }
         bool needsTangent=false;
         for(auto& geometry:mesh->geometries){
-            auto input=std::find_if(materialInputs.begin(),materialInputs.end(),[&](const auto& value){return value.material->name==geometry->material->name;});
-            needsTangent|=input!=materialInputs.end()?input->textures[1]>=0:bool(geometry->material->normalTexture);
+            const auto& name=geometry->material->name;
+            needsTangent|=materials.count(name)?normalMaterials.count(name)!=0:bool(geometry->material->normalTexture);
         }
         if(needsTangent)b.tangentData.resize(vertices);
         if(needsTangent&&!tangent.empty())for(size_t v=0;v<vertices;v++)b.tangentData[v]=donut::math::vectorToSnorm8(float4(tangent[v*4],tangent[v*4+1],tangent[v*4+2],tangent[v*4+3]));

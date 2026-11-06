@@ -101,3 +101,7 @@ target_compile_features(rtxpt_diagnostics_selftest PRIVATE cxx_std_17)
 set_target_properties(rtxpt_diagnostics_selftest rtxpt_resource_protocol_selftest PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+
+add_executable(rtxpt_resource_import_selftest EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/rtxpt_resource_import_selftest.cpp")
+target_compile_features(rtxpt_resource_import_selftest PRIVATE cxx_std_17)
+set_target_properties(rtxpt_resource_import_selftest PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")

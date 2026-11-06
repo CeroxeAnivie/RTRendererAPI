@@ -1,0 +1,1120 @@
+{
+  "date": "2026-11-07",
+  "version": "7.2.2",
+  "baselineVersion": "7.2.1",
+  "branch": "codex/resource-root-followup",
+  "baseCommit": "353751c81140f4ba598d9f97dfeab27f3741d94b",
+  "scope": "internal-compatible-resource-performance-and-legacy-lookup-correctness",
+  "nativeSha256": "ca1611e9562b63aad615b2743761992d618a669a593a648530a161773cd779cb",
+  "baselineNativeSha256": "b7faab55677bc5a16806ab00a66c6d2a00a221029e17ed7b5ccfea69b03537ee",
+  "mcPerformanceMeasured": false,
+  "baselineFlight": {
+    "initialGpuPercent": 0,
+    "fps": 45.58698736011899,
+    "frameIdentities": 755,
+    "updateFrames": 483,
+    "apiJoinMeanMs": 11.2394004,
+    "apiJoinP95Ms": 35.1274,
+    "updateSubmitMeanMs": 15.3854124,
+    "updateSubmitP95Ms": 40.1586
+  },
+  "retainedSlowTrees": {
+    "capture": "D:\\Engineering\\code\\MCVulkanRT\\build\\renderer-audit\\mainline-light-response-clean-flight",
+    "window": {
+      "type": "mcvulkanrt.BenchmarkWindow",
+      "epoch_ns": "1793979588172780000",
+      "duration_ns": "16554538600",
+      "thread": "Render thread",
+      "os_thread": "11228",
+      "details": "rayTracing=true;streaming=true;frames=754;fps=45.58698736011899",
+      "stack": ""
+    },
+    "identities": 755,
+    "sequences": 755,
+    "sequenceMin": 5910,
+    "sequenceMax": 6664,
+    "completeGroups": 83,
+    "incompleteGroups": 2,
+    "retainedEventCopies": 77967,
+    "uniqueRetainedEvents": 77967,
+    "caveat": "Retained slow trees are selected observations, not all-frame means. Stage sample counts differ. Pre-dedup dirty bytes are not actual GPU bytes.",
+    "stages": {
+      "IMPORT": {
+        "inclusiveMs": {
+          "samples": 19,
+          "mean": 8.854984210526316,
+          "p50": 7.6156,
+          "p95": 24.1842,
+          "p99": 24.1842,
+          "maximum": 24.1842
+        },
+        "selfTotalMs": 153.0103,
+        "slowest": [
+          {
+            "sequence": 6447,
+            "revision": 2871,
+            "chain": [
+              {
+                "stage": "IMPORT",
+                "scope": "893374468",
+                "inclusiveMs": 24.1842,
+                "selfMs": 19.8577,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCE_STAGING",
+                "scope": "893373955",
+                "inclusiveMs": 44.4908,
+                "selfMs": 0.6664,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCES",
+                "scope": "893373442",
+                "inclusiveMs": 44.4951,
+                "selfMs": 0.0043,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "893359104",
+                "inclusiveMs": 71.0425,
+                "selfMs": 0.203,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "RESOURCE_PLAN": 0.09369999999999969,
+              "STAGING_ACQUIRE": 0.0114,
+              "TLAS_ALLOCATE": 0.0729,
+              "PLACED_BIND": 2.3512999999999984,
+              "DEFAULT_BUFFER_ALLOCATE": 0.0132,
+              "ALLOCATION_INFO": 0.6660999999999982,
+              "RESOURCE_PREBUILD": 1.0753999999999997,
+              "DESCRIPTOR_ALLOCATE": 0.0425
+            }
+          },
+          {
+            "sequence": 6447,
+            "revision": 2871,
+            "chain": [
+              {
+                "stage": "IMPORT",
+                "scope": "893171715",
+                "inclusiveMs": 18.7479,
+                "selfMs": 18.6181,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCE_STAGING",
+                "scope": "893171202",
+                "inclusiveMs": 18.7501,
+                "selfMs": 0.0022,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCES",
+                "scope": "893170689",
+                "inclusiveMs": 18.762,
+                "selfMs": 0.0119,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "893156352",
+                "inclusiveMs": 28.2653,
+                "selfMs": 0.069,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "RESOURCE_PLAN": 0.09019999999999984,
+              "STAGING_ACQUIRE": 0.0396
+            }
+          },
+          {
+            "sequence": 6495,
+            "revision": 2906,
+            "chain": [
+              {
+                "stage": "IMPORT",
+                "scope": "965693955",
+                "inclusiveMs": 16.331,
+                "selfMs": 16.2135,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCE_STAGING",
+                "scope": "965693442",
+                "inclusiveMs": 16.3325,
+                "selfMs": 0.0015,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCES",
+                "scope": "965692929",
+                "inclusiveMs": 16.3419,
+                "selfMs": 0.0094,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "965676032",
+                "inclusiveMs": 20.0424,
+                "selfMs": 0.017,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "RESOURCE_PLAN": 0.08230000000000012,
+              "STAGING_ACQUIRE": 0.0352
+            }
+          },
+          {
+            "sequence": 6495,
+            "revision": 2906,
+            "chain": [
+              {
+                "stage": "IMPORT",
+                "scope": "965901828",
+                "inclusiveMs": 15.3541,
+                "selfMs": 13.3134,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCE_STAGING",
+                "scope": "965901315",
+                "inclusiveMs": 75.025,
+                "selfMs": 0.4803,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCES",
+                "scope": "965900801",
+                "inclusiveMs": 75.0289,
+                "selfMs": 0.0039,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "965891584",
+                "inclusiveMs": 106.0773,
+                "selfMs": 0.1946,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "RESOURCE_PLAN": 0.08240000000000003,
+              "STAGING_ACQUIRE": 0.0094,
+              "TLAS_ALLOCATE": 0.0431,
+              "PLACED_BIND": 1.1385999999999998,
+              "DEFAULT_BUFFER_ALLOCATE": 0.0138,
+              "ALLOCATION_INFO": 0.23100000000000007,
+              "RESOURCE_PREBUILD": 0.49060000000000015,
+              "DESCRIPTOR_ALLOCATE": 0.0318
+            }
+          }
+        ]
+      },
+      "STAGING_ALLOCATE": {
+        "inclusiveMs": {
+          "samples": 81,
+          "mean": 1.0682592592592592,
+          "p50": 0.5065,
+          "p95": 1.1387,
+          "p99": 40.6736,
+          "maximum": 40.6736
+        },
+        "selfTotalMs": 86.529,
+        "slowest": [
+          {
+            "sequence": 6386,
+            "revision": 2823,
+            "chain": [
+              {
+                "stage": "STAGING_ALLOCATE",
+                "scope": "852167685",
+                "inclusiveMs": 40.6736,
+                "selfMs": 40.6736,
+                "bytes": 65536,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "TEXTURE_UPLOAD",
+                "scope": "852167172",
+                "inclusiveMs": 40.771,
+                "selfMs": 0.0884,
+                "bytes": 1024,
+                "items": 1,
+                "reason": 256
+              },
+              {
+                "stage": "UPLOAD",
+                "scope": "852164611",
+                "inclusiveMs": 41.1353,
+                "selfMs": 0.3072,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCE_STAGING",
+                "scope": "852144130",
+                "inclusiveMs": 45.2716,
+                "selfMs": 0.0326,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCES",
+                "scope": "852143617",
+                "inclusiveMs": 45.2778,
+                "selfMs": 0.0062,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "852127232",
+                "inclusiveMs": 53.5561,
+                "selfMs": 0.1012,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {}
+          },
+          {
+            "sequence": 6518,
+            "revision": 2929,
+            "chain": [
+              {
+                "stage": "STAGING_ALLOCATE",
+                "scope": "1026728966",
+                "inclusiveMs": 1.7366,
+                "selfMs": 1.7366,
+                "bytes": 1048576,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "STAGING_ACQUIRE",
+                "scope": "1026728453",
+                "inclusiveMs": 1.8325,
+                "selfMs": 0.0749,
+                "bytes": 589824,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "SCENE_TABLE_UPLOAD",
+                "scope": "1026727940",
+                "inclusiveMs": 2.496,
+                "selfMs": 0.5367,
+                "bytes": 534464,
+                "items": 8351,
+                "reason": 0
+              },
+              {
+                "stage": "PREPARATION",
+                "scope": "1026622467",
+                "inclusiveMs": 9.0078,
+                "selfMs": 0.3632,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCE_STAGING",
+                "scope": "1026395138",
+                "inclusiveMs": 21.9311,
+                "selfMs": 0.2147,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCES",
+                "scope": "1026394625",
+                "inclusiveMs": 21.9421,
+                "selfMs": 0.011,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "1026387456",
+                "inclusiveMs": 76.9846,
+                "selfMs": 0.9347,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {}
+          },
+          {
+            "sequence": 6525,
+            "revision": 2936,
+            "chain": [
+              {
+                "stage": "STAGING_ALLOCATE",
+                "scope": "1044011013",
+                "inclusiveMs": 1.5389,
+                "selfMs": 1.5389,
+                "bytes": 65536,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "TEXTURE_UPLOAD",
+                "scope": "1044010500",
+                "inclusiveMs": 1.669,
+                "selfMs": 0.106,
+                "bytes": 1024,
+                "items": 1,
+                "reason": 256
+              },
+              {
+                "stage": "UPLOAD",
+                "scope": "1044007939",
+                "inclusiveMs": 2.2748,
+                "selfMs": 0.4546,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCE_STAGING",
+                "scope": "1043981314",
+                "inclusiveMs": 8.7006,
+                "selfMs": 0.0543,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "RESOURCES",
+                "scope": "1043980801",
+                "inclusiveMs": 8.7091,
+                "selfMs": 0.0085,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "1043964416",
+                "inclusiveMs": 50.1461,
+                "selfMs": 1.2796,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {}
+          },
+          {
+            "sequence": 6491,
+            "revision": 2902,
+            "chain": [
+              {
+                "stage": "STAGING_ALLOCATE",
+                "scope": "955890180",
+                "inclusiveMs": 1.3841,
+                "selfMs": 1.3841,
+                "bytes": 1048576,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "STAGING_ACQUIRE",
+                "scope": "955889667",
+                "inclusiveMs": 1.4305,
+                "selfMs": 0.0354,
+                "bytes": 2624,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "SPARSE_UPLOAD",
+                "scope": "955045378",
+                "inclusiveMs": 5.8354,
+                "selfMs": 1.5302,
+                "bytes": 288512,
+                "items": 18,
+                "reason": 512
+              },
+              {
+                "stage": "FRAME",
+                "scope": "953925633",
+                "inclusiveMs": 23.4463,
+                "selfMs": 6.0729,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "953022464",
+                "inclusiveMs": 64.0268,
+                "selfMs": 9.9025,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {}
+          }
+        ]
+      },
+      "SPARSE_REGIONS": {
+        "inclusiveMs": {
+          "samples": 12,
+          "mean": 9.482408333333334,
+          "p50": 1.3992,
+          "p95": 54.3341,
+          "p99": 54.3341,
+          "maximum": 54.3341
+        },
+        "selfTotalMs": 76.7596,
+        "slowest": [
+          {
+            "sequence": 6450,
+            "revision": 2874,
+            "chain": [
+              {
+                "stage": "SPARSE_REGIONS",
+                "scope": "902573057",
+                "inclusiveMs": 54.3341,
+                "selfMs": 39.8559,
+                "bytes": 0,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "902263296",
+                "inclusiveMs": 134.1801,
+                "selfMs": 12.168,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "SPARSE_HASH_ERASE": 2.3643,
+              "SPARSE_REGION_PUBLISH": 12.1139
+            }
+          },
+          {
+            "sequence": 6371,
+            "revision": 2808,
+            "chain": [
+              {
+                "stage": "SPARSE_REGIONS",
+                "scope": "826523649",
+                "inclusiveMs": 14.1484,
+                "selfMs": 10.0966,
+                "bytes": 0,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "826350080",
+                "inclusiveMs": 58.5552,
+                "selfMs": 5.2896,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "SPARSE_HASH_ERASE": 2.0292,
+              "SPARSE_REGION_PUBLISH": 2.0226
+            }
+          },
+          {
+            "sequence": 6490,
+            "revision": 2901,
+            "chain": [
+              {
+                "stage": "SPARSE_REGIONS",
+                "scope": "949273089",
+                "inclusiveMs": 13.0176,
+                "selfMs": 7.5845,
+                "bytes": 0,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "948894720",
+                "inclusiveMs": 71.2274,
+                "selfMs": 1.6625,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "SPARSE_HASH_ERASE": 1.4409,
+              "SPARSE_REGION_PUBLISH": 3.9922
+            }
+          },
+          {
+            "sequence": 6512,
+            "revision": 2923,
+            "chain": [
+              {
+                "stage": "SPARSE_REGIONS",
+                "scope": "1010284033",
+                "inclusiveMs": 10.8973,
+                "selfMs": 6.4904,
+                "bytes": 0,
+                "items": 1,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "1009970176",
+                "inclusiveMs": 62.1842,
+                "selfMs": 1.8577,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "SPARSE_HASH_ERASE": 1.8923,
+              "SPARSE_REGION_PUBLISH": 2.5146
+            }
+          }
+        ]
+      },
+      "SPARSE_UPLOAD": {
+        "inclusiveMs": {
+          "samples": 12,
+          "mean": 11.459141666666667,
+          "p50": 5.8354,
+          "p95": 33.1013,
+          "p99": 33.1013,
+          "maximum": 33.1013
+        },
+        "selfTotalMs": 61.1628,
+        "slowest": [
+          {
+            "sequence": 6450,
+            "revision": 2874,
+            "chain": [
+              {
+                "stage": "SPARSE_UPLOAD",
+                "scope": "902925826",
+                "inclusiveMs": 33.1013,
+                "selfMs": 18.5981,
+                "bytes": 14181120,
+                "items": 5945,
+                "reason": 512
+              },
+              {
+                "stage": "FRAME",
+                "scope": "902576129",
+                "inclusiveMs": 42.2587,
+                "selfMs": 4.6616,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "902263296",
+                "inclusiveMs": 134.1801,
+                "selfMs": 12.168,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "STAGING_ACQUIRE": 10.04930000000004,
+              "STAGING_COPY": 3.264000000000003,
+              "STAGING_BARRIER": 0.297100000000003,
+              "STAGING_RECORD": 0.8928000000000008
+            }
+          },
+          {
+            "sequence": 6371,
+            "revision": 2808,
+            "chain": [
+              {
+                "stage": "SPARSE_UPLOAD",
+                "scope": "826589698",
+                "inclusiveMs": 17.1303,
+                "selfMs": 8.8523,
+                "bytes": 4020288,
+                "items": 5924,
+                "reason": 512
+              },
+              {
+                "stage": "FRAME",
+                "scope": "826526721",
+                "inclusiveMs": 26.8471,
+                "selfMs": 2.8068,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "826350080",
+                "inclusiveMs": 58.5552,
+                "selfMs": 5.2896,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "STAGING_ACQUIRE": 5.598700000000069,
+              "STAGING_COPY": 1.7473999999999847,
+              "STAGING_BARRIER": 0.2357000000000032,
+              "STAGING_RECORD": 0.6962000000000006
+            }
+          },
+          {
+            "sequence": 6490,
+            "revision": 2901,
+            "chain": [
+              {
+                "stage": "SPARSE_UPLOAD",
+                "scope": "949592578",
+                "inclusiveMs": 16.9141,
+                "selfMs": 7.2634,
+                "bytes": 5856960,
+                "items": 840,
+                "reason": 512
+              },
+              {
+                "stage": "FRAME",
+                "scope": "949276161",
+                "inclusiveMs": 33.772,
+                "selfMs": 4.2826,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "948894720",
+                "inclusiveMs": 71.2274,
+                "selfMs": 1.6625,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "STAGING_ACQUIRE": 5.358200000000076,
+              "STAGING_COPY": 2.1732999999999842,
+              "STAGING_BARRIER": 0.5647000000000058,
+              "STAGING_RECORD": 1.5544999999999565
+            }
+          },
+          {
+            "sequence": 6512,
+            "revision": 2923,
+            "chain": [
+              {
+                "stage": "SPARSE_UPLOAD",
+                "scope": "1010596354",
+                "inclusiveMs": 17.5729,
+                "selfMs": 6.4579,
+                "bytes": 3477120,
+                "items": 921,
+                "reason": 512
+              },
+              {
+                "stage": "FRAME",
+                "scope": "1010287105",
+                "inclusiveMs": 27.79,
+                "selfMs": 5.1411,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "1009970176",
+                "inclusiveMs": 62.1842,
+                "selfMs": 1.8577,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "STAGING_ACQUIRE": 6.0047000000000255,
+              "STAGING_COPY": 2.6381999999999834,
+              "STAGING_BARRIER": 0.6640999999999937,
+              "STAGING_RECORD": 1.8079999999999445
+            }
+          }
+        ]
+      },
+      "RESOURCE_INDEX": {
+        "inclusiveMs": {
+          "samples": 858,
+          "mean": 0.10032249417249417,
+          "p50": 0.0007,
+          "p95": 0.0026,
+          "p99": 1.8928,
+          "maximum": 13.0073
+        },
+        "selfTotalMs": 72.527,
+        "slowest": [
+          {
+            "sequence": 6518,
+            "revision": 2929,
+            "chain": [
+              {
+                "stage": "RESOURCE_INDEX",
+                "scope": "1026825218",
+                "inclusiveMs": 12.5259,
+                "selfMs": 11.8904,
+                "bytes": 0,
+                "items": 4798,
+                "reason": 0
+              },
+              {
+                "stage": "FRAME",
+                "scope": "1026804737",
+                "inclusiveMs": 41.2078,
+                "selfMs": 5.7122,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "1026387456",
+                "inclusiveMs": 76.9846,
+                "selfMs": 0.9347,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "BUFFER_UPLOAD": 0.1208,
+              "STAGING_ACQUIRE": 0.07279999999999992,
+              "STAGING_COPY": 0.18390000000000012,
+              "STAGING_BARRIER": 0.06949999999999991,
+              "STAGING_RECORD": 0.1885
+            }
+          },
+          {
+            "sequence": 6449,
+            "revision": 2873,
+            "chain": [
+              {
+                "stage": "RESOURCE_INDEX",
+                "scope": "900462594",
+                "inclusiveMs": 10.9295,
+                "selfMs": 10.3401,
+                "bytes": 0,
+                "items": 4084,
+                "reason": 0
+              },
+              {
+                "stage": "FRAME",
+                "scope": "900442113",
+                "inclusiveMs": 22.3275,
+                "selfMs": 5.2545,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "900011520",
+                "inclusiveMs": 55.5269,
+                "selfMs": 0.0,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "BUFFER_UPLOAD": 0.0572,
+              "STAGING_ACQUIRE": 0.06899999999999991,
+              "STAGING_COPY": 0.19910000000000003,
+              "STAGING_BARRIER": 0.0681,
+              "STAGING_RECORD": 0.19600000000000026
+            }
+          },
+          {
+            "sequence": 6495,
+            "revision": 2906,
+            "chain": [
+              {
+                "stage": "RESOURCE_INDEX",
+                "scope": "966868482",
+                "inclusiveMs": 13.0073,
+                "selfMs": 10.0901,
+                "bytes": 0,
+                "items": 4782,
+                "reason": 0
+              },
+              {
+                "stage": "FRAME",
+                "scope": "966845953",
+                "inclusiveMs": 24.0152,
+                "selfMs": 4.6867,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "965891584",
+                "inclusiveMs": 106.0773,
+                "selfMs": 0.1946,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "BUFFER_UPLOAD": 0.0346,
+              "STAGING_ACQUIRE": 1.9074999999999949,
+              "STAGING_COPY": 0.35920000000000196,
+              "STAGING_BARRIER": 0.1590999999999997,
+              "STAGING_RECORD": 0.4568000000000009
+            }
+          },
+          {
+            "sequence": 6490,
+            "revision": 2901,
+            "chain": [
+              {
+                "stage": "RESOURCE_INDEX",
+                "scope": "949296130",
+                "inclusiveMs": 9.7483,
+                "selfMs": 9.309,
+                "bytes": 0,
+                "items": 4126,
+                "reason": 0
+              },
+              {
+                "stage": "FRAME",
+                "scope": "949276161",
+                "inclusiveMs": 33.772,
+                "selfMs": 4.2826,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              },
+              {
+                "stage": "SUBMIT",
+                "scope": "948894720",
+                "inclusiveMs": 71.2274,
+                "selfMs": 1.6625,
+                "bytes": 0,
+                "items": 0,
+                "reason": 0
+              }
+            ],
+            "directChildrenInclusiveMs": {
+              "BUFFER_UPLOAD": 0.0733,
+              "STAGING_ACQUIRE": 0.05609999999999997,
+              "STAGING_COPY": 0.11430000000000003,
+              "STAGING_BARRIER": 0.05480000000000002,
+              "STAGING_RECORD": 0.1408000000000001
+            }
+          }
+        ]
+      }
+    }
+  },
+  "changes": [
+    "address-ordered-neighbour-only attribute free-range coalescing; first-fit offsets preserved",
+    "one queued dirty entry per regional 64-byte node per successful upload",
+    "borrow validated unaligned float packet views during synchronous import; final buffers remain owned",
+    "batch index resize/copy and constant-time new-material normal map lookup",
+    "explicit initialization of all 640 lookup pairs; legacy 512-float publications retain defined zero response tail"
+  ],
+  "correctness": {
+    "rangeReference": {
+      "operations": 50000,
+      "firstFitExact": true,
+      "completeTrim": true,
+      "overflow": true
+    },
+    "floatView": {
+      "unalignedValues": 4096,
+      "finiteAndBoundsChecksRetained": true
+    },
+    "lookupDefaults": {
+      "poisonedConstructor": true,
+      "baselinePairs": 256,
+      "tailPairs": 384
+    },
+    "regions": {
+      "sources": 25000,
+      "probes": 2198,
+      "travelSteps": 256,
+      "uniqueDirtyJournal": true,
+      "partialUploadImageExact": true
+    },
+    "topology": {
+      "passed": true,
+      "nativeSha256": "b36b931cf78418e6b33c0936eddb3a133f4131d320230340ec076d3b4a16aad3",
+      "frames": 6,
+      "signals": 3,
+      "growthAndRemoval": 1025,
+      "note": "Before lookup-only correction; not rerun or relabelled as final DLL"
+    },
+    "mixed": {
+      "passed": true,
+      "nativeSha256": "ca1611e9562b63aad615b2743761992d618a669a593a648530a161773cd779cb",
+      "sharedDependents": 2,
+      "legacy512Publication": true,
+      "replacementAndAlphaRestoration": true
+    },
+    "sparseUpload": {
+      "passed": true,
+      "nativeSha256": "ca1611e9562b63aad615b2743761992d618a669a593a648530a161773cd779cb",
+      "freshFrames": 24,
+      "sourceGrowth": "128 -> 4096",
+      "sourceRemoval": 3072,
+      "fullRegionInitializations": 1,
+      "maxWriteBytes": 1048576,
+      "stagingRequests": 1726,
+      "stagingBytes": 24241748,
+      "recordBytes": 675840,
+      "indexBytes": 20516416
+    }
+  },
+  "mechanismObservation": {
+    "scope": "8192 fragmented attribute releases; isolated CPU fixture, one latest trial",
+    "oldMs": 58.6108,
+    "newMs": 0.4965,
+    "deltaMs": -58.1143,
+    "percent": -99.15288649873402,
+    "p95Measured": false,
+    "mcBenefitProven": false,
+    "dirtyJournalSyntheticOldEntries": 32,
+    "dirtyJournalSyntheticNewEntries": 1,
+    "additionalQueuedFlagCapacityBytes": 802816
+  },
+  "unresolved": [
+    "40.6736ms CreateCommittedResource under 1024-byte texture upload; cause inside driver not expanded",
+    "Import retries re-decode the packet after a pending arena reservation; no persistent parsed-transaction cache added",
+    "regional coverage and actual resource/GPU uploads remain required work; no per-subfunction timing attribution in baseline"
+  ],
+  "failures": [
+    {
+      "kind": "new CPU fixture string escaping compile failure",
+      "productionCause": false,
+      "retained": true,
+      "corrected": true
+    },
+    {
+      "kind": "direct bat bounded invocation command quoting failed before tests",
+      "productionCause": false,
+      "retained": true,
+      "corrected": true
+    },
+    {
+      "kind": "legacy lookup validation exception",
+      "productionCause": true,
+      "root": "Donut vector() leaves components untouched; 384 response tail pairs not initialized",
+      "corrected": true
+    }
+  ],
+  "execution": [
+    {
+      "name": "native-first-build-with-fixture-failure",
+      "exit": 1,
+      "wallSeconds": 38.434,
+      "peakGiB": 0.86
+    },
+    {
+      "name": "native-fixture-corrected-build",
+      "exit": 0,
+      "wallSeconds": 9.534,
+      "peakGiB": 0.562
+    },
+    {
+      "name": "cpu-regions",
+      "exit": 0,
+      "wallSeconds": 5.127,
+      "peakGiB": 0.257
+    },
+    {
+      "name": "topology-and-legacy-publication-failure",
+      "exit": 1,
+      "wallSeconds": 81.087,
+      "peakGiB": 2.327
+    },
+    {
+      "name": "lookup-corrected-build",
+      "exit": 0,
+      "wallSeconds": 16.236,
+      "peakGiB": 0.76
+    },
+    {
+      "name": "final-cpu-mixed-sparse",
+      "exit": 0,
+      "wallSeconds": 64.18,
+      "peakGiB": 2.613
+    }
+  ],
+  "dependencyLock": {
+    "restoredUnrelatedRecompiledFiles": 551,
+    "previousNrdSha256": "55b64cd8a144865c2b3c0bc03016db2eae93e6f73bd6e71c11e33316fae34bad"
+  },
+  "publication": {
+    "sourcePush": "pending",
+    "mavenLocal": "pending",
+    "central": false
+  }
+}

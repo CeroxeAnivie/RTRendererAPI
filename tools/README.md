@@ -8,6 +8,8 @@
 
 | 工具 | 用途 | 常用参数 |
 | --- | --- | --- |
+| [Analyze-FlightResourceHotspots.py](Analyze-FlightResourceHotspots.py) | 将 JFR 快飞帧身份匹配到完整 native slow group，按 session/scope 去重并保留最慢父链。 | capture、--output |
+| [Verify-FlightHotspotRelease.py](Verify-FlightHotspotRelease.py) | 核对当前分支源码已上传、四模块 Maven Local、受测 JNI 和未变 shader/依赖字节。 | --tested-native、--source-commit、--output |
 | [Build-RtxptBridge.ps1](Build-RtxptBridge.ps1) | 对固定版本的 RTXPT 源码应用宿主适配，构建 JNI runtime 并收集上游许可证。 | `-SdkRoot`、`-CMakeExecutable`、`-StreamlineSdk`、`-MemoryLimitGB`、`-ConfigureOnly` |
 | [Build-RtxptShaderBudgets.ps1](Build-RtxptShaderBudgets.ps1) | 使用已采集的上游编译清单生成 1～6 光学界面预算的 shader 包，或校验已有包。 | `-ManifestDirectory`、`-RuntimeDirectory`、`-OutputDirectory`、`-VerifyOnly` |
 | [Invoke-BoundedBuild.ps1](Invoke-BoundedBuild.ps1) | 通过 Windows Job Object 限制构建进程及其子进程的总内存。 | `-FilePath`、`-ArgumentList`、`-WorkingDirectory`、`-MemoryLimitGB` |

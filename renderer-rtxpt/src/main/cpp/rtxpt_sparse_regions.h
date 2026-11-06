@@ -29,6 +29,7 @@ public:
     std::unordered_map<Cell,CellEntry,HashCell> cells;
     std::vector<rtr::LightTreeNode> packed;
     std::vector<uint32_t> global,dirtyNodes;
+    std::vector<uint8_t> queuedNodes;
     std::vector<Shape> shapes;
     std::vector<uint32_t> owners;
     std::vector<uint64_t> affectedEpochs,topologyEpochs;
@@ -46,7 +47,7 @@ public:
     // bounded hash-probe overflows, uploaded bytes.
     std::array<uint64_t,9> work{};
     void Clear(){
-        roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();affectedEpoch=0;dirtyNodes.clear();overflowByHome.clear();hashHoles.clear();
+        roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();affectedEpoch=0;dirtyNodes.clear();queuedNodes.clear();overflowByHome.clear();hashHoles.clear();
         for(auto& blocks:freeBlocks)blocks.clear();buckets=poolNodes=tombstones=0;globalWords=GlobalWordCapacity;links=0;
         dirty=full=true;indexed=true;initialized=false;for(size_t i=2;i<=6;i++)work[i]=0;
     }
@@ -146,7 +147,11 @@ private:
         const auto& n=nodes[id];for(uint32_t child:{uint32_t(n.left),uint32_t(n.right)})
             if(force||affectedEpochs[child]==affectedEpoch)Sync(tree,nodes,child,changed,force);
     }
-    void Mark(uint32_t index){dirtyNodes.push_back(index);dirty=true;}
+    void Mark(uint32_t index){
+        dirty=true;if(full)return;
+        if(queuedNodes.size()<=index)queuedNodes.resize(packed.size());
+        if(!queuedNodes[index]){dirtyNodes.push_back(index);queuedNodes[index]=1;}
+    }
     void WriteWord(uint32_t offset,uint32_t value){
         const uint32_t node=buckets+offset/16;auto* words=reinterpret_cast<unsigned char*>(&packed.at(node));
         uint32_t previous;std::memcpy(&previous,words+(offset%16)*4,4);
@@ -243,6 +248,7 @@ private:
         for(uint32_t slot=0;slot<buckets;slot++){uint32_t empty=Empty;std::memcpy(&packed[slot].maximum[0],&empty,4);}
         for(auto& [cell,entry]:cells){entry.slot=entry.block=None;entry.order=0;entry.overflow=false;PublishCell(cell,entry);}
         for(uint32_t i=0;i<global.size();i++)WriteWord(i,global[i]);
+        for(auto index:dirtyNodes)queuedNodes[index]=0;
         dirtyNodes.clear();dirty=full=true;++fullPacks;
     }
 public:
@@ -293,5 +299,5 @@ public:
         if(rebuilding||coverageChanged||globalChanged)++work[0];
         work[2]=roots.size();work[3]=cells.size();work[4]=links;work[5]=global.size();work[6]=packed.size()*64;
     }
-    void Uploaded(){dirtyNodes.clear();dirty=full=false;}
+    void Uploaded(){for(auto index:dirtyNodes)queuedNodes[index]=0;dirtyNodes.clear();dirty=full=false;}
 };

@@ -8,6 +8,9 @@
 
 struct Light {std::array<float,4> positionType{},directionRange{},colorIntensity{};};
 struct RtrSparseRegionsTestAccess {
+    static void MarkWords(RtrSparseRegions& r,uint32_t node,uint32_t first){
+        for(uint32_t word=0;word<16;++word)r.WriteWord((node-r.buckets)*16+word,first+word);
+    }
     static void Populate(RtrSparseRegions& r,const std::vector<RtrSparseRegions::Cell>& cells){
         r.Clear();for(auto cell:cells)r.cells[cell].roots={0};r.FullPack();
     }
@@ -53,6 +56,8 @@ struct UploadOracle {
     std::vector<rtr::LightTreeNode> gpu;
     uint64_t bytes=0,spans=0;
     void Apply(RtrSparseRegions& r){
+        auto unique=r.dirtyNodes;std::sort(unique.begin(),unique.end());
+        Check(std::adjacent_find(unique.begin(),unique.end())==unique.end(),"Regional dirty journal contains duplicate nodes");
         bool growth=gpu.size()<r.packed.size();if(growth){size_t size=64;while(size<r.packed.size())size*=2;gpu.resize(size);std::memset(gpu.data(),0xcd,gpu.size()*64);}
         bytes=spans=0;
         if(growth||r.full){std::copy(r.packed.begin(),r.packed.end(),gpu.begin());bytes=r.packed.size()*64;spans=!r.packed.empty();}
@@ -68,6 +73,17 @@ struct UploadOracle {
     }
 };
 int main(){try{
+    {RtrSparseRegions journal;journal.buckets=0;journal.packed.resize(4);
+        RtrSparseRegionsTestAccess::MarkWords(journal,2,1);RtrSparseRegionsTestAccess::MarkWords(journal,2,17);
+        Check(journal.dirtyNodes.size()==1&&journal.dirtyNodes[0]==2,"Repeated words did not coalesce at the owning node");
+        journal.Uploaded();RtrSparseRegionsTestAccess::MarkWords(journal,2,33);
+        Check(journal.dirtyNodes.size()==1,"Uploaded node was not requeued next transaction");
+        journal.Clear();journal.packed.resize(4);RtrSparseRegionsTestAccess::MarkWords(journal,2,1);
+        Check(journal.dirtyNodes.empty()&&journal.full,"Full upload unnecessarily queued individual words");
+        journal.Uploaded();RtrSparseRegionsTestAccess::MarkWords(journal,2,17);
+        Check(journal.dirtyNodes.size()==1,"Full upload left stale journal ownership");
+        std::cout<<"SPARSE_DIRTY_JOURNAL PASS repeatedWordMarks=32 queuedNodes=1 nextTransaction=1 fullReset=1\n";
+    }
     uint64_t page=0,remaining=0,allocations=0,bytes=0;
     for(uint64_t copied=0;copied<18*1024*1024;copied+=4096){
         if(remaining<4096){page=RtrUploadRetention::NextChunkSize(65536,page,allocations!=0);remaining=page;++allocations;bytes+=page;}

@@ -13,8 +13,21 @@ public:
         if constexpr(std::is_same_v<T,float>)if(!std::isfinite(result))throw std::invalid_argument("Nonfinite resource scalar");return result;}
     uint32_t count(){auto n=value<uint32_t>();if(n>size_t(end-cursor))throw std::invalid_argument("Invalid resource count");return n;}
     std::string text(){auto n=count();auto data=take(n);return std::string(reinterpret_cast<const char*>(data),n);}
-    std::vector<float> floats(){auto n=count();auto data=take(size_t(n)*4);std::vector<float> result(n);std::memcpy(result.data(),data,size_t(n)*4);
-        for(float x:result)if(!std::isfinite(x))throw std::invalid_argument("Nonfinite resource input");return result;}
+    class FloatView {
+        const uint8_t* values;size_t length;
+    public:
+        FloatView(const uint8_t* data,size_t count):values(data),length(count){}
+        size_t size()const{return length;}bool empty()const{return !length;}
+        const uint8_t* data()const{return values;}
+        float operator[](size_t index)const{float result;std::memcpy(&result,values+index*4,4);return result;}
+    };
+    FloatView floatView(){
+        auto n=count();FloatView result(take(size_t(n)*4),n);
+        for(size_t i=0;i<n;++i)if(!std::isfinite(result[i]))throw std::invalid_argument("Nonfinite resource input");
+        return result;
+    }
+    std::vector<float> floats(){auto view=floatView();std::vector<float> result(view.size());
+        std::memcpy(result.data(),view.data(),view.size()*4);return result;}
     std::vector<uint8_t> bytes(){auto n=count();auto p=take(n);return {p,p+n};}
     void finish(){if(cursor!=end)throw std::invalid_argument("Trailing resource packet data");}
 };
