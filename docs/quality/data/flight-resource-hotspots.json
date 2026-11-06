@@ -3,7 +3,7 @@
   "version": "7.2.2",
   "baselineVersion": "7.2.1",
   "branch": "codex/resource-root-followup",
-  "baseCommit": "353751c81140f4ba598d9f97dfeab27f3741d94b",
+  "baseCommit": "eb29fcc5cc7f955e8fbbc186659ac471cde2cca6",
   "scope": "internal-compatible-resource-performance-and-legacy-lookup-correctness",
   "nativeSha256": "ca1611e9562b63aad615b2743761992d618a669a593a648530a161773cd779cb",
   "baselineNativeSha256": "b7faab55677bc5a16806ab00a66c6d2a00a221029e17ed7b5ccfea69b03537ee",

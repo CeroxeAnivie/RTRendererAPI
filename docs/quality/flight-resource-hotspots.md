@@ -1,6 +1,6 @@
 # 快飞资源热点与旧 lookup 兼容修复
 
-2026-11-07，兼容内部修复版本 **7.2.2**。保持原分支 `codex/resource-root-followup`，不创建分支或 worktree。基线为 7.2.1 / `353751c8`，最终受测 JNI SHA256：
+2026-11-07，兼容内部修复版本 **7.2.2**。保持原分支 `codex/resource-root-followup`，不创建分支或 worktree。本批起点为 `eb29fcc5`（保留此前验收窗口修正），依赖基线为 7.2.1 / `353751c8`，最终受测 JNI SHA256：
 
 `ca1611e9562b63aad615b2743761992d618a669a593a648530a161773cd779cb`。
 
