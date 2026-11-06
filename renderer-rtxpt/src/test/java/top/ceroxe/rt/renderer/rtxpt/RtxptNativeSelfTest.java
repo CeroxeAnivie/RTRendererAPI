@@ -12,7 +12,7 @@ public final class RtxptNativeSelfTest {
         // This happens outside the frame loop and never changes the rendered scene.
         var controlScene=new RtxptScene();controlScene.retain(RtxptAdapterSelfTest.scene(1));
         var controlFrame=RtxptAdapterSelfTest.frame(0);
-        var controlFile=controlScene.export(output.resolve("native-control"),controlFrame,controlScene.items(controlFrame));
+        var controlFile=new RtxptSceneExport(controlScene).export(output.resolve("native-control"),controlFrame,controlScene.items(controlFrame));
         System.out.println("RTXPT standalone control scene: "+controlFile);
         if(java.util.Arrays.asList(args).contains("--export-only"))return;
         try(Renderer r=Renderer.open("rtxpt",RendererConfig.pathTracedPresentation())) {

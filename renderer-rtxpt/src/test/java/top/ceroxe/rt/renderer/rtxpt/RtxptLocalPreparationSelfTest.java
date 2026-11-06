@@ -57,7 +57,7 @@ public final class RtxptLocalPreparationSelfTest {
                 changed.retain(tx.build());var before=new Reads(items);var after=new Reads(changed.items(frame));
                 Path parent=Files.createDirectories(output.resolve(count+"-"+kind+"-"+sample));
                 long bytes=allocation(),start=System.nanoTime();
-                result=RtxptDelta.prepare(parent,original,changed,before,after,paths,Map.of(),PACKETS);
+                result=RtxptDelta.prepare(original,changed,before,after,Map.of(),PACKETS);
                 long elapsed=System.nanoTime()-start,allocated=allocation()-bytes;
                 if(sample>=0){allocations[sample]=allocated;wall[sample]=elapsed;oldReads[sample]=before.reads;newReads[sample]=after.reads;}
                 if(!OBSERVE){
@@ -103,11 +103,11 @@ public final class RtxptLocalPreparationSelfTest {
         for(long id=1;id<=256;id++)tx.upsert(SceneInstance.builder(id,1).build());
         tx.upsert(SceneInstance.builder(257,2).build());scene.retain(tx.build());var frame=RtxptAdapterSelfTest.frame(0);
         var shared=new RtxptScene(scene);shared.retain(SceneTransaction.builder(2).upsert(MaterialAsset.builder(1).roughness(.7f).build()).build());
-        var delta=RtxptDelta.prepare(output,scene,shared,scene.items(frame),shared.items(frame),new RtxptPersistentMap<>(),Map.of(),PACKETS);
+        var delta=RtxptDelta.prepare(scene,shared,scene.items(frame),shared.items(frame),Map.of(),PACKETS);
         require(delta.materials()==1&&delta.meshes()==0&&delta.work().dependencyVisits()>=256,"Shared resource visits all actual users and deduplicates variants");
         var mixed=new RtxptScene(scene);mixed.retain(SceneTransaction.builder(2).upsert(MaterialAsset.builder(2).roughness(.7f).build())
             .upsert(SceneInstance.builder(1,1).transform(new AffineTransform(new float[]{1,0,0,2,0,1,0,0,0,0,1,0})).build()).build());
-        var mixedDelta=RtxptDelta.prepare(output,scene,mixed,scene.items(frame),mixed.items(frame),new RtxptPersistentMap<>(),Map.of(),PACKETS);
+        var mixedDelta=RtxptDelta.prepare(scene,mixed,scene.items(frame),mixed.items(frame),Map.of(),PACKETS);
         require(mixedDelta.work().dependencyVisits()<16&&mixedDelta.meshes()==0,"Mixed material/pose avoids unrelated users of unchanged pose variant");
         var payload=new byte[mixedDelta.memory().remaining()];mixedDelta.memory().duplicate().get(payload);require(new String(payload,java.nio.charset.StandardCharsets.ISO_8859_1).contains("i1"),"Mixed memory delta publishes changed pose");
         try{scene.validateAssetBudget(new RendererResourceOptions(1,1,1,1,1));throw new AssertionError("Tiny asset budget accepted");}

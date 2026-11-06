@@ -145,7 +145,9 @@ public:
     uint64_t applicationUploadedBytes=0,applicationUploadCalls=0,applicationPatches=0;
     bool lookupDirty=true,applicationDirty=true;
     void PatchApplication(uint64_t generation,size_t offset,const std::vector<uint8_t>& bytes){
-        if(generation==0||generation<=publication)throw std::invalid_argument("Application patch generations must strictly increase");
+        // Public Java publications require strictly increasing generations. Their
+        // bounded uploader may emit several disjoint slices of that same generation.
+        if(generation==0||generation<publication)throw std::invalid_argument("Application patch generation cannot precede the resident publication");
         if(applicationData.size()<extensionMinimumBytes)throw std::invalid_argument("Application data is smaller than the active extension contract");
         auto next=RtrMergeApplicationRange(applicationDirtyRanges,offset,bytes.size(),applicationData.size());
         // All validation/allocation precedes mutation, including the dirty-range metadata.

@@ -657,7 +657,11 @@ listOf(
     "RtxptSparseRegionalNativeSelfTest",
     "RtxptSparseUploadNativeSelfTest",
     "RtxptTlasCapacityNativeSelfTest",
-    "RtxptTopologyPreparationNativeSelfTest"
+    "RtxptTopologyPreparationNativeSelfTest",
+    "RtxptBlasReuseNativeSelfTest",
+    "RtxptBootstrapNativeSelfTest",
+    "RtxptManagedScaleNativeSelfTest",
+    "RtxptApplicationDataSelfTest"
 ).forEach { name ->
     tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
         group = "verification"

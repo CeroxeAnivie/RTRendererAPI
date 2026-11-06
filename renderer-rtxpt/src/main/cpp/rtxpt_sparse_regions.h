@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #define RTR_REGION_INCIDENCE 1
+#define RTR_REGION_LOCAL_FRONTIER 1
 
 // Incremental treelet frontiers, stable hash slots and independent list blocks.
 class RtrSparseRegions {
@@ -33,7 +34,7 @@ public:
     std::vector<uint8_t> queuedNodes;
     std::vector<Shape> shapes;
     std::vector<uint32_t> owners;
-    std::vector<uint64_t> affectedEpochs,topologyEpochs;
+    std::vector<uint64_t> affectedEpochs,topologyEpochs,oldRootEpochs;
     std::unordered_map<uint32_t,std::vector<Cell>> overflowByHome;
     std::vector<uint32_t> hashHoles;
     std::vector<uint32_t> publishRoots;
@@ -50,13 +51,13 @@ public:
     // bounded hash-probe overflows, uploaded bytes.
     std::array<uint64_t,9> work{};
     size_t CpuBytes()const{
-        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity())*4+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity())*8;
+        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity())*4+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity()+oldRootEpochs.capacity())*8;
         for(const auto& [id,r]:roots)bytes+=sizeof(Root)+r.cells.capacity()*sizeof(Cell)+(r.members.capacity()+r.cellSlots.capacity())*4;
         for(const auto& [cell,e]:cells)bytes+=sizeof(CellEntry)+(e.roots.capacity()+e.rootCellIndices.capacity())*4;
         return bytes; // tracked payload capacity; unordered-map allocator metadata is excluded
     }
     void Clear(){
-        roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();affectedEpoch=0;dirtyNodes.clear();queuedNodes.clear();overflowByHome.clear();hashHoles.clear();
+        roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();oldRootEpochs.clear();affectedEpoch=0;dirtyNodes.clear();queuedNodes.clear();overflowByHome.clear();hashHoles.clear();
         for(auto& blocks:freeBlocks)blocks.clear();buckets=poolNodes=tombstones=0;globalWords=GlobalWordCapacity;links=0;
         dirty=full=true;indexed=true;initialized=false;for(size_t i=2;i<=6;i++)work[i]=0;
     }
@@ -170,16 +171,33 @@ private:
         if(at==members.size()||members[at++]!=id)return false;const auto& n=nodes[id];
         return n.light>=0||(MatchMembers(nodes,uint32_t(n.left),members,at)&&MatchMembers(nodes,uint32_t(n.right),members,at));
     }
-    void ReconcileFrontier(const rtr::RetainedLightTree& tree,const std::vector<rtr::LightTreeNode>& nodes,ChangedCells& changed){
-        std::vector<uint32_t> finalRoots,stack{tree.root};finalRoots.reserve(roots.size());
-        while(!stack.empty()){auto id=stack.back();stack.pop_back();++frontierVisited;
-            if(Eligible(tree,nodes,id)){finalRoots.push_back(id);topologyEpochs[id]=affectedEpoch;}
-            else{stack.push_back(uint32_t(nodes[id].right));stack.push_back(uint32_t(nodes[id].left));}}
+    void QueueOldRoot(uint32_t id,std::vector<uint32_t>& oldRoots){
+        if(id!=None&&oldRootEpochs[id]!=affectedEpoch){oldRootEpochs[id]=affectedEpoch;oldRoots.push_back(id);}
+    }
+    void CollectOwners(const std::vector<rtr::LightTreeNode>& nodes,uint32_t id,std::vector<uint32_t>& oldRoots){
+        QueueOldRoot(owners[id],oldRoots);
+        if(nodes[id].light<0){CollectOwners(nodes,uint32_t(nodes[id].left),oldRoots);CollectOwners(nodes,uint32_t(nodes[id].right),oldRoots);}
+    }
+    void PlanFrontier(const rtr::RetainedLightTree& tree,const std::vector<rtr::LightTreeNode>& nodes,uint32_t id,bool force,
+            std::vector<uint32_t>& finalRoots,std::vector<uint32_t>& oldRoots){
+        ++frontierVisited;
+        if(Eligible(tree,nodes,id)){finalRoots.push_back(id);topologyEpochs[id]=affectedEpoch;CollectOwners(nodes,id,oldRoots);return;}
+        if(roots.count(id)){QueueOldRoot(id,oldRoots);force=true;}
+        for(uint32_t child:{uint32_t(nodes[id].left),uint32_t(nodes[id].right)})
+            if(force||affectedEpochs[child]==affectedEpoch)PlanFrontier(tree,nodes,child,force,finalRoots,oldRoots);
+    }
+    void ReconcileFrontier(const rtr::RetainedLightTree& tree,const std::vector<rtr::LightTreeNode>& nodes,ChangedCells& changed,
+            std::vector<uint32_t>& oldRoots,bool rebuilding){
+        std::vector<uint32_t> finalRoots;finalRoots.reserve(oldRoots.size());
+        PlanFrontier(tree,nodes,tree.root,rebuilding,finalRoots,oldRoots);
         // Rotations can exchange descendants between two surviving frontier
         // roots. An old owner must never delete a different final root that
         // this same transaction already updated. Plan the final set first.
-        for(auto at=roots.begin();at!=roots.end();){auto id=at->first;++at;if(topologyEpochs[id]!=affectedEpoch)RemoveRoot(id,changed);}
-        std::fill(owners.begin(),owners.end(),None);
+        // Clear only the affected old ownership before publishing any final
+        // root. A small rotation must not scan/reset the entire resident tree.
+        for(auto id:oldRoots){auto old=roots.find(id);if(old==roots.end())continue;
+            if(topologyEpochs[id]!=affectedEpoch)RemoveRoot(id,changed);
+            else for(auto member:old->second.members)if(owners[member]==id)owners[member]=None;}
         for(auto id:finalRoots){auto old=roots.find(id);size_t at=0;
             const bool same=old!=roots.end()&&MatchMembers(nodes,id,old->second.members,at)&&at==old->second.members.size();
             if(same){topologyEpochs[id]=0;for(auto member:old->second.members)owners[member]=id;}
@@ -301,22 +319,22 @@ public:
         ChangedCells changed;const auto oldGlobal=global;
         const bool rebuilding=!initialized;owners.resize(nodes.size(),None);
         shapes.resize(nodes.size());
-        affectedEpochs.resize(nodes.size());topologyEpochs.resize(nodes.size());
-        if(++affectedEpoch==0){std::fill(affectedEpochs.begin(),affectedEpochs.end(),0);std::fill(topologyEpochs.begin(),topologyEpochs.end(),0);++affectedEpoch;}
-        bool affected=false,topologyChanged=false;
+        affectedEpochs.resize(nodes.size());topologyEpochs.resize(nodes.size());oldRootEpochs.resize(nodes.size());
+        if(++affectedEpoch==0){std::fill(affectedEpochs.begin(),affectedEpochs.end(),0);std::fill(topologyEpochs.begin(),topologyEpochs.end(),0);std::fill(oldRootEpochs.begin(),oldRootEpochs.end(),0);++affectedEpoch;}
+        bool affected=false,topologyChanged=false;std::vector<uint32_t> oldRoots;
         auto inspect=[&](uint32_t id){if(id>=nodes.size())return;auto shape=Describe(tree,nodes,id);
             if(rebuilding||!(shape==shapes[id])){
                 const auto& old=shapes[id];
                 const bool topology=rebuilding||shape.kind!=old.kind||shape.left!=old.left||shape.right!=old.right;
                 topologyChanged|=topology;
-                shapes[id]=shape;if(tree.heights[id]<0)RemoveRoot(id,changed);
-                else for(uint32_t parent=id;parent!=None;parent=tree.parents[parent]){
+                QueueOldRoot(owners[id],oldRoots);
+                shapes[id]=shape;if(tree.heights[id]>=0)for(uint32_t parent=id;parent!=None;parent=tree.parents[parent]){
                     if(affectedEpochs[parent]==affectedEpoch)break;affectedEpochs[parent]=affectedEpoch;affected=true;
                 }
             }};
         if(rebuilding)for(uint32_t id=0;id<nodes.size();++id)inspect(id);
         else for(auto id:nodeChanges)inspect(id);
-        if(rebuilding||topologyChanged)ReconcileFrontier(tree,nodes,changed);
+        if(rebuilding||topologyChanged)ReconcileFrontier(tree,nodes,changed,oldRoots,rebuilding);
         else if(affected)Sync(tree,nodes,tree.root,changed,false);
         initialized=true;
         const bool coverageChanged=!changed.empty();

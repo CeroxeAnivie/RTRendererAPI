@@ -1,0 +1,4 @@
+RTXPT_MEMORY_PHASE time=1793990238551 phase=selftest private=2088960 workingSet=6434816 gpuQueryStatus=0x80004002 dedicated=0 shared=0 trackedDefault=0 trackedUpload=0 trackedReadback=0 liveResources=0 outputDropped=0 resourceCensus=0
+RTXPT_MEMORY_CAPACITY time=1793990238551 name=selftest domain=cpu_payload live=16 capacity=64 retired=0 idle=48
+RTXPT_MEMORY_SCOPE time=1793990238551 phase=selftest.scope before=2117632 after=2117632 delta=0
+RTXPT_MEMORY_DIAGNOSTICS_SELFTEST PASS optIn=1 offQueries=0 offClocks=0 offWrites=0 staleEpochRejected=true

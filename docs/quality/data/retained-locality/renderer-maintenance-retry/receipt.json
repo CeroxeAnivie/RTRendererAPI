@@ -1,0 +1,15 @@
+{
+    "memoryDiagnostics":  0,
+    "resourceCensus":  0,
+    "backgroundWindow":  1,
+    "nativeSha256":  "f08e3a42bb6b0e8d67efdfa4b83ba3e11e9d947b8acd6df2e640be4dd86ee315",
+    "cases":  [
+                  {
+                      "name":  "RtxptBootstrapNativeSelfTest",
+                      "passed":  false,
+                      "exit":  1,
+                      "wallSeconds":  4.8660337,
+                      "stdout":  "RtxptBootstrapNativeSelfTest.log"
+                  }
+              ]
+}

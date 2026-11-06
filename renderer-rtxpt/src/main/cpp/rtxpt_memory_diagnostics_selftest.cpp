@@ -5,10 +5,13 @@
 #include <optional>
 
 int main(int argc,char** argv) {
-    const bool expected=argc==2 && std::strcmp(argv[1],"enabled")==0;
+    const bool census=argc==2&&std::strcmp(argv[1],"census")==0;
+    const bool expected=census||(argc==2 && std::strcmp(argv[1],"enabled")==0);
     SetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_DIAGNOSTICS",expected?L"1":nullptr);
+    SetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_RESOURCE_CENSUS",census?L"1":nullptr);
     SetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_LOG",nullptr);
     if(RtrMemoryDiagnostics::Enabled()!=expected)return 1;
+    if(RtrMemoryDiagnostics::CensusEnabled()!=census)return 7;
     // Null resources and an unavailable graphics device must be safe in both modes.
     RtrMemoryDiagnostics::Created(nullptr,"test","test",nullptr,nullptr,0);
     RtrMemoryDiagnostics::Released(nullptr);

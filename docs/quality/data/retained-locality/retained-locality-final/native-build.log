@@ -1,0 +1,64 @@
+适用于 .NET Framework MSBuild 版本 17.14.10+8b8e13593
+
+  Created Dir: D:/Engineering/code/APIs/RTRendererAPI/build/rtxpt-sdk/bin	Copied DLLs: D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.common.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.interposer.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.pcl.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.dlss.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/nvngx_dlss.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.reflex.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/NvLowLatencyVk.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.dlss_g.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/nvngx_dlssg.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.dlss_d.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/nvngx_dlssd.dll	Copied JSONs: D:/NVIDIA SDK/Streamline-2.14.16/scripts//sl.common.json;D:/NVIDIA SDK/Streamline-2.14.16/scripts//sl.imgui.json;D:/NVIDIA SDK/Streamline-2.14.16/scripts//sl.interposer.json;D:/NVIDIA SDK/Streamline-2.14.16/scripts//sl.reflex.json
+  DirectX-Headers.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\_deps\directx_headers-build\Release\DirectX-Headers.lib
+  DirectX-Guids.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\_deps\directx_headers-build\Release\DirectX-Guids.lib
+  ShaderMake.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderMake.exe
+  1>
+  ShaderMakeBlob.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\ShaderMake\Release\ShaderMakeBlob.lib
+  NRD.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\NRD.dll
+  Rtxdi.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Rtxdi\Release\Rtxdi.lib
+  1>Copying shader compilers
+  1>Copying shader sources
+  1>
+  TracyClient.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\_deps\tracy-build\Release\TracyClient.lib
+  jsoncpp_static.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\thirdparty\Release\jsoncpp_static.lib
+  donut_core.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\Release\donut_core.lib
+  nvrhi.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\nvrhi\Release\nvrhi.lib
+  donut_engine.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\Release\donut_engine.lib
+  glfw.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\thirdparty\glfw\src\Release\glfw3.lib
+  imgui.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\thirdparty\Release\imgui.lib
+  nvrhi_d3d12.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\nvrhi\Release\nvrhi_d3d12.lib
+  donut_app.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\Release\donut_app.lib
+  donut_render.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\Release\donut_render.lib
+  lz4_static.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Omm\external\lz4\build\cmake\Release\lz4.lib
+  xxhash.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Omm\external\xxHash\build\cmake\Release\xxhash.lib
+  omm-lib.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\omm-lib.dll
+  omm-gpu-nvrhi.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Omm\libraries\omm-gpu-nvrhi\Release\omm-gpu-nvrhi.lib
+  RtxptCore.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\Rtxpt\Release\RtxptCore.lib
+  rtxpt_jni.cpp
+    正在创建库 D:/Engineering/code/APIs/RTRendererAPI/build/rtxpt-sdk/build-host/Release/rtrenderer_rtxpt.lib 和对象 D:/Engineering/code/APIs/RTRendererAPI/build/rtxpt-sdk/build-host/Release/rtrenderer_rtxpt.exp
+  rtrenderer_rtxpt.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\rtrenderer_rtxpt.dll
+适用于 .NET Framework MSBuild 版本 17.14.10+8b8e13593
+
+  rtxpt_sparse_regions_selftest.cpp
+  rtxpt_sparse_regions_selftest.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\rtxpt_sparse_regions_selftest.exe
+适用于 .NET Framework MSBuild 版本 17.14.10+8b8e13593
+
+  Created Dir: D:/Engineering/code/APIs/RTRendererAPI/build/rtxpt-sdk/bin	Copied DLLs: D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.common.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.interposer.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.pcl.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.dlss.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/nvngx_dlss.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.reflex.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/NvLowLatencyVk.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.dlss_g.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/nvngx_dlssg.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/sl.dlss_d.dll;D:/NVIDIA SDK/Streamline-2.14.16/bin/x64/nvngx_dlssd.dll	Copied JSONs: D:/NVIDIA SDK/Streamline-2.14.16/scripts//sl.common.json;D:/NVIDIA SDK/Streamline-2.14.16/scripts//sl.imgui.json;D:/NVIDIA SDK/Streamline-2.14.16/scripts//sl.interposer.json;D:/NVIDIA SDK/Streamline-2.14.16/scripts//sl.reflex.json
+  DirectX-Headers.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\_deps\directx_headers-build\Release\DirectX-Headers.lib
+  DirectX-Guids.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\_deps\directx_headers-build\Release\DirectX-Guids.lib
+  ShaderMake.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderMake.exe
+  1>
+  ShaderMakeBlob.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\ShaderMake\Release\ShaderMakeBlob.lib
+  NRD.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\NRD.dll
+  Rtxdi.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Rtxdi\Release\Rtxdi.lib
+  1>Copying shader compilers
+  1>Copying shader sources
+  1>
+  TracyClient.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\_deps\tracy-build\Release\TracyClient.lib
+  jsoncpp_static.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\thirdparty\Release\jsoncpp_static.lib
+  donut_core.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\Release\donut_core.lib
+  nvrhi.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\nvrhi\Release\nvrhi.lib
+  donut_engine.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\Release\donut_engine.lib
+  glfw.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\thirdparty\glfw\src\Release\glfw3.lib
+  imgui.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\thirdparty\Release\imgui.lib
+  nvrhi_d3d12.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\nvrhi\Release\nvrhi_d3d12.lib
+  donut_app.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\Release\donut_app.lib
+  donut_render.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Donut\Release\donut_render.lib
+  lz4_static.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Omm\external\lz4\build\cmake\Release\lz4.lib
+  xxhash.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Omm\external\xxHash\build\cmake\Release\xxhash.lib
+  omm-lib.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\omm-lib.dll
+  omm-gpu-nvrhi.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\External\Omm\libraries\omm-gpu-nvrhi\Release\omm-gpu-nvrhi.lib
+  RtxptCore.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\build-host\Rtxpt\Release\RtxptCore.lib
+  rtxpt_memory_diagnostics_selftest.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\rtxpt_memory_diagnostics_selftest.exe

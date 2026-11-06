@@ -2012,5 +2012,26 @@
       },
       "notAnInterleavedOrMcBenchmark": true
     }
+  },
+  "managedResourceLocality": {
+    "version": "7.3.2",
+    "date": "2026-11-07",
+    "status": "targeted-correctness-and-scale-pair-passed-host-unmeasured",
+    "evidence": "retained-update-locality.json",
+    "baseline": "7.3.1",
+    "ownerMeanMs": {
+      "old": 13.456881,
+      "new": 7.520794
+    },
+    "ownerP95Ms": {
+      "old": 34.4202,
+      "new": 11.6608
+    },
+    "regressions": [
+      "FRAME mean +8.12%, P95 +27.45%",
+      "SPARSE_REGIONS mean +1.65%",
+      "tree/prepare mixed bench regressions retained without attribution"
+    ],
+    "limits": "One sequential pair, CPU inclusive timings, mostly offscreen, no MC FPS claim; rejected repeated-sort and failed bootstrap/ABI fixtures retained."
   }
 }

@@ -96,7 +96,7 @@ void IndexRetainedResources() {
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::IndexRebuild);
     resourceArena.Prepare(GetDevice());uploadArena.Prepare(GetDevice());
     resourceRetirement.reserve(16);resourceCommandPool.reserve(8);resourceQueryPool.reserve(16);
-    spareMeshBuffers.reserve(64);spareMeshBlases.reserve(64);spareResourceTlas.reserve(16);resourceGpuQueries.reserve(8);
+    spareMeshBuffers.reserve(64);spareMeshBlases.reserve(1024);spareResourceTlas.reserve(16);resourceGpuQueries.reserve(8);
     candidateLayoutDirty=true;
     if(!m_scene){
         residentMeshes.clear();residentMaterials.clear();residentMaterialMeshes.clear();residentTextureUsers.clear();residentMeshNodes.clear();residentInstanceNodes.clear();return;
@@ -272,6 +272,7 @@ struct RetiredResources {
 };
 std::vector<RetiredResources> resourceRetirement;
 std::vector<nvrhi::CommandListHandle> resourceCommandPool;
+nvrhi::CommandListHandle resourceComputeOrdering;
 std::vector<std::pair<nvrhi::EventQueryHandle,nvrhi::EventQueryHandle>> resourceQueryPool;
 struct SpareMeshBuffers {
     nvrhi::BufferHandle vertex,index;
@@ -282,6 +283,10 @@ struct SpareMeshBuffers {
 struct SpareMeshBlas { nvrhi::rt::AccelStructHandle acceleration; uint64_t bytes;RtrResourceArena::Storage storage; };
 std::vector<SpareMeshBuffers> spareMeshBuffers;
 std::vector<SpareMeshBlas> spareMeshBlases;
+// A 64-item limit retained only ~4MiB for the common 64KiB AS, despite
+// its existing 64MiB budget. Keep the byte cap while admitting small targets.
+static constexpr size_t SpareMeshBlasLimit=1024,CompletedMeshRecycleBatch=128;
+static constexpr uint64_t SpareMeshBlasBudget=64*1024*1024;
 uint64_t spareMeshBufferBytes=0,spareMeshBlasBytes=0;
 BlasAllocationIndex resourceBlasAllocationBytes;
 BufferAllocationIndex resourceBufferAllocations;
@@ -306,6 +311,10 @@ static bool CompatibleMemoryMesh(const ResidentMesh& a,const ResidentMesh& b){
         if(x->numIndices!=y->numIndices||x->numVertices!=y->numVertices||x->material->name!=y->material->name)return false;
     }
     return true;
+}
+static bool SameMemoryPositions(const ResidentMesh& a,const ResidentMesh& b){
+    const auto& x=a->buffers->positionData;const auto& y=b->buffers->positionData;
+    return !x.empty()&&x.size()==y.size()&&std::memcmp(x.data(),y.data(),x.size()*sizeof(x[0]))==0;
 }
 // Called before any graph or GPU mutation. Heap pressure can defer the complete
 // request here; it must never fail halfway through publishing a scene revision.
@@ -466,14 +475,14 @@ void RecycleMesh(const ResidentMesh& mesh,RetiredResources& retired){
         auto allocation=std::find_if(retired.allocationEntries.begin(),retired.allocationEntries.end(),[&](const auto& entry){return !entry.empty()&&entry.key()==as.Get();});
         if(allocation!=retired.allocationEntries.end()){
             bytes=allocation->mapped().bytes;
-            while(!spareMeshBlases.empty()&&(spareMeshBlases.size()>=64||spareMeshBlasBytes+bytes>64*1024*1024)){
+            while(!spareMeshBlases.empty()&&(spareMeshBlases.size()>=SpareMeshBlasLimit||spareMeshBlasBytes+bytes>SpareMeshBlasBudget)){
                 auto& old=spareMeshBlases.front();auto oldBytes=old.bytes;
                 RtrDiagnostics::Scope evict(RtrDiagnostics::PoolEvict,1,0,1,0,0,0,0,oldBytes);
                 if(!nativeLighting.reclaimer->Enqueue(old,oldBytes))break;
                 if(RtrDiagnostics::level.load())++arenaWork[5];
                 spareMeshBlases.erase(spareMeshBlases.begin());spareMeshBlasBytes-=oldBytes;
             }
-            if(spareMeshBlases.size()<64&&spareMeshBlasBytes+bytes<=64*1024*1024){spareMeshBlases.push_back({as,bytes,allocation->mapped().storage});spareMeshBlasBytes+=bytes;}
+            if(spareMeshBlases.size()<SpareMeshBlasLimit&&spareMeshBlasBytes+bytes<=SpareMeshBlasBudget){spareMeshBlases.push_back({as,bytes,allocation->mapped().storage});spareMeshBlasBytes+=bytes;}
             else if(RtrDiagnostics::level.load())++arenaWork[7];
         }
     }
@@ -514,7 +523,7 @@ void PollResourceRetirement(){
         bool completed;{RtrDiagnostics::Scope poll(RtrDiagnostics::CompletionPoll,2);completed=GetDevice()->pollEventQuery(i->done)&&GetDevice()->pollEventQuery(i->computeDone);}
         if(!completed)break;
         if(!i->recycled){
-            size_t recycleBudget=8;
+            size_t recycleBudget=CompletedMeshRecycleBatch;
             while(i->recycleCursor<i->meshes.size()&&recycleBudget--){RecycleMesh(i->meshes[i->recycleCursor],*i);++i->recycleCursor;}
             // Preserve the cursor and this completed generation for the next
             // observation, including meshes after the first bounded batch.
@@ -590,6 +599,7 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
     RetiredResources retiredGeneration;
     std::vector<ResidentMesh> localMeshes;
     std::unordered_map<donut::engine::MeshInfo*,nvrhi::rt::AccelStructHandle> refitSources;
+    bool inPlaceBlases=false;
     std::unordered_map<std::string,ResidentMesh> affectedMeshes;
     std::vector<ResidentMesh> newIndexMeshes;
     std::vector<ResidentMaterial> changedMaterials;
@@ -617,10 +627,25 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
                 if(target->HostIndices&&next->HostIndices&&*target->HostIndices==*next->HostIndices&&target->HostRefitFrames<16&&target->accelStruct
                     &&(target->accelStruct->getDesc().buildFlags&nvrhi::rt::AccelStructBuildFlags::AllowUpdate)!=0)
                     refitSources.emplace(target.get(),target->accelStruct);
-                retiredGeneration.meshes.push_back(std::make_shared<MeshInfoEx>(*target));
+                auto old=std::make_shared<MeshInfoEx>(*target);
+                auto prepared=preparedMeshBlases.find(mesh->name);
+                nvrhi::rt::AccelStructHandle unchangedAcceleration;
+                if(prepared!=preparedMeshBlases.end()&&prepared->second==target->accelStruct){
+                    // Old vertex/index pages still retire behind both readers.
+                    // The stable AS remains resident and is ordered on GPU.
+                    old->accelStruct=nullptr;inPlaceBlases=true;
+                    if(target->HostIndices&&next->HostIndices&&*target->HostIndices==*next->HostIndices&&SameMemoryPositions(target,next)){
+                        unchangedAcceleration=prepared->second;preparedMeshBlases.erase(prepared);refitSources.erase(target.get());
+                    }
+                }
+                // Only the current exact position payload participates in the
+                // next classification. GPU readers retain buffers, not this CPU copy.
+                std::vector<float3>().swap(target->buffers->positionData);
+                retiredGeneration.meshes.push_back(std::move(old));
                 int meshIndex=target->globalMeshIndex;
                 for(size_t g=0;g<mesh->geometries.size();g++)mesh->geometries[g]->globalGeometryIndex=target->geometries[g]->globalGeometryIndex;
                 static_cast<donut::engine::MeshInfo&>(*target)=*mesh;target->globalMeshIndex=meshIndex;
+                if(unchangedAcceleration)target->accelStruct=unchangedAcceleration;
                 target->HostIndices=next->HostIndices;target->HostDynamicCoverage|=next->HostDynamicCoverage;
                 target->HostCoverageCandidates|=next->HostCoverageCandidates;
                 target->AccelStructOMM=nullptr;target->OpacityMicroMaps.clear();target->InvalidateOmmCpuInputIdentity();
@@ -797,7 +822,7 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
             // ordinary AS allocations and stay entirely on the graphics queue.
             struct BlasJob {
                 ResidentMesh mesh;nvrhi::rt::AccelStructDesc desc;
-                nvrhi::rt::AccelStructHandle next,source;
+                nvrhi::rt::AccelStructHandle next;bool update;
                 uint64_t allocationBytes,identity,reason;
             };
             std::vector<BlasJob> jobs;jobs.reserve(pendingMeshes.size());
@@ -827,8 +852,8 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
                 auto source=refitSources.find(mesh.get());
                 RtrProtocolTrace::Record(7,0,0,0,0,RtrDiagnostics::frame.load(),resourceRevision,desc.bottomLevelGeometries.size(),
                     source!=refitSources.end()?source->second->getDesc().bottomLevelGeometries.size():0,source!=refitSources.end()&&CompatibleBlas(source->second->getDesc(),desc),source!=refitSources.end());
-                const bool update=source!=refitSources.end()&&CompatibleBlas(source->second->getDesc(),desc);
-                jobs.push_back({mesh,std::move(desc),next,update?source->second:nvrhi::rt::AccelStructHandle{},allocationBytes,identity,reason});
+                const bool update=source!=refitSources.end()&&source->second==next&&CompatibleBlas(source->second->getDesc(),desc);
+                jobs.push_back({mesh,std::move(desc),next,update,allocationBytes,identity,reason});
             }
             // Prepare dependencies before the first independent build. A state
             // transition to AS-write synchronizes the build stage, so doing this
@@ -840,25 +865,12 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
                     command->setBufferState(triangle.vertexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
                 }
                 command->setAccelStructState(job.next,nvrhi::ResourceStates::AccelStructWrite);
-                if(job.source)command->setAccelStructState(job.source,nvrhi::ResourceStates::AccelStructBuildBlas);
             }
             command->commitBarriers();
-            bool cloned=false;
-            for(auto& job:jobs)if(job.source){
-                RtrDiagnostics::Scope clone(RtrDiagnostics::BlasClone,1,0,1,0,job.identity,RtrDiagnostics::revision.load(),job.reason,job.allocationBytes);
-                command->copyRaytracingAccelerationStructure(job.next,job.source);cloned=true;
-            }
-            if(cloned){
-                // All clones complete before any in-place refit reads its target.
-                // Independent targets need one shared phase dependency.
-                auto* list=static_cast<ID3D12GraphicsCommandList*>(command->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
-                D3D12_RESOURCE_BARRIER dependency{};dependency.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
-                list->ResourceBarrier(1,&dependency);
-            }
             for(auto& job:jobs){
                 auto& mesh=job.mesh;auto& desc=job.desc;auto& next=job.next;
                 const auto identity=job.identity,reason=job.reason,allocationBytes=job.allocationBytes;
-                if(job.source){
+                if(job.update){
                     {RtrDiagnostics::Scope refit(RtrDiagnostics::BlasRefit,mesh->totalIndices/3,0,1,0,identity,RtrDiagnostics::revision.load(),reason,allocationBytes);
                         auto gpu=RtrGpuProfile::Begin(command,"ResourceBlasRefit",-1,identity,RtrDiagnostics::revision.load(),reason);
                         command->buildBottomLevelAccelStruct(next,desc.bottomLevelGeometries.data(),desc.bottomLevelGeometries.size(),desc.buildFlags|nvrhi::rt::AccelStructBuildFlags::PerformUpdate);RtrGpuProfile::End(command,gpu);}
@@ -915,7 +927,21 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
     // updates still rebuild/refit the shared AS without creating a beauty PSO.
     if(hitGroupsChanged)if(auto baker=GetRTPipelineBaker())baker->HostInvalidateScene();
     if(gpuQuery)command->endTimerQuery(gpuQuery);
-    {RtrDiagnostics::Scope submit(RtrDiagnostics::CommandSubmit);command->close();GetDevice()->executeCommandList(command);}
+    {RtrDiagnostics::Scope submit(RtrDiagnostics::CommandSubmit);
+        if(inPlaceBlases){
+            // All already submitted graphics readers precede this command.
+            // Snapshot the compute queue too, then establish both directions
+            // with GPU timeline waits. No owner-thread fence wait is needed.
+            if(!resourceComputeOrdering)resourceComputeOrdering=GetDevice()->createCommandList(
+                nvrhi::CommandListParameters().setQueueType(nvrhi::CommandQueue::Compute));
+            if(!resourceComputeOrdering)throw std::runtime_error("Mutable AS queue ordering allocation failed");
+            resourceComputeOrdering->open();resourceComputeOrdering->close();
+            auto priorCompute=GetDevice()->executeCommandList(resourceComputeOrdering,nvrhi::CommandQueue::Compute);
+            GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Graphics,nvrhi::CommandQueue::Compute,priorCompute);
+        }
+        command->close();auto published=GetDevice()->executeCommandList(command);
+        if(inPlaceBlases)GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,published);
+    }
     retiredGeneration.commands.push_back(command);
     commitPart.reset();commitPart.emplace(RtrDiagnostics::ResourceRetirement);
     if(gpuQuery)resourceGpuQueries.push_back(gpuQuery);

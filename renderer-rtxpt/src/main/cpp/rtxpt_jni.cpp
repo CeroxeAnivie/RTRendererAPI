@@ -358,6 +358,17 @@ private:
     }
 public:
     using AdvancedPathTracer::AdvancedPathTracer;
+    bool pendingEmptyScene=false,currentMemoryScene=false;
+    bool LoadScene(std::shared_ptr<donut::vfs::IFileSystem> fs,const std::filesystem::path& path) override {
+        currentMemoryScene=std::exchange(pendingEmptyScene,false);
+        if(!currentMemoryScene)return AdvancedPathTracer::LoadScene(fs,path);
+        // Donut owns graph construction and Sample owns the unchanged SceneLoaded/
+        // FinishedLoading lifecycle. Retained resources never need a dummy glTF.
+        m_scene=std::make_shared<ExtendedScene>(GetDevice(),*m_shaderFactory,fs,m_TextureCache,m_DescriptorTable,std::make_shared<ExtendedSceneTypeFactory>());
+        auto graph=m_scene->CreateSceneGraph();
+        graph->SetRootNode(std::make_shared<donut::engine::SceneGraphNode>());
+        m_progressLoading.Set(10);return true;
+    }
     #include "rtxpt_retained_scene.inl"
     #include "rtxpt_memory_resources.inl"
     int exactOpticalInterfaces=4;
@@ -383,6 +394,9 @@ public:
     size_t HostShaderCompilerThreads() const {return GetRTPipelineBaker()?GetRTPipelineBaker()->HostCompilerThreadCount():0;}
     void LoadSceneLighting(const std::string& path) {
         sceneLights.clear();sceneSky={};sceneLightsDirty=true;managedLighting=false;managedLightRoot.reset();
+        if(currentMemoryScene){
+            managedLighting=true;preSrHistoryReset=true;ConfigureManagedBackground();return;
+        }
         std::ifstream input(std::filesystem::u8path(path));
         Json::Value root;if(!input || !(input>>root))return;
         const auto& data=root["rtrSceneLighting"];
@@ -667,9 +681,11 @@ public:
 class HostApp final : public AdvancedSample {
 public:
     uint32_t framesInFlight=2;
+    bool emptyScene=false;
     RtrPathQuality pathQuality;
     std::unique_ptr<Sample> CreateMainRenderPass(donut::app::DeviceManager& dm,const CommandLineOptions& options) override {
         auto pass=std::make_unique<HostPathTracer>(dm,options);
+        pass->pendingEmptyScene=emptyScene;
         pass->ConfigurePathQuality(pathQuality);
         return pass;
     }
@@ -849,7 +865,7 @@ void indexNodes(Session& s) {
     while (w) { s.nodes.emplace(w->GetName(), w.Get()); w.Next(true); }
     auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());
     host.memoryTextures.clear();host.spareMemoryTextures.clear();host.spareMemoryTextureBytes=0;host.uploadPreparationPending=false;
-    host.resourceRetirement.clear();host.resourceCommandPool.clear();host.resourceQueryPool.clear();host.resourceBlasAllocationBytes.clear();host.resourceBufferAllocations.clear();host.preparedMeshBlases.clear();host.meshUploadScratch.clear();
+    host.resourceRetirement.clear();host.resourceCommandPool.clear();host.resourceComputeOrdering=nullptr;host.resourceQueryPool.clear();host.resourceBlasAllocationBytes.clear();host.resourceBufferAllocations.clear();host.preparedMeshBlases.clear();host.meshUploadScratch.clear();
     host.spareMeshBuffers.clear();host.spareMeshBlases.clear();host.spareMeshBufferBytes=host.spareMeshBlasBytes=0;
     host.spareResourceTlas={};host.spareResourceTlasBytes=0;host.resourceTlasAllocationBytes=0;host.resourceTlasAllocationIdentity=nullptr;
     host.activeResourceTlas={};host.preparedResourceTlas={};host.preparedTlasTables={};host.activeTlasTableStorage={};host.preparedTlasTableStorage={};host.preparedTlasAliases=false;
@@ -942,7 +958,8 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
                 settings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
             }
         }
-        std::vector<std::string> args {"RTRenderer-RTXPT", "--nonInteractive", "--scene", utf8(e, scene),
+        const std::string scenePath=scene?utf8(e,scene):"__rtr_memory_scene__";
+        std::vector<std::string> args {"RTRenderer-RTXPT", "--nonInteractive", "--scene", scenePath,
             "--width", std::to_string(width), "--height", std::to_string(height), "--overrideToRealtimeMode"};
         if(const char* validation=std::getenv("RTR_RTXPT_GPU_VALIDATION");validation&&std::string(validation)=="1")args.emplace_back("--gpuValidation");
         // The pinned upstream RR async-prefix path repeatedly loses the device in this host.
@@ -971,6 +988,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         donut::log::ConsoleApplicationMode();
         g_sampleUIData = SampleUIData{};
         s->app = std::make_unique<HostApp>();
+        s->app->emptyScene=scene==nullptr;
         s->app->framesInFlight=uint32_t(maxFramesInFlight);
         s->app->pathQuality=initialQuality;
         s->app->HostDeviceManager()->HostExternalPresentation=externalPresentation;
@@ -991,7 +1009,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
         donut::app::StreamlineIntegration::Get().hostFrameGeneration={};
         if(!s->app->HostRenderPass()->GetScene()) throw std::runtime_error("RTXPT scene failed to load");
         {RtrDiagnostics::Scope sceneInitialization(RtrDiagnostics::SceneInitialize);
-            static_cast<HostPathTracer*>(s->app->HostRenderPass())->LoadSceneLighting(utf8(e,scene));}
+            static_cast<HostPathTracer*>(s->app->HostRenderPass())->LoadSceneLighting(scenePath);}
         auto& afterPresent=s->app->HostDeviceManager()->m_callbacks.afterPresent;
         auto upstreamAfterPresent=afterPresent;
         afterPresent = [ptr=s.get(),upstreamAfterPresent](auto& dm, uint32_t index) {
@@ -1179,6 +1197,12 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
                 RtrMemoryDiagnostics::Capacity("sparse.tree","cpu_payload",sparse.tree.nodes.size()*64,sparse.tree.CpuBytes());
                 RtrMemoryDiagnostics::Capacity("sparse.dirty","cpu_payload",(sparse.dirtyNodes.size()+sparse.dirtyRecords.size())*4,(sparse.dirtyNodes.capacity()+sparse.dirtyRecords.capacity())*4);
                 RtrMemoryDiagnostics::Capacity("sparse.regions","cpu_payload",sparse.regions.packed.size()*64,sparse.regions.CpuBytes());
+                uint64_t positionLive=0,positionCapacity=0;
+                std::unordered_set<const donut::engine::BufferGroup*> positionOwners;
+                for(const auto& [name,mesh]:pass.residentMeshes)if(mesh->buffers&&positionOwners.insert(mesh->buffers.get()).second){
+                    const auto& positions=mesh->buffers->positionData;positionLive+=positions.size()*sizeof(positions[0]);positionCapacity+=positions.capacity()*sizeof(positions[0]);
+                }
+                RtrMemoryDiagnostics::Capacity("mesh.positions","cpu_payload",positionLive,positionCapacity);
                 auto bufferBytes=[](const nvrhi::BufferHandle& b)->uint64_t{return b?b->getDesc().byteSize:0;};
                 uint64_t retiredBytes=0;for(const auto& old:sparse.retired)retiredBytes+=bufferBytes(old.sources)+bufferBytes(old.nodes);
                 RtrMemoryDiagnostics::Capacity("sparse.buffers","device_local",sparse.records.size()*96+(sparse.queryNodes.size()+sparse.regions.packed.size())*64,bufferBytes(sparse.sourceBuffer)+bufferBytes(sparse.treeBuffer),retiredBytes);
@@ -1330,7 +1354,8 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             g_sampleUIData.DLSSFGMode=SI::DLSSGMode::eOff;
             s.restoreFrameGenerationBeforeRender=true;
         }
-        const auto scenePath=utf8(e,path);
+        const std::string scenePath=path?utf8(e,path):"__rtr_memory_scene__";
+        static_cast<HostPathTracer*>(s.app->HostRenderPass())->pendingEmptyScene=path==nullptr;
         s.app->HostRenderPass()->SetCurrentScene(scenePath, true);
         static_cast<HostPathTracer*>(s.app->HostRenderPass())->LoadSceneLighting(scenePath);indexNodes(s);
     }

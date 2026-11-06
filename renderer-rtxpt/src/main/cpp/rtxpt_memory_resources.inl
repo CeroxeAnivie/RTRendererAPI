@@ -88,7 +88,7 @@ nvrhi::rt::AccelStructDesc MemoryBlasDesc(const ResidentMesh& mesh){
 void PrepareMemoryAllocations(const std::vector<ResidentMesh>& meshes){
     if(meshes.empty())return;
     if(RtrDiagnostics::level.load())++arenaWork[6];
-    struct Plan {ResidentMesh mesh;size_t buffers=SIZE_MAX,blas=SIZE_MAX;std::array<size_t,3> allocation{SIZE_MAX,SIZE_MAX,SIZE_MAX};nvrhi::rt::AccelStructHandle acceleration;};
+    struct Plan {ResidentMesh mesh;size_t buffers=SIZE_MAX,blas=SIZE_MAX;std::array<size_t,3> allocation{SIZE_MAX,SIZE_MAX,SIZE_MAX};nvrhi::rt::AccelStructHandle acceleration;bool inPlace=false;};
     std::vector<Plan> plans;plans.reserve(meshes.size());
     std::vector<bool> usedBuffers(spareMeshBuffers.size()),usedBlases(spareMeshBlases.size());
     std::vector<nvrhi::MemoryRequirements> requirements;requirements.reserve(meshes.size()*3);
@@ -159,7 +159,16 @@ void PrepareMemoryAllocations(const std::vector<ResidentMesh>& meshes){
             }
         }
         auto desc=MemoryBlasDesc(mesh);
-        for(size_t i=0;i<spareMeshBlases.size();++i)if(!usedBlases[i]&&CompatibleBlas(spareMeshBlases[i].acceleration->getDesc(),desc)){
+        // The upstream mutable-AS path updates a stable object. A compatible
+        // host mesh uses that same NVRHI contract instead of allocating a new
+        // target for every pose and then cloning the previous acceleration.
+        auto resident=residentMeshes.find(mesh->name);
+        if(resident!=residentMeshes.end()&&CompatibleMemoryMesh(resident->second,mesh)){
+            auto current=resident->second->accelStruct;
+            if(current&&!current->isCompacted()&&resourceBlasAllocationBytes.count(current.Get())
+                &&CompatibleBlas(current->getDesc(),desc)){plan.acceleration=current;plan.inPlace=true;}
+        }
+        for(size_t i=0;!plan.acceleration&&i<spareMeshBlases.size();++i)if(!usedBlases[i]&&CompatibleBlas(spareMeshBlases[i].acceleration->getDesc(),desc)){
             plan.blas=i;usedBlases[i]=true;plan.acceleration=spareMeshBlases[i].acceleration;break;
         }
         if(!plan.acceleration){
@@ -221,7 +230,7 @@ void PrepareMemoryAllocations(const std::vector<ResidentMesh>& meshes){
             b.vertexBufferDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,b.vertexBuffer)));
             b.indexBufferDescriptor=std::make_shared<donut::engine::DescriptorHandle>(m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0,b.indexBuffer)));
         }
-        if(plan.blas==SIZE_MAX){auto& lease=storage[plan.allocation[2]];
+        if(!plan.inPlace&&plan.blas==SIZE_MAX){auto& lease=storage[plan.allocation[2]];
             RtrDiagnostics::Scope bind(RtrDiagnostics::PlacedBind,1,0,1,0,RtrDiagnostics::Identity(plan.mesh->name));
             if(!GetDevice()->bindAccelStructMemory(plan.acceleration,lease->Heap(),lease->Offset()))throw std::runtime_error("Placed BLAS binding failed");}
     }
@@ -231,9 +240,12 @@ void PrepareMemoryAllocations(const std::vector<ResidentMesh>& meshes){
             auto index=plan.buffers==SIZE_MAX?storage[plan.allocation[1]]:spareMeshBuffers[plan.buffers].indexStorage;
             resourceBufferAllocations.insert_or_assign(b.vertexBuffer.Get(),vertex);resourceBufferAllocations.insert_or_assign(b.indexBuffer.Get(),index);
         }
-        auto lease=plan.blas==SIZE_MAX?storage[plan.allocation[2]]:spareMeshBlases[plan.blas].storage;
-        auto bytes=plan.blas==SIZE_MAX?lease->Capacity():spareMeshBlases[plan.blas].bytes;
-        resourceBlasAllocationBytes.insert_or_assign(plan.acceleration.Get(),BlasAllocation{bytes,lease});preparedMeshBlases.insert_or_assign(plan.mesh->name,plan.acceleration);
+        if(!plan.inPlace){
+            auto lease=plan.blas==SIZE_MAX?storage[plan.allocation[2]]:spareMeshBlases[plan.blas].storage;
+            auto bytes=plan.blas==SIZE_MAX?lease->Capacity():spareMeshBlases[plan.blas].bytes;
+            resourceBlasAllocationBytes.insert_or_assign(plan.acceleration.Get(),BlasAllocation{bytes,lease});
+        }
+        preparedMeshBlases.insert_or_assign(plan.mesh->name,plan.acceleration);
     }
     for(size_t i=usedBuffers.size();i--;)if(usedBuffers[i]){spareMeshBufferBytes-=spareMeshBuffers[i].bytes;spareMeshBuffers.erase(spareMeshBuffers.begin()+i);}
     for(size_t i=usedBlases.size();i--;)if(usedBlases[i]){spareMeshBlasBytes-=spareMeshBlases[i].bytes;spareMeshBlases.erase(spareMeshBlases.begin()+i);}
@@ -265,7 +277,9 @@ void UploadMemoryMesh(const ResidentMesh& mesh,nvrhi::ICommandList* command,cons
         RtrDiagnostics::Scope diagnostic(RtrDiagnostics::BufferUpload,2,0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes+indexBytes);
         copy(b.vertexBuffer,vertex,vertexBytes);copy(b.indexBuffer,index,indexBytes);
     }
-    std::vector<float3>().swap(b.positionData);std::vector<float2>().swap(b.texcoord1Data);
+    // Retain one authoritative position payload for exact geometric change
+    // detection. The previous copy is released when its stable mesh is updated.
+    std::vector<float2>().swap(b.texcoord1Data);
     std::vector<uint32_t>().swap(b.normalData);std::vector<uint32_t>().swap(b.tangentData);std::vector<uint32_t>().swap(b.indexData);
 }
 void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
@@ -394,8 +408,8 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
             bool same=prior->geometries.size()==mesh->geometries.size()&&prior->HostIndices&&*prior->HostIndices==mesh->buffers->indexData;
             if(same)for(size_t g=0;g<mesh->geometries.size();++g){auto a=prior->geometries[g],b=mesh->geometries[g];
                 same&=a->numVertices==b->numVertices&&a->numIndices==b->numIndices&&a->material->name==b->material->name;}
-            reason=same?RtrDiagnostics::Deformation:RtrDiagnostics::Topology;
-            if(same&&prior->HostRefitFrames>=16)reason|=RtrDiagnostics::RefitRefresh;
+            reason=same?(SameMemoryPositions(old->second,mesh)?RtrDiagnostics::Attributes:RtrDiagnostics::Deformation):RtrDiagnostics::Topology;
+            if(reason==RtrDiagnostics::Deformation&&prior->HostRefitFrames>=16)reason|=RtrDiagnostics::RefitRefresh;
         }
         resourceChangeReasons.emplace(mesh->name,reason);
         uint64_t payload=uint64_t(mesh->totalVertices)*24+mesh->buffers->tangentData.size()*4+uint64_t(mesh->totalIndices)*4;

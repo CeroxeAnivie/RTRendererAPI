@@ -13,7 +13,7 @@ public final class RtxptParityBenchmark {
         var config=RendererConfig.pathTracedPresentation();
         if(args[0].equals("prepare")) {
             var scene=new RtxptScene();scene.retain(RtxptAcceptanceFixture.scene());
-            var path=scene.export(directory,frame,scene.items(frame));
+            var path=new RtxptSceneExport(scene).export(directory,frame,scene.items(frame));
             try(var renderer=Renderer.open("rtxpt",config)) {
                 renderer.apply(RtxptAcceptanceFixture.scene());renderer.submit(frame);
                 var host=renderer.extension(RtxptAccess.class).orElseThrow();

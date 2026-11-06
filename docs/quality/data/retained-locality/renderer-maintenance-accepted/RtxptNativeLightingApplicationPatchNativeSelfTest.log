@@ -1,0 +1,4 @@
+Exception in thread "main" java.lang.IllegalStateException: Native-lighting extension ABI does not match this runtime
+	at top.ceroxe.rt.renderer.rtxpt.RtxptNative.nativeLightingExtensionValidate(Native Method)
+	at top.ceroxe.rt.renderer.rtxpt.RtxptRenderer.activateLightingExtension(RtxptRenderer.java:188)
+	at top.ceroxe.rt.renderer.rtxpt.RtxptNativeLightingApplicationPatchNativeSelfTest.main(RtxptNativeLightingApplicationPatchNativeSelfTest.java:20)

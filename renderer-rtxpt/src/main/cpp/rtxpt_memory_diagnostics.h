@@ -30,6 +30,10 @@ inline bool Enabled() {
     static const bool enabled=[] {wchar_t value[2]{};return GetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_DIAGNOSTICS",value,2)==1 && value[0]==L'1';}();
     return enabled && recording.load(std::memory_order_relaxed);
 }
+inline bool CensusEnabled(){
+    static const bool enabled=[] {wchar_t value[2]{};return GetEnvironmentVariableW(L"RTR_RTXPT_MEMORY_RESOURCE_CENSUS",value,2)==1&&value[0]==L'1';}();
+    return enabled&&Enabled();
+}
 inline bool Current(uint64_t value){return Enabled()&&epoch.load(std::memory_order_acquire)==value;}
 inline FILE* Output() {
     static FILE* output=[] {
@@ -82,7 +86,7 @@ inline void Configure(bool enabled){
 }
 
 inline void Created(const void* object,const char* kind,std::string_view name,ID3D12Device* device,ID3D12Resource* resource,UINT64 logical) {
-    if(!Enabled() || !resource)return;
+    if(!CensusEnabled() || !resource)return;
     const auto started=epoch.load(std::memory_order_acquire);
     std::lock_guard lock(mutex);
     if(!Current(started))return;
@@ -109,7 +113,7 @@ inline void Created(const void* object,const char* kind,std::string_view name,ID
     }
 }
 inline void Released(const void* object) {
-    if(!Enabled())return;
+    if(!CensusEnabled())return;
     std::lock_guard lock(mutex);
     if(!Enabled())return;
     if(resources.erase(object)) {
@@ -133,10 +137,10 @@ inline void Checkpoint(const char* phase,ID3D12Device* device=nullptr) {
     }
     UINT64 totals[5]{};
     for(const auto& entry:resources)if(entry.second.heap<5)totals[entry.second.heap]+=entry.second.allocated;
-    Write("RTXPT_MEMORY_PHASE time=%llu phase=%s private=%llu workingSet=%llu gpuQueryStatus=0x%08lx dedicated=%llu shared=%llu trackedDefault=%llu trackedUpload=%llu trackedReadback=%llu liveResources=%zu outputDropped=%llu\n",
+    Write("RTXPT_MEMORY_PHASE time=%llu phase=%s private=%llu workingSet=%llu gpuQueryStatus=0x%08lx dedicated=%llu shared=%llu trackedDefault=%llu trackedUpload=%llu trackedReadback=%llu liveResources=%zu outputDropped=%llu resourceCensus=%d\n",
         Timestamp(),phase,(unsigned long long)memory.PrivateUsage,(unsigned long long)memory.WorkingSetSize,
         (unsigned long)gpuResult,(unsigned long long)local.CurrentUsage,(unsigned long long)shared.CurrentUsage,
-        (unsigned long long)totals[1],(unsigned long long)totals[2],(unsigned long long)totals[3],resources.size(),(unsigned long long)Writer().dropped);
+        (unsigned long long)totals[1],(unsigned long long)totals[2],(unsigned long long)totals[3],resources.size(),(unsigned long long)Writer().dropped,int(CensusEnabled()));
 }
 class Scope {
     const char* phase;

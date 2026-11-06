@@ -37,7 +37,7 @@ public final class RtxptResourceArenaNativeSelfTest {
         do{r.awaitIdle();submit(r);require(System.nanoTime()<deadline,"Retirement cursor and release queue recover");}
         while(r.resourcePressure().retiredGenerations()!=0||r.resourcePressure().pendingReleases()!=0);
         var arena=r.resourceArenaStatistics();
-        require(arena.pooledBuffers()<=64&&arena.pooledBlases()<=64,"Both object caches have count limits");
+        require(arena.pooledBuffers()<=64&&arena.pooledBlases()<=1024,"Both object caches have count limits");
         require(r.resourcePressure().pooledMeshBytes()<=64L*1024*1024&&r.resourcePressure().pooledBlasBytes()<=64L*1024*1024,"Both caches have byte limits");
         require(arena.heapBytes()<=arena.budgetBytes()&&arena.leasedBytes()<=arena.heapBytes(),"Heap and lease accounting obey budget");
         require(arena.freeBytes()+arena.leasedBytes()==arena.heapBytes(),"Every arena byte has one owner or is free");

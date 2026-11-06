@@ -36,9 +36,9 @@ public final class RtxptDynamicResourcesSelfTest {
         var items=scene.items(RenderFrameRequest.builder(0,64,64,CameraState.lookAt(0,0,4,0,0,0).build()).build());
         Path path=Files.createTempDirectory("resource-plan-");
         try{
-            var result=RtxptDelta.prepare(path,old,scene,List.of(),items,new RtxptPersistentMap<>(),Map.of(),PACKETS);
+            var result=RtxptDelta.prepare(old,scene,List.of(),items,Map.of(),PACKETS);
             require(result.memory().isDirect()&&result.memory().getInt(0)==0x52445254,"Direct little-endian resource packet");
-            require(result.work().exportedModels()==0&&result.directory()==null&&result.manifest()==null,"No file importer path");
+            require(result.work().exportedModels()==0,"No file importer path");
             try(var files=Files.list(path)){require(files.findAny().isEmpty(),"Resource planning creates no files");}
             var mesh=scene.meshes.get(1L);var groups=RtxptAttributeBatch.groups(mesh);
             require(groups.size()==2&&groups.stream().mapToInt(g->g.corners().length).sum()==mesh.triangleCount()*3,"Multi-material primitive groups preserve every corner");

@@ -1,0 +1,72 @@
+ERROR: Couldn't read file D:/Engineering/code/APIs/RTRendererAPI/build/rtxpt-sdk/bin/Assets/__rtr_memory_scene__
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  EXCEPTION_ACCESS_VIOLATION (0xc0000005) at pc=0x00007ffd7cc9a9c3, pid=6924, tid=11136
+#
+# JRE version: Java(TM) SE Runtime Environment Oracle GraalVM 25.0.5+1.1 (25.0.5+1) (build 25.0.5.0.2+1-LTS-jvmci-b01)
+# Java VM: Java HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.0.5+1.1 (25.0.5.0.2+1-LTS-jvmci-b01, mixed mode, sharing, tiered, jvmci, compressed oops, compressed class ptrs, g1 gc, windows-amd64)
+# Problematic frame:
+# C  [rtrenderer_rtxpt.dll+0x2ea9c3]
+#
+# No core dump will be written. Minidumps are not enabled by default on client versions of Windows
+#
+# An error report file with more information is saved as:
+# D:\Engineering\code\APIs\RTRendererAPI\hs_err_pid6924.log
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_common_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_g_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_reflex_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_d_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.common.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_common_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss_d.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_d_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss_g.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_g_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.nis.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.pcl.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.reflex.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_reflex_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+[4.538s][warning][os] Loading hsdis library failed
+#
+# If you would like to submit a bug report, please visit:
+#   https://bugreport.java.com/bugreport/crash.jsp
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...

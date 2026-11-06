@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import math
 from pathlib import Path
 import struct
 import subprocess
@@ -20,6 +21,51 @@ spec.loader.exec_module(bytes_tool)
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def check_managed_resource_locality(evidence, check):
+    check("managed-baseline-version", evidence["baselineVersion"] == "7.3.1")
+    cost = evidence["updateCost"]
+    cost_stages = {"tree", "prepare", "regions"}
+    check("same-fixture-mixed-update-cost", cost["samples"] == 32 and cost["sources"] == 42191
+          and cost["upserts"] == 4096 and cost["removeInsert"] == 128
+          and set(cost["baseline"]) == set(cost["candidate"]) == cost_stages)
+    locality = evidence["locality"]
+    check("bounded-topology-frontier", locality["maximumFrontierVisited"] == 23
+          and locality["liveNodes"] == 49999)
+    scale = evidence["managedScale"]
+    scale_stages = {"owner", "FRAME", "TRANSLATION", "RESOURCES", "SPARSE_REGIONS",
+                    "SPARSE_QUERY_PREPARATION"}
+    check("same-fixture-managed-scale", scale["samples"] == 16 and scale["warmup"] == 4
+          and scale["meshes"] == 3300 and scale["sources"] == 45000
+          and scale["meshDelta"] == 128 and scale["sourceDelta"] == 150
+          and set(scale["baseline"]) == set(scale["candidate"]) == scale_stages)
+    for name, group in (("mixed-update", cost), ("managed-scale", scale)):
+        check(name + "-timings-finite-nonnegative", all(
+            isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value >= 0
+            for side in ("baseline", "candidate") for timing in group[side].values()
+            for value in (timing["meanMs"], timing["p95Ms"])))
+    required = {"outputDeferral", "retryIdentity", "activePoolExcluded", "incompatibleReplacement",
+                "patchGpu", "bootstrap", "sameNamedFile", "crossThreadSnapshots"}
+    managed = evidence["managedCorrectness"]
+    check("managed-resource-correctness", required <= set(managed)
+          and all(managed[name] is True for name in required))
+    equivalence = evidence["outputEquivalence"]
+    if isinstance(equivalence, dict):
+        records = list(equivalence.items())
+    elif isinstance(equivalence, list):
+        records = [(record.get("name"), record) for record in equivalence if isinstance(record, dict)]
+    else:
+        records = []
+    check("equivalent-output-file-inventory", len(records) == len(equivalence) and len(records) >= 4
+          and all(isinstance(name, str) and name for name, _ in records)
+          and len({name for name, _ in records}) == len(records))
+    check("equivalent-output-sha256", all(isinstance(record, dict)
+          and isinstance(record.get("baselineSha256"), str)
+          and len(record["baselineSha256"]) == 64
+          and all(c in "0123456789abcdefABCDEF" for c in record["baselineSha256"])
+          and record["baselineSha256"] == record.get("candidateSha256") for _, record in records))
 
 
 def main():
@@ -45,11 +91,16 @@ def main():
 
     check("evidence-version", evidence["version"] == version)
     retained = evidence.get("releaseKind") == "compatible-retained-update-maintenance"
-    check("affected-checks-pass", all(c["passed"] and c["exit"] == 0 for c in evidence["correctness"].values())
-          and (len(evidence["correctness"]) >= 6 if retained else len(evidence["correctness"]) == 3))
+    managed = evidence.get("releaseKind") == "compatible-managed-resource-locality"
+    check("affected-checks-pass", all((c["passed"] is True if managed else c["passed"])
+          and c["exit"] == 0 for c in evidence["correctness"].values())
+          and (len(evidence["correctness"]) >= 12 if managed else
+               len(evidence["correctness"]) >= 6 if retained else len(evidence["correctness"]) == 3))
     for group in ("productionSourceSha256", "productionClassSha256", "testClassSha256", "evidenceFileSha256"):
         check(group, bool(evidence[group]) and all(sha((ROOT / p).read_bytes()) == h for p, h in evidence[group].items()))
-    if retained:
+    if managed:
+        check_managed_resource_locality(evidence, check)
+    elif retained:
         cost = evidence["updateCost"]
         check("same-fixture-refit-cost", cost["samples"] == 32 and cost["sources"] == 42191
               and cost["upserts"] == 4096 and cost["removeInsert"] == 0

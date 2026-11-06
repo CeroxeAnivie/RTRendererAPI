@@ -37,7 +37,7 @@ public final class RtxptAdapterSelfTest {
         float[] authoredNormals=new float[mesh.vertexCount()*3];java.util.Arrays.fill(authoredNormals,1);
         require(RtxptScene.ExportGeometry.from(mesh.toBuilder().normals(authoredNormals).build()).vertexCount()==mesh.vertexCount(),"Authored normals keep indexed geometry");
         Path dir=Files.createTempDirectory("rtxpt-adapter-test-");try {
-            Path file=s.export(dir,frame,items);String json=Files.readString(file),gltf=Files.readString(dir.resolve("content.gltf"));
+            Path file=new RtxptSceneExport(s).export(dir,frame,items);String json=Files.readString(file),gltf=Files.readString(dir.resolve("content.gltf"));
             require(json.contains("EnvironmentLight")&&json.contains("DirectionalLight"),"Native light graph");
             require(gltf.contains("KHR_materials_transmission")&&gltf.contains("KHR_materials_ior"),"Native transmission and IOR");
             require(gltf.contains("\"name\":\"i1\"")&&s.interiors.size()==1,"Interior assigned to imported material");
@@ -46,7 +46,7 @@ public final class RtxptAdapterSelfTest {
             opaque.retain(SceneTransaction.builder(2)
                 .upsert(MaterialAsset.builder(1).transmission(0).indexOfRefraction(2.618034f).build())
                 .upsert(SceneInstance.builder(1,1).build()).build());
-            opaque.export(dir.resolve("opaque"),frame,opaque.items(frame));
+            new RtxptSceneExport(opaque).export(dir.resolve("opaque"),frame,opaque.items(frame));
             require(opaque.interiors.isEmpty(),"Opaque IOR does not invent a medium boundary");
             require(opaque.materialIors.equals(Map.of(new RtxptScene.Variant(1,null,1).name(),2.618034f)),"Opaque IOR survives export for native BSDF upload");
             require(Files.size(dir.resolve("content.bin"))>0,"Geometry is exported");
@@ -166,7 +166,7 @@ public final class RtxptAdapterSelfTest {
                 .baseColorRgba8(0xff0000ff).emissive(0xffff0000,2).build())
                 .upsert(SceneLight.point(9,1,2,3).range(10.5f).intensity(310).build()).build());
             Path colorDir=dir.resolve("rgba-contract");
-            String lightJson=Files.readString(colored.export(colorDir,frame,colored.items(frame)));
+            String lightJson=Files.readString(new RtxptSceneExport(colored).export(colorDir,frame,colored.items(frame)));
             String colorJson=Files.readString(colorDir.resolve("content.gltf"));
             require(colorJson.contains("\"baseColorFactor\":[1.0,0.0,0.0,1.0]"),"RGBA8 low byte is red, matching Vulkan");
             require(colorJson.contains("\"emissiveFactor\":[0.0,0.0,1.0]"),"Emissive RGBA8 keeps red/blue channel order");

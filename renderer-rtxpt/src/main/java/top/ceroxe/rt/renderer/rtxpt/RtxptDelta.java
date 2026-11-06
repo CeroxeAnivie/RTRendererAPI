@@ -1,16 +1,12 @@
 package top.ceroxe.rt.renderer.rtxpt;
 
-import java.io.IOException;
-import java.nio.file.*;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
-import static top.ceroxe.rt.renderer.rtxpt.RtxptJson.object;
 
 /** A model contains only new geometry and affected material/texture dependencies. */
 final class RtxptDelta {
     record Work(long itemReads,long dependencyVisits,long inspectedMapNodes,int exportedModels) { }
-    record Prepared(Path manifest,RtxptScene translated,Map<Long,Path> textureFiles,int meshes,int materials,int textures,
-                    boolean hasWork,boolean mappingsChanged,Path directory,List<Path> retiredTextures,Work work,
+    record Prepared(RtxptScene translated,int meshes,int materials,int textures,boolean hasWork,boolean mappingsChanged,Work work,
                     java.nio.ByteBuffer memory,List<RtxptScene.Item> changedVariants) { }
     static boolean alphaEquivalent(TextureAsset a,TextureAsset b){
         if(a==b)return true;if(a==null||b==null)return false;
@@ -44,8 +40,8 @@ final class RtxptDelta {
             String name=RtxptScene.meshName(item);return variants(item.mesh()).stream().anyMatch(i->RtxptScene.meshName(i).equals(name));
         }
     }
-    static Prepared prepare(Path parent,RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
-            List<RtxptScene.Item> items,Map<Long,Path> existingTextures,Map<Long,TextureAsset> residentTextures,RtxptMemoryResources.PacketPool packets)throws IOException {
+    static Prepared prepare(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
+            List<RtxptScene.Item> items,Map<Long,TextureAsset> residentTextures,RtxptMemoryResources.PacketPool packets) {
         var changedTextures=new HashSet<Long>();var changedMaterials=new HashSet<Long>();var changedGeometry=new HashSet<Long>();
         long nodes=scene.textures.forEachChanged(old.textures,(id,value)->{if(!Objects.equals(value,old.textures.get(id)))changedTextures.add(id);});
         nodes+=scene.materials.forEachChanged(old.materials,(id,value)->{if(!Objects.equals(value,old.materials.get(id)))changedMaterials.add(id);});
@@ -87,10 +83,6 @@ final class RtxptDelta {
                 for(var item:current.variants(mesh)){var variant=new RtxptScene.Variant(id,item.boundary(),item.visibility());variants.put(variant.name(),variant);}
             }
         }
-        Map<Long,Path> textureFiles=existingTextures instanceof RtxptPersistentMap<Path> persistent
-            ?new RtxptPersistentMap<>(persistent):new TextureOverlay(existingTextures);
-        var retired=new ArrayList<Path>();
-        for(long id:changedTextures){var path=textureFiles.remove(id);if(path!=null)retired.add(path);}
         var translated=new RtxptScene();
         for(var item:meshItems.values())translated.meshes.put(item.mesh(),scene.meshes.get(item.mesh()));
         for(var variant:variants.values()){
@@ -102,29 +94,19 @@ final class RtxptDelta {
         boolean hasWork=!meshItems.isEmpty()||!variants.isEmpty()||!changes.removals().isEmpty()||!updates.isEmpty()||!changedTextures.isEmpty();
         boolean mappingsChanged=!meshItems.isEmpty()||!old.sameRetainedStructure(scene)||!sameDynamicStructure(old,scene,previous,items);
         long dependencies=current.dependencies+prior.dependencies,reads=current.reads+prior.reads+changes.itemReads();
-        if(!hasWork)return new Prepared(null,translated,textureFiles,0,0,0,false,mappingsChanged,null,retired,new Work(reads,dependencies,nodes,0),null,List.of());
+        if(!hasWork)return new Prepared(translated,0,0,0,false,mappingsChanged,new Work(reads,dependencies,nodes,0),null,List.of());
         var coverageChanged=new ArrayList<String>();
         for(var variant:variants.values()){
             var a=old.materials.get(variant.material());var b=scene.materials.get(variant.material());
             if(a==null||!alphaEquivalent(old.textures.get(a.baseColorTextureId()),scene.textures.get(b.baseColorTextureId())))coverageChanged.add(variant.name());
         }
-        int writtenTextures=0;for(long id:translated.textures.keySet())if(textureFiles.get(id)==null)writtenTextures++;
         var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged,residentTextures,packets);
-        return new Prepared(null,translated,textureFiles,meshItems.size(),variants.size(),changedTextures.size(),true,mappingsChanged,null,List.of(),new Work(reads,dependencies,nodes,0),memory,List.copyOf(meshItems.values()));
+        return new Prepared(translated,meshItems.size(),variants.size(),changedTextures.size(),true,mappingsChanged,new Work(reads,dependencies,nodes,0),memory,List.copyOf(meshItems.values()));
     }
     private static boolean sameDynamicStructure(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,List<RtxptScene.Item> items){
         int before=previous.size()-old.instances.size(),after=items.size()-scene.instances.size();if(before!=after)return false;
         for(int index=0;index<after;index++)if(!RtxptScene.sameStructure(previous.get(old.instances.size()+index),items.get(scene.instances.size()+index)))return false;
         return true;
-    }
-    /** External callers may supply an ordinary immutable map; do not copy its unrelated entries. */
-    private static final class TextureOverlay extends AbstractMap<Long,Path> {
-        final Map<Long,Path> base;final Map<Long,Path> changed=new HashMap<>();final Set<Long> removed=new HashSet<>();
-        TextureOverlay(Map<Long,Path> base){this.base=base;}
-        @Override public Path get(Object key){return changed.containsKey(key)?changed.get(key):removed.contains(key)?null:base.get(key);}
-        @Override public Path put(Long key,Path value){var old=get(key);changed.put(key,value);removed.remove(key);return old;}
-        @Override public Path remove(Object key){var old=get(key);changed.remove(key);removed.add((Long)key);return old;}
-        @Override public Set<Entry<Long,Path>> entrySet(){var entries=new HashMap<>(base);removed.forEach(entries::remove);entries.putAll(changed);return Collections.unmodifiableMap(entries).entrySet();}
     }
     /** Only attributes consumed by the resident geometry importer participate.
      * Baseline coordinates and authored tint have independent GPU publications. */

@@ -99,6 +99,20 @@ static void Journal(){
     std::cout<<"SPARSE_UPDATE_JOURNAL PASS transactions=60 pendingUploads=true failedUploadSort=true deleteReuse=true rebuild=true attempts="<<tree.dirtyAttempts<<" enqueued="<<tree.dirtyEnqueued<<"\n";
 #endif
 }
+static void LocalTopology(){
+#ifdef RTR_REGION_LOCAL_FRONTIER
+    std::vector<Light> lights(25000);for(uint32_t i=0;i<lights.size();++i){lights[i].positionType={float(i%163)*.4f,1,float(i/163)*.4f,1};lights[i].directionRange[3]=3.208f;}
+    rtr::RetainedLightTree tree;double normalization=1;tree.Rebuild(lights,&normalization);RtrSparseRegions regions;UploadOracle upload;
+    regions.Update(tree,Query(tree,lights),true,{},true);upload.Apply(regions);uint64_t maximum=0;
+    for(uint32_t batch=0;batch<8;++batch){std::vector<uint32_t> dirty;tree.BeginChanges();const auto position=lights[17].positionType;
+        tree.Remove(17,dirty);lights[17]=lights.back();lights.pop_back();lights.push_back({position,{0,0,0,3.208f},{}});tree.Insert(lights,uint32_t(lights.size()-1),normalization,dirty);
+        const auto visited=regions.frontierVisited;regions.Update(tree,Query(tree,lights),true,tree.changes);maximum=std::max(maximum,regions.frontierVisited-visited);
+        Check(regions.frontierVisited-visited<tree.ActiveNodes()/32,"A local topology edit scanned the resident frontier");Incidence(regions);upload.Apply(regions);
+    }
+    for(uint32_t p=0;p<64;++p)Oracle(regions,tree,lights,{float(p%8)*8,1,float(p/8)*8});
+    std::cout<<"SPARSE_LOCAL_TOPOLOGY PASS sources=25000 transactions=8 deleteReuse=true maximumFrontierVisited="<<maximum<<" activeNodes="<<tree.ActiveNodes()<<"\n";
+#endif
+}
 static void Benchmark(bool mixed=true){
     using Clock=std::chrono::steady_clock;std::vector<Light> lights(42191);
     for(uint32_t i=0;i<lights.size();++i){lights[i].positionType={float(i%163)*.4f,1,float(i/163)*.4f,1};lights[i].directionRange[3]=3.208f;}
@@ -132,6 +146,7 @@ int main(int argc,char** argv){try{
     if(argc>1&&std::string(argv[1])=="bench"){Benchmark();return 0;}
     if(argc>1&&std::string(argv[1])=="bench-refit"){Benchmark(false);return 0;}
     if(argc>1&&std::string(argv[1])=="journal"){Journal();return 0;}
+    if(argc>1&&std::string(argv[1])=="locality"){LocalTopology();return 0;}
     {RtrSparseRegions journal;journal.buckets=0;journal.packed.resize(4);
         RtrSparseRegionsTestAccess::MarkWords(journal,2,1);RtrSparseRegionsTestAccess::MarkWords(journal,2,17);
         Check(journal.dirtyNodes.size()==1&&journal.dirtyNodes[0]==2,"Repeated words did not coalesce at the owning node");

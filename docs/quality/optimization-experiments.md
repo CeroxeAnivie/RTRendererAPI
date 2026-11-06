@@ -207,3 +207,8 @@ rc.6受影响正确性已通过：CPU锁/并发覆盖、Java v6、实际DLL moni
 ## 宿主响应与自适应上传
 
 2026-11-06，本批在当前分支7.2.1修复宿主响应契约，并针对真实SparseUpload→StagingAcquire→CreateCommittedResource链加入单recording自适应页（最多max(default,1MiB)，4MiB warm不变）和按拓扑变化维护区域成员。原失败候选不恢复，不降低质量或复用旧帧。新增定向验证、真实碎写GPU读回和28项发布身份检查通过；源码先上传GitHub，随后四模块发布Maven Local。真实碎写创建页288→22，原24帧夹具25→25及分配bytes退化保留；尚无MC FPS收益结论。根因、口径和验收见[本批记录](host-response-and-sparse-upload.md)。
+
+
+## 7.3.2：原地资源与局部事务
+
+2026-11-07，本批用 mutable AS 原地 refit、精确属性分流和双队列 GPU ticket 排序消除兼容 mesh 的 clone；补丁改为有界 shadow/dirty words，跨线程观测只读不可变快照，空场景改用显式私有状态。25k 局部事务、16 项定向检查和四份最终像素哈希通过。3300 mesh／45000 source 的单配对 owner mean 13.456881→7.520794ms（−44.11%），P95 34.4202→11.6608ms（−66.12%）；FRAME mean +8.12%、P95 +27.45% 与 regions mean +1.65% 如实保留。多数 mesh 离屏，CPU 包含计时且非 ABBA，不代表 MC FPS。初次 bootstrap native crash、遗漏 managedLighting 和旧扩展 ABI 失败保留，均有定向修正。见 [本批报告](retained-update-locality.md)；不重跑旧矩阵。

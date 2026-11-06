@@ -84,17 +84,12 @@ public final class RtxptSceneAdmissionSelfTest {
             map(r,"hostRequests").put(1L,new Object());
         }finally{r.close();}
         for(String name:List.of("attributeGroups","lightingInstances","lightingBaselines","hostRequests"))require(map(r,name).isEmpty(),"Close releases "+name);
-        for(String name:List.of("pendingLightingInstances","pendingLightingBaselines","pendingLightingColors","pendingSparseIds","pendingApplicationPatches"))require(((Collection<?>)field(r,name)).isEmpty(),"Close releases "+name);
-        require(field(r,"pendingBaselineLookup")==null&&field(r,"pendingApplicationData")==null,"Close releases full publication buffers");
+        for(String name:List.of("pendingLightingInstances","pendingLightingBaselines","pendingLightingColors","pendingSparseIds"))require(((Collection<?>)field(r,name)).isEmpty(),"Close releases "+name);
+        require(field(r,"pendingBaselineLookup")==null&&((RtxptApplicationData)field(r,"applicationData")).capacity()==0,"Close releases full publication buffers");
         require(((RtxptScene)field(r,"scene")).meshes.isEmpty()&&field(r,"residentScene")==null,"Close releases accepted and resident generations");
     }
     public static void main(String[] arguments)throws Exception {
         hostProjection();oracle();for(var level:RtxptDiagnostics.Level.values())renderer(level);
-        var removedDirectory=java.nio.file.Files.createTempDirectory("rtrenderer-close-removed-");
-        java.nio.file.Files.delete(removedDirectory);
-        var closed=new RtxptRenderer(RtxptRenderers.nativeLightingConfiguration(),true);
-        var directory=RtxptRenderer.class.getDeclaredField("directory");directory.setAccessible(true);directory.set(closed,removedDirectory);
-        closed.close();closed.close();require(closed.status()==Renderer.Status.CLOSED,"External temporary cleanup preserves idempotent renderer shutdown");
         System.out.println("SCENE_ADMISSION_CPU PASS checks="+checks+" oracleGenerations=500 diagnosticLevels=3 activePayloadExact=true deletedPayloadZero=true typedBudgetAtomic=true sparseValidationAtomic=true oldMeshReleased=true closeCachesReleased=true noDevice=true");
     }
 }

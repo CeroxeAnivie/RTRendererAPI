@@ -90,11 +90,11 @@ routing = candidate;                                // 后端成功发布才提�
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:7.3.1") {
+    implementation("top.ceroxe.rt:renderer-api:7.3.2") {
         exclude(group = "top.ceroxe.rt", module = "renderer-core")
         exclude(group = "top.ceroxe.rt", module = "renderer-nvidia")
     }
-    implementation("top.ceroxe.rt:renderer-rtxpt:7.3.1")
+    implementation("top.ceroxe.rt:renderer-rtxpt:7.3.2")
 }
 ```
 

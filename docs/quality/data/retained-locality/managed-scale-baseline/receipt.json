@@ -1,0 +1,17 @@
+{
+    "memoryDiagnostics":  0,
+    "resourceCensus":  0,
+    "backgroundWindow":  1,
+    "ciCompilerCount":  2,
+    "rendererJar":  "C:/Users/Administrator/.m2/repository/top/ceroxe/rt/renderer-rtxpt/7.3.1/renderer-rtxpt-7.3.1.jar",
+    "nativeSha256":  "16b82de59926172a15b99b3550234c2e5d531e0eed5e247ecb19aa248a727560",
+    "cases":  [
+                  {
+                      "name":  "RtxptManagedScaleNativeSelfTest",
+                      "passed":  true,
+                      "exit":  0,
+                      "wallSeconds":  6.2398359999999995,
+                      "stdout":  "RtxptManagedScaleNativeSelfTest.log"
+                  }
+              ]
+}

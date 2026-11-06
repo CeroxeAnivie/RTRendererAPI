@@ -1595,6 +1595,8 @@ m_hostShutdownResult = slShutdown(); // RTR observable embedded shutdown
 '@ 'RTR invalidate unloaded plugin addresses'
 Patch-Once 'Rtxpt/Sample.cpp' 'if (available.empty())' 'if (std::filesystem::path(preferred).is_absolute() && std::filesystem::is_regular_file(preferred)) return preferred; // RTR absolute host scene
     if (available.empty())' 'RTR absolute host scene'
+Patch-Once 'Rtxpt/Sample.cpp' 'if (std::filesystem::path(preferred).is_absolute()' 'if (preferred == "__rtr_memory_scene__") return preferred; // RTR framework empty retained scene
+    if (std::filesystem::path(preferred).is_absolute()' 'RTR framework empty retained scene'
 Patch-Once 'Rtxpt/SampleCommon/SampleBaseApp.h' 'private:' @'
 public:
     donut::app::DeviceManager* HostDeviceManager() { return m_DeviceManager.get(); }

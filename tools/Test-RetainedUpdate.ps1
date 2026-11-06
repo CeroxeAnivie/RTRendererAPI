@@ -1,9 +1,10 @@
 param(
     [string]$CMake = 'D:/Engineering/code/APIs/RTRendererAPI/build/native-build-tools/cmake-4.1.2-windows-x86_64/bin/cmake.exe',
-    [string]$BaselineCommit = '6eacb19',
+    [string]$BaselineCommit = 'ffab1b7',
     [string]$Output = 'build/reports/retained-update',
     [switch]$CostOnly,
-    [switch]$AffectedOnly
+    [switch]$AffectedOnly,
+    [switch]$MixedOnly
 )
 $ErrorActionPreference='Stop'
 $OutputEncoding=[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
@@ -47,20 +48,22 @@ if(!$CostOnly){
 Invoke-Logged 'native-build' $CMake @('--build','build/rtxpt-sdk/build-host','--config','Release','--target','rtrenderer_rtxpt','rtxpt_sparse_regions_selftest','rtxpt_memory_diagnostics_selftest','--parallel','1')
 if(!$AffectedOnly){Invoke-Logged 'journal' (Join-Path $repo 'build/rtxpt-sdk/bin/rtxpt_sparse_regions_selftest.exe') @('journal')}
 Invoke-Logged 'regions-oracle' (Join-Path $repo 'build/rtxpt-sdk/bin/rtxpt_sparse_regions_selftest.exe') @()
-if(!$AffectedOnly){
+Invoke-Logged 'region-locality' (Join-Path $repo 'build/rtxpt-sdk/bin/rtxpt_sparse_regions_selftest.exe') @('locality')
 Invoke-Logged 'memory-off' (Join-Path $repo 'build/rtxpt-sdk/bin/rtxpt_memory_diagnostics_selftest.exe') @()
 Invoke-Logged 'memory-enabled' (Join-Path $repo 'build/rtxpt-sdk/bin/rtxpt_memory_diagnostics_selftest.exe') @('enabled')
-}
+Invoke-Logged 'memory-census' (Join-Path $repo 'build/rtxpt-sdk/bin/rtxpt_memory_diagnostics_selftest.exe') @('census')
 }else{Invoke-Logged 'cost-candidate-build' $CMake @('--build','build/rtxpt-sdk/build-host','--config','Release','--target','rtxpt_sparse_regions_selftest','--parallel','1')}
 Invoke-Logged 'baseline-configure' $CMake @('-S',$baseline,'-B',(Join-Path $out 'baseline/build'),'-G','Visual Studio 17 2022','-A','x64')
 Invoke-Logged 'baseline-build' $CMake @('--build',(Join-Path $out 'baseline/build'),'--config','Release','--parallel','1')
 $gpu=Get-Command nvidia-smi -ErrorAction SilentlyContinue
 if($gpu){Invoke-Logged 'initial-gpu' $gpu.Source @('--query-gpu=name,utilization.gpu','--format=csv,noheader')}else{[IO.File]::WriteAllText((Join-Path $out 'initial-gpu.log'),'unavailable',$utf8)}
 Invoke-Logged 'candidate-mixed' (Join-Path $repo 'build/rtxpt-sdk/bin/rtxpt_sparse_regions_selftest.exe') @('bench')
+if($BaselineCommit -ne '6eacb19'){Invoke-Logged 'baseline-mixed' (Join-Path $out 'baseline/build/Release/retained_update_baseline.exe') @('bench');if($MixedOnly){return}}
 Invoke-Logged 'baseline-refit' (Join-Path $out 'baseline/build/Release/retained_update_baseline.exe') @('bench-refit')
 Invoke-Logged 'candidate-refit' (Join-Path $repo 'build/rtxpt-sdk/bin/rtxpt_sparse_regions_selftest.exe') @('bench-refit')
 # The exact same mixed fixture found a released baseline correctness defect.
 # Keep its failure; do not calculate speedups from an incorrect workload.
+if($BaselineCommit -ne '6eacb19'){return}
 $baselineFailed=$false
 try{Invoke-Logged 'baseline-mixed-regression' (Join-Path $out 'baseline/build/Release/retained_update_baseline.exe') @('bench')}catch{
     if((Get-Content -LiteralPath $script:LastLog -Raw -Encoding UTF8) -notmatch 'Regional exact-once source=2114 visits=0'){throw}
