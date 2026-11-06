@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tested-native", required=True)
     parser.add_argument("--source-commit", required=True)
-    parser.add_argument("--baseline-version", default="7.2.1")
+    parser.add_argument("--baseline-version", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     version = next(line.split("=", 1)[1] for line in (ROOT / "gradle.properties").read_text().splitlines()
