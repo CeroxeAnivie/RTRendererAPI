@@ -8,7 +8,7 @@ final class RtxptNativeLightingParameters {
         float[] values=new float[80];var camera=frame.camera();
         if(camera.hasExactProjection()) {
             var exact=camera.exactProjection();
-            if(exact.matrix(3,0)!=0||exact.matrix(3,1)!=0||exact.matrix(3,3)!=0)
+            if(!exact.hasPerspectiveProjection())
                 throw new IllegalArgumentException("Native lighting currently requires a perspective exact projection");
             var inverse=exact.inverseClipFromView();var toWorld=exact.cameraToWorld();
             for(int i=0;i<16;i++){values[i]=(float)inverse[i];values[16+i]=(float)toWorld[i];}

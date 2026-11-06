@@ -22,5 +22,15 @@
   "7.1.4": "docs/release-high-framerate-resources.md",
   "7.1.5": "docs/release-resource-latency.md",
   "7.1.6": "docs/release-resource-architecture.md",
-  "7.1.7": "docs/release-7.1.7.md"
+  "7.1.7": "docs/release-7.1.7.md",
+  "7.2.0-rc.1": "docs/release-7.2.0-rc.1.md",
+  "7.2.0-rc.2": "docs/release-7.2.0-rc.2.md",
+  "7.2.0-rc.3": "docs/release-7.2.0-rc.3.md",
+  "7.2.0-rc.4": "docs/release-7.2.0-rc.4.md",
+  "7.2.0-rc.5": "docs/release-7.2.0-rc.5.md",
+  "7.2.0-rc.6": "docs/release-7.2.0-rc.6.md",
+  "7.2.0-rc.7": "docs/release-7.2.0-rc.7.md",
+  "7.2.0-rc.8": "docs/release-sparse-movement.md",
+  "7.2.0-rc.9": "docs/release-upload-retention.md",
+  "7.2.0-rc.10": "docs/release-source-visibility.md"
 }

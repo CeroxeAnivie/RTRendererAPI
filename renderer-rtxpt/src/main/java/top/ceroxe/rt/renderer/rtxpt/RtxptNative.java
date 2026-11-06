@@ -38,6 +38,7 @@ final class RtxptNative {
     static native long[] diagnosticSnapshot(long handle);
     static native long diagnosticMonitorToken(long handle);
     static native long[] diagnosticMonitorSnapshot(long token);
+    static native long[] diagnosticMonitorSnapshotAfter(long token,long afterTrigger);
     static native String[] diagnosticGpuSnapshot(long handle);
     @FunctionalInterface interface Compositor { void compose(long[] frame); }
     static native void compositor(long handle,Compositor callback);
@@ -67,6 +68,7 @@ final class RtxptNative {
     static native long[] lightUpdateTelemetry(long handle);
     static native void sparseLighting(long handle,long[] ids,float[] records,long[] removals,boolean reset);
     static native long[] sparseLightingTelemetry(long handle);
+    static native long[] uploadMemory(long handle);
     static native void hostSurfacePlan(long handle,int width,int height,int composition,int hostComponents,boolean motionIncludesJitter,long budget);
     static native long[] hostSurfaceAcquire(long handle,long sequence,long revision,long resourceGeneration,long viewIdentity,long time,long delta);
     static native void hostSurfaceInputAction(long handle,long generation,int slot,long ticket,int action);
@@ -89,6 +91,8 @@ final class RtxptNative {
     static native void nativeLighting(long handle,float[] parameters);
     static native void nativeLightingReconstruction(long handle,boolean enabled,boolean reset);
     static native long[] nativeLightingReconstructionState(long handle);
+    static native void nativeLightingReconstructionScale(long handle,int divisor);
+    static native long[] nativeLightingReconstructionGrid(long handle);
     static native void nativeLightingClock(long handle,long timeNanos,long deltaNanos);
     static native void nativeLightingAttributes(long handle,long generation,String[] instances,float[] attributes,float[] lookup,byte[] application);
     static native void nativeLightingApplicationPatch(long handle,long generation,int offset,byte[] data);
@@ -96,6 +100,8 @@ final class RtxptNative {
     static native void nativeLightingEncoding(long handle,int encoding);
     /** Explicit diagnostic GPU encoder sweep; never called from the production frame path. */
     static native double[] nativeLightingCompactProbe(long handle);
+    /** Explicit diagnostic GPU edge/validity/alpha fixture. */
+    static native double[] nativeLightingGridProbe(long handle);
     static native void nativeLightingActivateValidatedExtension(long handle,String manifest,String expectedHash,int signals,int applicationBytes);
     static native void nativeLightingClearAttributes(long handle);
     static native String[] nativeLightingExtensionValidate(String manifest,int signals,int bytes);

@@ -42,7 +42,7 @@ public:
         }
     }
     RTR_HOST_SURFACE_NOINLINE void RecordWork(nvrhi::IDevice* device){
-        PollWork(device);if(!active||!workStatisticsEnabled)return;
+        PollWork(device);if(!active||!workStatisticsEnabled||!statistics)return;
         for(auto& slot:readbacks)if(!slot.pending){
             if(!slot.staging){nvrhi::BufferDesc desc;desc.byteSize=32;desc.cpuAccess=nvrhi::CpuAccessMode::Read;desc.initialState=nvrhi::ResourceStates::CopyDest;
                 slot.staging=device->createBuffer(desc);slot.done=device->createEventQuery();

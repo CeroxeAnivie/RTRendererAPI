@@ -31,6 +31,10 @@ SDK 映射依据 Streamline `ProgrammingGuideDLSS_RR.md` 第 4.1 节：
 
 RR 使用 DLAA 尺寸模式，在光照网格内完成降噪和时间重建。所有发布 plane 保持同一光照尺寸，随后由宿主空间重建到原生底图尺寸。这个入口不声称已经产生宿主全尺寸的 DLSS 超分结果。`GlGuidedLightingComposer` 示例可使用低分辨率 normal/distance、identity 和可选宿主 guides 做边缘约束；宿主底图始终在宿主分辨率采样。没有宿主 guides 时使用显式空间回退，不要求完整分辨率宿主 G-buffer。
 
+7.2.0 新增可选 `lightingReconstructionScale(2)`：每轴把 GI 的实际 RR 输入／DLAA 输出缩为光照网格的一半，奇数边向上取整。默认值 1 保持原执行路径。这是明确的 GI 重建细节／性能取舍，不是等画质修复；直接光、阴影、gain 以及两张发布 HDR plane 的尺寸和计算不变。每个低网格 texel 从本帧选择同一 primary receiver 的 raw GI、albedo、normal、depth、normalized motion；jitter 按实际评价尺寸换算。真实 RR 之后，以当前 receiver 的 instance/geometry 身份、距离、normal、roughness、albedo、validity 限制四邻点上采样；没有匹配点时使用本帧 raw GI，alpha 精确保留本帧 coverage。没有新引入旧帧缓存、宿主专用数据或全尺寸宿主 G-buffer。
+
+`lightingReconstructionGrid()` 返回 divisor、实际 inputWidth/inputHeight、发布 outputWidth/outputHeight 和这组纹理的逻辑 resourceBytes（不含 Streamline 不公开的网络内部分配）。现有 `lightingReconstruction().width/height` 继续表示发布光照网格。GPU profile 分别记录 `NativeGiRRCurrentFrameReduce`、真实 `NativeDiffuseGiDLSSRR`、`NativeGiRRGeometryUpsample`，reason 是 divisor。低网格仍使用合法同输入／输出尺寸的 DLAA，不静默切换为 raw。切换比例使下一帧重置历史，关闭 RR 停止评价并释放这组纹理引用；先前已提交的命令列表和输出 lease 保留各自资源直到完成。
+
 发布前单独恢复 primary coverage，并清零没有 receiver 的 GI；紧凑输出编码发生在 RR 之后。最终合成是 `hostBase * gain + reconstructedGI`，不得再加 raw GI。coverage 的部分覆盖混合遵守 plane 契约。gain 的采样与重建仍由空间组合器负责，不能将 gain 当作线性颜色重复 RR。
 
 `lightingReconstruction()` 返回 requested、actual、工作尺寸、成功 evaluate 数、history reset 数和 guides 有效状态。初始化前 actual 为 NONE。切回 `NativeLightingReconstruction.NONE` 后停止 RR 调用并释放其纹理引用。空场景直接发布中性增益／零 GI，重置历史。网格尺寸变化和显式 temporal reset 同样重置历史；宿主发生未通过场景或相机描述的跳变时调用 `resetLightingReconstruction()`。

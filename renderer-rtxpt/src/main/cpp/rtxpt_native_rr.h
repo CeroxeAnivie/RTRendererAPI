@@ -3,33 +3,40 @@
 #include "rtxpt_cached_bindings.h"
 #include <sl_dlss_d.h>
 
-// One diffuse radiance layer, at the lighting-grid extent. Spatial composition
-// samples the independent full-resolution host base afterwards.
+// One diffuse radiance layer. Optional lower-grid RR never changes direct gain
+// or the published lighting extent; all resampling uses this frame's receivers.
 class RtrNativeRR {
 public:
     bool requested=false,valid=false,reset=true,guidesNeedClear=false;
     uint64_t evaluated=0,resets=0,lastSequence=0;
     uint32_t width=0,height=0;
-    nvrhi::BindingLayoutHandle layout,resolveLayout;
+    uint32_t divisor=1,allocatedDivisor=0,evaluationWidth=0,evaluationHeight=0;
+    uint64_t resourceBytes=0;
+    nvrhi::BindingLayoutHandle layout,resolveLayout,reduceLayout,upsampleLayout;
     nvrhi::ComputePipelineHandle pipeline,singleGroupPipeline,sparseOnlyPipeline,sparseOnlySingleGroupPipeline,pairGroupPipeline,sparseOnlyPairGroupPipeline,smallGroupPipeline,sparseOnlySmallGroupPipeline,resolvePipeline;
     std::array<nvrhi::ComputePipelineHandle,8> uninstrumentedPipelines;
     std::array<nvrhi::ComputePipelineHandle,16> maxPipelines;
+    std::array<nvrhi::ComputePipelineHandle,8> countedMaxPipelines;
+    std::array<nvrhi::ComputePipelineHandle,16> channelMaxPipelines;
     nvrhi::BufferHandle constants;
     std::array<nvrhi::TextureHandle,6> guides;
     nvrhi::TextureHandle reconstructed,result;
-    RtrCachedBindings resolveBindings;
+    nvrhi::TextureHandle surfaces,reducedRaw;
+    std::array<nvrhi::TextureHandle,6> reducedGuides;
+    nvrhi::ComputePipelineHandle reducePipeline,upsamplePipeline;
+    RtrCachedBindings resolveBindings,reduceBindings,upsampleBindings;
     struct alignas(16) Parameters {dm::float4x4 worldToClip,previousWorldToClip;float4 depth;};
     Parameters parameters{};
     dm::float4x4 previous=dm::float4x4::identity();
     static void Check(sl::Result result,const char* stage){
         if(result!=sl::Result::eOk)throw std::runtime_error(std::string("Native GI RR ")+stage+" failed: "+std::to_string(int(result)));
     }
-    void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* base,nvrhi::IBindingLayout* bindless,nvrhi::IBindingLayout* sourceHistory,uint32_t w,uint32_t h,unsigned groupVariant,bool maximum,bool allDynamic){
+    void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* base,nvrhi::IBindingLayout* bindless,nvrhi::IBindingLayout* sourceHistory,uint32_t w,uint32_t h,unsigned groupVariant,bool maximum,bool allDynamic,bool channelMaximum){
         if(!requested)return;
         if(!donut::app::StreamlineIntegration::Get().IsDLSSRRAvailable())throw std::runtime_error("Native diffuse GI RR is not available on this device");
         if(!pipeline){
             auto desc=*base->getDesc();desc.bindings.push_back(nvrhi::BindingLayoutItem::ConstantBuffer(1));
-            for(uint32_t i=5;i<=10;i++)desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(i));
+            for(uint32_t i=5;i<=11;i++)desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(i));
             layout=device->createBindingLayout(desc);std::vector<donut::engine::ShaderMacro> defaultMacros{{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
             auto shader=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&defaultMacros,nvrhi::ShaderType::Compute);
             if(!layout||!shader)throw std::runtime_error("Native GI RR guide shader unavailable");
@@ -69,29 +76,93 @@ public:
             pso.CS=factory.CreateShader(allDynamic?"app/ProcessingPasses/RtrNativeDynamicLightingReconstruct.hlsl":"app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);maxPipelines[maxOffset+i]=device->createComputePipeline(pso);
             if(!maxPipelines[maxOffset+i])throw std::runtime_error("Max-composition native GI RR pipeline unavailable");
         }
-        if(width==w&&height==h)return;
+        // Diagnostic observation must not force a different composition
+        // executor. Count actual work in the exact maximum-only path, with no
+        // previous-frame winner seed or extra history binding.
+        if(maximum&&RtrDiagnostics::level.load()==2)for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!countedMaxPipelines[i]){
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
+                {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","1"}};
+            nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindless};
+            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+            countedMaxPipelines[i]=device->createComputePipeline(pso);
+            if(!countedMaxPipelines[i])throw std::runtime_error("Counted maximum-composition lighting pipeline unavailable");
+        }
+        // CHANNEL_MAX has independent RGB winners and needs neither scalar
+        // luminance/ID arrays nor a dynamically indexed per-ray stack.
+        if(channelMaximum)for(unsigned instrumented=0;instrumented<2;++instrumented)
+            for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!channelMaxPipelines[instrumented*8+i]){
+                std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
+                    {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS",instrumented?"1":"0"},{"RTR_MAX_COMPOSITION","2"}};
+                nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindless};
+                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingReconstruct.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+                channelMaxPipelines[instrumented*8+i]=device->createComputePipeline(pso);
+                if(!channelMaxPipelines[instrumented*8+i])throw std::runtime_error("Channel-maximum lighting pipeline unavailable");
+            }
+        if(divisor>1&&!reducePipeline){
+            nvrhi::BindingLayoutDesc desc;desc.visibility=nvrhi::ShaderType::Compute;
+            for(uint32_t i=0;i<5;i++)desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(i));
+            for(uint32_t i=0;i<5;i++)desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(i));
+            reduceLayout=device->createBindingLayout(desc);nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={reduceLayout};
+            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeGiReduce.hlsl","main",nullptr,nvrhi::ShaderType::Compute);reducePipeline=device->createComputePipeline(pso);
+            desc.bindings.clear();for(uint32_t i=0;i<5;i++)desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(i));
+            desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(0));upsampleLayout=device->createBindingLayout(desc);pso.bindingLayouts={upsampleLayout};
+            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeGiUpsample.hlsl","main",nullptr,nvrhi::ShaderType::Compute);upsamplePipeline=device->createComputePipeline(pso);
+            if(!reducePipeline||!upsamplePipeline)throw std::runtime_error("Independent GI RR resampling pipeline unavailable");
+        }
+        if(width==w&&height==h&&allocatedDivisor==divisor)return;
         // NVRHI command-list references retain old textures until GPU completion.
+        const uint32_t ew=(w+divisor-1)/divisor,eh=(h+divisor-1)/divisor;
         std::array<nvrhi::TextureHandle,8> next;
+        auto texture=[&](uint32_t x,uint32_t y,nvrhi::Format format,const char* name){
+            auto desc=nvrhi::TextureDesc().setWidth(x).setHeight(y).setFormat(format).setIsUAV(true)
+                .setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);desc.debugName=name;
+            auto value=device->createTexture(desc);if(!value)throw std::runtime_error("Native GI RR texture allocation failed");return value;
+        };
         for(unsigned i=0;i<next.size();i++){
             auto format=i==3?nvrhi::Format::RG16_FLOAT:(i==4||i==5)?nvrhi::Format::R32_FLOAT:nvrhi::Format::RGBA16_FLOAT;
-            auto td=nvrhi::TextureDesc().setWidth(w).setHeight(h).setFormat(format).setIsUAV(true).setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);
-            td.debugName="Native diffuse GI RR";next[i]=device->createTexture(td);if(!next[i])throw std::runtime_error("Native GI RR texture allocation failed");
+            next[i]=texture(i==6?ew:w,i==6?eh:h,format,"Native diffuse GI RR");
         }
-        for(unsigned i=0;i<6;i++)guides[i]=next[i];reconstructed=next[6];result=next[7];width=w;height=h;valid=false;reset=true;guidesNeedClear=true;
+        auto nextSurfaces=texture(divisor>1?w:1,divisor>1?h:1,nvrhi::Format::RGBA32_UINT,"Current GI receiver identity and distance");
+        std::array<nvrhi::TextureHandle,6> nextReduced; nvrhi::TextureHandle nextRaw;
+        if(divisor>1){
+            for(unsigned i=0;i<6;i++)nextReduced[i]=texture(ew,eh,next[i]->getDesc().format,"Reduced current GI RR guide");
+            nextRaw=texture(ew,eh,nvrhi::Format::RGBA16_FLOAT,"Reduced current GI radiance");
+        }
+        for(unsigned i=0;i<6;i++)guides[i]=next[i];reconstructed=next[6];result=next[7];surfaces=nextSurfaces;
+        reducedGuides=std::move(nextReduced);reducedRaw=nextRaw;
+        resolveBindings.value=nullptr;reduceBindings.value=nullptr;upsampleBindings.value=nullptr;
+        width=w;height=h;evaluationWidth=ew;evaluationHeight=eh;allocatedDivisor=divisor;
+        // Logical texture bytes, excluding opaque Streamline network allocations.
+        resourceBytes=uint64_t(w)*h*44+uint64_t(ew)*eh*8+uint64_t(divisor>1?w:1)*(divisor>1?h:1)*16;
+        if(divisor>1)resourceBytes+=uint64_t(ew)*eh*44;
+        valid=false;reset=true;guidesNeedClear=true;
     }
     void Bind(nvrhi::ICommandList* command,nvrhi::BindingSetDesc& bindings,const float* words,uint64_t sequence){
         // Diffuse-only reconstruction has invariant zero specular inputs. Clear
         // once per allocation instead of writing twelve MB of zeros every frame.
-        if(guidesNeedClear){for(unsigned i:{1u,5u})command->clearTextureFloat(guides[i],nvrhi::AllSubresources,nvrhi::Color(0));guidesNeedClear=false;}
+        if(guidesNeedClear){for(unsigned i:{1u,5u}){command->clearTextureFloat(guides[i],nvrhi::AllSubresources,nvrhi::Color(0));
+                if(divisor>1)command->clearTextureFloat(reducedGuides[i],nvrhi::AllSubresources,nvrhi::Color(0));}guidesNeedClear=false;}
         dm::float4x4 inverseClip,cameraToWorld;std::memcpy(&inverseClip,words,64);std::memcpy(&cameraToWorld,words+16,64);
         parameters.worldToClip=dm::inverse(cameraToWorld*inverseClip);
         if(sequence!=lastSequence+1)reset=true;
         parameters.previousWorldToClip=reset?parameters.worldToClip:previous;
-        bool negative=words[35]<0||words[36]<0;parameters.depth=float4(negative?.5f:1.f,negative?.5f:0.f,0,0);
+        bool negative=words[35]<0||words[36]<0;parameters.depth=float4(negative?.5f:1.f,negative?.5f:0.f,divisor>1?float(divisor):0.f,0);
         command->writeBuffer(constants,&parameters,sizeof(parameters));bindings.bindings.push_back(nvrhi::BindingSetItem::ConstantBuffer(1,constants));
         for(uint32_t i=0;i<6;i++)bindings.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(i+5,guides[i]));
+        bindings.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(11,surfaces));
     }
     void Evaluate(nvrhi::IDevice* device,nvrhi::ICommandList* command,nvrhi::ITexture* raw,const float* words,uint64_t sequence){
+        if(divisor>1){
+            const auto scope=RtrGpuProfile::Begin(command,"NativeGiRRCurrentFrameReduce",-1,0,0,divisor);
+            nvrhi::BindingSetDesc bindings;bindings.bindings={nvrhi::BindingSetItem::Texture_SRV(0,raw),
+                nvrhi::BindingSetItem::Texture_SRV(1,guides[0]),nvrhi::BindingSetItem::Texture_SRV(2,guides[2]),
+                nvrhi::BindingSetItem::Texture_SRV(3,guides[3]),nvrhi::BindingSetItem::Texture_SRV(4,guides[4]),
+                nvrhi::BindingSetItem::Texture_UAV(0,reducedRaw),nvrhi::BindingSetItem::Texture_UAV(1,reducedGuides[0]),
+                nvrhi::BindingSetItem::Texture_UAV(2,reducedGuides[2]),nvrhi::BindingSetItem::Texture_UAV(3,reducedGuides[3]),
+                nvrhi::BindingSetItem::Texture_UAV(4,reducedGuides[4])};
+            nvrhi::ComputeState state;state.pipeline=reducePipeline;state.bindings={reduceBindings.Get(device,bindings,reduceLayout)};
+            command->setComputeState(state);command->dispatch((evaluationWidth+7)/8,(evaluationHeight+7)/8);RtrGpuProfile::End(command,scope);
+        }
         auto& slIntegration=donut::app::StreamlineIntegration::Get();auto* token=slIntegration.HostFrameToken();
         if(!token)throw std::runtime_error("Native GI RR has no Streamline frame token");
         dm::float4x4 inverseClip,cameraToWorld;std::memcpy(&inverseClip,words,64);std::memcpy(&cameraToWorld,words+16,64);
@@ -106,25 +177,26 @@ public:
         c.clipToPrevClip=toSl(reprojection);c.prevClipToClip=toSl(dm::inverse(reprojection));c.clipToLensClip=toSl(dm::float4x4::identity());
         c.cameraPos={words[32],words[33],words[34]};c.cameraRight={words[16],words[20],words[24]};c.cameraUp={words[17],words[21],words[25]};c.cameraFwd={-words[18],-words[22],-words[26]};
         c.cameraNear=.001f;c.cameraFar=1e7f;c.cameraFOV=2*std::atan(std::abs(words[5]));c.cameraAspectRatio=std::abs(words[0]/words[5]);
-        c.jitterOffset={-words[37]*width*.5f,words[38]*height*.5f};c.mvecScale={1,1};c.cameraPinholeOffset={0,0};
+        c.jitterOffset={-words[37]*evaluationWidth*.5f,words[38]*evaluationHeight*.5f};c.mvecScale={1,1};c.cameraPinholeOffset={0,0};
         c.depthInverted=words[35]>words[36]?sl::Boolean::eTrue:sl::Boolean::eFalse;c.cameraMotionIncluded=sl::Boolean::eTrue;
         c.motionVectors3D=sl::Boolean::eFalse;c.motionVectorsDilated=sl::Boolean::eFalse;c.motionVectorsJittered=sl::Boolean::eFalse;c.orthographicProjection=sl::Boolean::eFalse;c.motionVectorsInvalidValue=FLT_MIN;c.reset=reset?sl::Boolean::eTrue:sl::Boolean::eFalse;
         const sl::ViewportHandle viewport(0);Check(slSetConstants(c,*token,viewport),"constants");
-        sl::DLSSDOptions options;options.mode=sl::DLSSMode::eDLAA;options.outputWidth=width;options.outputHeight=height;
+        sl::DLSSDOptions options;options.mode=sl::DLSSMode::eDLAA;options.outputWidth=evaluationWidth;options.outputHeight=evaluationHeight;
         options.colorBuffersHDR=sl::Boolean::eTrue;options.preExposure=1;options.exposureScale=1;options.normalRoughnessMode=sl::DLSSDNormalRoughnessMode::ePacked;
         options.worldToCameraView=toSl(dm::transpose(dm::inverse(cameraToWorld)));options.cameraViewToWorld=toSl(dm::transpose(cameraToWorld));
         // Options carry the current camera matrices as well as the extent.
         Check(slDLSSDSetOptions(viewport,options),"options");
-        std::array<nvrhi::ITexture*,8> textures{raw,guides[0],guides[1],guides[2],guides[3],guides[4],guides[5],reconstructed};
+        auto& actualGuides=divisor>1?reducedGuides:guides;
+        std::array<nvrhi::ITexture*,8> textures{divisor>1?reducedRaw.Get():raw,actualGuides[0],actualGuides[1],actualGuides[2],actualGuides[3],actualGuides[4],actualGuides[5],reconstructed};
         const std::array<sl::BufferType,8> types{sl::kBufferTypeScalingInputColor,sl::kBufferTypeAlbedo,sl::kBufferTypeSpecularAlbedo,sl::kBufferTypeNormalRoughness,sl::kBufferTypeMotionVectors,sl::kBufferTypeDepth,sl::kBufferTypeSpecularHitDistance,sl::kBufferTypeScalingOutputColor};
-        sl::Extent extent{0,0,width,height};std::array<sl::Resource,8> resources;std::array<sl::ResourceTag,8> tags;
+        sl::Extent extent{0,0,evaluationWidth,evaluationHeight};std::array<sl::Resource,8> resources;std::array<sl::ResourceTag,8> tags;
         for(unsigned i=0;i<8;i++){
             command->setTextureState(textures[i],nvrhi::AllSubresources,nvrhi::ResourceStates::Common);
             resources[i]=sl::Resource{sl::ResourceType::eTex2d,textures[i]->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource),nullptr,nullptr,D3D12_RESOURCE_STATE_COMMON};
             tags[i]=sl::ResourceTag{&resources[i],types[i],sl::ResourceLifecycle::eValidUntilEvaluate,&extent};
         }
         command->commitBarriers();void* native=command->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList);
-        const auto scope=RtrGpuProfile::Begin(command,"NativeDiffuseGiDLSSRR",-1);
+        const auto scope=RtrGpuProfile::Begin(command,"NativeDiffuseGiDLSSRR",-1,0,0,divisor);
         // Borrow resources for this evaluation instead of publishing volatile
         // global tags, which make Streamline clone the inputs before evaluation.
         // setTextureState above retains all eight textures on this command list
@@ -136,7 +208,15 @@ public:
         Check(slEvaluateFeature(sl::kFeatureDLSS_RR,*token,inputs.data(),uint32_t(inputs.size()),native),"evaluate");
         command->clearState();RtrGpuProfile::End(command,scope);
         nvrhi::BindingSetDesc bindings;bindings.bindings={nvrhi::BindingSetItem::Texture_SRV(0,reconstructed),nvrhi::BindingSetItem::Texture_SRV(1,raw),nvrhi::BindingSetItem::Texture_UAV(0,result)};
-        auto binding=resolveBindings.Get(device,bindings,resolveLayout);nvrhi::ComputeState state;state.pipeline=resolvePipeline;state.bindings={binding};command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);
+        nvrhi::ComputeState state;
+        const auto resolveScope=divisor>1?RtrGpuProfile::Begin(command,"NativeGiRRGeometryUpsample",-1,0,0,divisor):RtrGpuProfile::Token{};
+        if(divisor>1){
+            bindings.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(2,guides[0]));
+            bindings.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(3,guides[2]));
+            bindings.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(4,surfaces));
+            state.pipeline=upsamplePipeline;state.bindings={upsampleBindings.Get(device,bindings,upsampleLayout)};
+        }else{state.pipeline=resolvePipeline;state.bindings={resolveBindings.Get(device,bindings,resolveLayout)};}
+        command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);if(divisor>1)RtrGpuProfile::End(command,resolveScope);
         ++evaluated;if(reset)++resets;reset=false;valid=true;previous=parameters.worldToClip;lastSequence=sequence;
     }
 };

@@ -52,21 +52,21 @@ public:
     uint64_t sequence=0,sceneRevision=0;
     struct WorkReadback {nvrhi::BufferHandle staging;nvrhi::EventQueryHandle done;uint64_t sequence=0,revision=0;bool pending=false;};
     std::array<WorkReadback,3> workReadbacks;
-    std::array<uint64_t,9> latestWork{};
+    std::array<uint64_t,15> latestWork{};
     uint64_t workCopies=0,workQueries=0,workPolls=0;
     void PollWork(nvrhi::IDevice* device){
         for(auto& slot:workReadbacks)if(slot.pending&&((++workPolls),device->pollEventQuery(slot.done))){
             auto* words=static_cast<const uint32_t*>(device->mapBuffer(slot.staging,nvrhi::CpuAccessMode::Read));
-            if(words){if(!latestWork[0]||slot.sequence>=latestWork[1]){latestWork={1,slot.sequence,slot.revision,words[0],words[1],words[2],words[3],words[4],words[5]};}device->unmapBuffer(slot.staging);}
+            if(words){if(!latestWork[0]||slot.sequence>=latestWork[1]){latestWork={1,slot.sequence,slot.revision,words[0],words[1],words[2],words[3],words[4],words[5],words[6],words[7],words[8],words[9],words[10],words[11]};}device->unmapBuffer(slot.staging);}
             slot.pending=false;
         }
     }
     void RecordWork(nvrhi::IDevice* device){
         PollWork(device);if(!workStatisticsEnabled)return;
         for(auto& slot:workReadbacks)if(!slot.pending){
-            if(!slot.staging){nvrhi::BufferDesc desc;desc.byteSize=24;desc.cpuAccess=nvrhi::CpuAccessMode::Read;desc.initialState=nvrhi::ResourceStates::CopyDest;desc.debugName="Optional native lighting statistics";
+            if(!slot.staging){nvrhi::BufferDesc desc;desc.byteSize=48;desc.cpuAccess=nvrhi::CpuAccessMode::Read;desc.initialState=nvrhi::ResourceStates::CopyDest;desc.debugName="Optional native lighting statistics";
                 slot.staging=device->createBuffer(desc);slot.done=device->createEventQuery();}
-            auto commands=device->createCommandList();commands->open();commands->copyBuffer(slot.staging,0,work,0,24);commands->close();device->executeCommandList(commands);
+            auto commands=device->createCommandList();commands->open();commands->copyBuffer(slot.staging,0,work,0,48);commands->close();device->executeCommandList(commands);
             device->setEventQuery(slot.done,nvrhi::CommandQueue::Graphics);++workCopies;++workQueries;slot.sequence=sequence;slot.revision=sceneRevision;slot.pending=true;break;
         }
     }
@@ -85,6 +85,8 @@ public:
     nvrhi::ComputePipelineHandle pairGroupPipeline,sparseOnlyPairGroupPipeline;
     std::array<nvrhi::ComputePipelineHandle,8> uninstrumentedPipelines;
     std::array<nvrhi::ComputePipelineHandle,16> maxPipelines;
+    std::array<nvrhi::ComputePipelineHandle,8> countedMaxPipelines;
+    std::array<nvrhi::ComputePipelineHandle,16> channelMaxPipelines;
     std::string extensionIdentity;
     uint32_t extensionSignals=15,extensionMinimumBytes=0;
     std::unordered_map<std::string,InstanceAttributes> instanceAttributes;
@@ -239,7 +241,7 @@ public:
             cb.initialState=nvrhi::ResourceStates::ConstantBuffer;cb.keepInitialState=true;constantBuffer=device->createBuffer(cb);
             application=Buffer(device,4,0,"Native lighting application data",true);
             lookup=Buffer(device,sizeof(baselineLookup),sizeof(float2),"Native lighting baseline lookup");
-            nvrhi::BufferDesc counter;counter.byteSize=24;counter.canHaveRawViews=counter.canHaveUAVs=true;
+            nvrhi::BufferDesc counter;counter.byteSize=48;counter.canHaveRawViews=counter.canHaveUAVs=true;
             counter.debugName="Native lighting work counters";counter.initialState=nvrhi::ResourceStates::UnorderedAccess;counter.keepInitialState=true;work=device->createBuffer(counter);
             auto td=nvrhi::TextureDesc().setWidth(1).setHeight(1).setFormat(nvrhi::Format::RGBA16_FLOAT).setIsUAV(true)
                 .setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);
@@ -319,7 +321,29 @@ public:
             pso.CS=factory.CreateShader(allDynamic?"app/ProcessingPasses/RtrNativeDynamicLighting.hlsl":"app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);maxPipelines[maxOffset+i]=device->createComputePipeline(pso);
             if(!maxPipelines[maxOffset+i])throw std::runtime_error("Max-composition native lighting pipeline unavailable");
         }
-        reconstruction.Prepare(device,factory,layout,bindlessLayout,sourceHistoryLayout,width,height,groupVariant,maximum,allDynamic);
+        // Diagnostic observation must not force a different composition
+        // executor. Count actual work in the exact maximum-only path, with no
+        // previous-frame winner seed or extra history binding.
+        if(!reconstruction.requested&&maximum&&RtrDiagnostics::level.load()==2)for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!countedMaxPipelines[i]){
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
+                {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","1"}};
+            nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
+            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+            countedMaxPipelines[i]=device->createComputePipeline(pso);
+            if(!countedMaxPipelines[i])throw std::runtime_error("Counted maximum-composition lighting pipeline unavailable");
+        }
+        // CHANNEL_MAX has independent RGB winners and needs neither scalar
+        // luminance/ID arrays nor a dynamically indexed per-ray stack.
+        if(!reconstruction.requested&&sources&&sources->ChannelExecutor())for(unsigned instrumented=0;instrumented<2;++instrumented)
+            for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!channelMaxPipelines[instrumented*8+i]){
+                std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
+                    {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS",instrumented?"1":"0"},{"RTR_MAX_COMPOSITION","2"}};
+                nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
+                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+                channelMaxPipelines[instrumented*8+i]=device->createComputePipeline(pso);
+                if(!channelMaxPipelines[instrumented*8+i])throw std::runtime_error("Channel-maximum lighting pipeline unavailable");
+            }
+        reconstruction.Prepare(device,factory,layout,bindlessLayout,sourceHistoryLayout,width,height,groupVariant,maximum,allDynamic,sources&&sources->ChannelExecutor());
     }
     float maximumGi()const{return constants.words[70];}
     std::array<nvrhi::TextureHandle,4> Outputs()const{
@@ -647,6 +671,10 @@ public:
             else if(extensionIdentity.empty())state.pipeline=lightCount<=1
                 ?(sources.SingleGroup()?sparseOnlySingleGroupPipeline:sources.PairGroups()?sparseOnlyPairGroupPipeline:sources.SmallGroups()?sparseOnlySmallGroupPipeline:sparseOnlyPipeline)
                 :(sources.SingleGroup()?singleGroupPipeline:sources.PairGroups()?pairGroupPipeline:sources.SmallGroups()?smallGroupPipeline:pipeline);
+            if(workStatisticsEnabled&&extensionIdentity.empty()&&sources.VisibleMax()){
+                const unsigned variant=sources.SingleGroup()?1+(lightCount<=1?2:0):sources.PairGroups()?6+(lightCount<=1?1:0):sources.SmallGroups()?4+(lightCount<=1?1:0):(lightCount<=1?2:0);
+                state.pipeline=reconstruction.requested?reconstruction.countedMaxPipelines[variant]:countedMaxPipelines[variant];
+            }
             if(!workStatisticsEnabled&&extensionIdentity.empty()){
                 const unsigned variant=sources.SingleGroup()?1+(lightCount<=1?2:0):sources.PairGroups()?6+(lightCount<=1?1:0):sources.SmallGroups()?4+(lightCount<=1?1:0):(lightCount<=1?2:0);
                 const unsigned maxVariant=variant+(sources.dynamicCount==sources.records.size()?8:0);
@@ -659,6 +687,10 @@ public:
                         nvrhi::BindingSetItem::Texture_UAV(0,sourceHistory[1-sourceHistoryRead])};
                     state.bindings.push_back(sourceHistoryBindings[sourceHistoryRead].Get(device,history,sourceHistoryLayout));
                 }
+            }
+            if(extensionIdentity.empty()&&sources.ChannelExecutor()){
+                const unsigned variant=sources.SingleGroup()?1+(lightCount<=1?2:0):sources.PairGroups()?6+(lightCount<=1?1:0):sources.SmallGroups()?4+(lightCount<=1?1:0):(lightCount<=1?2:0);
+                state.pipeline=(reconstruction.requested?reconstruction.channelMaxPipelines:channelMaxPipelines)[(workStatisticsEnabled?8:0)+variant];
             }
             command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);}
         RtrGpuProfile::End(command,dispatchScope);

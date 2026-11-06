@@ -13,4 +13,6 @@ public interface RtxptDiagnosticAccess {
     RtxptAccess.RuntimeStatus runtimeStatus();
     /** Cumulative work counters; compare snapshots around the same submission. */
     default RtxptDiagnostics.LightUpdates lightUpdates(){throw new UnsupportedOperationException("Light work counters unavailable");}
+    /** Upload resource capacity counters, read on the renderer owner thread without waiting for the GPU. */
+    default RtxptDiagnostics.UploadMemory uploadMemory(){throw new UnsupportedOperationException("Upload memory counters unavailable");}
 }

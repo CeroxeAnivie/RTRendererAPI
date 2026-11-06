@@ -95,6 +95,9 @@ public final class RtxptResourceArenaNativeSelfTest {
                     "arena",r.resourceArenaStatistics().toString(),"pressure",r.resourcePressure().toString()));
             }
             require(r.resourceArenaStatistics().evictions()>0,"Cache saturation exercises background eviction");
+            var uploadMemory=r.uploadMemory();
+            require(uploadMemory.transactionLeasedBytes()==0&&uploadMemory.transactionAllocatedBytes()<=4L*1024*1024,"Completed upload pages exceeded the idle warm budget");
+            System.out.println("TRANSACTION_UPLOAD_MEMORY "+uploadMemory);
             require(r.resourceArenaStatistics().bufferPoolHits()>0,"Capacity-compatible buffers are actually reused");
             var before=r.resourceMaintenance();
             // The first material had no tangent payload. Enabling a normal map

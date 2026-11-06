@@ -19,6 +19,8 @@ public final class RtxptHighFramerateBenchmark {
     // Architecture probe only: isolate the unavoidable GI -> RR chain. This
     // reduced output selection is never a production dual-HDR acceptance run.
     static final boolean DIAGNOSTIC_GI_ONLY=Boolean.getBoolean("highFramerate.diagnosticGiOnly");
+    static final int RR_DIVISOR=Integer.getInteger("highFramerate.rrDivisor",1);
+    static final int GI_SAMPLES=Integer.getInteger("highFramerate.giSamples",2);
     static void collectFull(RtxptRenderer r,Map<Long,long[]> samples){
         if(!INDEPENDENT)return;var data=r.benchmarkGpuSnapshot();
         int stride=Math.toIntExact(data[3]);require(stride>=7,"Independent request and render timing schema");
@@ -57,9 +59,9 @@ public final class RtxptHighFramerateBenchmark {
         int sourceCount=COUNT>=4096?26000:COUNT>=977?22000:17408;
         var sources=sources(sourceCount);
         var signals=DIAGNOSTIC_GI_ONLY?Set.of(NativeLightingPlan.Signal.INDIRECT_DIFFUSE):Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.INDIRECT_DIFFUSE);
-        var plan=new NativeLightingPlan(1280,800,signals,2,6,.35f,NativeLightingStyle.defaults(),SUN_ON,null,true);
+        var plan=new NativeLightingPlan(1280,800,signals,GI_SAMPLES,6,.35f,NativeLightingStyle.defaults(),SUN_ON,null,true);
         try(var r=new RtxptRenderer(RtxptLightTreeNativeSelfTest.config(4).copyBuilder().resources(RendererResourceOptions.high()).gpuTimingsEnabled(true).build(),true)){
-            r.nativeLightingPlan(plan);r.lightingReconstruction(NativeLightingReconstruction.DLSS_RR);r.diagnosticLevel(LEVEL);
+            r.nativeLightingPlan(plan);r.lightingReconstructionScale(RR_DIVISOR);r.lightingReconstruction(NativeLightingReconstruction.DLSS_RR);r.diagnosticLevel(LEVEL);
             r.lightingWorkStatisticsEnabled(true);
             var tx=SceneTransaction.builder(1).resetScene();for(long id=1;id<=63;id++)tx.upsert(texture(id,1)).upsert(MaterialAsset.builder(id).baseColorTextureId(id).roughness(.8f).build());
             for(long id=1;id<=COUNT;id++)tx.upsert(RtxptDynamicResourcesNativeSelfTest.mesh(id,0)).upsert(SceneInstance.builder(id,id).build());
@@ -98,6 +100,7 @@ public final class RtxptHighFramerateBenchmark {
             }
             long acceptedDuration=System.nanoTime()-start;r.awaitIdle();long duration=System.nanoTime()-start;if(LEVEL!=RtxptDiagnostics.Level.OFF)for(var scope:r.diagnosticGpuSnapshot().scopes())gpu.put(scope.nativeFrame()+":"+scope.queue()+":"+scope.event(),scope);
             collectFull(r,fullGpu);var after=maintenance(r);var tablesAfter=tableUploads(r);var rr=r.lightingReconstruction();require(rr.actual()==NativeLightingReconstruction.DLSS_RR&&rr.guidesValid(),"Real GI RR remains active");
+            Files.writeString(OUT.resolve(stem+"-gi-grid.json"),RtxptJson.encode(RtxptJson.object("grid",r.lightingReconstructionGrid().toString(),"giSamples",GI_SAMPLES,"rrMode","DLAA")));
             Files.writeString(OUT.resolve(stem+"-scene-tables.json"),RtxptJson.encode(RtxptJson.object("before",tablesBefore,"after",tablesAfter,
                 "fields",List.of("materialBytes","geometryBytes","instanceBytes","materialCalls","geometryCalls","instanceCalls","fullWriteReferenceBytes","comparedRows"))));
             require(r.dynamicResourceStatistics().deviceDrains()==0,"Normal updates never idle the device");

@@ -261,6 +261,7 @@ public final class RtxptComposedRenderer implements Renderer {
         public RtxptAccess.PresentationStatus presentationStatus(){return rtxpt.presentationStatus();}
         public RtxptAccess.RuntimeStatus runtimeStatus(){return rtxpt.runtimeStatus();}
         public RtxptDiagnostics.LightUpdates lightUpdates(){return rtxpt.lightUpdates();}
+        public RtxptDiagnostics.UploadMemory uploadMemory(){return rtxpt.uploadMemory();}
     }
     @Override public <T> Optional<T> extension(Class<T> type){
         ready();Objects.requireNonNull(type,"extensionType");

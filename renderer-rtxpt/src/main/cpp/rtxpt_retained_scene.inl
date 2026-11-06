@@ -27,6 +27,15 @@ void CaptureLinear(const std::filesystem::path& path,int signal=0,int hostSignal
         if(signal==1&&rr.requested&&rr.valid)source=rr.result;
         if(signal>=3&&signal<=8)source=rr.guides[signal-3];
         if(signal==9)source=nativeLighting.indirect;
+        if(signal==10)source=rr.reducedRaw;
+        if(signal==11)source=rr.reducedGuides[0];
+        if(signal==12)source=rr.reducedGuides[2];
+        if(signal==13)source=rr.reducedGuides[3];
+        if(signal==14)source=rr.reducedGuides[4];
+        if(signal==15)source=nativeLighting.indirect;
+        if(signal==16)source=rr.result;
+        if(signal==17)source=rr.reducedGuides[1];
+        if(signal==18)source=rr.reducedGuides[5];
     }
     if(hostSignal>=0){if(hostSignal>=8)throw std::invalid_argument("Unknown host signal");source=hostSurface.composition==0?hostAugmentation.outputs[hostSignal]:hostOutputs.outputs[hostSignal];}
     if(!source)throw std::runtime_error("No linear render output");
@@ -44,7 +53,7 @@ void CaptureLinear(const std::filesystem::path& path,int signal=0,int hostSignal
     std::ofstream output(path,std::ios::binary);output<<"PF\n"<<desc.width<<" "<<desc.height<<"\n-1.0\n";
     for(int y=int(desc.height)-1;y>=0;y--){auto* row=reinterpret_cast<const uint16_t*>(bytes+size_t(y)*pitch);
         for(uint32_t x=0;x<desc.width;x++)for(int c=0;c<3;c++){
-            unsigned component=std::min<unsigned>(unsigned(c),channels-1);
+            unsigned component=signal==15||signal==16?3:std::min<unsigned>(unsigned(c),channels-1);
             if(floating32){auto f=reinterpret_cast<const float*>(bytes+size_t(y)*pitch)[x*channels+component];output.write(reinterpret_cast<const char*>(&f),4);continue;}
             uint16_t h=row[x*channels+component];int exponent=(h>>10)&31;int mantissa=h&1023;
             float f=exponent==31?(mantissa?NAN:INFINITY):std::ldexp(float(exponent?mantissa+1024:mantissa),exponent?exponent-25:-24);
@@ -85,7 +94,7 @@ static auto MaterialTextures(const ResidentMaterial& material) {
 }
 void IndexRetainedResources() {
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::IndexRebuild);
-    resourceArena.Prepare(GetDevice());
+    resourceArena.Prepare(GetDevice());uploadArena.Prepare(GetDevice());
     resourceRetirement.reserve(16);resourceCommandPool.reserve(8);resourceQueryPool.reserve(16);
     spareMeshBuffers.reserve(64);spareMeshBlases.reserve(64);spareResourceTlas.reserve(16);resourceGpuQueries.reserve(8);
     candidateLayoutDirty=true;
@@ -149,10 +158,7 @@ void PatchRetainedResourceIndex(
         const std::vector<ResidentMesh>& newMeshes) {
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::IndexRebuild);
     candidateLayoutDirty=true;
-    auto active=[this](const ResidentMesh& mesh){
-        const size_t index=size_t(mesh->globalMeshIndex);
-        return index<retainedIndexMeshes.size()&&retainedIndexMeshes[index]==mesh.get();
-    };
+    auto active=[this](const ResidentMesh& mesh){return m_scene->GetSceneGraph()->GetMeshes().Contains(mesh);};
     auto removeUser=[](auto& users,const auto& value){
         auto found=std::find(users.begin(),users.end(),value);
         if(found!=users.end()){
@@ -231,6 +237,8 @@ struct BlasAllocation {uint64_t bytes=0;RtrResourceArena::Storage storage;};
 using BlasAllocationIndex=std::unordered_map<nvrhi::rt::IAccelStruct*,BlasAllocation>;
 using BufferAllocationIndex=std::unordered_map<nvrhi::IBuffer*,RtrResourceArena::Storage>;
 RtrResourceArena resourceArena;
+RtrUploadArena uploadArena;
+bool uploadPreparationPending=false;
 bool memoryPreparationPending=false;
 uint64_t memoryPreparationRevision=UINT64_MAX,memoryPreparationSequence=UINT64_MAX;
 // Diagnostic counters freeze at OFF. Arena ownership/capacity is operational.
@@ -242,6 +250,7 @@ struct ResourceTlasStorage {
     std::array<RtrResourceArena::Storage,2> storage;
 };
 struct RetiredResources {
+    RtrUploadArena::Storage upload;
     std::vector<BlasAllocationIndex::node_type> allocationEntries;
     std::vector<BufferAllocationIndex::node_type> bufferAllocationEntries;
     size_t recycleCursor=0;
@@ -482,7 +491,7 @@ void PollResourceRetirement(){
     // the background destruction queue is full. Queue order permits stopping at
     // the first incomplete generation; no in-flight resource can enter the pool.
     for(auto& retired:resourceRetirement){
-        if(retired.tlasRecycled)continue;
+        if(retired.tlasRecycled&&!retired.upload)continue;
         bool completed;{RtrDiagnostics::Scope poll(RtrDiagnostics::CompletionPoll,2);completed=GetDevice()->pollEventQuery(retired.done)&&GetDevice()->pollEventQuery(retired.computeDone);}
         if(!completed)break;
         if(retired.tlas.acceleration&&retired.tlas.subInstances){
@@ -493,7 +502,7 @@ void PollResourceRetirement(){
                     else if(spareResourceTlas.size()<16){spareResourceTlas.push_back(std::move(retired.tlas));spareResourceTlasBytes+=bytes;}
                 }
         }
-        retired.tlasRecycled=true;
+        retired.tlasRecycled=true;retired.upload.reset();
     }
     size_t budget=2;
     for(auto i=resourceRetirement.begin();i!=resourceRetirement.end()&&budget&&nativeLighting.reclaimer->Available();){
@@ -730,30 +739,29 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
     if(RtrDiagnostics::level.load()!=0&&resourceGpuQueries.size()<8){gpuQuery=GetDevice()->createTimerQuery();GetDevice()->resetTimerQuery(gpuQuery);command->beginTimerQuery(gpuQuery);}
     retiredGeneration.buffers={m_scene->GetInstanceBuffer(),m_scene->GetGeometryBuffer(),m_scene->GetMaterialBuffer(),m_subInstanceBuffer};
     if(m_topLevelAS)retiredGeneration.acceleration.push_back(m_topLevelAS);
-    if(topology)m_scene->Refresh(command,GetFrameIndex());
+    if(topology){
+        if(memory)m_scene->HostRefreshTopology(command,GetFrameIndex(),localMeshes,changedMaterials);
+        else m_scene->Refresh(command,GetFrameIndex());
+    }
     else{
         if(!localMeshes.empty())m_scene->HostRefreshMeshes(command,GetFrameIndex(),localMeshes);
         m_scene->HostRefreshMaterials(command,changedMaterials);
     }
     if(!detachedMeshes.empty()||(topology&&memory)){
-        // Shared meshes still referenced by another instance must never enter
-        // the reusable pool. A topology refresh already requires this inventory.
-        retainedIndexMeshes.assign(graph->GetMeshes().size(),nullptr);
-        for(auto& mesh:graph->GetMeshes()){
-            const auto index=size_t(mesh->globalMeshIndex);
-            if(index>=retainedIndexMeshes.size()||retainedIndexMeshes[index])throw std::runtime_error("Invalid dense mesh index");
-            retainedIndexMeshes[index]=mesh.get();
-        }
+        // The tracker's authoritative shared ownership answers membership;
+        // do not reconstruct a second dense inventory after graph refresh.
         for(auto& [identity,mesh]:detachedMeshes){
-            const auto index=size_t(mesh->globalMeshIndex);
-            const bool active=index<retainedIndexMeshes.size()&&retainedIndexMeshes[index]==identity;
+            const bool active=graph->GetMeshes().Contains(mesh);
             if(!active&&std::none_of(retiredGeneration.meshes.begin(),retiredGeneration.meshes.end(),[&](const auto& old){return old.get()==identity;}))
                 retiredGeneration.meshes.push_back(mesh);
         }
     }
     // Memory imports bypass the SDK scene loader. Its OMM debug table must
     // still follow the published geometry count before the beauty pass uses it.
-    if(topology&&m_ommBaker)m_ommBaker->SceneLoaded(*m_scene);
+    if(topology&&m_ommBaker){
+        if(nativeLighting.active)nativeOmmDebugStale=true;
+        else{m_ommBaker->SceneLoaded(*m_scene);nativeOmmDebugStale=false;}
+    }
     commitPart.reset();
     stageBegin=ResourceClock();bool materialShadersChanged=[&]{RtrDiagnostics::Scope diagnostic(RtrDiagnostics::Materials);
         return topology?GetMaterialsBaker()->HostSyncMaterials(m_scene):GetMaterialsBaker()->HostSyncChangedMaterials(changedMaterials);}();

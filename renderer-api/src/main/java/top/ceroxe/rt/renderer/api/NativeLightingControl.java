@@ -16,6 +16,12 @@ public interface NativeLightingControl {
     void lightingWorkStatisticsEnabled(boolean enabled);
     record WorkStatistics(boolean available,long sequence,long sceneRevision,long primaryRays,long receivers,long shadowRays,long bounceRays,long sourceNodes,long sourceCandidates) { }
     WorkStatistics lightingWorkStatistics();
+    /** Same asynchronous frame as work statistics. Indexed and fallback queries
+     * are disjoint; empty indexed cells may still visit large-support treelets.
+     * Collection follows the existing opt-in DEEP work-statistics switch. */
+    record SpatialQueryStatistics(boolean available,long sequence,long sceneRevision,long queries,long indexedQueries,
+            long emptyCells,long fullTreeFallbacks,long treelets,long globalTreelets) { }
+    default SpatialQueryStatistics lightingSpatialQueryStatistics(){return new SpatialQueryStatistics(false,0,0,0,0,0,0,0,0);}
     /** Requested RTXPT ray counters run only at the unified DEEP diagnostic level;
      * OFF and SUMMARY suppress new ray instrumentation.
      * Pending samples may drain; cumulative copy/query/poll counts then stop. */
@@ -32,6 +38,15 @@ public interface NativeLightingControl {
     /** Reconstruct the diffuse GI radiance at the lighting-grid extent. Gain and
      * host base color never enter RR. NONE selects the deterministic raw path. */
     default void lightingReconstruction(NativeLightingReconstruction value){throw new UnsupportedOperationException("Native lighting reconstruction unavailable");}
+    /** GI-only RR evaluation divisor, 1 or 2 per axis. Default 1 preserves the
+     * lighting-grid evaluation. Direct gain and both published HDR extents stay
+     * at the plan extent. Divisor 2 trades GI reconstruction detail for cost. */
+    default void lightingReconstructionScale(int divisor){throw new UnsupportedOperationException("Independent GI reconstruction grid unavailable");}
+    record ReconstructionGrid(int divisor,int inputWidth,int inputHeight,int outputWidth,int outputHeight,long resourceBytes) { }
+    /** Actual allocated RR input/output grid; zero extents before allocation or
+     * after disabling RR. RR runs DLAA at inputWidth x inputHeight, followed by
+     * current-frame geometry-constrained resolve to the output extent. */
+    default ReconstructionGrid lightingReconstructionGrid(){return new ReconstructionGrid(1,0,0,0,0,0);}
     /** Explicitly reset layer history after a discontinuity not described by scene or camera updates. */
     default void resetLightingReconstruction(){throw new UnsupportedOperationException("Native lighting reconstruction unavailable");}
     record ReconstructionState(NativeLightingReconstruction requested,NativeLightingReconstruction actual,int width,int height,

@@ -32,7 +32,7 @@ struct MemoryMeshBufferPage {
     uint64_t vertexBytes=0,indexBytes=0;
     size_t remaining=0;
     std::array<size_t,2> allocation{};
-    std::vector<uint8_t> vertexUpload,indexUpload;
+    uint64_t uploadVertex=UINT64_MAX,uploadIndex=UINT64_MAX;
 };
 // The shared_ptr conversion preserves this derived deleter. Every live or
 // retired mesh owns its page, even after another mesh from that page is removed.
@@ -238,31 +238,33 @@ void PrepareMemoryAllocations(const std::vector<ResidentMesh>& meshes){
     for(size_t i=usedBuffers.size();i--;)if(usedBuffers[i]){spareMeshBufferBytes-=spareMeshBuffers[i].bytes;spareMeshBuffers.erase(spareMeshBuffers.begin()+i);}
     for(size_t i=usedBlases.size();i--;)if(usedBlases[i]){spareMeshBlasBytes-=spareMeshBlases[i].bytes;spareMeshBlases.erase(spareMeshBlases.begin()+i);}
 }
-void UploadMemoryMesh(const ResidentMesh& mesh,nvrhi::ICommandList* command){
+static uint64_t AlignUpload(uint64_t bytes){return (bytes+255)&~uint64_t(255);}
+void UploadMemoryMesh(const ResidentMesh& mesh,nvrhi::ICommandList* command,const RtrUploadArena::Storage& upload,uint64_t& cursor){
     static_cast<MeshInfoEx*>(mesh.get())->HostIndices=std::make_shared<const std::vector<uint32_t>>(mesh->buffers->indexData);
     static_cast<MeshInfoEx*>(mesh.get())->HostDynamicCoverage=true;
-    using donut::engine::VertexAttribute;auto& b=*mesh->buffers;
+    using donut::engine::VertexAttribute;auto& b=*mesh->buffers;auto& memory=static_cast<MemoryMeshBufferGroup&>(b);
     const auto vertexBytes=LayoutMemoryMesh(mesh),indexBytes=b.indexData.size()*4;
-    // Owner-thread staging capacity is reused across meshes and transactions.
-    // writeBuffer copies into the command list's own retained upload chunks.
-    RtrDiagnostics::Scope packScope(RtrDiagnostics::PayloadPack,b.positionData.size(),0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes);
-    std::vector<uint8_t> oversized;
-    auto& packed=vertexBytes<=64*1024*1024?meshUploadScratch:oversized;packed.resize(vertexBytes);
-    auto& memory=static_cast<MemoryMeshBufferGroup&>(b);
-    auto pack=[&](VertexAttribute attribute,const auto& data){if(!data.empty())std::memcpy(packed.data()+b.getVertexBufferRange(attribute).byteOffset-memory.vertexBase,data.data(),data.size()*sizeof(data[0]));};
-    pack(VertexAttribute::Position,b.positionData);pack(VertexAttribute::Normal,b.normalData);pack(VertexAttribute::Tangent,b.tangentData);pack(VertexAttribute::TexCoord1,b.texcoord1Data);
+    auto take=[&](uint64_t bytes){const auto offset=cursor;cursor+=AlignUpload(bytes);if(cursor>upload->Capacity())throw std::logic_error("Upload preflight underestimated payload");return offset;};
+    uint64_t vertex,index;
     if(auto& page=memory.page;page){
-        if(page->vertexUpload.empty()){page->vertexUpload.resize(page->vertexBytes);page->indexUpload.resize(page->indexBytes);}
-        std::memcpy(page->vertexUpload.data()+memory.vertexBase,packed.data(),vertexBytes);
-        std::memcpy(page->indexUpload.data()+size_t(mesh->indexOffset)*4,b.indexData.data(),indexBytes);
-        if(--page->remaining==0){
-            RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,2,0,1,0,0,RtrDiagnostics::revision.load(),0,page->vertexBytes+page->indexBytes);
-            command->writeBuffer(page->vertex,page->vertexUpload.data(),page->vertexUpload.size());
-            command->writeBuffer(page->index,page->indexUpload.data(),page->indexUpload.size());
-            std::vector<uint8_t>().swap(page->vertexUpload);std::vector<uint8_t>().swap(page->indexUpload);
-        }
-    }else{RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,2,0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes+indexBytes);
-        command->writeBuffer(b.vertexBuffer,packed.data(),packed.size());command->writeBuffer(b.indexBuffer,b.indexData.data(),indexBytes);}
+        if(page->uploadVertex==UINT64_MAX){page->uploadVertex=take(page->vertexBytes);page->uploadIndex=take(page->indexBytes);}
+        vertex=page->uploadVertex+memory.vertexBase;index=page->uploadIndex+uint64_t(mesh->indexOffset)*4;
+    }else{vertex=take(vertexBytes);index=take(indexBytes);}
+    {
+        RtrDiagnostics::Scope packScope(RtrDiagnostics::PayloadPack,b.positionData.size(),0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes+indexBytes);
+        auto* target=upload->Data()+vertex;
+        auto pack=[&](VertexAttribute attribute,const auto& data){if(!data.empty())std::memcpy(target+b.getVertexBufferRange(attribute).byteOffset-memory.vertexBase,data.data(),data.size()*sizeof(data[0]));};
+        pack(VertexAttribute::Position,b.positionData);pack(VertexAttribute::Normal,b.normalData);pack(VertexAttribute::Tangent,b.tangentData);pack(VertexAttribute::TexCoord1,b.texcoord1Data);
+        std::memcpy(upload->Data()+index,b.indexData.data(),indexBytes);
+    }
+    auto copy=[&](nvrhi::IBuffer* destination,uint64_t source,uint64_t bytes){command->copyBuffer(destination,0,upload->Buffer(),upload->Offset()+source,bytes);};
+    if(auto& page=memory.page;page){if(--page->remaining==0){
+        RtrDiagnostics::Scope diagnostic(RtrDiagnostics::BufferUpload,2,0,1,0,0,RtrDiagnostics::revision.load(),0,page->vertexBytes+page->indexBytes);
+        copy(page->vertex,page->uploadVertex,page->vertexBytes);copy(page->index,page->uploadIndex,page->indexBytes);
+    }}else{
+        RtrDiagnostics::Scope diagnostic(RtrDiagnostics::BufferUpload,2,0,1,0,RtrDiagnostics::Identity(mesh->name),RtrDiagnostics::revision.load(),0,vertexBytes+indexBytes);
+        copy(b.vertexBuffer,vertex,vertexBytes);copy(b.indexBuffer,index,indexBytes);
+    }
     std::vector<float3>().swap(b.positionData);std::vector<float2>().swap(b.texcoord1Data);
     std::vector<uint32_t>().swap(b.normalData);std::vector<uint32_t>().swap(b.tangentData);std::vector<uint32_t>().swap(b.indexData);
 }
@@ -276,9 +278,10 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
         // from freeing the capacity that the earlier request was waiting for.
         // These preparations have never been submitted and own no GPU readers.
         preparedResourceTlas={};preparedTlasTables={};preparedTlasTableStorage={};preparedTlasAliases=false;
-        memoryPreparationPending=false;memoryPreparationRevision=revision;memoryPreparationSequence=sequence;
+        memoryPreparationPending=false;uploadPreparationPending=false;memoryPreparationRevision=revision;memoryPreparationSequence=sequence;
     }
     if(memoryPreparationPending&&!resourceArena.PreparationReady())throw RtrResourcePending();
+    if(uploadPreparationPending&&!uploadArena.PreparationReady())throw RtrResourcePending();
     RtrDiagnostics::Scope stagingScope(RtrDiagnostics::ResourceStaging);
     std::optional<RtrDiagnostics::Scope> part;part.emplace(RtrDiagnostics::Import);
     RtrResourceReader r(bytes,size);if(r.value<uint32_t>()!=0x52445254)throw std::invalid_argument("Unknown resource transport");
@@ -403,6 +406,16 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
     for(auto& node:json["removeNodes"]){RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,0,1,0,RtrDiagnostics::Identity(node.asString()),revision,RtrDiagnostics::Removal);}
     for(auto& m:imported.materials){RtrDiagnostics::Scope entry(RtrDiagnostics::ResourcePlan,1,0,1,0,RtrDiagnostics::Identity(m->name),revision,RtrDiagnostics::Material|(coverageMaterials.count(m->name)?RtrDiagnostics::Coverage:0));}
     {RtrDiagnostics::Scope budget(RtrDiagnostics::ResourcePlan,newMeshes.size(),plannedTriangles,1,0,0,revision,0,plannedBytes);}
+    // Reserve staging before either final-resource pool or graph ownership changes.
+    // Per-mesh alignment is an upper bound on the later coalesced page layout.
+    uint64_t uploadBytes=0;for(auto& mesh:newMeshes){
+        const auto next=AlignUpload(LayoutMemoryMesh(mesh))+AlignUpload(mesh->buffers->indexData.size()*4);
+        if(uploadBytes>UINT64_MAX-next)throw std::length_error("Upload payload size overflow");uploadBytes+=next;
+    }
+    RtrUploadArena::Storage upload;uint64_t uploadCursor=0;
+    {RtrDiagnostics::Scope reserve(RtrDiagnostics::StagingAcquire,newMeshes.size(),0,1,0,0,revision,0,uploadBytes);
+        if(!uploadArena.Reserve(uploadBytes,upload)){uploadPreparationPending=true;throw RtrResourcePending();}}
+    uploadPreparationPending=false;
     // All references and byte ranges are validated before staging or graph mutation.
     if(!json["removeNodes"].empty()||!json["nodes"].empty()){
         auto graph=m_scene->GetSceneGraph();size_t instanceCapacity=graph->GetMeshInstances().size();
@@ -473,7 +486,7 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
     size_t uploadedMeshes=0;for(auto& mesh:newMeshes){
         auto* extended=static_cast<MeshInfoEx*>(mesh.get());
         for(auto& geometry:mesh->geometries)extended->HostCoverageCandidates|=coverageMaterials.count(geometry->material->name)!=0||geometry->material->domain!=donut::engine::MaterialDomain::Opaque||geometry->material->opacity<1;
-        UploadMemoryMesh(mesh,command);if((++uploadedMeshes&63)==0&&RtrHostResources::eventPump)RtrHostResources::eventPump();}
+        UploadMemoryMesh(mesh,command,upload,uploadCursor);if((++uploadedMeshes&63)==0&&RtrHostResources::eventPump)RtrHostResources::eventPump();}
     for(auto& [id,t]:textures){auto old=memoryTextures.find(id);bool compatible=old!=memoryTextures.end()&&old->second.sameLayout(t);
         if(compatible&&((t.patch&&!t.patchChanged)||(!t.patch&&old->second.pixels==t.pixels))){t.loaded=old->second.loaded;continue;}
         std::shared_ptr<donut::engine::LoadedTexture> loaded;
@@ -525,6 +538,7 @@ void ApplyMemoryResources(const void* bytes,size_t size,uint64_t revision,
     }
     auto graph=m_scene->GetSceneGraph();for(auto& mesh:newMeshes)graph->AttachLeafNode(imported.rootNode,std::make_shared<MeshInstanceEx>(mesh));
     CommitResources(imported,json,nodes,true,command);
+    resourceRetirement.back().upload=std::move(upload);
     for(auto& slot:texturePatchStaging)if(slot.recording){slot.graphics=resourceRetirement.back().done;slot.compute=resourceRetirement.back().computeDone;slot.recording=false;}
     resourceRetirement.back().recycleCommands=size<=4*1024*1024;
     for(auto& input:materialInputs){auto target=residentMaterials.at(input.material->name);auto* pt=PTMaterial::SafeCast(target);pt->IoR=input.ior;if(input.boundary){pt->VolumeAttenuationColor=float3(std::exp(-input.absorption.x),std::exp(-input.absorption.y),std::exp(-input.absorption.z));pt->VolumeAttenuationDistance=1;pt->NestedPriority=input.priority;}pt->GPUDataDirty=true;}

@@ -1,6 +1,44 @@
 // Include after session(), HostPathTracer and fail() are defined in rtxpt_jni.cpp.
 // Explicit diagnostic: exercises the production encoder over 100001 float32
 // inputs, with readback/wait confined to this test entry point.
+extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingGridProbe(JNIEnv* e,jclass,jlong handle){
+    try{
+        auto& s=session(handle);auto& rr=static_cast<HostPathTracer*>(s.app->HostRenderPass())->nativeLighting.reconstruction;
+        if(!rr.upsamplePipeline)throw std::runtime_error("Run a scaled GI frame before the grid diagnostic");
+        auto* device=s.app->HostDeviceManager()->GetDevice();constexpr uint32_t w=16,h=8;
+        auto texture=[&](uint32_t x,uint32_t y,nvrhi::Format format){return device->createTexture(nvrhi::TextureDesc().setWidth(x).setHeight(y).setFormat(format)
+            .setIsUAV(true).setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true));};
+        auto raw=texture(w,h,nvrhi::Format::RGBA32_FLOAT),albedo=texture(w,h,nvrhi::Format::RGBA32_FLOAT),normal=texture(w,h,nvrhi::Format::RGBA32_FLOAT);
+        auto surfaces=texture(w,h,nvrhi::Format::RGBA32_UINT),reconstructed=texture(w/2,h/2,nvrhi::Format::RGBA32_FLOAT),output=texture(w,h,nvrhi::Format::RGBA32_FLOAT);
+        if(!raw||!albedo||!normal||!surfaces||!reconstructed||!output)throw std::runtime_error("Grid diagnostic allocation failed");
+        std::array<float4,w*h> rv,av,nv;std::array<std::array<uint32_t,4>,w*h> sv;
+        std::array<float4,w*h/4> low;
+        for(uint32_t i=0;i<w*h;i++){rv[i]=float4(.125f,.25f,.5f,1);av[i]=float4(.5f,.5f,.5f,1);nv[i]=float4(0,0,1,.5f);
+            sv[i]={i%w<8?1u:2u,0,0x3f800000,1};}
+        for(uint32_t i=0;i<w*h/4;i++)low[i]=i%(w/2)<4?float4(2,0,0,1):float4(0,2,0,1);
+        rv[0].w=0;rv[1].w=.5f;
+        nv[2*w+2]=float4(0,0,-1,.5f);sv[2*w+4][2]=0x40400000;sv[2*w+6][1]=77;av[2*w+10]=float4(0,0,0,1);
+        auto staging=device->createStagingTexture(output->getDesc(),nvrhi::CpuAccessMode::Read);auto command=device->createCommandList();command->open();
+        command->writeTexture(raw,0,0,rv.data(),w*sizeof(float4));command->writeTexture(albedo,0,0,av.data(),w*sizeof(float4));
+        command->writeTexture(normal,0,0,nv.data(),w*sizeof(float4));command->writeTexture(surfaces,0,0,sv.data(),w*16);
+        command->writeTexture(reconstructed,0,0,low.data(),w/2*sizeof(float4));
+        nvrhi::BindingSetDesc desc;desc.bindings={nvrhi::BindingSetItem::Texture_SRV(0,reconstructed),nvrhi::BindingSetItem::Texture_SRV(1,raw),
+            nvrhi::BindingSetItem::Texture_SRV(2,albedo),nvrhi::BindingSetItem::Texture_SRV(3,normal),nvrhi::BindingSetItem::Texture_SRV(4,surfaces),nvrhi::BindingSetItem::Texture_UAV(0,output)};
+        auto binding=device->createBindingSet(desc,rr.upsampleLayout);nvrhi::ComputeState state;state.pipeline=rr.upsamplePipeline;state.bindings={binding};
+        command->setComputeState(state);command->dispatch((w+7)/8,(h+7)/8);command->copyTexture(staging,nvrhi::TextureSlice(),output,nvrhi::TextureSlice());
+        command->close();device->executeCommandList(command);device->waitForIdle(); // Explicit diagnostic only.
+        size_t pitch=0;auto* bytes=static_cast<const uint8_t*>(device->mapStagingTexture(staging,nvrhi::TextureSlice(),nvrhi::CpuAccessMode::Read,&pitch));
+        if(!bytes)throw std::runtime_error("Grid diagnostic readback failed");std::array<double,5> result{w*h,0,0,4,0};
+        for(uint32_t y=0;y<h;y++)for(uint32_t x=0;x<w;x++){
+            const auto* value=reinterpret_cast<const float4*>(bytes+y*pitch)+x;
+            bool fallback=y==2&&(x==2||x==4||x==6||x==10);
+            float4 expected=rv[y*w+x].w==0?float4(0,0,0,0):fallback?rv[y*w+x]:(x<8?float4(2,0,0,rv[y*w+x].w):float4(0,2,0,rv[y*w+x].w));
+            if(value->x!=expected.x||value->y!=expected.y||value->z!=expected.z)++result[1];if(value->w!=expected.w)++result[2];
+            if(!std::isfinite(value->x)||!std::isfinite(value->y)||!std::isfinite(value->z)||!std::isfinite(value->w))++result[4];
+        }
+        device->unmapStagingTexture(staging);auto array=e->NewDoubleArray(jsize(result.size()));if(array)e->SetDoubleArrayRegion(array,0,jsize(result.size()),result.data());return array;
+    }catch(const std::exception& failure){fail(e,failure);return nullptr;}
+}
 extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCompactProbe(
     JNIEnv* e,jclass,jlong handle){
     try{

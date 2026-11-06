@@ -1,5 +1,7 @@
 #pragma once
 #include "rtxpt_retained_light_tree.h"
+#include "rtxpt_sparse_regions.h"
+#include "rtxpt_upload_ranges.h"
 #include <array>
 #include <cstring>
 #include <cstdlib>
@@ -20,19 +22,22 @@ public:
     std::unordered_map<int64_t,uint32_t> slots;
     rtr::RetainedLightTree tree;
     std::vector<rtr::LightTreeNode> queryNodes;
+    RtrSparseRegions regions;
     double normalization=1;
     std::vector<uint32_t> dirtyRecords,dirtyNodes;
     bool full=true,headerDirty=true;
     std::array<uint32_t,32> groupCounts{};
     uint32_t groupMask=0;
-    size_t visibleMaxCount=0,dynamicCount=0,linearCount=0;
-    void Group(const Record& record,bool add){if(uint32_t(record.identity[3])&2){if(add)++linearCount;else --linearCount;}if(uint32_t(record.identity[3])&1){if(add)++dynamicCount;else --dynamicCount;}if(record.cone[3]==1){if(add)++visibleMaxCount;else --visibleMaxCount;}if(record.cone[3]==0)return;const auto group=uint32_t(record.cone[2]);
+    size_t visibleMaxCount=0,channelMaxCount=0,dynamicCount=0,linearCount=0;
+    void Group(const Record& record,bool add){if(record.cone[3]==2){if(add)++channelMaxCount;else --channelMaxCount;}if(uint32_t(record.identity[3])&2){if(add)++linearCount;else --linearCount;}if(uint32_t(record.identity[3])&1){if(add)++dynamicCount;else --dynamicCount;}if(record.cone[3]==1){if(add)++visibleMaxCount;else --visibleMaxCount;}if(record.cone[3]==0)return;const auto group=uint32_t(record.cone[2]);
         if(add){++groupCounts[group];groupMask|=1u<<group;}else if(--groupCounts[group]==0)groupMask&=~(1u<<group);}
     bool SmallGroups()const{return (groupMask&~15u)==0;}
     bool PairGroups()const{return (groupMask&~3u)==0;}
     bool VisibleMax()const{return !records.empty()&&visibleMaxCount==records.size();}
+    bool ChannelMax()const{return !records.empty()&&channelMaxCount==records.size();}
+    bool ChannelExecutor()const{const char* disabled=std::getenv("RTR_RTXPT_DISABLE_SPARSE_CHANNEL_EXECUTOR");return ChannelMax()&&(!disabled||std::string(disabled)!="1");}
     bool SingleGroup()const{return (groupMask&(groupMask-1))==0;}
-    uint32_t recordCapacity=0,nodeCapacity=0;
+    uint32_t recordCapacity=0,nodeCapacity=0,regionCapacity=0;
     nvrhi::BufferHandle sourceBuffer,treeBuffer;
     struct Retired {nvrhi::BufferHandle sources,nodes;nvrhi::EventQueryHandle graphics,compute;};
     std::vector<Retired> retired;
@@ -45,7 +50,10 @@ public:
         if(shape<0||shape>2||float(shape)!=r.position[3]||group<0||group>=32||float(group)!=r.cone[2]
             ||composition<0||composition>2||float(composition)!=r.cone[3]||r.direction[3]<=0
             ||r.extent[3]<=0||r.extent[3]>32||r.cone[0]<r.cone[1]||r.cone[0]>1||r.cone[1]<-1
-            ||(r.identity[0]!=0&&r.identity[0]!=1)||r.identity[3]<0||r.identity[3]>3||r.identity[3]!=float(uint32_t(r.identity[3])))throw std::invalid_argument("Invalid sparse source record");
+            ||(r.identity[0]!=0&&r.identity[0]!=1)||r.identity[3]<0||r.identity[3]>11||r.identity[3]!=float(uint32_t(r.identity[3])))throw std::invalid_argument("Invalid sparse source record");
+        const auto visibility=uint32_t(r.identity[3])>>2;
+        if(visibility&&shape==2)throw std::invalid_argument("Center support visibility applies to POINT or BOX");
+        if(visibility==2&&(r.extent[0]!=r.extent[1]||r.extent[0]!=r.extent[2]))throw std::invalid_argument("Sphere visibility requires equal half extents");
         double length=0;for(int a=0;a<3;a++){
             if(r.extent[a]<0||r.color[a]<0||(shape!=1&&r.extent[a]!=0))throw std::invalid_argument("Invalid sparse source extent/color");
             length+=double(r.direction[a])*r.direction[a];
@@ -71,7 +79,7 @@ public:
         size_t capacity=std::max<size_t>(64,records.capacity());while(capacity<count)capacity*=2;
         records.reserve(capacity);proxies.reserve(capacity);ids.reserve(capacity);slots.reserve(capacity);tree.Reserve(capacity);
         dirtyRecords.reserve(dirtyRecords.size()+changed.size()+removed.size());dirtyNodes.reserve(dirtyNodes.size()+(changed.size()+removed.size())*128);
-        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;visibleMaxCount=dynamicCount=linearCount=0;full=true;}
+        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;visibleMaxCount=channelMaxCount=dynamicCount=linearCount=0;regions.Clear();full=true;}
         uint64_t visited=tree.visited;
         for(auto id:removed){uint32_t slot=slots.at(id),last=uint32_t(records.size()-1);Group(records[slot],false);tree.Remove(slot,dirtyNodes);slots.erase(id);
             if(slot!=last){records[slot]=records[last];proxies[slot]=proxies[last];ids[slot]=ids[last];slots.at(ids[slot])=slot;dirtyRecords.push_back(slot);}
@@ -87,12 +95,16 @@ public:
         // insertion-order-dependent overlap in the AVL hierarchy; later small
         // edits keep the existing bounded incremental path.
         if(reset){tree.Rebuild(proxies,&normalization);dirtyNodes.clear();}
-        PrepareQueryNodes(reset);
+        const auto spatialChanges=PrepareQueryNodes(reset);
+        const char* disableRegions=std::getenv("RTR_RTXPT_DISABLE_SPARSE_REGIONS");
+        {RtrDiagnostics::Scope spatial(RtrDiagnostics::SparseRegions,1);
+            regions.Update(tree,queryNodes,records.size()>=128&&(VisibleMax()||ChannelMax())&&(!disableRegions||std::string(disableRegions)!="1"),spatialChanges,reset);}
         // No probability normalization is needed for exact spatial queries. Tree powers
         // are intentionally unused; the geometry/support bounds are authoritative.
         headerDirty=true;work[0]=records.size();++work[1];work[2]+=changed.size();work[3]+=removed.size();work[4]+=tree.visited-visited;
     }
-    void PrepareQueryNodes(bool rebuild){
+    std::vector<uint32_t> PrepareQueryNodes(bool rebuild){
+        RtrDiagnostics::Scope evidence(RtrDiagnostics::SparseQueryPreparation,rebuild?tree.nodes.size():dirtyNodes.size(),0,1,0,0,RtrDiagnostics::revision.load(),rebuild?RtrDiagnostics::CapacityGrowth:0);
         queryNodes.resize(tree.nodes.size());
         auto changed=dirtyNodes;
         if(rebuild){changed.resize(tree.nodes.size());std::iota(changed.begin(),changed.end(),0);}
@@ -102,7 +114,7 @@ public:
         std::sort(changed.begin(),changed.end(),[&](auto a,auto b){return tree.heights[a]<tree.heights[b];});
         for(auto index:changed){
             auto& n=queryNodes[index];n=tree.nodes[index];if(n.light< -1)continue;
-            uint32_t mask=0;
+            uint32_t mask=0,dynamic=0;
             if(n.light>=0){const auto& r=records.at(uint32_t(n.light));
                 // Query bounds enclose the emitting volume itself. Expanding a
                 // center bound and also its radius paid twice for BOX extents.
@@ -110,51 +122,78 @@ public:
                 n.range=r.direction[3];
                 n.power=r.color[0]*r.color[3];n.directional=r.color[1]*r.color[3];n.leaves=r.color[2]*r.color[3];
                 n.unused[0]=(uint32_t(r.identity[3])&2)?-1.f:r.extent[3];
-                n.unused[1]=0;mask=1u<<uint32_t(r.cone[2]);
+                dynamic=(uint32_t(r.identity[3])&1)?0x80000000u:0;mask=1u<<uint32_t(r.cone[2]);
             }else{const auto& a=queryNodes[uint32_t(n.left)];const auto& b=queryNodes[uint32_t(n.right)];
                 for(int axis=0;axis<3;axis++){n.minimum[axis]=std::min(a.minimum[axis],b.minimum[axis]);n.maximum[axis]=std::max(a.maximum[axis],b.maximum[axis]);}
                 n.range=std::max(a.range,b.range);
                 n.power=std::max(a.power,b.power);n.directional=std::max(a.directional,b.directional);n.leaves=std::max(a.leaves,b.leaves);
                 n.unused[0]=std::min(std::abs(a.unused[0]),std::abs(b.unused[0]))*((a.unused[0]<0||b.unused[0]<0)?-1.f:1.f);
-                n.unused[1]=0;uint32_t x,y;std::memcpy(&x,&a.unused[2],4);std::memcpy(&y,&b.unused[2],4);mask=x|y;
+                uint32_t x,y;std::memcpy(&x,&a.unused[1],4);std::memcpy(&y,&b.unused[1],4);dynamic=(x|y)&0x80000000u;
+                std::memcpy(&x,&a.unused[2],4);std::memcpy(&y,&b.unused[2],4);mask=x|y;
             }
             std::memcpy(&n.unused[2],&mask,4);
-            std::memcpy(&n.unused[1],&tree.parents[index],4);
+            // Low 31 bits = parent (None=0x7fffffff); high bit = any dynamic
+            // descendant. Static-only nodes never depend on a dynamic winner.
+            uint32_t parent=(tree.parents[index]&0x7fffffffu)|dynamic;std::memcpy(&n.unused[1],&parent,4);
         }
+        return changed;
     }
     bool Ensure(nvrhi::IDevice* device){
         for(auto i=retired.begin();i!=retired.end();)if(device->pollEventQuery(i->graphics)&&device->pollEventQuery(i->compute))i=retired.erase(i);else ++i;
-        if(sourceBuffer&&records.size()<=recordCapacity&&tree.nodes.size()<=nodeCapacity)return false;
-        uint32_t rc=std::max(64u,recordCapacity),nc=std::max(128u,nodeCapacity);
-        while(rc<records.size())rc*=2;while(nc<tree.nodes.size())nc*=2;
+        if(sourceBuffer&&records.size()<=recordCapacity&&tree.nodes.size()<=nodeCapacity&&regions.packed.size()<=regionCapacity)return false;
+        // These are the existing public source/index budgets, not scene-sized
+        // guesses. A stable node prefix and region capacity avoid relocating
+        // every region word when a moving scene crosses a power of two.
+        uint32_t rc=std::max(64u,recordCapacity),nc=std::max(128u,nodeCapacity),gc=std::max(64u,regionCapacity);
+        if(regions.buckets){rc=uint32_t(Maximum);nc=uint32_t(Maximum)*2;while(gc<RtrSparseRegions::MaximumPackedNodes)gc*=2;}
+        else{while(rc<records.size())rc*=2;while(nc<tree.nodes.size())nc*=2;while(gc<regions.packed.size())gc*=2;}
         nvrhi::BufferDesc d;d.structStride=sizeof(Record);d.byteSize=(size_t(rc)+1)*sizeof(Record);d.debugName="Rtr sparse sources";
         d.initialState=nvrhi::ResourceStates::ShaderResource;d.keepInitialState=true;auto sources=device->createBuffer(d);
-        d.structStride=64;d.byteSize=size_t(nc)*64;d.debugName="Rtr sparse support index";auto nodes=device->createBuffer(d);
+        d.structStride=64;d.byteSize=(size_t(nc)+gc)*64;d.debugName="Rtr sparse support index";auto nodes=device->createBuffer(d);
         if(!sources||!nodes)throw std::runtime_error("Could not allocate sparse lighting buffers");
         if(sourceBuffer){Retired old;old.sources=sourceBuffer;old.nodes=treeBuffer;old.graphics=device->createEventQuery();old.compute=device->createEventQuery();
             device->setEventQuery(old.graphics,nvrhi::CommandQueue::Graphics);device->setEventQuery(old.compute,nvrhi::CommandQueue::Compute);retired.push_back(std::move(old));}
-        sourceBuffer=sources;treeBuffer=nodes;recordCapacity=rc;nodeCapacity=nc;full=headerDirty=true;++work[7];return true;
+        sourceBuffer=sources;treeBuffer=nodes;recordCapacity=rc;nodeCapacity=nc;regionCapacity=gc;full=headerDirty=true;++work[7];return true;
+    }
+    static constexpr size_t UploadChunkBytes=1024*1024;
+    static bool CoalesceUploads(){const char* disabled=std::getenv("RTR_RTXPT_DISABLE_SPARSE_UPLOAD_COALESCING");return !disabled||std::string(disabled)!="1";}
+    static void WriteBounded(nvrhi::ICommandList* command,nvrhi::IBuffer* buffer,const void* data,size_t bytes,size_t offset=0){
+        auto input=static_cast<const unsigned char*>(data);
+        for(size_t done=0;done<bytes;){const size_t count=std::min(UploadChunkBytes,bytes-done);
+            command->writeBuffer(buffer,input+done,count,offset+done);done+=count;}
     }
     template<class T> void UploadSpans(nvrhi::ICommandList* command,nvrhi::IBuffer* buffer,const std::vector<T>& data,std::vector<uint32_t>& dirty,size_t offset,int counter){
-        if(full){if(!data.empty()){command->writeBuffer(buffer,data.data(),data.size()*sizeof(T),offset*sizeof(T));work[counter]+=data.size()*sizeof(T);}return;}
-        std::sort(dirty.begin(),dirty.end());dirty.erase(std::unique(dirty.begin(),dirty.end()),dirty.end());
-        dirty.erase(std::lower_bound(dirty.begin(),dirty.end(),uint32_t(data.size())),dirty.end());
-        for(size_t i=0;i<dirty.size();){size_t end=i+1;while(end<dirty.size()&&dirty[end]==dirty[end-1]+1)++end;
-            command->writeBuffer(buffer,&data.at(dirty[i]),(end-i)*sizeof(T),(offset+dirty[i])*sizeof(T));work[counter]+=(end-i)*sizeof(T);i=end;}
+        if(full){if(!data.empty()){WriteBounded(command,buffer,data.data(),data.size()*sizeof(T),offset*sizeof(T));work[counter]+=data.size()*sizeof(T);}return;}
+        rtr::UploadRanges::ForEach(dirty,data.size(),sizeof(T),[&](size_t first,size_t count){
+            WriteBounded(command,buffer,&data.at(first),count*sizeof(T),(offset+first)*sizeof(T));work[counter]+=count*sizeof(T);},
+            CoalesceUploads()?rtr::UploadRanges::MergeGapBytes:0);
     }
     void Upload(nvrhi::ICommandList* command){
         if(!headerDirty)return;
+        RtrDiagnostics::Scope evidence(RtrDiagnostics::SparseUpload,dirtyRecords.size(),regions.dirtyNodes.size(),1,0,0,0,
+            full||regions.full?RtrDiagnostics::CapacityGrowth:RtrDiagnostics::PoolHit,
+            full||regions.full?regions.packed.size()*64:regions.dirtyNodes.size()*64);
         Record header{};header.position={float(records.size()),float(tree.root==rtr::RetainedLightTree::None?0:tree.root),1,0};
         header.direction[0]=dynamicCount==records.size()?1.f:0.f;header.direction[1]=dynamicCount==0?1.f:0.f;
         // Uniform L1 attenuation admits a tighter conservative AABB metric.
         // Mixed batches retain the general Euclidean support/score bounds.
         header.extent[0]=!records.empty()&&linearCount==records.size()?1.f:0.f;
-        // Bounds are an exact early rejection for max composition only. Mixed
-        // and additive compositions retain the general traversal unchanged.
+        // 1 = luminance winner; 2 = component-wise RGB winner. The latter
+        // cannot use the former's scalar score/mask without changing colors.
         const char* disable=std::getenv("RTR_RTXPT_DISABLE_SPARSE_NODE_BOUNDS");
-        header.position[3]=!records.empty()&&visibleMaxCount==records.size()&&(!disable||std::string(disable)!="1")?1.f:0.f;
+        header.position[3]=(!disable||std::string(disable)!="1")?(VisibleMax()?1.f:ChannelMax()?2.f:0.f):0.f;
+        if(regions.buckets&&regions.indexed){header.cone={float(nodeCapacity),float(regions.buckets-1),float(nodeCapacity+regions.buckets),float(RtrSparseRegions::CellSize)};header.extent[1]=float(regions.global.size());}
         command->writeBuffer(sourceBuffer,&header,sizeof(header));
         UploadSpans(command,sourceBuffer,records,dirtyRecords,1,5);UploadSpans(command,treeBuffer,queryNodes,dirtyNodes,0,6);
+        if(!regions.packed.empty()){
+            if(full||regions.full){const auto bytes=regions.packed.size()*64;WriteBounded(command,treeBuffer,regions.packed.data(),bytes,size_t(nodeCapacity)*64);work[6]+=bytes;regions.work[8]+=bytes;}
+            else{
+                rtr::UploadRanges::ForEach(regions.dirtyNodes,regions.packed.size(),64,[&](size_t first,size_t count){
+                    const auto bytes=count*64;WriteBounded(command,treeBuffer,&regions.packed[first],bytes,(size_t(nodeCapacity)+first)*64);work[6]+=bytes;regions.work[8]+=bytes;},
+                    CoalesceUploads()?rtr::UploadRanges::MergeGapBytes:4*64);
+            }
+        }
+        regions.Uploaded();
         dirtyRecords.clear();dirtyNodes.clear();full=headerDirty=false;
     }
 };

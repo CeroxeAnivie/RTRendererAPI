@@ -9,7 +9,7 @@ final class RtxptSparseSources {
             float[] r={(float)s.x(),(float)s.y(),(float)s.z(),s.shape().ordinal(),s.directionX(),s.directionY(),s.directionZ(),s.range(),
                 s.red(),s.green(),s.blue(),s.intensity(),s.halfX(),s.halfY(),s.halfZ(),s.falloffExponent(),
                 s.innerConeCosine(),s.outerConeCosine(),s.group(),s.composition().ordinal(),s.castsShadow()?1:0,
-                0,0,s.layer().ordinal()+2*s.attenuation().ordinal()};
+                0,0,s.layer().ordinal()+2*s.attenuation().ordinal()+4*s.visibility().ordinal()};
             System.arraycopy(r,0,data,p,24);p+=24;
         }
         return data;

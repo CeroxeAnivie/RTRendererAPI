@@ -55,8 +55,8 @@ if($RetryFailedRun){if([IO.File]::ReadAllText($main) -cne $referenceText){throw 
 else{[IO.File]::WriteAllText($main,$referenceText,$utf8)}
 $config=Join-Path $source 'reference.cfg'
 $entries=@(
-    'ProcessingPasses/RtrNativeLighting.hlsl -T cs -E main -D RTR_LIGHT_GROUP_CAPACITY={1,2,4,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1} -D RTR_MAX_COMPOSITION={0,1}',
-    'ProcessingPasses/RtrNativeLightingReconstruct.hlsl -T cs -E main -D RTR_LIGHT_GROUP_CAPACITY={1,2,4,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1} -D RTR_MAX_COMPOSITION={0,1}',
+    'ProcessingPasses/RtrNativeLighting.hlsl -T cs -E main -D RTR_LIGHT_GROUP_CAPACITY={1,2,4,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1} -D RTR_MAX_COMPOSITION={0,1,2}',
+    'ProcessingPasses/RtrNativeLightingReconstruct.hlsl -T cs -E main -D RTR_LIGHT_GROUP_CAPACITY={1,2,4,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1} -D RTR_MAX_COMPOSITION={0,1,2}',
     'ProcessingPasses/RtrNativeLightingDeep.hlsl -T cs -E main',
     'ProcessingPasses/RtrHostAugmentation.hlsl -T cs -E main'
 )

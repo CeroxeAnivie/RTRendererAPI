@@ -11,6 +11,11 @@ import java.util.Optional;
 public final class RtxptDiagnostics {
     private RtxptDiagnostics() { }
     public enum Level { OFF, SUMMARY, DEEP }
+    /** NVRHI counters span this native library; transaction arena counters belong to this renderer.
+     * Capacity sums include warm and fence-retired storage, not OS commit or physical VRAM. */
+    public record UploadMemory(long createdBytes,long releasedBytes,long retainedBytes,long peakRetainedBytes,
+            long createdChunks,long releasedChunks,long fenceRetiredBytes,long fencePendingBytes,
+            long transactionAllocatedBytes,long transactionPeakBytes,long transactionLeasedBytes,long transactionPeakLeasedBytes) { }
     public static final long FLAG_FAILED=2, FLAG_ACTIVE=256, FLAG_TRUNCATED=512,
         FLAG_CANCELLED=1024, FLAG_ENTERED_NATIVE_FRAME=2048;
     /** Dominant work for a submission: initial load, resize, resource/light update, wait, or steady. */
@@ -53,13 +58,28 @@ public final class RtxptDiagnostics {
         RESOURCE_PLAN, BUFFER_ALLOCATE, DESCRIPTOR_ALLOCATE, PAYLOAD_PACK, BUFFER_UPLOAD, BLAS_ALLOCATE, BLAS_CLONE, BLAS_BUILD, BLAS_REFIT,
         COMMAND_ACQUIRE, COMMAND_SUBMIT, COMPLETION_POLL, RECLAIM_ENQUEUE, DRIVER_RELEASE, INDEX_REBUILD, TEXTURE_ALLOCATE, TEXTURE_UPLOAD,
         RUNTIME_INITIALIZE, DEVICE_INITIALIZE, SCENE_INITIALIZE, LIGHTING_INITIALIZE, POOL_ACQUIRE, TLAS_ALLOCATE,
-        HEAP_ALLOCATE, RESOURCE_PREBUILD, ALLOCATION_INFO, PLACED_BIND, POOL_EVICT }
+        HEAP_ALLOCATE, RESOURCE_PREBUILD, ALLOCATION_INFO, PLACED_BIND, POOL_EVICT, STAGING_ACQUIRE, STAGING_ALLOCATE, STAGING_MAP, STAGING_COPY, STAGING_BARRIER, STAGING_RECORD, SPARSE_REGIONS, SCENE_GRAPH_REFRESH, SCENE_FULL_REFRESH, SCENE_TOPOLOGY_FALLBACK, SCENE_MESH_PREPARATION, SCENE_MATERIAL_ROWS, SCENE_GEOMETRY_ROWS, SCENE_INSTANCE_ROWS, SCENE_TABLE_UPLOAD, SPARSE_QUERY_PREPARATION, SPARSE_REGION_INITIALIZE, SPARSE_HASH_ERASE, SPARSE_HASH_RECOVER, SPARSE_REGION_PUBLISH, SPARSE_UPLOAD,
+        DEFAULT_BUFFER_ALLOCATE, DEFAULT_BUFFER_COMMITTED, DEFAULT_BUFFER_POST_CREATE, SCENE_CPU_RESIZE, SCENE_MATERIAL_PREPARE, SCENE_OMM_DEBUG_REFRESH, DIAGNOSTIC_MUTEX_WAIT, DIAGNOSTIC_MUTEX_HOLD }
+    // Enum.values() clones its backing array. Keep these private so decoding
+    // each native event performs a lookup without allocating another Stage[].
+    private static final Stage[] STAGES=Stage.values();
+    private static final Level[] LEVELS=Level.values();
+    private static final SubmissionKind[] SUBMISSION_KINDS=SubmissionKind.values();
     /** flags=1 on SHARED_REUSE_WAIT means CPU queue-wait enqueue cost, not a CPU fence wait.
-     * batch links caller, workers and completion waits. Self subtracts same-thread children only. */
+     * batch links caller, workers and completion waits. Self subtracts same-thread children only.
+     * DIAGNOSTIC_MUTEX_WAIT/HOLD are overlapping attribution records (threshold 100us),
+     * with reason=lock operation and items=subject stage; never add them to enclosing work. */
     public record CpuEvent(long sequence,long revision,long batch,long thread,Stage stage,
             long startNanos,long inclusiveNanos,long selfNanos,long items,long tasks,long parent,long flags,
             long scopeId,long parentScopeId,long inputGeneration,long outputGeneration,long threadCpuNanos,long threadCpuSelfNanos,
-            long resourceIdentity,long resourceGeneration,long reason,long bytes,long attempt,int diagnosticLevel,long ordinal) {
+            long resourceIdentity,long resourceGeneration,long reason,long bytes,long attempt,int diagnosticLevel,long ordinal,
+            long rootScopeId,long nativeFrameScopeId) {
+        public CpuEvent(long sequence,long revision,long batch,long thread,Stage stage,long startNanos,long inclusiveNanos,long selfNanos,long items,long tasks,long parent,long flags,
+                long scopeId,long parentScopeId,long inputGeneration,long outputGeneration,long threadCpuNanos,long threadCpuSelfNanos,
+                long resourceIdentity,long resourceGeneration,long reason,long bytes,long attempt,int diagnosticLevel,long ordinal){
+            this(sequence,revision,batch,thread,stage,startNanos,inclusiveNanos,selfNanos,items,tasks,parent,flags,scopeId,parentScopeId,inputGeneration,outputGeneration,
+                threadCpuNanos,threadCpuSelfNanos,resourceIdentity,resourceGeneration,reason,bytes,attempt,diagnosticLevel,ordinal,0,0);
+        }
         public CpuEvent(long sequence,long revision,long batch,long thread,Stage stage,long startNanos,long inclusiveNanos,long selfNanos,long items,long tasks,long parent,long flags,
                 long scopeId,long parentScopeId,long inputGeneration,long outputGeneration,long threadCpuNanos,long threadCpuSelfNanos){
             this(sequence,revision,batch,thread,stage,startNanos,inclusiveNanos,selfNanos,items,tasks,parent,flags,scopeId,parentScopeId,
@@ -88,23 +108,36 @@ public final class RtxptDiagnostics {
         public boolean cancelled(){return (flags&FLAG_CANCELLED)!=0;}
         public boolean enteredNativeFrame(){return (flags&FLAG_ENTERED_NATIVE_FRAME)!=0;}
     }
+    /** An independently retained trigger tree. Loss is explicit rather than inferred from rolling events. */
+    public record SlowFrameGroup(long triggerOrdinal,long sequence,long revision,long rootScopeId,Stage triggerStage,
+            long flags,long expectedEvents,long retainedEvents,long droppedEvents,List<CpuEvent> events) {
+        public SlowFrameGroup { events=List.copyOf(events); }
+        public boolean complete(){return (flags&FLAG_TRUNCATED)==0&&droppedEvents==0&&expectedEvents==retainedEvents&&retainedEvents==events.size();}
+    }
     public record Snapshot(long overwrittenEvents,List<CpuEvent> events,Distribution frames,
             long slowFrameTriggers,long overwrittenSlowFrameEvents,List<CpuEvent> lastSlowFrame,
             List<CpuEvent> activeScopes,long droppedActiveScopes,List<SubmissionSample> submissionSamples,
             long overwrittenSubmissionSamples,long generation,Optional<Level> recordedLevel,
-            long firstEventOrdinal,long nextEventOrdinal,long registrationOrdinal,long missedSinceRegistration) {
+            long firstEventOrdinal,long nextEventOrdinal,long registrationOrdinal,long missedSinceRegistration,
+            List<SlowFrameGroup> slowFrameGroups,long overwrittenSlowFrameGroups,long missedSlowFrameGroups) {
         public Snapshot {
             events=List.copyOf(events);lastSlowFrame=List.copyOf(lastSlowFrame);activeScopes=List.copyOf(activeScopes);
-            submissionSamples=List.copyOf(submissionSamples);recordedLevel=java.util.Objects.requireNonNull(recordedLevel);
+            submissionSamples=List.copyOf(submissionSamples);recordedLevel=java.util.Objects.requireNonNull(recordedLevel);slowFrameGroups=List.copyOf(slowFrameGroups);
+        }
+        public Snapshot(long overwrittenEvents,List<CpuEvent> events,Distribution frames,long slowFrameTriggers,long overwrittenSlowFrameEvents,List<CpuEvent> lastSlowFrame,
+                List<CpuEvent> activeScopes,long droppedActiveScopes,List<SubmissionSample> submissionSamples,long overwrittenSubmissionSamples,long generation,Optional<Level> recordedLevel,
+                long firstEventOrdinal,long nextEventOrdinal,long registrationOrdinal,long missedSinceRegistration){
+            this(overwrittenEvents,events,frames,slowFrameTriggers,overwrittenSlowFrameEvents,lastSlowFrame,activeScopes,droppedActiveScopes,submissionSamples,
+                overwrittenSubmissionSamples,generation,recordedLevel,firstEventOrdinal,nextEventOrdinal,registrationOrdinal,missedSinceRegistration,List.of(),0,0);
         }
         public Snapshot(long overwrittenEvents,List<CpuEvent> events,Distribution frames,long slowFrameTriggers,long overwrittenSlowFrameEvents,List<CpuEvent> lastSlowFrame,
                 List<CpuEvent> activeScopes,long droppedActiveScopes,List<SubmissionSample> submissionSamples,long overwrittenSubmissionSamples,long generation,Optional<Level> recordedLevel){
             this(overwrittenEvents,events,frames,slowFrameTriggers,overwrittenSlowFrameEvents,lastSlowFrame,activeScopes,droppedActiveScopes,
                 submissionSamples,overwrittenSubmissionSamples,generation,recordedLevel,0,0,0,0);
         }
-        Snapshot observed(long registration,long missed){
+        Snapshot observed(long registration,long missed,long slowMissed){
             return new Snapshot(overwrittenEvents,events,frames,slowFrameTriggers,overwrittenSlowFrameEvents,lastSlowFrame,activeScopes,droppedActiveScopes,
-                submissionSamples,overwrittenSubmissionSamples,generation,recordedLevel,firstEventOrdinal,nextEventOrdinal,registration,missed);
+                submissionSamples,overwrittenSubmissionSamples,generation,recordedLevel,firstEventOrdinal,nextEventOrdinal,registration,missed,slowFrameGroups,overwrittenSlowFrameGroups,slowMissed);
         }
         public Snapshot(long overwrittenEvents,List<CpuEvent> events,Distribution frames,
                 long slowFrameTriggers,long overwrittenSlowFrameEvents,List<CpuEvent> lastSlowFrame) {
@@ -123,7 +156,7 @@ public final class RtxptDiagnostics {
         }
         public Map<SubmissionKind,Distribution> submissionsByKind(){
             var result=new EnumMap<SubmissionKind,Distribution>(SubmissionKind.class);
-            for(var kind:SubmissionKind.values())result.put(kind,submissions(kind));
+            for(var kind:SUBMISSION_KINDS)result.put(kind,submissions(kind));
             return Collections.unmodifiableMap(result);
         }
         public long failedSubmissions(){return submissionSamples.stream().filter(SubmissionSample::failed).count();}
@@ -172,16 +205,17 @@ public final class RtxptDiagnostics {
         return new GpuSnapshot(Long.parseLong(status[0]),Long.parseLong(status[1]),Long.parseLong(status[2]),Integer.parseInt(status[3]),status[4].equals("1"),scopes);
     }
     static Snapshot decode(long[] values) {
-        if(values==null||values.length<7||(values[0]!=2&&values[0]!=3&&values[0]!=4&&values[0]!=5))
+        if(values==null||values.length<7||(values[0]<2||values[0]>6))
             throw new IllegalStateException("Incompatible native diagnostic snapshot");
-        boolean current=values[0]>=3;int header=values[0]>=5?15:current?13:7,width=values[0]>=5?25:values[0]==4?18:current?16:12;
+        boolean current=values[0]>=3;int header=values[0]>=6?19:values[0]>=5?15:current?13:7,width=values[0]>=6?27:values[0]>=5?25:values[0]==4?18:current?16:12;
         if(values.length<header||values[1]!=width||values[2]<0||values[3]<0||values[3]>8192||values[4]<0
-                ||values[5]<0||values[5]>2048||values[6]<0)
+                ||values[5]<0||values[5]>(values[0]>=6?4L*65536:2048)||values[6]<0)
             throw new IllegalStateException("Incompatible native diagnostic snapshot");
         long activeCount=current?values[7]:0,submitCount=current?values[9]:0;
         if(activeCount<0||activeCount>512||submitCount<0||submitCount>1024
-                ||current&&(values[8]<0||values[10]<0||values[11]<=0||values[12]<0||values[12]>=Level.values().length)
-                ||values.length!=header+width*(values[3]+values[5]+activeCount)+6*submitCount)
+                ||current&&(values[8]<0||values[10]<0||values[11]<=0||values[12]<0||values[12]>=LEVELS.length)
+                ||values[0]>=6&&(values[15]<0||values[15]>4||values[16]<0||values[17]<0||values[18]!=65536)
+                ||values.length!=header+width*(values[3]+values[5]+activeCount)+6*submitCount+(values[0]>=6?values[15]*10:0))
             throw new IllegalStateException("Incompatible native diagnostic snapshot");
         if(values[0]>=5&&(values[13]<1||values[14]<values[13]||values[14]-values[13]!=values[3]))
             throw new IllegalStateException("Invalid diagnostic ordinal window");
@@ -195,36 +229,60 @@ public final class RtxptDiagnostics {
             if(!event.active())throw new IllegalStateException("Active diagnostic scope missing its incomplete flag");
             active.add(event);
         }
-        var samples=new ArrayList<SubmissionSample>((int)submitCount);var kinds=SubmissionKind.values();
+        var samples=new ArrayList<SubmissionSample>((int)submitCount);var kinds=SUBMISSION_KINDS;
         for(int i=0;i<submitCount;i++,offset+=6){
             if(values[offset+2]<0||values[offset+4]<0||values[offset+4]>=kinds.length)
                 throw new IllegalStateException("Incompatible native submit sample");
             samples.add(new SubmissionSample(values[offset],values[offset+1],values[offset+2],values[offset+3],kinds[(int)values[offset+4]],values[offset+5]));
         }
+        var groups=new ArrayList<SlowFrameGroup>();
+        if(values[0]>=6){
+            long expectedOffset=0,previousTrigger=0;
+            for(int group=0;group<values[15];++group,offset+=10){
+                long trigger=values[offset],count=values[offset+7],dropped=values[offset+8],start=values[offset+9];
+                long stage=values[offset+4],expected=values[offset+6];
+                if(trigger<=previousTrigger||trigger>values[4]||count<1||count>65536||dropped<0||expected!=count+dropped
+                        ||start!=expectedOffset||start+count>slow.size()||stage<0||stage>=STAGES.length)
+                    throw new IllegalStateException("Invalid slow-frame group descriptor");
+                var groupEvents=List.copyOf(slow.subList((int)start,(int)(start+count)));
+                var root=groupEvents.getLast();
+                if(root.scopeId()!=values[offset+3]||root.stage()!=STAGES[(int)stage]
+                        ||root.sequence()!=values[offset+1]||root.revision()!=values[offset+2])
+                    throw new IllegalStateException("Slow-frame trigger identity differs from descriptor");
+                groups.add(new SlowFrameGroup(trigger,values[offset+1],values[offset+2],values[offset+3],STAGES[(int)stage],
+                    values[offset+5],expected,count,dropped,groupEvents));
+                expectedOffset+=count;previousTrigger=trigger;
+            }
+            if(expectedOffset!=slow.size())throw new IllegalStateException("Unassigned slow-frame events");
+        }
+        var latest=groups.isEmpty()?slow:groups.getLast().events();
         var frames=distribution(events.stream().filter(e->e.stage()==Stage.FRAME&&e.completed()).mapToLong(CpuEvent::inclusiveNanos).sorted().toArray());
-        return new Snapshot(values[2],events,frames,values[4],values[6],slow,active,current?values[8]:0,samples,
-            current?values[10]:0,current?values[11]:0,current?Optional.of(Level.values()[(int)values[12]]):Optional.empty(),
-            values[0]>=5?values[13]:0,values[0]>=5?values[14]:0,0,0);
+        return new Snapshot(values[2],events,frames,values[4],values[6],latest,active,current?values[8]:0,samples,
+            current?values[10]:0,current?values[11]:0,current?Optional.of(LEVELS[(int)values[12]]):Optional.empty(),
+            values[0]>=5?values[13]:0,values[0]>=5?values[14]:0,0,0,groups,values[0]>=6?values[16]:0,0);
     }
     private static CpuEvent decodeEvent(long[] values,int i,int width){
-        long stage=values[i+4];var stages=Stage.values();
+        long stage=values[i+4];var stages=STAGES;
         Stage name=stage>=0&&stage<stages.length?stages[(int)stage]:Stage.UNKNOWN;
         if(values[i+6]<0||values[i+7]<0||values[i+7]>values[i+6])throw new IllegalStateException("Invalid diagnostic duration");
         if(width>=25&&(values[i+19]<0||values[i+20]<0||values[i+21]<0||values[i+22]<0||values[i+23]<0||values[i+23]>2||values[i+24]<0))
             throw new IllegalStateException("Invalid diagnostic resource metadata");
         return new CpuEvent(values[i],values[i+1],values[i+2],values[i+3],name,values[i+5],values[i+6],values[i+7],values[i+8],values[i+9],values[i+10],values[i+11],
             width>=16?values[i+12]:0,width>=16?values[i+13]:0,width>=16?values[i+14]:0,width>=16?values[i+15]:0,width>=18?values[i+16]:-1,width>=18?values[i+17]:-1,
-            width>=25?values[i+18]:0,width>=25?values[i+19]:0,width>=25?values[i+20]:0,width>=25?values[i+21]:0,width>=25?values[i+22]:0,width>=25?(int)values[i+23]:-1,width>=25?values[i+24]:0);
+            width>=25?values[i+18]:0,width>=25?values[i+19]:0,width>=25?values[i+20]:0,width>=25?values[i+21]:0,width>=25?values[i+22]:0,width>=25?(int)values[i+23]:-1,width>=25?values[i+24]:0,width>=27?values[i+25]:0,width>=27?values[i+26]:0);
     }
     static Monitor monitor(long token){
         var initial=decode(RtxptNative.diagnosticMonitorSnapshot(token));
         return new Monitor(){
             private final long registration=initial.nextEventOrdinal();
-            private long cursor=registration,missed;
+            private long cursor=registration,missed,slowCursor,slowMissed;
             @Override public synchronized Snapshot snapshot(){
-                var value=decode(RtxptNative.diagnosticMonitorSnapshot(token));
+                var value=decode(RtxptNative.diagnosticMonitorSnapshotAfter(token,slowCursor));
+                if(!value.slowFrameGroups().isEmpty())slowMissed+=Math.max(0,value.slowFrameGroups().getFirst().triggerOrdinal()-slowCursor-1);
+                else slowMissed+=Math.max(0,value.slowFrameTriggers()-slowCursor);
+                slowCursor=value.slowFrameTriggers();
                 missed+=Math.max(0,value.firstEventOrdinal()-cursor);cursor=value.nextEventOrdinal();
-                return value.observed(registration,missed);
+                return value.observed(registration,missed,slowMissed);
             }
         };
     }

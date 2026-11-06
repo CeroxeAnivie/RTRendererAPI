@@ -10,7 +10,7 @@ final class RtxptHostSurfaceView {
     private static void write(float[] result,int offset,CameraState camera,int width,int height){
         if(camera.hasExactProjection()){
             var exact=camera.exactProjection();
-            if(exact.matrix(3,0)!=0||exact.matrix(3,1)!=0||exact.matrix(3,3)!=0)
+            if(!exact.hasPerspectiveProjection())
                 throw new IllegalArgumentException("Host primary surfaces require a perspective exact projection");
             if(exact.viewportWidth()!=width||exact.viewportHeight()!=height)
                 throw new IllegalArgumentException("Exact projection viewport must match the host frame output extent");

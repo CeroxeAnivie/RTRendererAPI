@@ -515,7 +515,7 @@ tasks.register<JavaExec>("rtxptHostSurfaceRrNativeSelfTest") {
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
 }
 
-listOf("RtxptHostSurfaceFrameContractSelfTest", "RtxptNativeLightingCompactContractSelfTest", "RtxptDiagnosticsSelfTest", "RtxptModeUsabilitySelfTest").forEach { name ->
+listOf("RtxptHostSurfaceFrameContractSelfTest", "RtxptNativeLightingCompactContractSelfTest", "RtxptNativeLightingProjectionSelfTest", "RtxptDiagnosticsSelfTest", "RtxptModeUsabilitySelfTest").forEach { name ->
     val contract = tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
         group = "verification"; dependsOn(tasks.testClasses)
         classpath = sourceSets.test.get().runtimeClasspath

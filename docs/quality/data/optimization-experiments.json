@@ -1,4 +1,15 @@
 {
+  "sparseMovementCandidate": {
+    "id": "bounded-sparse-upload-and-snapshot-capacity",
+    "date": "2026-11-06",
+    "baselineVersion": "7.2.0-rc.7",
+    "candidateVersion": "7.2.0-rc.8",
+    "status": "targeted-correctness-passed-awaiting-host-movement",
+    "evidence": "build/reports/sparse-movement/",
+    "changes": ["Authoritative CPU upload ranges merge gaps up to 4096 bytes with writes bounded to 1048576 bytes", "Diagnostic snapshot reserves only the captured upper bound outside recorder locks"],
+    "rejectedFrontier": {"status":"rejected-and-reverted","evidence":"build/reports/sparse-movement/rejected-frontier/","oldLinks":339108,"newLinks":760345,"oldPackedBytes":19922944,"newPackedBytes":26214400,"oldSourceNodeVisits":1818747,"newSourceNodeVisits":3075140,"rawExactCaptures":54,"rrExactCaptures":54},
+    "limits": "Treelet regional membership rebuilding remains unresolved. Extra unchanged upload bytes must be reported. An operation-count reduction alone does not establish end-to-end FPS benefit. No light, shape, attenuation, composition, or visibility semantics changed."
+  },
   "date": "2026-11-05",
   "completeGpuTargetMs": 4,
   "targetReached": false,
@@ -238,7 +249,7 @@
       "failureEvidence": "build/reports/resource-search/instrumented-max/rr-instrumentation.log",
       "controlEvidence": "build/reports/resource-search/control/rr-instrumentation.log",
       "controlResult": "The unchanged baseline DLL also failed the same motion comparison. The two modes had different one-shot previous-geometry inputs; test is being corrected to warm the input first without changing zero tolerance.",
-      "maximumMotionDifference": 1.7881393432617188E-07,
+      "maximumMotionDifference": 1.7881393432617188e-07,
       "performance": "Not measured; no benefit claim",
       "mustNotReapplyUnchanged": true
     },
@@ -964,13 +975,13 @@
     "differentMotionValues": 7912,
     "status": "resolved-for-tested-fixtures",
     "warmupOnlyFix": "failed; variant 0 signal 6 still differs",
-    "maximumDifference": 1.7881393432617188E-07,
+    "maximumDifference": 1.7881393432617188e-07,
     "currentTrial": "passed input-aligned static/camera/object trajectories in OFF/SUMMARY/DEEP; no shader change and no added tolerance",
     "evidence": "build/reports/resource-critical-path/baseline/rr-instrumentation.log",
     "toleranceUnchanged": true,
     "hypothesis": "Specialized shaders may use different floating-point projection arithmetic; previous-geometry warmup alone does not explain the failure",
     "rejectedTrial": {
-      "maximumDifference": 1.7881393432617188E-07,
+      "maximumDifference": 1.7881393432617188e-07,
       "result": "failed variant 0 signal 6; reverted source; runtime will be rebuilt before further tests",
       "differentValues": 15702,
       "name": "precise projection arithmetic",
@@ -1480,5 +1491,220 @@
       "attributeUploadBytes": 8800
     },
     "evidence": "docs/quality/data/native-resource-chain.json"
-  }
+  },
+  "followup718": [
+    {
+      "id": "transaction-upload-and-topology-journal-718",
+      "status": "built-affected-correctness-passed-candidate-awaiting-real-host-performance",
+      "baselineCommit": "fc72bb486399a310bd5aba86f175134938f02974",
+      "baselineDll": "e19ef2868f6c26b32946fcb8caf8102b52fbeadab455cc7054833a684248d35d",
+      "authorization": "Root relayed latest human order: implement all production code before more tests.",
+      "opportunity": "PreparationP951.987ms perupdate, ~28.5% duty; actual gain must be less than unrealistic~0.565ms/frame full-elimination bound. Upload14.4707ms is an enclosing one-request two-write range, allocator share unknown. Dispatch mean3.93143ms is the analyzed GPU scope, RRmean2.69111ms remains opaque.",
+      "macroChanges": [
+        "worker-created persistently mapped whole-transaction upload lease; direct pack, coalescedGPUcopies, independent fence-ready staging retirement",
+        "authoritative graph material/dense-geometry/instance-prefix journal consumers for SDK preparation and direct changed table runs; tracker membership replaces separate mesh inventory reconstruction"
+      ],
+      "diagnosticExecutor": "Select max-composition executor independently of six exact diagnostic counters; no history seed in counted executor.",
+      "differenceFromRejectedSelective": "No weak-identity preparation cache or whole-scene cache comparison. Material migration and affected instance geometry-prefix fields originate in graph dense assignment, then SDK consumes those authoritative events. Required graph traversal remains; growth, invalidation and skinning retain full preparation.",
+      "differenceFromRejectedInstrumentedMax": "Old failure also reproduced on unmodified baseline and later input snapshots proved previous-geometry semantic bit mismatch; three-frame input-aligned24-group eight-plane captures subsequently matched. New candidate retains7.1.7 six thread-local/wave counts, uses explicit history-free countedmax variants without dynamic-specialization/history bindings, and is part of actual upload/ownership architecture changes. Historical failure remains; correctness and performance not presumed.",
+      "excluded": [
+        "receiver/shading split",
+        "earlyBLAS overlap",
+        "crossqueueRR/direct",
+        "outputcopy optimization",
+        "primarysurface publicABI"
+      ],
+      "validationPending": true,
+      "candidateVersion": "7.2.0-rc.1",
+      "rawGiHdrByteExact": 54,
+      "actualGiRrHdrByteExact": 54,
+      "rrExtent": [
+        192,
+        128
+      ],
+      "performanceMeasured": false
+    },
+    {
+      "id": "exact-channel-max-regional-treelets",
+      "status": "built-affected-correctness-passed-candidate-awaiting-real-host-performance",
+      "criticalCorrection": "Actual MC uses composition2 RGB channel max; composition1 counted MAX has no MC FPS benefit.",
+      "baseline": "fc72bb4 / 7.1.7",
+      "mechanism": "Disjoint retained BVH treelets indexed by sparse 8-unit receiver cells; regional traversal avoids global root navigation; component-wise conservative winner bounds and RGB-only channel executor.",
+      "incremental": "Only new/removed/changed emitting-support coverage relinks; same Coverage after micromotion skips repack/upload. Changed coverage still repacks bounded hash/root pool and must be measured.",
+      "correctness": "Visibility before RGB max; independent dynamic subset; all32 groups and single high group remap; mixed/additive unchanged order; region/global root disjoint; query lookup resolved before exact full-tree fallback; stackless local depth stops at each treelet root.",
+      "bounds": "L1 leaf exponent is -1 independent of declared exponent; any-L1 node negative min(abs exponent) disables inverse square; all-L1 uses Manhattan distance.",
+      "limits": "Large range/budget roots global; high global fraction disables index. Out-of-range coordinates or probe exhaustion use full tree. No frame/source/quality omission.",
+      "diagnostics": "New compatible default spatial query/index statistics; DEEP async counters; SPARSE_REGIONS CPU scope; total packed/upload bytes. Existing six counters retain actual event definitions.",
+      "performanceMeasured": false,
+      "candidateVersion": "7.2.0-rc.1",
+      "validationPending": true,
+      "rawGiHdrByteExact": 54,
+      "actualGiRrHdrByteExact": 54,
+      "rrExtent": [
+        192,
+        128
+      ]
+    },
+    {
+      "id": "rc3-incremental-regional-maintenance",
+      "candidateVersion": "7.2.0-rc.3",
+      "status": "compiled-cpu-and-raw-passed-rr-running",
+      "baselineCandidate": "7.2.0-rc.2",
+      "confirmedCause": "Every support-coverage change walked/sorted the full frontier and rebuilt/uploaded the whole 5.7-10.25MB hash/root pool. Actual MC moving UPDATE P95 9.6862ms on7.1.7 versus20.5475ms onrc2; sampled SPARSE_REGIONS P957.1137ms, retained sample subset only.",
+      "mechanism": "Authority dirty BVH nodes -> affected ancestor paths -> only changed root/cell links; stable hash slots and buddy list blocks; upload changed64B spans with gaps<=256B merged. Color/intensity or identical cell coverage produce zero region bytes. Initialization/growth and amortized tombstone compaction retain full rebuild.",
+      "validationPending": true,
+      "performanceMeasured": false,
+      "cpuOracle": {
+        "sources": 25000,
+        "probes": 2198,
+        "localUploadBytes": 1152,
+        "localUploadSpans": 14,
+        "localFrontierNodes": 13,
+        "fullPackForLocalUpdate": false,
+        "colorOnlyRegionBytes": 0,
+        "micromotionRegionBytes": 0,
+        "zeroRootRetainedGpuGrowth": true,
+        "tombstoneCompaction": true
+      },
+      "rawGiHdrByteExact": 54
+    },
+    {
+      "id": "rc4-incremental-region-differences-and-complete-slow-groups",
+      "candidateVersion": "7.2.0-rc.4",
+      "baselineCandidate": "7.2.0-rc.3",
+      "status": "maven-local-published-affected-correctness-passed-awaiting-host-evidence",
+      "mechanism": "Reusable epoch marks on authoritative dirty ancestor paths; patch old/new coverage symmetric difference while retaining common cell links/list blocks/hash slots; active-count shrink within retained SDK table capacity does not trigger full packing.",
+      "diagnostics": "v6 retains four independent bounded slow trigger trees, immutable root/native-frame/sequence/revision, cursor-based consumption and explicit overwrite/truncation; SDK graph/full/topology reason/mesh/material/geometry/instance/table-upload/sparse-query scopes expose the remaining envelope.",
+      "differenceFromRc3": "Retains rc3 stable regional layout and dirty uploads, removes per-update affected-set allocations and unnecessary remove/reinsert of unchanged cell memberships. No source, GI, RR, resolution or timing-boundary reduction.",
+      "cpuDiagnosticsPassed": true,
+      "javaDiagnosticsPassed": true,
+      "regionalCpuOraclePassed": true,
+      "ownerNativePassed": true,
+      "monitorNativePassed": true,
+      "rawGiHdrByteExactRc3": 54,
+      "actualRrHdrByteExactRc3": 54,
+      "actualRrExtent": [
+        192,
+        128
+      ],
+      "initialGpuPercent": 39,
+      "performanceMeasured": false,
+      "validationPending": true,
+      "receipt": "build/reports/resource-root-followup/rc4-package/receipt.json",
+      "evidence": "build/reports/resource-root-followup/rc4-check"
+    },
+    {
+      "id": "rc5-stable-region-layout-and-bounded-upload",
+      "candidateVersion": "7.2.0-rc.5",
+      "baselineCandidate": "7.2.0-rc.4",
+      "status": "cpu-oracle-passed-native-build-in-progress",
+      "confirmedCause": "Complete host session2 seq105 rev38 submit53.5655ms contains SparseRegions19.7680ms and synchronous NVRHI StagingAllocate21.9332ms for16781312B, caused by16777472B whole-region upload exceeding the normal16MiB staging chunk. GPU initial50%; no absolute FPS inference.",
+      "mechanism": "Budget-sized fixed region hash/global prefix and GPU sparse capacity; retained list storage and backward-shift hash deletion; explicit home-bucket overflow reinsertion restores16-probe exact fallback before exposing an empty slot. Sparse writeBuffer calls limited to1MiB reuse standard staging chunks.",
+      "differenceFromRc4": "Replaces growth/compaction full pool repack and address migration, rather than changing SDK shrink fallback again. Real initialization/reset and ordinary in-flight chunk allocation remain explicit; no quality/frame/semantic omission.",
+      "cpuPackedReserveBoundBytes": 51380224,
+      "gpuSparseBuffersSteadyBoundBytes": 125829216,
+      "smallScenes": "Scenes without regional indexing retain existing demand-sized GPU buffers.",
+      "cpuOracle": {
+        "passed": true,
+        "sources": 25000,
+        "probes": 2198,
+        "collisionBackshift": true,
+        "overflowReinsertion": true,
+        "hashMoves": 870,
+        "overflowRetries": 3528,
+        "travelNoFullPack": true,
+        "tombstones": 0,
+        "localUploadBytes": 1152,
+        "localUploadSpans": 14,
+        "localFrontierNodes": 13
+      },
+      "performanceMeasured": false,
+      "validationPending": true,
+      "evidence": "build/reports/resource-root-followup/rc5-check"
+    },
+    {
+      "id": "bounded-diagnostic-snapshot-and-idle-omm-rc6",
+      "status": "built-affected-correctness-passed-awaiting-real-host-performance",
+      "candidateVersion": "7.2.0-rc.6",
+      "baselineVersion": "7.2.0-rc.5",
+      "facts": [
+        "I1 geometry rows6144to7168 is legitimate;77.302ms before first staging;waiting cause not proven",
+        "I1 preparation tail38.0115ms contains OMM debug growth;cost not independently proven",
+        "I2 material33rows has23.0341ms before first208B staging;132 staging scopes sum0.1123ms",
+        "Snapshot copied up to~55.8MiB under global recorder mutex;lock wait was not separately observable"
+      ],
+      "changes": [
+        "ring and slow snapshot copies under64event/13.5KiB lock slices with generation/ordinal/trigger validation;yield between slices;metadata bounded separately",
+        "100us threshold mutex wait and measured hold attribution;overlaps enclosing work and must not be added",
+        "default GPU create,committed call and postCreate timings;CPU table resize old/new row counts;material missing-buffer reason",
+        "independent native lighting defers unused beauty OMM debug table growth;restore before beauty consumer"
+      ],
+      "notProven": [
+        "specific cause of77.302ms and23.0341ms waits",
+        "rc.5 introduced a new regression",
+        "FPS benefit"
+      ],
+      "performanceMeasured": false,
+      "rawGiHdrByteExactRc5": 54,
+      "actualGiRrHdrByteExactRc5": 54,
+      "actualRrExtent": [
+        192,
+        128
+      ],
+      "nativeUploadFrames": 24,
+      "defaultGpuCreatesObserved": 38,
+      "cpuResizesObserved": 6,
+      "ommRefreshes": 1,
+      "ommRefreshOnlyEmptyStartup": true,
+      "diagnosticCpuAndJavaPassed": true,
+      "nativeMonitorConcurrentPassed": true,
+      "snapshotConcurrentOverwritePassed": true,
+      "controlledLockAttributionPassed": true,
+      "gpuInitialPercent": 3,
+      "nativeBuildJobPeakGiB": 2.919,
+      "javaJobPeakGiB": 1.078,
+      "gpuCorrectnessJobPeakGiB": 2.923,
+      "diagnosticsCpuMicrofixture": {
+        "comparison": "historical rc5 log vs current; not paired FPS",
+        "deepP50NsPerThreeScopeSubmitOld": 875.025,
+        "deepP50NsPerThreeScopeSubmitNew": 1046.065,
+        "deltaNs": 171.04,
+        "percent": 19.54687
+      },
+      "firstFailure": "Test initially treated an empty startup OMM refresh (geometry0,oldRows0) as an allocation; corrected assertion checks post-activation refresh, production unchanged; failure log retained."
+    },
+    {
+      "name": "independent-gi-rr-grid-budget",
+      "candidateVersion": "7.2.0-rc.7",
+      "baselineVersion": "7.2.0-rc.6",
+      "status": "validated-local-packaging-only",
+      "authorization": "Parent explicitly confirmed Maven Local and identity closeout only; mainline now direct-only GI0/RR NONE; no further GI/RR optimization or GPU tests",
+      "quality": "Explicit opt-in GI reconstruction detail/performance tradeoff; not an equivalent rendering bug fix",
+      "changes": [
+        "Generic divisor1 default preserves original path; divisor2 evaluates actual diffuse GI RR at ceil(plan/2) in same-input-output DLAA",
+        "Direct gain, shadows, raw one-bounce GI and published HDR extents remain at plan grid",
+        "Select current raw GI and every guide from one identical receiver; normalized motion and evaluation-sized jitter",
+        "Current instance/geometry identity, distance, normal, roughness, albedo and validity constrain upsampling; no compatible point uses current raw GI",
+        "Exact current alpha restoration; proportion and grid changes reset history; existing command-list and lease lifetimes retained",
+        "Actual evaluation/output extents, explicit texture bytes and reduce/RR/upsample GPU zones; no silent fallback"
+      ],
+      "notClaimed": ["Equal GI quality for divisor2", "180 FPS", "Full GPU P95 budget achieved", "Opaque network allocation byte counts"],
+      "performanceMeasured": true,
+      "performanceEvidence": "build/reports/resource-root-followup/rc7-check/performance-summary.json",
+      "performanceConditions": "Same rc7 DLL;719 meshes;1280x800 dual HDR;GI1;real RR;SUMMARY;signal reuse disabled;divisor1/2/2/1 each3s;initial GPU4/1/0/0 percent;complete request boundary",
+      "performanceLimits": "Short focused budget comparison, not full matrix or MC FPS; divisor2 changes GI reconstruction detail; GPU P95 above4ms; SUMMARY per-stage GPU was not enabled",
+      "completeGpuMeanMs": {"old":6.318163522513089,"new":3.8655946767546685,"delta":-2.4525688457584205,"percent":-38.817748812916065},
+      "completeGpuP95Ms": {"old":7.726624,"new":4.769087,"delta":-2.9575370000000003,"percent":-38.277221720637634},
+      "gridFramesPassed":32,
+      "projectionFramesPassed":16,
+      "invalidGiPixelsExactZero":544982,
+      "defaultRawGiHdrByteExactRc6":54,
+      "defaultActualRrHdrByteExactRc6":54,
+      "mainlineUsesGiRr":false,
+      "githubPublished":false,
+      "nativeBuildSeconds": 145.18,
+      "nativeBuildJobPeakGiB": 6.627,
+      "initialFixtureCompileFailure": "Java fixture used a compound var declaration; fixed test-only syntax; original failure log retained"
+    }
+  ]
 }

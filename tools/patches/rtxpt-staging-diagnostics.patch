@@ -1,0 +1,95 @@
+--- a/External/Donut/nvrhi/src/d3d12/d3d12-upload.cpp
++++ b/External/Donut/nvrhi/src/d3d12/d3d12-upload.cpp
+@@ -21,6 +21,7 @@
+ */
+ 
+ #include "d3d12-backend.h"
++#include "rtxpt_diagnostics.h" // RTR bounded staging breakdown
+ #include "rtxpt_memory_diagnostics.h" // RTR opt-in native resource census
+ 
+ #include <nvrhi/common/misc.h>
+@@ -68,19 +69,25 @@
+         bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+         if (m_IsScratchBuffer) bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+ 
+-        HRESULT hr = m_Context.device->CreateCommittedResource(
++        HRESULT hr;
++        {
++        std::optional<RtrDiagnostics::Scope> diagnostic;
++        if (!m_IsScratchBuffer) diagnostic.emplace(RtrDiagnostics::StagingAllocate, 1, 0, 2, 0, 0, 0, 0, size);
++        hr = m_Context.device->CreateCommittedResource(
+             &heapProps,
+             D3D12_HEAP_FLAG_NONE,
+             &bufferDesc,
+             m_IsScratchBuffer ? D3D12_RESOURCE_STATE_COMMON: D3D12_RESOURCE_STATE_GENERIC_READ,
+             nullptr,
+             IID_PPV_ARGS(&chunk->buffer));
++        }
+ 
+         if (FAILED(hr))
+             return nullptr;
+ 
+         if (!m_IsScratchBuffer)
+         {
++            RtrDiagnostics::Scope diagnostic(RtrDiagnostics::StagingMap, 1, 0, 2, 0, 0, 0, 0, size);
+             hr = chunk->buffer->Map(0, nullptr, &chunk->cpuVA);
+ 
+             if (FAILED(hr))
+--- a/External/Donut/nvrhi/src/d3d12/d3d12-buffer.cpp
++++ b/External/Donut/nvrhi/src/d3d12/d3d12-buffer.cpp
+@@ -22,6 +22,7 @@
+ 
+ 
+ #include "d3d12-backend.h"
++#include "rtxpt_diagnostics.h" // RTR bounded staging breakdown
+ #include "rtxpt_memory_diagnostics.h" // RTR opt-in native resource census
+ #include <nvrhi/utils.h>
+ #include <nvrhi/common/misc.h>
+@@ -575,8 +576,13 @@
+         D3D12_GPU_VIRTUAL_ADDRESS gpuVA;
+         ID3D12Resource* uploadBuffer;
+         size_t offsetInUploadBuffer;
+-        if (!m_UploadManager.suballocateBuffer(dataSize, nullptr, &uploadBuffer, &offsetInUploadBuffer, &cpuVA, &gpuVA, 
+-            m_RecordingVersion, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT))
++        bool acquired;
++        {
++            RtrDiagnostics::Scope diagnostic(RtrDiagnostics::StagingAcquire, 1, 0, 2, 0, 0, 0, 0, dataSize);
++            acquired = m_UploadManager.suballocateBuffer(dataSize, nullptr, &uploadBuffer, &offsetInUploadBuffer, &cpuVA, &gpuVA,
++                m_RecordingVersion, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
++        }
++        if (!acquired)
+         {
+             m_Context.error("Couldn't suballocate an upload buffer");
+             return;
+@@ -588,7 +594,10 @@
+             m_CurrentUploadBuffer = uploadBuffer;
+         }
+ 
+-        memcpy(cpuVA, data, dataSize);
++        {
++            RtrDiagnostics::Scope diagnostic(RtrDiagnostics::StagingCopy, 1, 0, 2, 0, 0, 0, 0, dataSize);
++            memcpy(cpuVA, data, dataSize);
++        }
+ 
+         if (buffer->desc.isVolatile)
+         {
+@@ -597,15 +606,19 @@
+         }
+         else
+         {
++            {
++            RtrDiagnostics::Scope diagnostic(RtrDiagnostics::StagingBarrier, 1, 0, 2, 0, 0, 0, 0, dataSize);
+             if (m_EnableAutomaticBarriers)
+             {
+                 requireBufferState(buffer, ResourceStates::CopyDest);
+                 m_BindingStatesDirty = true;
+             }
+             commitBarriers();
++            }
+ 
+             m_Instance->referencedResources.push_back(buffer);
+ 
++            RtrDiagnostics::Scope diagnostic(RtrDiagnostics::StagingRecord, 1, 0, 2, 0, 0, 0, 0, dataSize);
+             m_ActiveCommandList->commandList->CopyBufferRegion(buffer->resource, destOffsetBytes, uploadBuffer, offsetInUploadBuffer, dataSize);
+         }
+     }

@@ -38,6 +38,7 @@
 #include "rtxpt_path_quality.h"
 #include "rtxpt_host_resources.h"
 #include "rtxpt_memory_diagnostics.h"
+#include "rtxpt_upload_retention.h"
 #include "rtxpt_retained_light_tree.h"
 #include "rtxpt_sparse_lighting.h"
 #include "rtxpt_native_extension.h"
@@ -51,6 +52,7 @@
 #include "rtxpt_instance_transform.h"
 #include "rtxpt_memory_resources.h"
 #include "rtxpt_resource_arena.h"
+#include "rtxpt_upload_arena.h"
 #include "rtxpt_capacity.h"
 #include <map>
 extern SampleUIData g_sampleUIData;
@@ -167,24 +169,28 @@ public:
         hostSurface.active=true;GetBindingCache().Clear();InvalidateBindingSet();
     }
     void AbortHostRead(){if(surfaceRead){
-        if(hostReadSubmitted){FinishHostRead();return;}
+        if(hostReadSubmitted){FinishHostRead(false);return;}
         surfaceInputs->AbortRead(surfaceRead->packet.token);surfaceRead.reset();
     }}
-    void FinishHostRead(){if(!surfaceRead)return;
+    void FinishHostRead(bool completed=true){if(!surfaceRead)return;
         auto command=GetDevice()->createCommandList();command->open();surfaceInputs->RestoreCommon(command,*surfaceRead);command->close();
-        GetDevice()->executeCommandList(command);surfaceInputs->EndRead(surfaceRead->packet.token);surfaceRead.reset();hostReadSubmitted=false;hostSurface.RecordWork(GetDevice());
+        GetDevice()->executeCommandList(command);surfaceInputs->EndRead(surfaceRead->packet.token);surfaceRead.reset();hostReadSubmitted=false;if(completed)hostSurface.RecordWork(GetDevice());
     }
     const donut::engine::Scene* nativePreparedScene=nullptr;
     bool nativeTlasDirty=true;
+    bool nativeOmmDebugStale=false;
     void ActivateLightingExtension(const RtrNativeExtension& extension){nativeLighting.Prepare(GetDevice(),*m_shaderFactory,m_bindlessLayout,&sparseLighting);nativeLighting.Activate(GetDevice(),m_bindlessLayout,extension);}
     void Render(nvrhi::IFramebuffer* framebuffer) override {
         const bool augmentation=hostSurface.active&&hostSurface.composition==0;
         if(!nativeLighting.active&&!augmentation){
             if(hostSurface.active&&!surfaceRead)throw std::logic_error("Host mode requires a matching published primary surface input");
+            // Independent lighting never reads the beauty OMM debug table.
+            // Restore it before the next beauty consumer after a mode switch.
+            if(nativeOmmDebugStale&&m_scene&&m_ommBaker){m_ommBaker->SceneLoaded(*m_scene);nativeOmmDebugStale=false;}
             ++nativeLighting.beautyFrames;
             try{hostReadSubmitted=bool(surfaceRead);AdvancedPathTracer::Render(framebuffer);
                 if(hostSurface.active)hostOutputs.Resolve(GetDevice(),HostSurfaceHdr(),hostSurface);
-            }catch(...){if(surfaceRead)FinishHostRead();throw;}
+            }catch(...){if(surfaceRead)FinishHostRead(false);throw;}
             FinishHostRead();return;
         }
         if(!m_scene)throw std::runtime_error("Native lighting requires a resident scene");
@@ -799,7 +805,9 @@ struct Session {
         RtrDiagnostics::Configure(0);
         RtrMemoryDiagnostics::Checkpoint("shutdown.begin");
         if (app) {
-            static_cast<HostPathTracer*>(app->HostRenderPass())->resourceArena.Stop();
+            if(auto* pass=static_cast<HostPathTracer*>(app->HostRenderPass())){
+                pass->uploadArena.Stop();pass->resourceArena.Stop();
+            }
             auto* dm=app->HostDeviceManager();
             auto* nativeDevice=dm->GetDevice()?static_cast<ID3D12Device*>(dm->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)):nullptr;
             const bool deviceRemoved=RtrDeviceRemoved(nativeDevice);
@@ -840,7 +848,7 @@ void indexNodes(Session& s) {
     donut::engine::SceneGraphWalker w(graph->GetRootNode().get());
     while (w) { s.nodes.emplace(w->GetName(), w.Get()); w.Next(true); }
     auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());
-    host.memoryTextures.clear();host.spareMemoryTextures.clear();host.spareMemoryTextureBytes=0;
+    host.memoryTextures.clear();host.spareMemoryTextures.clear();host.spareMemoryTextureBytes=0;host.uploadPreparationPending=false;
     host.resourceRetirement.clear();host.resourceCommandPool.clear();host.resourceQueryPool.clear();host.resourceBlasAllocationBytes.clear();host.resourceBufferAllocations.clear();host.preparedMeshBlases.clear();host.meshUploadScratch.clear();
     host.spareMeshBuffers.clear();host.spareMeshBlases.clear();host.spareMeshBufferBytes=host.spareMeshBlasBytes=0;
     host.spareResourceTlas={};host.spareResourceTlasBytes=0;host.resourceTlasAllocationBytes=0;host.resourceTlasAllocationIdentity=nullptr;
@@ -1358,7 +1366,15 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     }catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_sparseLightingTelemetry(JNIEnv* e,jclass,jlong h){
-    try{const auto& values=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->sparseLighting.work;
+    try{const auto& sparse=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->sparseLighting;
+        std::array<uint64_t,17> values;std::copy(sparse.work.begin(),sparse.work.end(),values.begin());std::copy(sparse.regions.work.begin(),sparse.regions.work.end(),values.begin()+8);
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_uploadMemory(JNIEnv* e,jclass,jlong h){
+    try{auto& pass=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
+        std::array<uint64_t,12> values{};const auto pool=RtrUploadRetention::Snapshot();const auto arena=pass.uploadArena.Statistics();
+        std::copy(pool.begin(),pool.end(),values.begin());std::copy(arena.begin(),arena.end(),values.begin()+8);
         auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
@@ -1377,13 +1393,27 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             if(!donut::app::StreamlineIntegration::Get().IsDLSSRRAvailable())throw std::runtime_error("Native diffuse GI RR unavailable on this device");
         }
         auto& rr=pass.reconstruction;if(rr.requested!=bool(enabled)||reset)rr.reset=true;rr.requested=enabled;
-        if(!enabled){rr.valid=false;rr.guides={};rr.reconstructed=nullptr;rr.result=nullptr;rr.width=rr.height=0;}
+        if(!enabled){rr.valid=false;rr.guides={};rr.reducedGuides={};rr.surfaces=nullptr;rr.reducedRaw=nullptr;
+            rr.reconstructed=nullptr;rr.result=nullptr;rr.resolveBindings.value=nullptr;rr.reduceBindings.value=nullptr;rr.upsampleBindings.value=nullptr;
+            rr.width=rr.height=rr.evaluationWidth=rr.evaluationHeight=rr.allocatedDivisor=0;rr.resourceBytes=0;}
     }catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingReconstructionState(JNIEnv* e,jclass,jlong h){
     try{const auto& rr=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting.reconstruction;
         const jlong values[]{rr.requested&&rr.valid?1:0,rr.width,rr.height,jlong(rr.evaluated),jlong(rr.resets),rr.valid?1:0,rr.requested?1:0};
         auto result=e->NewLongArray(7);if(result)e->SetLongArrayRegion(result,0,7,values);return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingReconstructionScale(JNIEnv* e,jclass,jlong h,jint divisor){
+    try{if(divisor!=1&&divisor!=2)throw std::invalid_argument("GI RR divisor must be 1 or 2");
+        auto& pass=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting;auto& rr=pass.reconstruction;
+        if(rr.divisor!=uint32_t(divisor)){rr.divisor=uint32_t(divisor);rr.valid=false;rr.reset=true;pass.retainedSignals=false;}
+    }catch(const std::exception& x){fail(e,x);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingReconstructionGrid(JNIEnv* e,jclass,jlong h){
+    try{const auto& rr=static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->nativeLighting.reconstruction;
+        const jlong values[]{rr.divisor,rr.evaluationWidth,rr.evaluationHeight,rr.width,rr.height,jlong(rr.resourceBytes)};
+        auto result=e->NewLongArray(6);if(result)e->SetLongArrayRegion(result,0,6,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingBaseline(JNIEnv* e,jclass,jlong h,jstring name,jfloatArray coordinates){
@@ -1517,7 +1547,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingWork(JNIEnv* e,jclass,jlong h){
     try{auto& s=session(h);auto& pass=static_cast<HostPathTracer*>(s.app->HostRenderPass())->nativeLighting;pass.PollWork(s.app->HostDeviceManager()->GetDevice());
-        auto result=e->NewLongArray(9);if(result)e->SetLongArrayRegion(result,0,9,reinterpret_cast<const jlong*>(pass.latestWork.data()));return result;
+        auto result=e->NewLongArray(jsize(pass.latestWork.size()));if(result)e->SetLongArrayRegion(result,0,jsize(pass.latestWork.size()),reinterpret_cast<const jlong*>(pass.latestWork.data()));return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_hostSurfacePlan(JNIEnv* e,jclass,jlong h,jint width,jint height,jint composition,jint components,jboolean jitter,jlong budget){
@@ -1619,7 +1649,7 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
     catch(const std::exception& x){fail(e,x);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCapture(JNIEnv* e,jclass,jlong h,jstring path,jint signal){
-    try{if(signal<0||signal>9)throw std::invalid_argument("Unknown native-lighting diagnostic signal");
+    try{if(signal<0||signal>18)throw std::invalid_argument("Unknown native-lighting diagnostic signal");
         static_cast<HostPathTracer*>(session(h).app->HostRenderPass())->CaptureLinear(std::filesystem::u8path(utf8(e,path)),signal);
     }catch(const std::exception& x){fail(e,x);}
 }
@@ -2000,6 +2030,12 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
     catch(const std::exception& x){fail(e,x);return nullptr;}}
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticMonitorSnapshot(JNIEnv* e,jclass,jlong token) {
     try {if(token==0)throw std::invalid_argument("Diagnostic monitor token must be nonzero");auto values=RtrDiagnostics::Snapshot(uint64_t(token));
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticMonitorSnapshotAfter(JNIEnv* e,jclass,jlong token,jlong afterTrigger) {
+    try {if(token==0||afterTrigger<0)throw std::invalid_argument("Invalid diagnostic monitor cursor");
+        auto values=RtrDiagnostics::Snapshot(uint64_t(token),uint64_t(afterTrigger));
         auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }

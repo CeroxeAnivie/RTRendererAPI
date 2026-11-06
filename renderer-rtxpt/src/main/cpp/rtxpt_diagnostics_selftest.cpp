@@ -103,7 +103,7 @@ static void switchAndReset(){
     require((snapshot[sample+3]&(Failed|Truncated))==(Failed|Truncated),"Close/finally lost failure or truncation");
     require(snapshot[4]>=1,"Failed close did not retain diagnostic evidence");
     {Scope old(Lighting);Reset();Configure(1);{Scope current(Frame);}const auto clocks=clockCalls.load();
-        require(Snapshot()[3]==1,"Reset exposed stale scope events");require(clockCalls==clocks,"Completed snapshot read a clock");}
+        require(Snapshot()[3]==1,"Reset exposed stale scope events");require(clockCalls>clocks,"Enabled snapshot did not measure its lock holds");}
     require(Snapshot()[3]==1,"Old scope destructor repopulated new session");
     bool expired=false;try{Snapshot(token);}catch(const std::runtime_error&){expired=true;}require(expired,"Old session monitor was accepted");
     std::puts("RTXPT_DIAGNOSTICS_SWITCH PASS offDrain truncation failureAnnotation resetGeneration");
@@ -135,6 +135,77 @@ static void bounded(){
     while(!active.empty())active.pop_back();require(Snapshot()[7]==0,"Active slot leaked");
     std::puts("RTXPT_DIAGNOSTICS_BOUNDS PASS rolling=8192 live=512 submissions=1024 overflowReported");
 }
+static size_t descriptorOffset(const std::vector<uint64_t>& s){return Header+size_t(s[3]+s[5]+s[7])*Width+size_t(s[9])*6;}
+static void lockAttribution(){
+    Reset();Configure(2);BeginSubmit(650,650,0);const auto root=submission->event[12];
+    std::promise<void> entered;
+    std::thread holder([&]{std::lock_guard lock(mutex);entered.set_value();std::this_thread::sleep_for(std::chrono::milliseconds(4));});
+    entered.get_future().wait();{Scope child(SceneMaterialPrepare);}holder.join();
+    {DiagnosticLock lock(SnapshotSlow,64*sizeof(Event),true);std::this_thread::sleep_for(std::chrono::milliseconds(2));}
+    EndSubmit(false);const auto s=Snapshot();bool wait=false,hold=false;
+    for(size_t i=0;i<s[3];++i){auto event=eventAt(s,i);
+        if(event[4]==DiagnosticMutexWait){wait|=event[20]==ScopeEnter&&event[8]==SceneMaterialPrepare&&event[25]==root&&event[6]>=100'000;}
+        if(event[4]==DiagnosticMutexHold){hold|=event[20]==SnapshotSlow&&event[21]==64*sizeof(Event)&&event[6]>=100'000;}}
+    require(wait&&hold,"Contended wait or measured hold attribution missing");
+    std::puts("RTXPT_DIAGNOSTICS_LOCKS PASS waitOwnerStage=true waitRoot=true holdBytes=true threshold100us=true");
+}
+static std::atomic<unsigned> snapshotHookCalls{0};
+static std::promise<void>* snapshotHookEntered=nullptr;
+static std::shared_future<void>* snapshotHookReleased=nullptr;
+static void pauseSnapshotChunk(){
+    if(snapshotHookCalls.fetch_add(1)==0){snapshotHookEntered->set_value();snapshotHookReleased->wait();}
+}
+static void concurrentSnapshotOverwrite(){
+    Reset();Configure(2);
+    BeginSubmit(700,700,60'000'000);
+    for(size_t i=0;i<Capacity+100;++i){Scope child(ResourceIndex);}
+    EndSubmit(false);
+    std::promise<void> entered,released;auto release=released.get_future().share();
+    snapshotHookCalls=0;snapshotHookEntered=&entered;snapshotHookReleased=&release;snapshotChunkHook=pauseSnapshotChunk;
+    auto observer=std::async(std::launch::async,[]{return Snapshot();});
+    entered.get_future().wait();
+    // This completes while the observer is suspended between copy slices. It
+    // overwrites both old rolling slots and every old slow-group slot.
+    for(uint64_t n=0;n<SlowGroupCapacity+2;++n){BeginSubmit(800+n,800+n,60'000'000);
+        for(size_t i=0;i<Capacity+100;++i){Scope child(ResourceIndex);}
+        EndSubmit(false);}
+    released.set_value();const auto s=observer.get();snapshotChunkHook=nullptr;
+    require(s[14]-s[13]==s[3],"Concurrent overwrite returned a noncontiguous ordinal window");
+    for(size_t i=0;i<s[3];++i)require(eventAt(s,i)[24]==s[13]+i,"Snapshot spliced overwritten rolling rows");
+    const auto d=descriptorOffset(s);uint64_t offset=0;
+    for(size_t i=0;i<s[15];++i){auto p=d+i*SlowDescriptorWidth;const auto count=s[p+7];
+        require(s[p+9]==offset&&count>0,"Concurrent snapshot broke slow descriptor offsets");
+        const auto root=eventAt(s,size_t(s[3]+offset+count-1));
+        require(root[12]==s[p+3]&&root[0]==s[p+1]&&root[1]==s[p+2],"Snapshot spliced different slow trees");offset+=count;}
+    require(offset==s[5]&&s[16]>0,"Concurrent snapshot hid overwrite loss");
+    std::puts("RTXPT_DIAGNOSTICS_CONCURRENT_SNAPSHOT PASS recorderProgress=true rollingOrdinals=true noMixedTrees=true overwriteExplicit=true");
+}
+static void completeSlowGroups(){
+    Reset();Configure(2);const auto allocated=allocations.load();
+    BeginSubmit(88,19,60'000'000);
+    for(size_t i=0;i<Capacity+500;++i){Scope child(ResourceIndex);}
+    uint64_t workerRoot=0;const auto batch=submission->event[12];
+    std::thread worker([&]{Scope child(Worker,1,0,2,batch);workerRoot=child.event[25];});worker.join();
+    EndSubmit(false);
+    auto snapshot=Snapshot();require(snapshot[15]==1&&snapshot[5]>Capacity,"Complete slow tree was limited by rolling capacity");
+    auto d=descriptorOffset(snapshot);require(snapshot[d+6]==snapshot[d+7]&&snapshot[d+8]==0,"Complete tree marked lost");
+    require(workerRoot==batch,"Worker lost immutable submit root identity");
+    const auto first=snapshot[d];auto consumed=Snapshot(0,first);require(consumed[15]==0&&consumed[5]==0,"Monitor cursor resent consumed slow tree");
+    require(consumed.capacity()<snapshot.capacity(),"Consumed cursor reserved storage for absent slow trees");
+    std::printf("RTXPT_DIAGNOSTICS_SNAPSHOT_CAPACITY fullBytes=%llu consumedBytes=%llu\n",
+        static_cast<unsigned long long>(snapshot.capacity()*sizeof(uint64_t)),
+        static_cast<unsigned long long>(consumed.capacity()*sizeof(uint64_t)));
+    for(uint64_t i=0;i<SlowGroupCapacity+2;++i){BeginSubmit(100+i,20+i,60'000'000);{Scope child(Preparation);}EndSubmit(false);}
+    snapshot=Snapshot();require(snapshot[15]==SlowGroupCapacity&&snapshot[16]==3,"Bounded slow-group overwrite accounting");
+    d=descriptorOffset(snapshot);require(snapshot[d]==4,"Oldest retained trigger ordinal wrong");
+    Reset();Configure(2);BeginSubmit(1,1,60'000'000);
+    for(size_t i=0;i<CaptureCapacity+10;++i){Scope child(ResourceIndex);}
+    EndSubmit(false);snapshot=Snapshot();d=descriptorOffset(snapshot);
+    require(snapshot[d+5]&Truncated,"Exhausted slow tree was presented complete");
+    require(snapshot[d+8]>0&&snapshot[d+6]==snapshot[d+7]+snapshot[d+8],"Capture loss accounting wrong");
+    const auto root=eventAt(snapshot,size_t(snapshot[3]+snapshot[5]-1));require(root[4]==Submit&&root[0]==1,"Truncated tree lost trigger itself");
+    std::puts("RTXPT_DIAGNOSTICS_SLOW_GROUPS PASS rollingIndependent=true cursor=true workerRoot=true groupLoss=true truncatedExplicit=true");
+}
 static void benchmark(){
     for(unsigned mode:{0u,1u,2u}){Reset();Configure(mode);std::array<double,9> samples{};
         const auto beforeClocks=clockCalls.load();
@@ -146,7 +217,7 @@ static void benchmark(){
             mode,samples[4],samples[8],static_cast<unsigned long long>(clockCalls.load()-beforeClocks),static_cast<unsigned long long>(written));}
 }
 int main(int argc,char** argv){try{
-    off();eventPoll();hierarchy();workersAndCancellation();activeAndFailure();switchAndReset();auto fixture=categories();bounded();benchmark();
+    off();eventPoll();hierarchy();workersAndCancellation();activeAndFailure();switchAndReset();auto fixture=categories();bounded();completeSlowGroups();lockAttribution();concurrentSnapshotOverwrite();benchmark();
     if(argc==2){std::ofstream file(argv[1],std::ios::binary);file.write(reinterpret_cast<const char*>(fixture.data()),std::streamsize(fixture.size()*8));require(bool(file),"Fixture write failed");}
     std::puts("RTXPT_DIAGNOSTICS_ALL PASS");return 0;
 }catch(const std::exception& e){std::fprintf(stderr,"RTXPT_DIAGNOSTICS_FAIL %s\n",e.what());return 1;}}

@@ -7,6 +7,7 @@ import java.nio.file.Path;
 
 /** Diagnostic ABI and statistics tests. Accepts a fixture emitted by the native selftest. */
 public final class RtxptDiagnosticsSelfTest {
+    private static volatile RtxptDiagnostics.Snapshot allocationSnapshot;
     private static void require(boolean condition,String message){if(!condition)throw new AssertionError(message);}
     private static void rejected(long[] values){
         try{RtxptDiagnostics.decode(values);throw new AssertionError("Malformed snapshot accepted");}
@@ -25,6 +26,34 @@ public final class RtxptDiagnosticsSelfTest {
         rejected(data(3,16,0,0,0,0,0,0,0,Long.MAX_VALUE,0,1,1));
         rejected(data(2,12,0,Long.MAX_VALUE,0,0,0));
         System.out.println("RTXPT_DIAGNOSTICS_JAVA_COMPAT PASS v2 malformedCount level duration");
+    }
+    private static void enumLookupAllocation(){
+        long[] legacy={2,12,0,1,0,0,0,7,2,1,3,1,100,90,70,2,0,0,0};
+        for(long ordinal:new long[]{-1,Long.MAX_VALUE,RtxptDiagnostics.Stage.values().length}){
+            legacy[11]=ordinal;
+            require(RtxptDiagnostics.decode(legacy).events().getFirst().stage()==RtxptDiagnostics.Stage.UNKNOWN,"Unknown stage ordinal mapping changed");
+        }
+        for(var stage:RtxptDiagnostics.Stage.values()){
+            legacy[11]=stage.ordinal();require(RtxptDiagnostics.decode(legacy).events().getFirst().stage()==stage,"Known stage ordinal mapping changed");
+        }
+        var platform=java.lang.management.ManagementFactory.getThreadMXBean();
+        if(!(platform instanceof com.sun.management.ThreadMXBean bean)||!bean.isThreadAllocatedMemorySupported()){
+            System.out.println("RTXPT_DIAGNOSTICS_ENUM_ALLOCATION SKIP thread allocation accounting unavailable");return;
+        }
+        if(!bean.isThreadAllocatedMemoryEnabled())bean.setThreadAllocatedMemoryEnabled(true);
+        int count=8192,iterations=16;long[] words=new long[19+count*27];
+        long[] header={6,27,0,count,0,0,0,0,0,0,0,1,2,1,count+1,0,0,0,65536};
+        System.arraycopy(header,0,words,0,header.length);
+        for(int event=0;event<count;++event){int base=19+event*27;words[base+4]=RtxptDiagnostics.Stage.STAGING_COPY.ordinal();
+            words[base+6]=words[base+7]=10;words[base+23]=2;words[base+24]=event+1;}
+        for(int i=0;i<20;++i)allocationSnapshot=RtxptDiagnostics.decode(words);
+        long thread=Thread.currentThread().threadId(),before=bean.getThreadAllocatedBytes(thread);
+        for(int i=0;i<iterations;++i)allocationSnapshot=RtxptDiagnostics.decode(words);
+        long bytes=bean.getThreadAllocatedBytes(thread)-before,events=(long)count*iterations;
+        require(allocationSnapshot.events().size()==count&&allocationSnapshot.recordedLevel().orElseThrow()==RtxptDiagnostics.Level.DEEP,"Allocation fixture lost decoded events or level");
+        System.out.println("RTXPT_DIAGNOSTICS_ENUM_ALLOCATION events="+events+" allocatedBytes="+bytes+" bytesPerEvent="+((double)bytes/events));
+        require(bytes<events*400,"Decode allocates an extra enum array per event");
+        System.out.println("RTXPT_DIAGNOSTICS_ENUM_ALLOCATION PASS knownAndUnknownOrdinals=true");
     }
     private static void fixture(Path path)throws Exception {
         byte[] bytes=Files.readAllBytes(path);require(bytes.length%8==0,"Native fixture alignment");
@@ -77,8 +106,22 @@ public final class RtxptDiagnosticsSelfTest {
         require(legacyGpu.scopes().getFirst().diagnosticLevel()==-1,"Legacy GPU mode stays unknown");
         System.out.println("RTXPT_DIAGNOSTICS_RESOURCE_ABI PASS format=5 legacyGpu=true metadata=true ordinals=true");
     }
+    private static void slowGroups(){
+        long[] words=new long[19+2*27+10];long[] header={6,27,0,0,2,2,0,0,0,0,0,3,2,1,1,1,1,0,65536};
+        System.arraycopy(header,0,words,0,19);
+        for(int i=0;i<2;i++){int base=19+i*27;words[base]=88;words[base+1]=19;words[base+4]=i==0?RtxptDiagnostics.Stage.PREPARATION.ordinal():RtxptDiagnostics.Stage.SUBMIT.ordinal();
+            words[base+6]=60_000_000;words[base+7]=1;words[base+12]=i==0?1024:512;words[base+13]=i==0?512:0;words[base+23]=2;words[base+25]=512;}
+        int descriptor=19+2*27;long[] group={2,88,19,512,RtxptDiagnostics.Stage.SUBMIT.ordinal(),0,2,2,0,0};System.arraycopy(group,0,words,descriptor,10);
+        var snapshot=RtxptDiagnostics.decode(words);require(snapshot.slowFrameGroups().size()==1,"Slow groups decoded");
+        var slow=snapshot.slowFrameGroups().getFirst();require(slow.complete()&&slow.rootScopeId()==512&&slow.events().getFirst().rootScopeId()==512,"Complete root identity mapping");
+        require(snapshot.overwrittenSlowFrameGroups()==1&&snapshot.lastSlowFrame().size()==2,"Legacy latest slow accessor retained");
+        words[descriptor+8]=1;words[descriptor+6]=3;words[descriptor+5]=RtxptDiagnostics.FLAG_TRUNCATED;
+        require(!RtxptDiagnostics.decode(words).slowFrameGroups().getFirst().complete(),"Explicit group loss accepted as complete");
+        words[descriptor+3]=999;rejected(words);words[descriptor+3]=512;words[descriptor+9]=1;rejected(words);
+        System.out.println("RTXPT_DIAGNOSTICS_SLOW_ABI PASS v6 completeGroup=true loss=true immutableRoot=true malformedDescriptor=true");
+    }
     public static void main(String[] args)throws Exception {
-        compatibility();incomplete();resources();if(args.length==1)fixture(Path.of(args[0]));
+        compatibility();incomplete();resources();slowGroups();enumLookupAllocation();if(args.length==1)fixture(Path.of(args[0]));
         System.out.println("RTXPT_DIAGNOSTICS_JAVA_ALL PASS");
     }
 }

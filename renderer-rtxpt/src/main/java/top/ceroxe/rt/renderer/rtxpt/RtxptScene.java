@@ -92,9 +92,7 @@ final class RtxptScene {
         }
     }
     void validateAssetBudget(RendererResourceOptions budget){
-        if(geometryBytes>budget.geometryBytes()||textureBytes>budget.textureBytes()||Math.addExact(geometryBytes,textureBytes)>budget.totalAssetBytes())
-            throw new IllegalArgumentException("Retained scene asset budget exceeded: geometry="+geometryBytes+"/"+budget.geometryBytes()
-                +", textures="+textureBytes+"/"+budget.textureBytes()+", total="+Math.addExact(geometryBytes,textureBytes)+"/"+budget.totalAssetBytes());
+        budget.validateAssetBytes(geometryBytes,textureBytes);
     }
     Set<Long> materialsUsingTexture(long id){var users=textureUsers.get(id);return users==null?Set.of():users.keySet();}
     Set<Long> meshesUsingMaterial(long id){var users=materialUsers.get(id);return users==null?Set.of():users.keySet();}

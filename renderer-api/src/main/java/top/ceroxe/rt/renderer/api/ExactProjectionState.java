@@ -113,6 +113,8 @@ public final class ExactProjectionState {
     private final double[] cameraToWorld;
     private final double[] clipFromView;
     private final double[] inverseClipFromView;
+    private final boolean perspectiveProjection;
+    private final double cameraX, cameraY, cameraZ;
 
     private ExactProjectionState(Builder builder) {
         viewportWidth = builder.viewportWidth;
@@ -127,6 +129,21 @@ public final class ExactProjectionState {
         clipFromView = canonical(builder.clipFromView, matrixLayout, "clipFromView");
         validateRigid(cameraToWorld);
         inverseClipFromView = invert(clipFromView);
+        // The common center is the inverse image of clip (0,0,1,0), where x, y and w
+        // vanish. This remains valid when a host includes view effects in projection.
+        double centerW = inverseClipFromView[14];
+        double centerScale = Math.max(Math.max(Math.abs(inverseClipFromView[2]), Math.abs(inverseClipFromView[6])),
+                Math.max(Math.abs(inverseClipFromView[10]), Math.abs(centerW)));
+        perspectiveProjection = Math.abs(centerW) > DETERMINANT_EPSILON * centerScale;
+        double cx = perspectiveProjection ? inverseClipFromView[2] / centerW : 0.0D;
+        double cy = perspectiveProjection ? inverseClipFromView[6] / centerW : 0.0D;
+        double cz = perspectiveProjection ? inverseClipFromView[10] / centerW : 0.0D;
+        cameraX = cameraToWorld[0] * cx + cameraToWorld[1] * cy + cameraToWorld[2] * cz + cameraToWorld[3];
+        cameraY = cameraToWorld[4] * cx + cameraToWorld[5] * cy + cameraToWorld[6] * cz + cameraToWorld[7];
+        cameraZ = cameraToWorld[8] * cx + cameraToWorld[9] * cy + cameraToWorld[10] * cz + cameraToWorld[11];
+        if (!Double.isFinite(cameraX) || !Double.isFinite(cameraY) || !Double.isFinite(cameraZ)) {
+            throw new IllegalArgumentException("exact projection produced a non-finite camera center");
+        }
         validateJitter(jitterConvention, jitterX, jitterY);
     }
 
@@ -195,18 +212,24 @@ public final class ExactProjectionState {
      */
     public double[] inverseClipFromView() { return inverseClipFromView.clone(); }
 
-    /** Returns the camera world-space x coordinate.
+    /** Returns whether the projection has a finite common perspective center.
+     * Rotations, translations, asymmetric frusta and affine view effects are supported.
+     * @return true for a finite perspective center, false for parallel projection
+     */
+    public boolean hasPerspectiveProjection() { return perspectiveProjection; }
+
+    /** Returns the perspective center's world-space x coordinate, or the view origin for a parallel projection.
      * @return world-space x coordinate
      */
-    public double cameraX() { return cameraToWorld[3]; }
-    /** Returns the camera world-space y coordinate.
+    public double cameraX() { return cameraX; }
+    /** Returns the perspective center's world-space y coordinate, or the view origin for a parallel projection.
      * @return world-space y coordinate
      */
-    public double cameraY() { return cameraToWorld[7]; }
-    /** Returns the camera world-space z coordinate.
+    public double cameraY() { return cameraY; }
+    /** Returns the perspective center's world-space z coordinate, or the view origin for a parallel projection.
      * @return world-space z coordinate
      */
-    public double cameraZ() { return cameraToWorld[11]; }
+    public double cameraZ() { return cameraZ; }
 
     /** Returns one canonical row-major clip-from-view matrix element.
      * @param row matrix row
@@ -222,6 +245,8 @@ public final class ExactProjectionState {
 
     /**
      * Maps a top-left-origin pixel center to a normalized world-space primary ray.
+     * Perspective rays start at the projection's finite common center, including view
+     * effects encoded in clip-from-view. Parallel rays start on the near plane.
      *
      * @param pixelX pixel coordinate, finite
      * @param pixelY pixel coordinate, finite
@@ -243,7 +268,9 @@ public final class ExactProjectionState {
             ndcY += jitterY;
         }
         double[] near = unproject(ndcX, ndcY, depthConvention.nearNdc());
-        double[] far = unproject(ndcX, ndcY, depthConvention.farNdc());
+        // Stay inside the far plane so infinite perspective projections also yield a finite point.
+        double[] far = unproject(ndcX, ndcY, depthConvention.nearNdc()
+                + (depthConvention.farNdc() - depthConvention.nearNdc()) * 0.9999D);
         double[] worldNear = transformPoint(cameraToWorld, near);
         double[] worldFar = transformPoint(cameraToWorld, far);
         double dx = worldFar[0] - worldNear[0];
@@ -253,7 +280,9 @@ public final class ExactProjectionState {
         if (!Double.isFinite(length) || length <= DETERMINANT_EPSILON) {
             throw new IllegalArgumentException("exact projection produced a degenerate ray");
         }
-        return new Ray(cameraX(), cameraY(), cameraZ(), dx / length, dy / length, dz / length);
+        return perspectiveProjection
+                ? new Ray(cameraX, cameraY, cameraZ, dx / length, dy / length, dz / length)
+                : new Ray(worldNear[0], worldNear[1], worldNear[2], dx / length, dy / length, dz / length);
     }
 
     private double[] unproject(double ndcX, double ndcY, double ndcZ) {

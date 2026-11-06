@@ -23,9 +23,13 @@ public record RendererResourceOptions(int workerThreads,int shaderCompilerThread
         long geometry=0,pixels=0;
         for(var mesh:meshes)geometry=Math.addExact(geometry,meshBytes(mesh));
         for(var texture:textures)pixels=Math.addExact(pixels,texture.rgba8().remaining());
+        validateAssetBytes(geometry,pixels);
+    }
+    /** Checks exact retained payload totals; this does not allocate or evict assets. */
+    public void validateAssetBytes(long geometry,long pixels){
+        if(geometry<0||pixels<0)throw new IllegalArgumentException("Retained asset totals must not be negative");
         if(geometry>geometryBytes||pixels>textureBytes||Math.addExact(geometry,pixels)>totalAssetBytes)
-            throw new IllegalArgumentException("Retained scene asset budget exceeded: geometry="+geometry+"/"+geometryBytes
-                +", textures="+pixels+"/"+textureBytes+", total="+Math.addExact(geometry,pixels)+"/"+totalAssetBytes);
+            throw new SceneAssetBudgetExceededException(geometry,pixels,this);
     }
     public static long meshBytes(MeshAsset m){return 4L*(m.positions().remaining()+m.normals().remaining()+m.tangents().remaining()
         +(long)m.textureCoordinates().remaining()+m.lightmapCoordinates().remaining()+m.vertexColorsRgba8().remaining()+m.triangleIndices().remaining())

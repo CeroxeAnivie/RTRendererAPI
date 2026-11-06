@@ -83,7 +83,7 @@ float RtrFalloff(float value,float exponent){
 #define RTR_WORK_STATISTICS 1
 #endif
 #if RTR_WORK_STATISTICS
-static uint rtrWorkCounts[6]={0,0,0,0,0,0};
+static uint rtrWorkCounts[12]={0,0,0,0,0,0,0,0,0,0,0,0};
 #endif
 void RtrCount(uint index){
 #if RTR_WORK_STATISTICS
@@ -96,7 +96,7 @@ void RtrCount(uint index){
 void RtrFlushWork(){
 #if RTR_WORK_STATISTICS
     if((g.publication.w&1)!=0){
-        [unroll]for(uint index=0;index<6;++index){
+        [unroll]for(uint index=0;index<12;++index){
             uint total=WaveActiveSum(rtrWorkCounts[index]);
             if(WaveIsFirstLane()&&total!=0){uint unused;u_Work.InterlockedAdd(index*4,total,unused);}
         }
@@ -234,9 +234,9 @@ bool RtrTrace(float3 origin,float3 direction,float distance,uint role,out RtrRec
     receiver=RtrLoad(query.CommittedInstanceIndex(),query.CommittedGeometryIndex(),query.CommittedPrimitiveIndex(),
         query.CommittedTriangleBarycentrics(),origin,direction,query.CommittedRayT(),query.CommittedWorldToObject3x4());return true;
 }
-float3 RtrShadow(RtrReceiver receiver,float3 direction,float distance)
+float3 RtrShadowRay(RayDesc ray)
 {
-    RtrCount(2);RayDesc ray;ray.Origin=receiver.position+receiver.geometricNormal*g.gi.z;ray.Direction=direction;ray.TMin=g.gi.z;ray.TMax=max(g.gi.z,distance-g.gi.z*2);
+    RtrCount(2);
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),1,ray);float3 visibility=1;
     while(query.Proceed())if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE)
     {
@@ -247,6 +247,24 @@ float3 RtrShadow(RtrReceiver receiver,float3 direction,float distance)
     }
     if(query.CommittedStatus()==COMMITTED_TRIANGLE_HIT)return 0;
     return visibility;
+}
+float3 RtrShadow(RtrReceiver receiver,float3 direction,float distance)
+{
+    RayDesc ray;ray.Origin=receiver.position+receiver.geometricNormal*g.gi.z;ray.Direction=direction;ray.TMin=g.gi.z;ray.TMax=max(g.gi.z,distance-g.gi.z*2);
+    return RtrShadowRay(ray);
+}
+float3 RtrSupportShadow(RtrReceiver receiver,RtrSource source,float3 direction,float distance,uint visibilityMode)
+{
+    float end;
+    if(visibilityMode==2)end=max(.002,distance-source.extent.x-.004);
+    else {
+        float3 a=abs(direction);
+        float3 slab=float3(a.x>0?source.extent.x/a.x:1e30,a.y>0?source.extent.y/a.y:1e30,a.z>0?source.extent.z/a.z:1e30);
+        end=distance-min(slab.x,min(slab.y,slab.z))-.004;
+        if(end<=.005)return 1;
+    }
+    RayDesc ray;ray.Origin=receiver.position+receiver.normal*.003;ray.Direction=direction;
+    ray.TMin=.001;ray.TMax=end;return RtrShadowRay(ray);
 }
 bool RtrSupport(RtrNode node,float3 position,bool linearL1)
 {
@@ -265,7 +283,7 @@ bool RtrSupport(RtrNode node,float3 position,bool linearL1)
 #ifndef RTR_MAX_COMPOSITION
 #define RTR_MAX_COMPOSITION 0
 #endif
-#if RTR_MAX_COMPOSITION && RTR_LIGHT_GROUP_CAPACITY <= 4
+#if RTR_MAX_COMPOSITION == 1 && RTR_LIGHT_GROUP_CAPACITY <= 4 && !RTR_WORK_STATISTICS
 #define RTR_SOURCE_HISTORY 1
 Texture2DArray<uint> t_SourceWinners : register(t0,space3);
 RWTexture2DArray<uint> u_SourceWinners : register(u0,space3);
@@ -287,33 +305,46 @@ uint RtrSourceGroup(RtrSource source){
 }
 struct RtrSourceGroups
 {
+#if RTR_MAX_COMPOSITION != 2
     float3 maxima[RTR_LIGHT_GROUP_CAPACITY];float scores[RTR_LIGHT_GROUP_CAPACITY];uint2 keys[RTR_LIGHT_GROUP_CAPACITY];uint mask;
+#endif
 #if RTR_SOURCE_HISTORY
     uint slots[RTR_LIGHT_GROUP_CAPACITY];
 #endif
-#if !RTR_MAX_COMPOSITION
-    float3 sum,channels[RTR_LIGHT_GROUP_CAPACITY];uint channelMask;
+#if RTR_MAX_COMPOSITION != 1
+    float3 channels[RTR_LIGHT_GROUP_CAPACITY];uint channelMask;
+#if RTR_MAX_COMPOSITION == 0
+    float3 sum;
+#endif
 #endif
 };
 bool RtrCanImprove(RtrSourceGroups groups,RtrSource source,float3 upper)
 {
     uint composition=uint(source.cone.w),group=RtrSourceGroup(source),bit=1u<<group;
-#if !RTR_MAX_COMPOSITION
+#if RTR_MAX_COMPOSITION != 1
+#if RTR_MAX_COMPOSITION == 0
     if(composition==0)return any(upper>0);
-    if(composition==2)return (groups.channelMask&bit)==0||any(upper>groups.channels[group]);
+    if(composition==2)
 #endif
-    // Visibility is in [0,1], so its luminance cannot exceed this bound.
+        return (groups.channelMask&bit)==0||any(upper>groups.channels[group]);
+#endif
+#if RTR_MAX_COMPOSITION != 2
     if((groups.mask&bit)==0)return true;
     float score=dot(upper,float3(.2126,.7152,.0722));uint2 key=asuint(source.identity.zy),old=groups.keys[group];
     return score>groups.scores[group]||(score==groups.scores[group]&&(key.x<old.x||(key.x==old.x&&key.y<old.y)));
+#endif
 }
 void RtrAccumulate(inout RtrSourceGroups groups,RtrSource source,float3 contribution,uint slot)
 {
     uint composition=uint(source.cone.w),group=RtrSourceGroup(source),bit=1u<<group;
-#if !RTR_MAX_COMPOSITION
+#if RTR_MAX_COMPOSITION != 1
+#if RTR_MAX_COMPOSITION == 0
     if(composition==0){groups.sum+=contribution;return;}
-    if(composition==2){groups.channels[group]=(groups.channelMask&bit)==0?contribution:max(groups.channels[group],contribution);groups.channelMask|=bit;return;}
+    if(composition==2)
 #endif
+    {groups.channels[group]=(groups.channelMask&bit)==0?contribution:max(groups.channels[group],contribution);groups.channelMask|=bit;return;}
+#endif
+#if RTR_MAX_COMPOSITION != 2
     uint2 key=asuint(source.identity.zy);bool replace=(groups.mask&bit)==0;float score=dot(contribution,float3(.2126,.7152,.0722));
     if(!replace){float old=groups.scores[group];
         replace=score>old||(score==old&&(key.x<groups.keys[group].x||(key.x==groups.keys[group].x&&key.y<groups.keys[group].y)));}
@@ -322,59 +353,73 @@ void RtrAccumulate(inout RtrSourceGroups groups,RtrSource source,float3 contribu
         groups.slots[group]=slot+1;
 #endif
     }
+#endif
 }
 float3 RtrGroupTotal(RtrSourceGroups groups)
 {
     float3 result=0;
-#if !RTR_MAX_COMPOSITION
+#if RTR_MAX_COMPOSITION == 0
     result=groups.sum;
 #endif
+#if RTR_MAX_COMPOSITION != 2
     uint mask=groups.mask;
     while(mask!=0){uint group=firstbitlow(mask);mask&=mask-1;result+=groups.maxima[group];}
-#if !RTR_MAX_COMPOSITION
-    mask=groups.channelMask;while(mask!=0){uint group=firstbitlow(mask);mask&=mask-1;result+=groups.channels[group];}
+#endif
+#if RTR_MAX_COMPOSITION != 1
+    uint channelMask=groups.channelMask;while(channelMask!=0){uint group=firstbitlow(channelMask);channelMask&=channelMask-1;result+=groups.channels[group];}
 #endif
     return result;
 }
-float RtrNodeScoreBound(RtrNode node,float3 position,bool linearL1)
+float3 RtrNodeUpperBound(RtrNode node,float3 position,bool linearL1)
 {
-    // Bounds contain maximum radiance, emitting volume and support radius,
-    // and the smallest falloff exponent. They overestimate every descendant,
-    // including spot cones, colored transmission and visibility in [0,1].
+    // Max RGB/radius and minimum exponent conservatively bound every child.
+    // Negative exponent marks a mixed subtree containing L1: omit inverse square.
     float3 delta=max(max(node.lower.xyz-position,position-node.left.xyz),0);
     float distance=linearL1?dot(delta,float3(1,1,1)):length(delta);
     float attenuation=saturate(1-distance/node.upper.z);
-    // LINEAR_L1 ignores the declared falloff exponent and inverse-square term.
-    // Mixed trees retain the existing conservative exponent/radial bound.
     [branch]if(!linearL1){
         attenuation=RtrFalloff(attenuation,abs(node.right.y));
         if(node.right.y>0)attenuation/=max(distance*distance,1);
     }
-    float3 upper=float3(node.upper.xy,node.right.x)*attenuation*1.00001+1e-12;
-    return dot(upper,float3(.2126,.7152,.0722));
+    return float3(node.upper.xy,node.right.x)*attenuation*1.00001+1e-12;
 }
-bool RtrNodeCanImprove(uint mask,float score,RtrSourceGroups groups)
+uint RtrNodeWinnerMask(RtrSourceGroups groups,uint composition)
 {
-#if RTR_LIGHT_GROUP_CAPACITY == 1
-    mask=mask!=0?1:0;
-#endif
-    if((mask&~groups.mask)!=0)return true;
-#if RTR_LIGHT_GROUP_CAPACITY <= 4
-    bool improves=false;
-    [unroll]for(uint group=0;group<RTR_LIGHT_GROUP_CAPACITY;group++)improves|=(mask&(1u<<group))!=0&&score>=groups.scores[group];
-    return improves;
+#if RTR_MAX_COMPOSITION == 2
+    return groups.channelMask;
+#elif RTR_MAX_COMPOSITION == 1
+    return groups.mask;
 #else
-    while(mask!=0){uint group=firstbitlow(mask);mask&=mask-1;
-        if(score>=groups.scores[group])return true;}
-    return false;
+    return composition==2?groups.channelMask:groups.mask;
 #endif
 }
-bool RtrNodeHasUnseenGroup(uint mask,RtrSourceGroups groups)
+bool RtrNodeHasUnseenGroup(uint mask,RtrSourceGroups groups,uint composition)
 {
 #if RTR_LIGHT_GROUP_CAPACITY == 1
     mask=mask!=0?1:0;
 #endif
-    return (mask&~groups.mask)!=0;
+    return (mask&~RtrNodeWinnerMask(groups,composition))!=0;
+}
+bool RtrNodeCanImprove(uint mask,float3 upper,RtrSourceGroups groups,uint composition)
+{
+#if RTR_LIGHT_GROUP_CAPACITY == 1
+    mask=mask!=0?1:0;
+#endif
+    if((mask&~RtrNodeWinnerMask(groups,composition))!=0)return true;
+    while(mask!=0){uint group=firstbitlow(mask);mask&=mask-1;
+#if RTR_MAX_COMPOSITION != 1
+#if RTR_MAX_COMPOSITION == 0
+        if(composition==2){if(any(upper>groups.channels[group]))return true;}
+        else
+#else
+        if(any(upper>groups.channels[group]))return true;
+#endif
+#endif
+#if RTR_MAX_COMPOSITION != 2
+        if(dot(upper,float3(.2126,.7152,.0722))>=groups.scores[group])return true;
+#endif
+    }
+    return false;
 }
 // Each declared composition/group is independent, including the dynamic-only
 // subset used by the default baseline correction. Visibility precedes selection.
@@ -391,15 +436,101 @@ void RtrEvaluateSource(RtrReceiver receiver,uint slot,bool separateDynamic,inout
         if(!RtrCanImprove(allSources,source,upper)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,upper)))return;
     }
     float distance=length(delta);if(distance>=source.direction.w)return;
-    float3 direction=distance>1e-5?delta/distance:receiver.normal;if(dot(receiver.normal,direction)<=0)return;
+    uint visibilityMode=uint(source.identity.w)>>2;bool centerSupport=visibilityMode!=0;
+    float3 centerDelta=source.position.xyz-receiver.position;
+    bool insideSupport=centerSupport&&(visibilityMode==2?length(centerDelta)<=source.extent.x+.005:all(abs(centerDelta)<=source.extent.xyz+.005));
+    float3 visibilityDelta=centerSupport?source.position.xyz-receiver.position:delta;
+    float visibilityDistance=length(visibilityDelta);
+    float3 direction=visibilityDistance>1e-5?visibilityDelta/visibilityDistance:receiver.normal;
+    if(!insideSupport&&dot(receiver.normal,direction)<=(centerSupport?.0001:0))return;
     [branch] if(!isLinear)attenuation=RtrFalloff(saturate(1-distance/source.direction.w),source.extent.w)/max(distance*distance,1);
     if(source.position.w==2){float cosine=dot(source.direction.xyz,-direction);
         attenuation*=source.cone.x==source.cone.y?step(source.cone.y,cosine):smoothstep(source.cone.y,source.cone.x,cosine);}
     float3 contribution=source.color.rgb*source.color.w*attenuation;
     if(!isLinear||source.position.w==2)
         if(!RtrCanImprove(allSources,source,contribution)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,contribution)))return;
-    if(source.identity.x>0&&distance>1e-5&&any(contribution!=0))contribution*=RtrShadow(receiver,direction,distance);
+    if(source.identity.x>0&&!insideSupport&&any(contribution!=0)){
+        if(centerSupport)contribution*=RtrSupportShadow(receiver,source,direction,visibilityDistance,visibilityMode);
+        else if(distance>1e-5)contribution*=RtrShadow(receiver,direction,distance);
+    }
     RtrAccumulate(allSources,source,contribution,slot);if(isDynamic)RtrAccumulate(dynamicSources,source,contribution,slot);
+}
+void RtrTraverseSparse(RtrReceiver receiver,uint root,uint count,bool separateDynamic,uint bounded,bool linearL1,
+    inout RtrSourceGroups allSources,inout RtrSourceGroups dynamicSources)
+{
+#if RTR_MAX_COMPOSITION
+    // Only the branch choice and pending bits need per-ray storage. Parent
+    // indices live in the retained tree, avoiding a dynamically indexed local
+    // 32-entry stack across each shadow RayQuery.
+    uint next=root,depth=0,pending=0,deferredLeft=0;
+    while(next!=0xffffffff){
+        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position,linearL1);
+        bool nodeDynamic=separateDynamic&&(asuint(node.right.z)&0x80000000u)!=0;
+        if(supported&&bounded){uint mask=asuint(node.right.w);
+            // A missing winner accepts the node regardless of its score. Avoid
+            // sqrt/falloff/division until both queried subsets have winners.
+            [branch]if(!RtrNodeHasUnseenGroup(mask,allSources,bounded)&&(!nodeDynamic||!RtrNodeHasUnseenGroup(mask,dynamicSources,bounded))){
+                float3 upper=RtrNodeUpperBound(node,receiver.position,linearL1);
+                supported=RtrNodeCanImprove(mask,upper,allSources,bounded)||(nodeDynamic&&RtrNodeCanImprove(mask,upper,dynamicSources,bounded));}}
+        if(supported&&node.upper.w<0){
+            uint left=uint(node.lower.w),right=uint(node.left.w);bool leftFirst=false;
+            if(bounded){RtrNode a=t_SourceTree[left],b=t_SourceTree[right];
+                float3 da=max(max(a.lower.xyz-receiver.position,receiver.position-a.left.xyz),0);
+                float3 db=max(max(b.lower.xyz-receiver.position,receiver.position-b.left.xyz),0);
+                leftFirst=(linearL1?dot(da,float3(1,1,1)):dot(da,da))<(linearL1?dot(db,float3(1,1,1)):dot(db,db));}
+            uint bit=1u<<depth;pending|=bit;deferredLeft=(deferredLeft&~bit)|(leftFirst?0:bit);++depth;
+            next=leftFirst?left:right;continue;
+        }
+        if(supported){uint slot=uint(node.upper.w);if(slot<count){RtrCount(5);RtrEvaluateSource(receiver,slot,separateDynamic,allSources,dynamicSources);}}
+        next=0xffffffff;uint parent=asuint(node.right.z)&0x7fffffffu;
+        while(depth!=0){
+            uint bit=1u<<--depth;RtrNode ancestor=t_SourceTree[parent];
+            if((pending&bit)!=0){pending&=~bit;next=(deferredLeft&bit)!=0?uint(ancestor.lower.w):uint(ancestor.left.w);++depth;break;}
+            parent=asuint(ancestor.right.z)&0x7fffffffu;
+        }
+    }
+#else
+    uint stack[32],pending=0,next=root;
+    while(next!=0xffffffff)
+    {
+        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position,linearL1);
+        bool nodeDynamic=separateDynamic&&(asuint(node.right.z)&0x80000000u)!=0;
+        if(supported&&bounded){uint mask=asuint(node.right.w);
+            [branch]if(!RtrNodeHasUnseenGroup(mask,allSources,bounded)&&(!nodeDynamic||!RtrNodeHasUnseenGroup(mask,dynamicSources,bounded))){
+                float3 upper=RtrNodeUpperBound(node,receiver.position,linearL1);
+                supported=RtrNodeCanImprove(mask,upper,allSources,bounded)||(nodeDynamic&&RtrNodeCanImprove(mask,upper,dynamicSources,bounded));}}
+        if(supported&&node.upper.w<0){
+            uint deferred=uint(node.lower.w),first=uint(node.left.w);
+            if(bounded){RtrNode a=t_SourceTree[deferred],b=t_SourceTree[first];
+                float3 da=max(max(a.lower.xyz-receiver.position,receiver.position-a.left.xyz),0);
+                float3 db=max(max(b.lower.xyz-receiver.position,receiver.position-b.left.xyz),0);
+                if((linearL1?dot(da,float3(1,1,1)):dot(da,da))<(linearL1?dot(db,float3(1,1,1)):dot(db,db))){uint swap=deferred;deferred=first;first=swap;}}
+            stack[pending++]=deferred;next=first;continue;
+        }
+        if(pending>0)next=stack[--pending];else next=0xffffffff;
+        if(!supported)continue;
+        uint slot=uint(node.upper.w);if(slot>=count)continue;RtrCount(5);
+        RtrEvaluateSource(receiver,slot,separateDynamic,allSources,dynamicSources);
+    }
+#endif
+}
+uint RtrRegionWord(uint base,uint index)
+{
+    RtrNode n=t_SourceTree[base+index/16];uint part=(index/4)&3;
+    return asuint(part==0?n.lower[index&3]:part==1?n.left[index&3]:part==2?n.upper[index&3]:n.right[index&3]);
+}
+bool RtrRegionLookup(float3 position,out uint start,out uint count)
+{
+    start=count=0;float3 coordinate=floor(position/t_Sources[0].cone.w);
+    if(any(!isfinite(coordinate))||any(coordinate< -1048576)||any(coordinate>=1048576))return false;
+    int3 cell=int3(coordinate);uint mask=uint(t_Sources[0].cone.y);
+    uint slot=(uint(cell.x)*73856093u)^(uint(cell.y)*19349663u)^(uint(cell.z)*83492791u);slot&=mask;
+    [loop]for(uint probe=0;probe<16;probe++,slot=(slot+1)&mask){
+        RtrNode bucket=t_SourceTree[uint(t_Sources[0].cone.x)+slot];uint size=asuint(bucket.left.x);
+        if(size==0xffffffff)return true;
+        if(all(asint(bucket.lower.xyz)==cell)){start=asuint(bucket.lower.w);count=size;return true;}
+    }
+    return false;
 }
 void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool needDynamic=true,bool primary=false)
 {
@@ -418,65 +549,23 @@ void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,boo
         if(encoded>0&&encoded<=count)RtrEvaluateSource(receiver,encoded-1,separateDynamic,allSources,dynamicSources);
     }}
 #endif
-    // Max composition is order-independent (ties use stable IDs). Visit the
-    // nearer child first to establish a useful winner before testing far bounds.
-    // Additive/mixed composition retains its original accumulation order.
-    bool bounded=t_Sources[0].position.w!=0;
-    // Empty/older headers leave this reserved field zero and retain L2 bounds.
-    bool linearL1=t_Sources[0].extent.x!=0;
-#if RTR_MAX_COMPOSITION
-    // Only the branch choice and pending bits need per-ray storage. Parent
-    // indices live in the retained tree, avoiding a dynamically indexed local
-    // 32-entry stack across each shadow RayQuery.
-    uint next=uint(t_Sources[0].position.y),depth=0,pending=0,deferredLeft=0;
-    while(next!=0xffffffff){
-        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position,linearL1);
-        if(supported&&bounded){uint mask=asuint(node.right.w);
-            // A missing winner accepts the node regardless of its score. Avoid
-            // sqrt/falloff/division until both queried subsets have winners.
-            [branch]if(!RtrNodeHasUnseenGroup(mask,allSources)&&(!separateDynamic||!RtrNodeHasUnseenGroup(mask,dynamicSources))){
-                float score=RtrNodeScoreBound(node,receiver.position,linearL1);
-                supported=RtrNodeCanImprove(mask,score,allSources)||(separateDynamic&&RtrNodeCanImprove(mask,score,dynamicSources));}}
-        if(supported&&node.upper.w<0){
-            uint left=uint(node.lower.w),right=uint(node.left.w);bool leftFirst=false;
-            if(bounded){RtrNode a=t_SourceTree[left],b=t_SourceTree[right];
-                float3 da=max(max(a.lower.xyz-receiver.position,receiver.position-a.left.xyz),0);
-                float3 db=max(max(b.lower.xyz-receiver.position,receiver.position-b.left.xyz),0);
-                leftFirst=(linearL1?dot(da,float3(1,1,1)):dot(da,da))<(linearL1?dot(db,float3(1,1,1)):dot(db,db));}
-            uint bit=1u<<depth;pending|=bit;deferredLeft=(deferredLeft&~bit)|(leftFirst?0:bit);++depth;
-            next=leftFirst?left:right;continue;
+    uint bounded=uint(t_Sources[0].position.w);bool linearL1=t_Sources[0].extent.x!=0;
+    uint start=0,regionalCount=0;bool regional=t_Sources[0].cone.w!=0;
+    RtrCount(6);
+    // Resolve lookup before evaluating any roots. A fallback therefore cannot
+    // accumulate an already visited region a second time.
+    bool found=regional&&RtrRegionLookup(receiver.position,start,regionalCount);
+    if(found){
+        RtrCount(7);if(regionalCount==0)RtrCount(8);
+        uint globalCount=uint(t_Sources[0].extent.y),base=uint(t_Sources[0].cone.z);
+        for(uint i=0;i<globalCount+regionalCount;i++){
+            bool globalRoot=i<globalCount;uint root=RtrRegionWord(base,globalRoot?i:start+i-globalCount);
+            RtrCount(10);if(globalRoot)RtrCount(11);
+            RtrTraverseSparse(receiver,root,count,separateDynamic,bounded,linearL1,allSources,dynamicSources);
         }
-        if(supported){uint slot=uint(node.upper.w);if(slot<count){RtrCount(5);RtrEvaluateSource(receiver,slot,separateDynamic,allSources,dynamicSources);}}
-        next=0xffffffff;uint parent=asuint(node.right.z);
-        while(depth!=0){
-            uint bit=1u<<--depth;RtrNode ancestor=t_SourceTree[parent];
-            if((pending&bit)!=0){pending&=~bit;next=(deferredLeft&bit)!=0?uint(ancestor.lower.w):uint(ancestor.left.w);++depth;break;}
-            parent=asuint(ancestor.right.z);
-        }
+    }else{
+        RtrCount(9);RtrTraverseSparse(receiver,uint(t_Sources[0].position.y),count,separateDynamic,bounded,linearL1,allSources,dynamicSources);
     }
-#else
-    uint stack[32],pending=0,next=uint(t_Sources[0].position.y);
-    while(next!=0xffffffff)
-    {
-        RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position,linearL1);
-        if(supported&&bounded){uint mask=asuint(node.right.w);
-            [branch]if(!RtrNodeHasUnseenGroup(mask,allSources)&&(!separateDynamic||!RtrNodeHasUnseenGroup(mask,dynamicSources))){
-                float score=RtrNodeScoreBound(node,receiver.position,linearL1);
-                supported=RtrNodeCanImprove(mask,score,allSources)||(separateDynamic&&RtrNodeCanImprove(mask,score,dynamicSources));}}
-        if(supported&&node.upper.w<0){
-            uint deferred=uint(node.lower.w),first=uint(node.left.w);
-            if(bounded){RtrNode a=t_SourceTree[deferred],b=t_SourceTree[first];
-                float3 da=max(max(a.lower.xyz-receiver.position,receiver.position-a.left.xyz),0);
-                float3 db=max(max(b.lower.xyz-receiver.position,receiver.position-b.left.xyz),0);
-                if((linearL1?dot(da,float3(1,1,1)):dot(da,da))<(linearL1?dot(db,float3(1,1,1)):dot(db,db))){uint swap=deferred;deferred=first;first=swap;}}
-            stack[pending++]=deferred;next=first;continue;
-        }
-        if(pending>0)next=stack[--pending];else next=0xffffffff;
-        if(!supported)continue;
-        uint slot=uint(node.upper.w);if(slot>=count)continue;RtrCount(5);
-        RtrEvaluateSource(receiver,slot,separateDynamic,allSources,dynamicSources);
-    }
-#endif
 #if RTR_SOURCE_HISTORY
     if(history){[unroll]for(uint group=0;group<RTR_LIGHT_GROUP_CAPACITY;group++)u_SourceWinners[uint3(rtrSourcePixel,group)]=allSources.slots[group];}
 #endif

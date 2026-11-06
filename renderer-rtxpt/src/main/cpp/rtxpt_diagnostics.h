@@ -34,11 +34,13 @@ enum Stage : uint64_t { Frame=1, InstanceCache, SubInstances, Dispatch, Caller,
     ResourcePlan, BufferAllocate, DescriptorAllocate, PayloadPack, BufferUpload, BlasAllocate, BlasClone, BlasBuild, BlasRefit,
     CommandAcquire, CommandSubmit, CompletionPoll, ReclaimEnqueue, DriverRelease, IndexRebuild, TextureAllocate, TextureUpload,
     RuntimeInitialize, DeviceInitialize, SceneInitialize, LightingInitialize, PoolAcquire, TlasAllocate,
-    HeapAllocate, ResourcePrebuild, AllocationInfo, PlacedBind, PoolEvict };
+    HeapAllocate, ResourcePrebuild, AllocationInfo, PlacedBind, PoolEvict, StagingAcquire, StagingAllocate, StagingMap, StagingCopy, StagingBarrier, StagingRecord, SparseRegions, SceneGraphRefresh, SceneFullRefresh, SceneTopologyFallback, SceneMeshPreparation, SceneMaterialRows, SceneGeometryRows, SceneInstanceRows, SceneTableUpload, SparseQueryPreparation, SparseRegionInitialize, SparseHashErase, SparseHashRecover, SparseRegionPublish, SparseUpload,
+    DefaultBufferAllocate, DefaultBufferCommitted, DefaultBufferPostCreate, SceneCpuResize, SceneMaterialPrepare, SceneOmmDebugRefresh, DiagnosticMutexWait, DiagnosticMutexHold };
 enum Flag : uint64_t { QueueWaitEnqueue=1, Failed=2, CacheHit=4, CacheMiss=8,
     Active=256, Truncated=512, Cancelled=1024, EnteredNativeFrame=2048 };
 enum SubmissionKind : uint64_t { Initial=0, Update, Steady, Resized, Waited, KindCount };
-constexpr size_t Capacity=8192, Width=25, Header=15, ActiveCapacity=512, SubmissionCapacity=1024;
+constexpr size_t Capacity=8192, Width=27, Header=19, ActiveCapacity=512, SubmissionCapacity=1024;
+constexpr size_t CaptureCapacity=65536, CaptureSlots=2, SlowGroupCapacity=4, SlowDescriptorWidth=10;
 using Event=std::array<uint64_t,Width>;
 using SubmissionSample=std::array<uint64_t,6>;
 enum Trait : uint64_t { HasFrame=1, HasUpdate=2, HasResize=4, HasWait=8, IsInitial=16 };
@@ -53,8 +55,11 @@ inline std::atomic<uint64_t> frame{0},revision{0},inputGeneration{0},outputGener
 inline std::mutex mutex;
 inline std::array<Event,Capacity> events{};
 inline uint64_t written=0,dropped=0;
-inline std::array<Event,2048> slowEvents{};
-inline uint64_t slowCount=0,slowTriggers=0;
+struct Capture {std::array<Event,CaptureCapacity> events;uint64_t root=0,count=0,dropped=0;};
+struct SlowGroup {std::array<Event,CaptureCapacity> events;std::array<uint64_t,SlowDescriptorWidth> description{};};
+inline std::array<Capture,CaptureSlots> captures{};
+inline std::array<SlowGroup,SlowGroupCapacity> slowGroups{};
+inline uint64_t slowCount=0,slowTriggers=0,slowGroupOverwrites=0,slowEventOverwrites=0;
 inline std::array<Live,ActiveCapacity> live{};
 inline uint64_t activeDropped=0;
 inline std::array<SubmissionSample,SubmissionCapacity> submissions{};
@@ -68,6 +73,7 @@ inline uint64_t Identity(std::string_view value){
 }
 #ifdef RTR_DIAGNOSTICS_SELFTEST
 inline std::atomic<uint64_t> clockCalls{0};
+inline void (*snapshotChunkHook)()=nullptr;
 #endif
 inline uint64_t Now(){
 #ifdef RTR_DIAGNOSTICS_SELFTEST
@@ -97,19 +103,73 @@ inline Live* Find(uint64_t id){
     auto& entry=live[id%ActiveCapacity];
     return entry.occupied&&entry.event[12]==id?&entry:nullptr;
 }
-inline void RetainTriggerLocked(const Event& event){
-    ++slowTriggers;slowCount=0;
-    for(uint64_t i=written-std::min<uint64_t>(written,Capacity);i<written;++i){
-        const auto& candidate=events[i%Capacity];
-        if(candidate[0]==event[0]&&candidate[1]==event[1]&&candidate[5]>=event[5]){
-            slowEvents[slowCount%slowEvents.size()]=candidate;++slowCount;
+inline void RecordLocked(Event event,uint64_t traits=0);
+// Lock samples are overlapping attribution records, not extra work to add to
+// enclosing scopes. Never recurse through Scope while holding this mutex.
+enum LockOperation : uint64_t { ScopeEnter=1,ScopeLeave,RecordEvent,SetContext,SnapshotMetadata,SnapshotRing,SnapshotSlow,SnapshotFinish };
+struct DiagnosticLock {
+    std::unique_lock<std::mutex> guard{mutex,std::defer_lock};
+    uint64_t operation=0,bytes=0,subject=0,waitBegin=0,waitNanos=0,holdBegin=0,epoch=0;
+    Event context{};
+    DiagnosticLock(uint64_t op,uint64_t copiedBytes=0,bool measureHold=false,uint64_t stage=0):operation(op),bytes(copiedBytes),subject(stage){
+        const bool enabled=level.load(std::memory_order_relaxed)!=0;
+        if(!guard.try_lock()){
+            if(enabled)waitBegin=Now();
+            guard.lock();
+            if(waitBegin&&level.load(std::memory_order_relaxed))waitNanos=Now()-waitBegin;
+        }
+        if(!measureHold&&waitNanos<100'000)return;
+        if(!level.load(std::memory_order_relaxed))return;
+        epoch=generation.load();if(measureHold)holdBegin=Now();
+        context[0]=frame.load();context[1]=revision.load();context[3]=ThreadIdentity();
+        context[14]=inputGeneration.load();context[15]=outputGeneration.load();
+        context[16]=context[17]=UINT64_MAX;context[19]=epoch;context[20]=operation;
+        context[21]=bytes;context[22]=attempt;context[23]=level.load();context[8]=subject;
+        if(parentGeneration==epoch)if(auto* parent=Find(parentId)){
+            context[0]=parent->event[0];context[1]=parent->event[1];
+            context[25]=parent->event[25];context[26]=parent->event[26];
         }
     }
+    ~DiagnosticLock(){
+        if(!epoch||!level.load(std::memory_order_relaxed)||epoch!=generation.load())return;
+        const uint64_t holdNanos=holdBegin?Now()-holdBegin:0;
+        auto record=[&](Stage stage,uint64_t start,uint64_t nanos){
+            if(nanos<100'000)return;
+            auto event=context;event[2]=event[12]=nextId.fetch_add(1)*ActiveCapacity+ActiveCapacity-1;
+            event[4]=stage;event[5]=start;event[6]=event[7]=nanos;RecordLocked(event);
+        };
+        record(DiagnosticMutexWait,waitBegin,waitNanos);
+        record(DiagnosticMutexHold,holdBegin,holdNanos);
+    }
+};
+inline void RetainTriggerLocked(const Event& event){
+    auto& retained=slowGroups[slowTriggers%SlowGroupCapacity];
+    if(slowTriggers>=SlowGroupCapacity){++slowGroupOverwrites;slowEventOverwrites+=retained.description[7];}
+    ++slowTriggers;uint64_t count=0,lost=0;bool found=false;
+    for(const auto& capture:captures)if(capture.root&&capture.root==event[25]){
+        found=true;lost=capture.dropped;
+        for(uint64_t i=0;i<capture.count;++i){const auto& candidate=capture.events[i];
+            if(event[4]==Submit||candidate[26]==event[12])retained.events[count++]=candidate;
+        }
+        break;
+    }
+    // Retain the trigger even when the bounded capture was exhausted. The
+    // descriptor reports missing children explicitly; never present a tail as
+    // a complete tree or mix unrelated attempts sharing sequence/revision.
+    if(!count||retained.events[count-1][12]!=event[12]){
+        if(count==CaptureCapacity){--count;++lost;}retained.events[count++]=event;
+    }
+    if(!found)++lost;
+    retained.description={slowTriggers,event[0],event[1],event[12],event[4],event[11]|(lost?uint64_t(Truncated):0),count+lost,count,lost,0};
+    slowCount=count;
 }
-inline void RecordLocked(Event event,uint64_t traits=0){
+inline void RecordLocked(Event event,uint64_t traits){
+    if(event[4]==Submit&&(traits&HasFrame))event[11]|=EnteredNativeFrame;
     event[24]=written+1;
+    for(auto& capture:captures)if(capture.root&&capture.root==event[25]){
+        if(capture.count<CaptureCapacity)capture.events[capture.count++]=event;else ++capture.dropped;break;
+    }
     if(event[4]==Submit){
-        if(traits&HasFrame)event[11]|=EnteredNativeFrame;
         const uint64_t kind=traits&IsInitial?Initial:traits&HasResize?Resized:traits&HasUpdate?Update:traits&HasWait?Waited:Steady;
         submissions[submissionCount%SubmissionCapacity]={event[0],event[1],event[6],event[11],kind,event[12]};
         ++submissionCount;if(submissionCount>SubmissionCapacity)++submissionDropped;
@@ -120,6 +180,7 @@ inline void RecordLocked(Event event,uint64_t traits=0){
         // native FRAME. Scope IDs disambiguate batches shared by caller/workers.
         RetainTriggerLocked(event);
     }
+    if(event[12]==event[25])for(auto& capture:captures)if(capture.root==event[12]){capture.root=0;break;}
 }
 inline uint64_t Traits(Stage stage){
     switch(stage){
@@ -165,46 +226,108 @@ inline void Configure(unsigned value){
 }
 inline void Reset(){
     std::lock_guard lock(mutex);level=0;++generation;++monitorGeneration;
-    written=dropped=slowCount=slowTriggers=activeDropped=submissionCount=submissionDropped=0;
+    written=dropped=slowCount=slowTriggers=slowGroupOverwrites=slowEventOverwrites=activeDropped=submissionCount=submissionDropped=0;
+    for(auto& capture:captures)capture.root=capture.count=capture.dropped=0;
     seenSubmission=false;frame=revision=inputGeneration=outputGeneration=0;
     for(auto& entry:live)entry.occupied=false;
 }
 inline void Context(uint64_t f,uint64_t r,uint64_t input=0,uint64_t output=0){
     if(!level.load(std::memory_order_acquire))return;
-    std::lock_guard lock(mutex);frame=f;revision=r;inputGeneration=input;outputGeneration=output;
+    DiagnosticLock lock(SetContext);frame=f;revision=r;inputGeneration=input;outputGeneration=output;
 }
 inline void Record(Event event){
     if(!level.load(std::memory_order_acquire))return;
-    std::lock_guard lock(mutex);if(level.load(std::memory_order_relaxed))RecordLocked(event);
+    DiagnosticLock lock(RecordEvent,0,true,event[4]);if(level.load(std::memory_order_relaxed))RecordLocked(event);
 }
 inline uint64_t MonitorToken(){return monitorGeneration.load(std::memory_order_acquire);}
-inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0){
-    // Allocate outside the recording lock. Capacity bounds every possible copy,
-    // including scopes that enter while this observer allocates its storage.
-    std::vector<uint64_t> result;
-    result.reserve(Header+(Capacity+slowEvents.size()+ActiveCapacity)*Width+SubmissionCapacity*6);
-    std::lock_guard lock(mutex);
-    if(expectedGeneration&&expectedGeneration!=monitorGeneration.load())throw std::runtime_error("Diagnostic monitor generation expired; acquire a monitor from the current session");
-    const uint64_t count=std::min<uint64_t>(written,Capacity),retainedSlow=std::min<uint64_t>(slowCount,slowEvents.size());
-    const uint64_t retainedSubmissions=std::min<uint64_t>(submissionCount,SubmissionCapacity);
-    uint64_t activeCount=0;for(const auto& entry:live)activeCount+=entry.occupied;
-    const uint64_t now=activeCount?Now():0;
-    result.insert(result.end(),{5,Width,dropped,count,slowTriggers,retainedSlow,slowCount-retainedSlow,
-        activeCount,activeDropped,retainedSubmissions,submissionDropped,monitorGeneration.load(),level.load(),written-count+1,written+1});
-    for(uint64_t i=written-count;i<written;++i)result.insert(result.end(),events[i%Capacity].begin(),events[i%Capacity].end());
-    for(uint64_t i=slowCount-retainedSlow;i<slowCount;++i)result.insert(result.end(),slowEvents[i%slowEvents.size()].begin(),slowEvents[i%slowEvents.size()].end());
-    for(const auto& entry:live)if(entry.occupied){auto event=entry.event;event[6]=now-event[5];event[7]=0;event[11]|=Active;
-        result.insert(result.end(),event.begin(),event.end());}
-    for(uint64_t i=submissionCount-retainedSubmissions;i<submissionCount;++i)result.insert(result.end(),submissions[i%SubmissionCapacity].begin(),submissions[i%SubmissionCapacity].end());
-    return result;
+inline void SnapshotCopyYield(){
+#ifdef RTR_DIAGNOSTICS_SELFTEST
+    if(snapshotChunkHook)snapshotChunkHook();
+#endif
+    std::this_thread::yield();
 }
+inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0,uint64_t afterTrigger=0){
+    // Allocate outside the recorder lock. Copy ring/slow data in bounded slices,
+    // validating their immutable ordinals after each reacquisition. A concurrent
+    // overwrite drops an explicit prefix; never splice different trigger trees.
+    constexpr size_t CopyChunk=64;
+    std::vector<uint64_t> result;
+    result.resize(Header);
+    std::vector<Event> active;active.reserve(ActiveCapacity);
+    std::vector<SubmissionSample> samples;samples.reserve(SubmissionCapacity);
+    std::array<std::array<uint64_t,SlowDescriptorWidth>,SlowGroupCapacity> descriptions{};
+    std::array<uint64_t,Header> header{};
+    uint64_t session=0,cut=0,first=0,groupCount=0;
+    {
+        DiagnosticLock lock(SnapshotMetadata,0,true);
+        session=monitorGeneration.load();
+        if(expectedGeneration&&expectedGeneration!=session)throw std::runtime_error("Diagnostic monitor generation expired; acquire a monitor from the current session");
+        cut=written;first=cut-std::min<uint64_t>(cut,Capacity)+1;
+        const auto firstGroup=std::max(slowTriggers-std::min<uint64_t>(slowTriggers,SlowGroupCapacity),std::min(afterTrigger,slowTriggers));
+        for(uint64_t i=firstGroup;i<slowTriggers;++i)descriptions[groupCount++]=slowGroups[i%SlowGroupCapacity].description;
+        const uint64_t retainedSubmissions=std::min<uint64_t>(submissionCount,SubmissionCapacity);
+        const bool anyActive=std::any_of(live.begin(),live.end(),[](const auto& entry){return entry.occupied;});
+        const uint64_t now=anyActive?Now():0;
+        for(const auto& entry:live)if(entry.occupied){auto event=entry.event;event[6]=now-event[5];event[7]=0;event[11]|=Active;active.push_back(event);}
+        for(uint64_t i=submissionCount-retainedSubmissions;i<submissionCount;++i)samples.push_back(submissions[i%SubmissionCapacity]);
+        header={6,Width,dropped,0,slowTriggers,0,slowEventOverwrites,uint64_t(active.size()),activeDropped,
+            retainedSubmissions,submissionDropped,session,level.load(),first,cut+1,0,slowGroupOverwrites,slowEventOverwrites,CaptureCapacity};
+    }
+    // The incremental cursor usually consumes every slow group. Reserve only
+    // this snapshot's captured upper bound, outside the recorder lock. Any
+    // concurrent overwrite can only reduce the number of copied events.
+    size_t words=Header+size_t(cut+1-first+active.size())*Width+samples.size()*6+size_t(groupCount)*SlowDescriptorWidth;
+    for(uint64_t group=0;group<groupCount;++group)words+=size_t(descriptions[group][7])*Width;
+    result.reserve(words);
+    auto checkSession=[&]{if(session!=monitorGeneration.load())throw std::runtime_error("Diagnostic session changed during snapshot; reacquire the monitor");};
+    uint64_t cursor=first;
+    while(cursor<=cut){
+        {
+        DiagnosticLock lock(SnapshotRing,CopyChunk*sizeof(Event),true);checkSession();
+        const uint64_t oldest=written-std::min<uint64_t>(written,Capacity)+1;
+        if(cursor<oldest){cursor=std::min(oldest,cut+1);first=cursor;result.resize(Header);}
+        const uint64_t end=std::min(cut+1,cursor+CopyChunk);
+        for(;cursor<end;++cursor){const auto& event=events[(cursor-1)%Capacity];result.insert(result.end(),event.begin(),event.end());}
+        }
+        SnapshotCopyYield();
+    }
+    header[3]=cut+1-first;header[13]=first;header[2]=std::max(header[2],first-1);
+    const size_t slowStart=result.size();
+    std::array<std::array<uint64_t,SlowDescriptorWidth>,SlowGroupCapacity> retained{};
+    uint64_t retainedGroups=0,retainedEvents=0;
+    for(uint64_t group=0;group<groupCount;++group){
+        auto description=descriptions[group];const uint64_t trigger=description[0];bool valid=true;
+        for(uint64_t offset=0;offset<description[7];offset+=CopyChunk){
+            {
+            DiagnosticLock lock(SnapshotSlow,CopyChunk*sizeof(Event),true);checkSession();
+            const auto& source=slowGroups[(trigger-1)%SlowGroupCapacity];
+            if(source.description[0]!=trigger){valid=false;break;}
+            const uint64_t end=std::min(description[7],offset+CopyChunk);
+            for(uint64_t i=offset;i<end;++i)result.insert(result.end(),source.events[i].begin(),source.events[i].end());
+            }
+            SnapshotCopyYield();
+        }
+        if(!valid){result.resize(slowStart);retainedGroups=retainedEvents=0;continue;}
+        description[9]=retainedEvents;retainedEvents+=description[7];retained[retainedGroups++]=description;
+    }
+    for(const auto& event:active)result.insert(result.end(),event.begin(),event.end());
+    for(const auto& sample:samples)result.insert(result.end(),sample.begin(),sample.end());
+    for(uint64_t i=0;i<retainedGroups;++i)result.insert(result.end(),retained[i].begin(),retained[i].end());
+    {
+        DiagnosticLock lock(SnapshotFinish,0,true);checkSession();
+        header[6]=header[17]=slowEventOverwrites;header[16]=slowGroupOverwrites;
+    }
+    header[5]=retainedEvents;header[15]=retainedGroups;
+    std::copy(header.begin(),header.end(),result.begin());return result;
+}
+
 struct Scope {
     Event event{};uint64_t previousId=0,epoch=0,cpuBegin=UINT64_MAX;int slot=-1,exceptions=0;bool enabled=false;
     Scope(Stage stage,uint64_t items=0,uint64_t tasks=0,unsigned minimum=1,uint64_t batch=0,
             uint64_t resource=0,uint64_t resourceGeneration=0,uint64_t reason=0,uint64_t bytes=0,
             uint64_t sequence=UINT64_MAX,uint64_t rev=UINT64_MAX){
         if(level.load(std::memory_order_acquire)<minimum)return;
-        std::lock_guard lock(mutex);if(level.load(std::memory_order_relaxed)<minimum)return;
+        DiagnosticLock lock(ScopeEnter,0,false,stage);if(level.load(std::memory_order_relaxed)<minimum)return;
         for(size_t i=0;i<live.size();++i)if(!live[i].occupied){slot=int(i);break;}
         if(slot<0){++activeDropped;return;}
         enabled=true;epoch=generation.load();exceptions=std::uncaught_exceptions();
@@ -213,7 +336,13 @@ struct Scope {
         event={sequence==UINT64_MAX?frame.load():sequence,rev==UINT64_MAX?revision.load():rev,batch?batch:id,ThreadIdentity(),
             uint64_t(stage),Now(),0,0,items,tasks,previousId?Find(previousId)->event[2]:0,0,
             id,previousId,inputGeneration.load(),outputGeneration.load(),UINT64_MAX,UINT64_MAX,
-            resource,resourceGeneration,reason,bytes,attempt,uint64_t(level.load()),0};
+            resource,resourceGeneration,reason,bytes,attempt,uint64_t(level.load()),0,0,0};
+        const auto* ancestor=Find(previousId?previousId:batch);
+        event[25]=ancestor?ancestor->event[25]:0;event[26]=stage==Frame?id:ancestor?ancestor->event[26]:0;
+        if(ancestor){if(sequence==UINT64_MAX)event[0]=ancestor->event[0];if(rev==UINT64_MAX)event[1]=ancestor->event[1];}
+        if(stage==Submit||(!event[25]&&stage==Frame)){
+            event[25]=id;for(auto& capture:captures)if(!capture.root){capture.root=id;capture.count=capture.dropped=0;break;}
+        }
         cpuBegin=ThreadCpuNow();
         auto traits=Traits(stage);if(stage==Submit&&!seenSubmission){traits|=IsInitial;seenSubmission=true;}
         live[slot]={event,0,traits,true};MarkAncestors(previousId,traits);
@@ -225,7 +354,7 @@ struct Scope {
             if(parentGeneration==epoch&&parentId==event[12]){parentId=0;parentGeneration=generation.load();}
             return;
         }
-        std::lock_guard lock(mutex);
+        DiagnosticLock lock(ScopeLeave,0,event[4]==Submit||event[4]==Frame,event[4]);
         if(epoch==generation.load()&&slot>=0&&live[slot].occupied&&live[slot].event[12]==event[12]){
             event[6]=Now()-event[5];event[7]=event[6]-std::min(event[6],live[slot].children);
             const auto cpuEnd=ThreadCpuNow();if(cpuBegin!=UINT64_MAX&&cpuEnd!=UINT64_MAX&&cpuEnd>=cpuBegin){event[16]=cpuEnd-cpuBegin;event[17]=event[16]-std::min(event[16],live[slot].cpuChildren);}
@@ -261,7 +390,8 @@ inline void EndSubmit(bool failed,bool cancelled=false){
             std::lock_guard lock(mutex);const uint64_t id=submission->event[12];
             const Event* retained=nullptr;
             for(uint64_t i=written-std::min<uint64_t>(written,Capacity);i<written;++i){auto& event=events[i%Capacity];if(event[12]==id){event[11]|=flags;retained=&event;}}
-            for(uint64_t i=slowCount-std::min<uint64_t>(slowCount,slowEvents.size());i<slowCount;++i){auto& event=slowEvents[i%slowEvents.size()];if(event[12]==id)event[11]|=flags;}
+            for(uint64_t i=slowTriggers-std::min<uint64_t>(slowTriggers,SlowGroupCapacity);i<slowTriggers;++i){auto& group=slowGroups[i%SlowGroupCapacity];
+                for(uint64_t j=0;j<group.description[7];++j)if(group.events[j][12]==id)group.events[j][11]|=flags;}
             for(uint64_t i=submissionCount-std::min<uint64_t>(submissionCount,SubmissionCapacity);i<submissionCount;++i){auto& sample=submissions[i%SubmissionCapacity];if(sample[5]==id)sample[3]|=flags;}
             if((failed||cancelled)&&retained)RetainTriggerLocked(*retained);
         }
@@ -274,7 +404,7 @@ inline void SubmitStage(Stage stage,uint64_t offset,uint64_t duration,uint64_t i
     if(submission->epoch!=generation.load()||submission->slot<0||!live[submission->slot].occupied)return;
     const auto& outer=submission->event;const auto id=nextId.fetch_add(1)*ActiveCapacity;
     Event event={outer[0],outer[1],id,outer[3],uint64_t(stage),outer[5]+offset,duration,duration,items,tasks,outer[2],0,id,outer[12],outer[14],outer[15],UINT64_MAX,UINT64_MAX,
-        0,0,0,0,outer[22],outer[23],0};
+        0,0,0,0,outer[22],outer[23],0,outer[12],0};
     live[submission->slot].children+=duration;RecordLocked(event);
 }
 }

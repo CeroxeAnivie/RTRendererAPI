@@ -35,6 +35,30 @@ if($CheckPaths){
 }
 $utf8=[Text.UTF8Encoding]::new($false)
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/rtxpt_scene_delta.h'),(Join-Path $sdk 'External/Donut/include/donut/engine/rtxpt_scene_delta.h'),$true)
+$growthDiagnosticsPatch=Join-Path $PSScriptRoot 'patches/rtxpt-growth-diagnostics.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $growthDiagnosticsPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $growthDiagnosticsPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT growth diagnostics overlay could not be removed'}
+}
+$topologyJournalPatch=Join-Path $PSScriptRoot 'patches/rtxpt-topology-journal.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $topologyJournalPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $topologyJournalPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT topology-journal overlay could not be removed'}
+}
+$uploadRetentionPatch=Join-Path $PSScriptRoot 'patches/rtxpt-upload-retention.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $uploadRetentionPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $uploadRetentionPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT upload-retention overlay could not be removed'}
+}
+$stagingDiagnosticsPatch=Join-Path $PSScriptRoot 'patches/rtxpt-staging-diagnostics.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $stagingDiagnosticsPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $stagingDiagnosticsPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT staging diagnostics overlay could not be removed'}
+}
 $tlasCapacityPatch=Join-Path $PSScriptRoot 'patches/rtxpt-tlas-capacity.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $tlasCapacityPatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -183,6 +207,31 @@ Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '      
             bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, pClearValue, IID_PPV_ARGS(&ptexture)));
             if(success)RtrMemoryDiagnostics::Created(ptexture,"streamline","Streamline texture",pd3d12Device,ptexture,0); // RTR attribute SDK textures
 '@ 'RTR attribute SDK textures'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '            ID3D12Resource* pbuffer;' @'
+            ID3D12Resource* pbuffer = nullptr; // RTR empty SL allocation failure
+'@ 'RTR empty SL allocation failure'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '            ID3D12Resource* ptexture;' @'
+            ID3D12Resource* ptexture = nullptr; // RTR empty SL texture allocation failure
+'@ 'RTR empty SL texture allocation failure'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '            bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, nullptr, IID_PPV_ARGS(&pbuffer)));' @'
+            const HRESULT allocationResult = pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, nullptr, IID_PPV_ARGS(&pbuffer));
+            const bool success = SUCCEEDED(allocationResult);
+            if (!success) { // RTR preserve SL buffer allocation error
+                log::error("SL buffer allocation failed: HRESULT=0x%08lx width=%llu heap=%u flags=%u removed=0x%08lx", (unsigned long)allocationResult, (unsigned long long)desc->Width, unsigned(heap->Type), unsigned(desc->Flags), (unsigned long)pd3d12Device->GetDeviceRemovedReason());
+                return res;
+            }
+'@ 'RTR preserve SL buffer allocation error'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '            bool success = SUCCEEDED(pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, pClearValue, IID_PPV_ARGS(&ptexture)));' @'
+            const HRESULT allocationResult = pd3d12Device->CreateCommittedResource(heap, D3D12_HEAP_FLAG_NONE, desc, state, pClearValue, IID_PPV_ARGS(&ptexture));
+            const bool success = SUCCEEDED(allocationResult);
+            if (!success) { // RTR preserve SL texture allocation error
+                log::error("SL texture allocation failed: HRESULT=0x%08lx width=%llu height=%u heap=%u flags=%u removed=0x%08lx", (unsigned long)allocationResult, (unsigned long long)desc->Width, desc->Height, unsigned(heap->Type), unsigned(desc->Flags), (unsigned long)pd3d12Device->GetDeviceRemovedReason());
+                return res;
+            }
+'@ 'RTR preserve SL texture allocation error'
+Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '    if (resource)' @'
+    if (resource && resource->native) // RTR tolerate failed SL allocation release
+'@ 'RTR tolerate failed SL allocation release'
 Patch-Once 'External/Donut/src/app/streamline/StreamlineIntegration.cpp' '        auto i = (IUnknown*)resource->native;' @'
         RtrMemoryDiagnostics::Released(resource->native); // RTR retire SDK census
         auto i = (IUnknown*)resource->native;
@@ -1259,7 +1308,7 @@ Patch-Once 'Rtxpt/Shaders/PathTracer/PathTracer.hlsli' '#if RTXPT_FIREFLY_FILTER
 # The bounded pre-SR history runs after current radiance merge, before SR tags.
 [IO.File]::WriteAllText((Join-Path $sdk 'Rtxpt/ProcessingPasses/RtrPreSrHistory.hlsl'),
     [IO.File]::ReadAllText((Join-Path $repo 'renderer-rtxpt/src/main/cpp/RtrPreSrHistory.hlsl')),$utf8)
-foreach($nativeLightingFile in @('RtrNativeLighting.hlsl','RtrNativeDynamicLighting.hlsl','RtrNativeDynamicLightingReconstruct.hlsl','RtrNativeLightingDeep.hlsl','RtrNativeLightingReconstruct.hlsl','RtrNativeLightingResolve.hlsl','RtrNativeLightingStyle.hlsli','RtrNativeLightingEncode.hlsl','RtrHostResolve.hlsl','RtrHostAugmentation.hlsl')) {
+foreach($nativeLightingFile in @('RtrNativeLighting.hlsl','RtrNativeDynamicLighting.hlsl','RtrNativeDynamicLightingReconstruct.hlsl','RtrNativeLightingDeep.hlsl','RtrNativeLightingReconstruct.hlsl','RtrNativeLightingResolve.hlsl','RtrNativeGiReduce.hlsl','RtrNativeGiUpsample.hlsl','RtrNativeLightingStyle.hlsli','RtrNativeLightingEncode.hlsl','RtrHostResolve.hlsl','RtrHostAugmentation.hlsl')) {
     [IO.File]::WriteAllText((Join-Path $sdk "Rtxpt/ProcessingPasses/$nativeLightingFile"),
         [IO.File]::ReadAllText((Join-Path $repo "renderer-rtxpt/src/main/cpp/$nativeLightingFile")),$utf8)
 }
@@ -1277,11 +1326,11 @@ $normalizedShaderConfig=$normalizedShaderConfig.Replace($historyAnchor,
 # Remove the complete generated line, including permutation flags. Removing
 # only the entry-point prefix left orphan -D lines on a repeated source build.
 $normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,'(?m)^[ \t]+-D RTR_LIGHT_GROUP_CAPACITY=[^\r\n]*(?:\r?\n|$)','')
-foreach($pass in @('RtrNativeLightingEncode','RtrNativeLightingDeep','RtrNativeDynamicLighting','RtrNativeDynamicLightingReconstruct','RtrNativeLightingReconstruct','RtrNativeLightingResolve','RtrHostResolve','RtrHostAugmentation','RtrNativeLighting')){
+foreach($pass in @('RtrNativeLightingEncode','RtrNativeLightingDeep','RtrNativeDynamicLighting','RtrNativeDynamicLightingReconstruct','RtrNativeLightingReconstruct','RtrNativeLightingResolve','RtrNativeGiReduce','RtrNativeGiUpsample','RtrHostResolve','RtrHostAugmentation','RtrNativeLighting')){
     $normalizedShaderConfig=[regex]::Replace($normalizedShaderConfig,"(?m)^ProcessingPasses/$pass\.hlsl -T cs -E main[^\r\n]*(?:\r?\n|$)",'')
 }
-foreach($pass in @('RtrNativeLightingEncode','RtrNativeLightingDeep','RtrNativeLightingResolve','RtrHostResolve','RtrHostAugmentation','RtrNativeLighting','RtrNativeLightingReconstruct','RtrNativeDynamicLighting','RtrNativeDynamicLightingReconstruct')){
-    $flags=if($pass -in @('RtrNativeLighting','RtrNativeLightingReconstruct')){' -D RTR_LIGHT_GROUP_CAPACITY={1,2,4,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1} -D RTR_MAX_COMPOSITION={0,1}'}elseif($pass -in @('RtrNativeDynamicLighting','RtrNativeDynamicLightingReconstruct')){' -D RTR_LIGHT_GROUP_CAPACITY={1,2,4,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS=0 -D RTR_MAX_COMPOSITION=1'}else{''}
+foreach($pass in @('RtrNativeLightingEncode','RtrNativeLightingDeep','RtrNativeLightingResolve','RtrNativeGiReduce','RtrNativeGiUpsample','RtrHostResolve','RtrHostAugmentation','RtrNativeLighting','RtrNativeLightingReconstruct','RtrNativeDynamicLighting','RtrNativeDynamicLightingReconstruct')){
+    $flags=if($pass -in @('RtrNativeLighting','RtrNativeLightingReconstruct')){' -D RTR_LIGHT_GROUP_CAPACITY={1,2,4,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS={0,1} -D RTR_MAX_COMPOSITION={0,1,2}'}elseif($pass -in @('RtrNativeDynamicLighting','RtrNativeDynamicLightingReconstruct')){' -D RTR_LIGHT_GROUP_CAPACITY={1,2,4,32} -D RTR_ANALYTIC_LIGHTS={0,1} -D RTR_WORK_STATISTICS=0 -D RTR_MAX_COMPOSITION=1'}else{''}
     $normalizedShaderConfig+="ProcessingPasses/$pass.hlsl -T cs -E main"+$flags+$shaderNewline
 }
 if($normalizedShaderConfig -cne $shaderConfig){
@@ -1672,6 +1721,22 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT metadata-delta overlay could not be applied
 if($LASTEXITCODE -ne 0){throw 'RTXPT TLAS capacity overlay does not match its pinned base'}
 & git -C $sdk apply --ignore-space-change $tlasCapacityPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT TLAS capacity overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $stagingDiagnosticsPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT staging diagnostics overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $stagingDiagnosticsPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT staging diagnostics overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $uploadRetentionPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT upload-retention overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $uploadRetentionPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT upload-retention overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $topologyJournalPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT topology-journal overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $topologyJournalPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT topology-journal overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $growthDiagnosticsPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT growth diagnostics overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $growthDiagnosticsPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT growth diagnostics overlay could not be applied'}
 
 Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-device.cpp' "    void Device::runGarbageCollection()`r`n    {" @'
     void Device::runGarbageCollection()

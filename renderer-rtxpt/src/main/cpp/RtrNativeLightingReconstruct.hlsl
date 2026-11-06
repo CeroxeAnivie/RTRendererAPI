@@ -4,7 +4,7 @@
 cbuffer RtrReconstruction : register(b1) {
     row_major float4x4 rtrWorldToClip;
     row_major float4x4 rtrPreviousWorldToClip;
-    float4 rtrDepth; // NDC-to-hardware scale, bias, unused, unused
+    float4 rtrDepth; // NDC-to-hardware scale, bias, optional RR divisor, unused
 };
 RWTexture2D<float4> u_DiffuseAlbedo : register(u5);
 RWTexture2D<float4> u_SpecularAlbedo : register(u6);
@@ -12,6 +12,7 @@ RWTexture2D<float4> u_NormalRoughness : register(u7);
 RWTexture2D<float2> u_Motion : register(u8);
 RWTexture2D<float> u_Depth : register(u9);
 RWTexture2D<float> u_SpecularDistance : register(u10);
+RWTexture2D<uint4> u_CurrentSurface : register(u11);
 float3 RtrPreviousPosition(RtrReceiver r) {
     InstanceData inst=t_Instances[r.instance];GeometryData geom=t_Geometry[inst.firstGeometryIndex+r.geometry];
     ByteAddressBuffer indices=t_Buffers[NonUniformResourceIndex(geom.indexBufferIndex)];
@@ -28,6 +29,7 @@ void main(uint2 pixel:SV_DispatchThreadID) {
     float4 nearView=mul(g.inverseClip,float4(ndc,g.cameraNear.w,1)),farView=mul(g.inverseClip,float4(ndc,g.farJitter.x,1));
     float3 direction=RtrNormalize(mul((float3x3)g.cameraToWorld,farView.xyz/farView.w-nearView.xyz/nearView.w));
     RtrReceiver r;float3 gain=1,indirect=0;bool valid=RtrTrace(g.cameraNear.xyz,direction,1e20,1,r);
+    if(rtrDepth.z>1)u_CurrentSurface[pixel]=valid?uint4(r.instance,r.geometry,asuint(r.distance),1):uint4(0xffffffff,0xffffffff,0,0);
     // Publish trace-only data before the nested lighting/shadow queries. Keeping
     // barycentrics, geometry IDs and material guide fields alive through that
     // traversal increases register pressure without changing either signal.
