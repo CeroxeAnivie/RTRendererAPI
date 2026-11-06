@@ -381,6 +381,21 @@
       "wallSeconds": 38.947,
       "peakGB": 1.804,
       "exit": 0
+    },
+    {
+      "name": "four-modules-maven-local",
+      "wallSeconds": 209.636,
+      "peakGB": 1.185,
+      "exit": 0
+    },
+    {
+      "name": "final-local-identity",
+      "wallSeconds": 32.486,
+      "peakGB": 1.804,
+      "exit": 0,
+      "checksPassed": 69
     }
-  ]
+  ],
+  "sourceCommitPushedBeforeMaven": "65810faff901330c455ff9f9a2550023dc2d7413",
+  "finalLocalRecord": "docs/quality/data/incremental-diagnostic-release.json"
 }

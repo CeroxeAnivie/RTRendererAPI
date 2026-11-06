@@ -61,7 +61,7 @@ GPU `diagnosticGpuMonitor()` 在 renderer owner 线程创建并 `poll()`；`miss
 
 本次意外无SDK参数的Gradle配置曾清理NVIDIA staging；已用完整SDK参数恢复并重建，发布检查核对当前实际字节并报告与7.2.3差异，不预称NVIDIA DLL逐字相同。
 
-### 交付包身份
+### 提交前打包身份
 
 四模块 assemble、sources/Javadoc、POM/module 打包通过，wall 223.377s、Job峰值2.065GB。正式工具 `tools/Verify-IncrementalDiagnosticsRelease.py` 的 package-only 47项通过，wall38.947s、峰值1.804GB：受测源码/108个RTXPT类/3个测试类、实际fixture/cost、JNI/PDB age264、四模块类/源码/元数据、81项SDK与1621项RTXPT执行依赖和shader均核验。核验工具首次把现有NVIDIA清单误按双空格切分，修为通用空白分隔后仅重试本次失败核验，没有重跑通过的渲染检查。
 
@@ -71,4 +71,19 @@ GPU `diagnosticGpuMonitor()` 在 renderer owner 线程创建并 `poll()`；`miss
 
 NVIDIA 21项runtime库存保留；仅重建的 `rtrenderer_nvidia.dll` 和 `runtime-files.sha256` 与7.2.3不同，当前NVIDIA DLL为 `d8067ff0102895ec8bddff24065ffa53afdd1b582b7b7d0beb5f561980ff6633`。所有RTXPT执行依赖/shader保持旧包字节，不把NVIDIA重新链接误写为全包不变。
 
-按授权先推完整源码/正式工具/文档，再发布四模块 Maven Local 7.3.0；Local最终逐字核验结果另记 `docs/quality/data/incremental-diagnostic-release.json`。不发布Central或GitHub二进制。
+### 最终 Maven Local 交付
+
+已按授权先将完整源码/正式工具/文档推送 GitHub，源码提交 `65810faff901330c455ff9f9a2550023dc2d7413`；随后四模块 Maven Local 7.3.0 发布通过，wall209.636s、Job峰值1.185GB。发布显式跳过已完成的NVIDIA configure/compile，仍提供完整SDK参数；没有再次运行已通过的CPU/GPU检查。
+
+最终 `--local` 69项逐字核验通过，wall32.486s、峰值1.804GB。正式记录为 `docs/quality/data/incremental-diagnostic-release.json`。发布任务刷新SDK归档，因此最终RTXPT JAR/ZIP与提交前package-only身份不同；受测JNI、生产类与1621项执行依赖/shader未改变，以本表为最终消费身份：
+
+| 制品 | SHA256 |
+|---|---|
+| renderer-api 7.3.0 | `fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c` |
+| renderer-core 7.3.0 | `a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69` |
+| renderer-nvidia 7.3.0 | `39b9f11445013704465776361dabccadc6a381e35d2923970ecd306266835095` |
+| renderer-rtxpt 7.3.0 | `5ab1f06570ec28536241bd2dc540f37761415440aa41b35374197c33b568aa98` |
+| RTXPT runtime ZIP | `b32313dbe767c34d600ad56b302ecd5d28e51e51766f6656966dec92f43f8538` |
+| RTXPT JNI | `1f37ad395dacc5a9745c9208a18b43f26b5f1972e46e1380742c8ebd5861e749` |
+
+最后仅补发布回执文档，不重建或重新发布成功制品。未发布Central或GitHub二进制，未开MC客户端或使用computer-use；MC快飞、任务管理器内存与人工验收由宿主继续完成。
