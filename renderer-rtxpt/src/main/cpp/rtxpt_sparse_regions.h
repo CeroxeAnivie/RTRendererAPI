@@ -6,6 +6,7 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#define RTR_REGION_INCIDENCE 1
 
 // Incremental treelet frontiers, stable hash slots and independent list blocks.
 class RtrSparseRegions {
@@ -19,8 +20,8 @@ public:
     static_assert(sizeof(Cell)==12);
     static uint32_t Hash(Cell c){return (uint32_t(c.x)*73856093u)^(uint32_t(c.y)*19349663u)^(uint32_t(c.z)*83492791u);}
     struct HashCell {size_t operator()(Cell c)const{return Hash(c);}};
-    struct Root {std::array<float,7> bounds{};std::vector<Cell> cells;std::vector<uint32_t> members;bool global=false;uint32_t globalSlot=0;};
-    struct CellEntry {std::vector<uint32_t> roots;uint32_t slot=None,block=None,order=0;bool overflow=false;};
+    struct Root {std::array<float,7> bounds{};std::vector<Cell> cells;std::vector<uint32_t> members,cellSlots;bool global=false;uint32_t globalSlot=0;};
+    struct CellEntry {std::vector<uint32_t> roots,rootCellIndices;uint32_t slot=None,block=None,order=0;bool overflow=false;};
     struct Shape {
         std::array<float,7> bounds{};uint32_t parent=None,left=None,right=None;int height=-2,kind=-2;
         bool operator==(const Shape& b)const{return bounds==b.bounds&&parent==b.parent&&left==b.left&&right==b.right&&height==b.height&&kind==b.kind;}
@@ -35,6 +36,8 @@ public:
     std::vector<uint64_t> affectedEpochs,topologyEpochs;
     std::unordered_map<uint32_t,std::vector<Cell>> overflowByHome;
     std::vector<uint32_t> hashHoles;
+    std::vector<uint32_t> publishRoots;
+    uint64_t linkRemovals=0;
     uint64_t affectedEpoch=0;
     std::array<std::set<uint32_t>,MaxPoolOrder+1> freeBlocks;
     uint32_t buckets=0,globalWords=GlobalWordCapacity,poolNodes=0,tombstones=0;
@@ -46,6 +49,12 @@ public:
     // builds, coverage changes, roots, cells, links, global roots, bytes,
     // bounded hash-probe overflows, uploaded bytes.
     std::array<uint64_t,9> work{};
+    size_t CpuBytes()const{
+        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity())*4+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity())*8;
+        for(const auto& [id,r]:roots)bytes+=sizeof(Root)+r.cells.capacity()*sizeof(Cell)+(r.members.capacity()+r.cellSlots.capacity())*4;
+        for(const auto& [cell,e]:cells)bytes+=sizeof(CellEntry)+(e.roots.capacity()+e.rootCellIndices.capacity())*4;
+        return bytes; // tracked payload capacity; unordered-map allocator metadata is excluded
+    }
     void Clear(){
         roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();affectedEpoch=0;dirtyNodes.clear();queuedNodes.clear();overflowByHome.clear();hashHoles.clear();
         for(auto& blocks:freeBlocks)blocks.clear();buckets=poolNodes=tombstones=0;globalWords=GlobalWordCapacity;links=0;
@@ -87,12 +96,23 @@ private:
     static void Members(const std::vector<rtr::LightTreeNode>& nodes,uint32_t id,std::vector<uint32_t>& result){
         result.push_back(id);if(nodes[id].light<0){Members(nodes,uint32_t(nodes[id].left),result);Members(nodes,uint32_t(nodes[id].right),result);}
     }
+    void Unlink(uint32_t id,Root& root,size_t index,ChangedCells& changed){
+        const auto cell=root.cells[index];auto& entry=cells.at(cell);const uint32_t slot=root.cellSlots.at(index);
+        if(slot>=entry.roots.size()||entry.roots[slot]!=id||entry.rootCellIndices.at(slot)!=index)throw std::logic_error("Broken regional incidence index");
+        const auto moved=entry.roots.back(),movedIndex=entry.rootCellIndices.back();
+        entry.roots[slot]=moved;entry.rootCellIndices[slot]=movedIndex;entry.roots.pop_back();entry.rootCellIndices.pop_back();
+        if(slot<entry.roots.size())roots.at(moved).cellSlots.at(movedIndex)=slot;
+        --links;++linkRemovals;changed.insert(cell);
+    }
+    uint32_t Link(uint32_t id,Cell cell,uint32_t index,ChangedCells& changed){
+        auto& entry=cells[cell];const auto slot=uint32_t(entry.roots.size());
+        entry.roots.push_back(id);entry.rootCellIndices.push_back(index);++links;changed.insert(cell);return slot;
+    }
     void RemoveRoot(uint32_t id,ChangedCells& changed){
         auto old=roots.find(id);if(old==roots.end())return;auto& root=old->second;
         for(auto member:root.members)if(member<owners.size()&&owners[member]==id)owners[member]=None;
         if(root.global){uint32_t slot=root.globalSlot,moved=global.back();global[slot]=moved;global.pop_back();if(moved!=id)roots.at(moved).globalSlot=slot;}
-        for(auto cell:root.cells){auto& list=cells.at(cell).roots;auto pos=std::find(list.begin(),list.end(),id);
-            if(pos==list.end())throw std::logic_error("Missing retained cell root");*pos=list.back();list.pop_back();--links;changed.insert(cell);}
+        for(size_t index=0;index<root.cells.size();++index)Unlink(id,root,index,changed);
         roots.erase(old);
     }
     void UpdateRoot(const std::vector<rtr::LightTreeNode>& nodes,uint32_t id,ChangedCells& changed){
@@ -119,16 +139,15 @@ private:
             size_t newCells=0;for(auto cell:coverage)newCells+=!cells.count(cell);
             if(!old->second.global&&!coverage.empty()&&links-old->second.cells.size()+coverage.size()<=LinkBudget&&cells.size()+newCells<=CellBudget){
                 auto less=[](Cell a,Cell b){return a.z!=b.z?a.z<b.z:a.y!=b.y?a.y<b.y:a.x<b.x;};
-                size_t a=0,b=0;
+                std::vector<uint32_t> nextSlots(coverage.size());size_t a=0,b=0;
                 while(a<old->second.cells.size()||b<coverage.size()){
                     if(a<old->second.cells.size()&&(b==coverage.size()||less(old->second.cells[a],coverage[b]))){
-                        auto cell=old->second.cells[a++];auto& list=cells.at(cell).roots;auto pos=std::find(list.begin(),list.end(),id);
-                        if(pos==list.end())throw std::logic_error("Missing retained cell root");*pos=list.back();list.pop_back();--links;changed.insert(cell);
+                        Unlink(id,old->second,a++,changed);
                     }else if(b<coverage.size()&&(a==old->second.cells.size()||less(coverage[b],old->second.cells[a]))){
-                        auto cell=coverage[b++];cells[cell].roots.push_back(id);++links;changed.insert(cell);
-                    }else{++a;++b;}
+                        nextSlots[b]=Link(id,coverage[b],uint32_t(b),changed);++b;
+                    }else{nextSlots[b]=old->second.cellSlots[a];cells.at(coverage[b]).rootCellIndices.at(nextSlots[b])=uint32_t(b);++a;++b;}
                 }
-                old->second.bounds=bound;old->second.cells=std::move(coverage);++work[1];return;
+                old->second.bounds=bound;old->second.cells=std::move(coverage);old->second.cellSlots=std::move(nextSlots);++work[1];return;
             }
             if(members.empty())members=old->second.members;
             RemoveRoot(id,changed);
@@ -136,7 +155,7 @@ private:
         Root root;root.bounds=bound;root.members=std::move(members);root.cells=Coverage(bound);
         size_t newCells=0;for(auto cell:root.cells)newCells+=!cells.count(cell);
         if(root.cells.empty()||links+root.cells.size()>LinkBudget||cells.size()+newCells>CellBudget){root.cells.clear();root.global=true;root.globalSlot=uint32_t(global.size());global.push_back(id);}
-        else for(auto cell:root.cells){cells[cell].roots.push_back(id);++links;changed.insert(cell);}
+        else{root.cellSlots.resize(root.cells.size());for(uint32_t index=0;index<root.cells.size();++index)root.cellSlots[index]=Link(id,root.cells[index],index,changed);}
         for(auto member:root.members)owners[member]=id;roots.emplace(id,std::move(root));++work[1];
     }
     void Sync(const rtr::RetainedLightTree& tree,const std::vector<rtr::LightTreeNode>& nodes,uint32_t id,
@@ -146,6 +165,27 @@ private:
         if(roots.count(id)){RemoveRoot(id,changed);force=true;}
         const auto& n=nodes[id];for(uint32_t child:{uint32_t(n.left),uint32_t(n.right)})
             if(force||affectedEpochs[child]==affectedEpoch)Sync(tree,nodes,child,changed,force);
+    }
+    static bool MatchMembers(const std::vector<rtr::LightTreeNode>& nodes,uint32_t id,const std::vector<uint32_t>& members,size_t& at){
+        if(at==members.size()||members[at++]!=id)return false;const auto& n=nodes[id];
+        return n.light>=0||(MatchMembers(nodes,uint32_t(n.left),members,at)&&MatchMembers(nodes,uint32_t(n.right),members,at));
+    }
+    void ReconcileFrontier(const rtr::RetainedLightTree& tree,const std::vector<rtr::LightTreeNode>& nodes,ChangedCells& changed){
+        std::vector<uint32_t> finalRoots,stack{tree.root};finalRoots.reserve(roots.size());
+        while(!stack.empty()){auto id=stack.back();stack.pop_back();++frontierVisited;
+            if(Eligible(tree,nodes,id)){finalRoots.push_back(id);topologyEpochs[id]=affectedEpoch;}
+            else{stack.push_back(uint32_t(nodes[id].right));stack.push_back(uint32_t(nodes[id].left));}}
+        // Rotations can exchange descendants between two surviving frontier
+        // roots. An old owner must never delete a different final root that
+        // this same transaction already updated. Plan the final set first.
+        for(auto at=roots.begin();at!=roots.end();){auto id=at->first;++at;if(topologyEpochs[id]!=affectedEpoch)RemoveRoot(id,changed);}
+        std::fill(owners.begin(),owners.end(),None);
+        for(auto id:finalRoots){auto old=roots.find(id);size_t at=0;
+            const bool same=old!=roots.end()&&MatchMembers(nodes,id,old->second.members,at)&&at==old->second.members.size();
+            if(same){topologyEpochs[id]=0;for(auto member:old->second.members)owners[member]=id;}
+            else topologyEpochs[id]=affectedEpoch;
+            UpdateRoot(nodes,id,changed);
+        }
     }
     void Mark(uint32_t index){
         dirty=true;if(full)return;
@@ -218,9 +258,11 @@ private:
             // Root id zero must be uploaded even when WriteWord sees no CPU change.
             for(uint32_t i=0;i<(entry.roots.size()+15)/16;i++)Mark(buckets+globalWords/16+entry.block+i);
         }
-        std::sort(entry.roots.begin(),entry.roots.end());
+        // Live incidence order is stable until O(1) swap removal. Sort only
+        // the final transaction publication; never invalidate the backlinks.
+        publishRoots.assign(entry.roots.begin(),entry.roots.end());std::sort(publishRoots.begin(),publishRoots.end());
         const uint32_t start=globalWords+entry.block*16;
-        for(uint32_t i=0;i<entry.roots.size();++i)WriteWord(start+i,entry.roots[i]);
+        for(uint32_t i=0;i<publishRoots.size();++i)WriteWord(start+i,publishRoots[i]);
         Bucket(entry.slot,cell,start,uint32_t(entry.roots.size()));
     }
     void RecoverOverflow(){
@@ -261,14 +303,12 @@ public:
         shapes.resize(nodes.size());
         affectedEpochs.resize(nodes.size());topologyEpochs.resize(nodes.size());
         if(++affectedEpoch==0){std::fill(affectedEpochs.begin(),affectedEpochs.end(),0);std::fill(topologyEpochs.begin(),topologyEpochs.end(),0);++affectedEpoch;}
-        bool affected=false;
+        bool affected=false,topologyChanged=false;
         auto inspect=[&](uint32_t id){if(id>=nodes.size())return;auto shape=Describe(tree,nodes,id);
             if(rebuilding||!(shape==shapes[id])){
                 const auto& old=shapes[id];
                 const bool topology=rebuilding||shape.kind!=old.kind||shape.left!=old.left||shape.right!=old.right;
-                if(topology&&tree.heights[id]>=0)for(uint32_t parent=id;parent!=None;parent=tree.parents[parent]){
-                    if(topologyEpochs[parent]==affectedEpoch)break;topologyEpochs[parent]=affectedEpoch;
-                }
+                topologyChanged|=topology;
                 shapes[id]=shape;if(tree.heights[id]<0)RemoveRoot(id,changed);
                 else for(uint32_t parent=id;parent!=None;parent=tree.parents[parent]){
                     if(affectedEpochs[parent]==affectedEpoch)break;affectedEpochs[parent]=affectedEpoch;affected=true;
@@ -276,7 +316,8 @@ public:
             }};
         if(rebuilding)for(uint32_t id=0;id<nodes.size();++id)inspect(id);
         else for(auto id:nodeChanges)inspect(id);
-        if(rebuilding||affected)Sync(tree,nodes,tree.root,changed,rebuilding);
+        if(rebuilding||topologyChanged)ReconcileFrontier(tree,nodes,changed);
+        else if(affected)Sync(tree,nodes,tree.root,changed,false);
         initialized=true;
         const bool coverageChanged=!changed.empty();
         {RtrDiagnostics::Scope erase(RtrDiagnostics::SparseHashErase,changed.size());

@@ -1,0 +1,5 @@
+Execution receipt from actual tool result; not full stdout.
+BUILD SUCCESSFUL in 1m 15s
+39 actionable tasks: 28 executed, 11 up-to-date
+Bounded build peak process-tree commit: 1.973 GB; exit=0
+Bounded build timing: wall=75.170s; tree CPU=139.453s; average busy cores=1.86

@@ -156,4 +156,5 @@ public:
         std::lock_guard lock(state->mutex);
         return {Budget,state->heapBytes,state->liveBytes,state->peakLiveBytes,state->FreeBytes(),state->LargestFree(),state->heapCreates,state->heapNanos,state->reservations,state->deferred,state->capacityRejected};
     }
+    uint64_t IdlePageBytes()const{std::lock_guard lock(state->mutex);uint64_t bytes=0;for(const auto& page:state->pages)if(page->freeUnits==page->used.size())bytes+=page->used.size()*Unit;return bytes;}
 };

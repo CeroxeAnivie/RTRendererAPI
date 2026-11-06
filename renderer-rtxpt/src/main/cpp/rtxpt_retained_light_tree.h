@@ -2,6 +2,7 @@
 #include "rtxpt_light_tree.h"
 #include <limits>
 #include <stdexcept>
+#define RTR_RETAINED_UPDATE_JOURNAL 1
 
 namespace rtr {
 // Dense light slots and independently allocated BVH nodes. AVL rotations bound
@@ -15,6 +16,13 @@ public:
     std::vector<uint32_t> free;
     uint32_t root=None;
     uint64_t visited=0;
+    // Upload ownership and query preparation have independent lifetimes. A
+    // node may change many times before upload, but each consumer needs only
+    // its final state once. Reused/deleted indices keep their pending entry.
+    std::vector<uint32_t> changes;
+    uint64_t dirtyAttempts=0,dirtyEnqueued=0;
+    size_t CpuBytes()const{return nodes.capacity()*sizeof(LightTreeNode)+(parents.capacity()+leaves.capacity()+free.capacity()+changes.capacity()+queuedEpochs.capacity()+changeEpochs.capacity())*sizeof(uint32_t)+heights.capacity()*sizeof(int);}
+    void BeginChanges(){collectChanges=true;changes.clear();if(++changeGeneration==0){std::fill(changeEpochs.begin(),changeEpochs.end(),0);++changeGeneration;}}
     void Reserve(size_t lights){
         size_t capacity=1;while(capacity<lights)capacity*=2;
         const auto n=std::max<size_t>(1,capacity*2);
@@ -22,17 +30,18 @@ public:
     }
     template<class Light> void Rebuild(const std::vector<Light>& lights,double* normalization){
         BuildLightTreeInto(lights,nodes,normalization);parents.assign(nodes.size(),None);
+        queuedEpochs.assign(nodes.size(),0);changeEpochs.assign(nodes.size(),0);changes.clear();queuedCount=0;queueGeneration=changeGeneration=1;
         leaves.assign(lights.size(),None);heights.assign(nodes.size(),0);free.clear();root=nodes.empty()?None:0;
         for(uint32_t i=0;i<nodes.size();++i){auto& n=nodes[i];if(n.light>=0)leaves.at(uint32_t(n.light))=i;
             else{parents.at(uint32_t(n.left))=i;parents.at(uint32_t(n.right))=i;}}
         for(size_t i=nodes.size();i--;)if(nodes[i].light<0)heights[i]=1+std::max(heights.at(uint32_t(nodes[i].left)),heights.at(uint32_t(nodes[i].right)));
     }
     template<class Light> void Refit(const std::vector<Light>& lights,uint32_t slot,double normalization,std::vector<uint32_t>& dirty){
-        uint32_t leaf=leaves.at(slot);SetLeaf(nodes.at(leaf),lights.at(slot),slot,normalization);dirty.push_back(leaf);Fix(parents[leaf],dirty);
+        uint32_t leaf=leaves.at(slot);SetLeaf(nodes.at(leaf),lights.at(slot),slot,normalization);Mark(leaf,dirty);Fix(parents[leaf],dirty);
     }
     template<class Light> void Insert(const std::vector<Light>& lights,uint32_t slot,double normalization,std::vector<uint32_t>& dirty){
         if(slot!=leaves.size())throw std::logic_error("Light tree slots must append densely");
-        uint32_t leaf=Allocate();SetLeaf(nodes[leaf],lights.at(slot),slot,normalization);leaves.push_back(leaf);dirty.push_back(leaf);
+        uint32_t leaf=Allocate();SetLeaf(nodes[leaf],lights.at(slot),slot,normalization);leaves.push_back(leaf);Mark(leaf,dirty);
         if(root==None){root=leaf;return;}
         uint32_t sibling=root;
         while(nodes[sibling].light<0){
@@ -43,7 +52,7 @@ public:
         uint32_t oldParent=parents[sibling],branch=Allocate();
         nodes[branch].light=-1;nodes[branch].left=float(sibling);nodes[branch].right=float(leaf);
         parents[branch]=oldParent;parents[sibling]=parents[leaf]=branch;
-        dirty.push_back(sibling);
+        Mark(sibling,dirty);
         Replace(oldParent,sibling,branch);Fix(branch,dirty);
     }
     void Remove(uint32_t slot,std::vector<uint32_t>& dirty){
@@ -51,15 +60,28 @@ public:
         if(branch==None){root=None;Release(leaf,dirty);}
         else{
             auto& p=nodes[branch];uint32_t sibling=uint32_t(p.left)==leaf?uint32_t(p.right):uint32_t(p.left),grand=parents[branch];
-            Replace(grand,branch,sibling);parents[sibling]=grand;dirty.push_back(sibling);Release(leaf,dirty);Release(branch,dirty);Fix(grand,dirty);
+            Replace(grand,branch,sibling);parents[sibling]=grand;Mark(sibling,dirty);Release(leaf,dirty);Release(branch,dirty);Fix(grand,dirty);
         }
         if(slot+1!=leaves.size()){
-            leaves[slot]=leaves.back();nodes[leaves[slot]].light=float(slot);dirty.push_back(leaves[slot]);
+            leaves[slot]=leaves.back();nodes[leaves[slot]].light=float(slot);Mark(leaves[slot],dirty);
         }
         leaves.pop_back();
     }
     size_t ActiveNodes() const{return leaves.empty()?0:leaves.size()*2-1;}
 private:
+    std::vector<uint32_t> queuedEpochs,changeEpochs;
+    uint32_t queueGeneration=1,changeGeneration=1;
+    size_t queuedCount=0;bool collectChanges=false;
+    void Mark(uint32_t id,std::vector<uint32_t>& dirty){
+        ++dirtyAttempts;
+        // Sorting an upload list or retrying a failed upload cannot invalidate
+        // these marks. Only an explicitly emptied list starts a new epoch.
+        if(dirty.empty()&&queuedCount){queuedCount=0;if(++queueGeneration==0){std::fill(queuedEpochs.begin(),queuedEpochs.end(),0);++queueGeneration;}}
+        if(queuedEpochs.size()<nodes.size())queuedEpochs.resize(nodes.size());
+        if(queuedEpochs[id]!=queueGeneration){dirty.push_back(id);queuedEpochs[id]=queueGeneration;++queuedCount;++dirtyEnqueued;}
+        if(collectChanges){if(changeEpochs.size()<nodes.size())changeEpochs.resize(nodes.size());
+            if(changeEpochs[id]!=changeGeneration){changes.push_back(id);changeEpochs[id]=changeGeneration;}}
+    }
     template<class Light> static void SetLeaf(LightTreeNode& node,const Light& l,uint32_t slot,double normalization){
         node={};for(int a=0;a<3;a++)node.minimum[a]=node.maximum[a]=l.positionType[a];
         node.light=float(slot);node.leaves=1;node.directional=l.positionType[3]==0?1.f:0.f;node.range=l.directionRange[3];
@@ -79,7 +101,7 @@ private:
         else{i=free.back();free.pop_back();nodes[i]={};parents[i]=None;heights[i]=0;}
         return i;
     }
-    void Release(uint32_t i,std::vector<uint32_t>& dirty){nodes[i]={};nodes[i].light=-2;parents[i]=None;heights[i]=-1;free.push_back(i);dirty.push_back(i);}
+    void Release(uint32_t i,std::vector<uint32_t>& dirty){nodes[i]={};nodes[i].light=-2;parents[i]=None;heights[i]=-1;free.push_back(i);Mark(i,dirty);}
     void Replace(uint32_t parent,uint32_t oldChild,uint32_t child){
         if(parent==None)root=child;
         else if(uint32_t(nodes[parent].left)==oldChild)nodes[parent].left=float(child);
@@ -91,18 +113,18 @@ private:
         uint32_t l=uint32_t(n.left),r=uint32_t(n.right);auto& a=nodes[l];auto& b=nodes[r];
         for(int axis=0;axis<3;axis++){n.minimum[axis]=std::min(a.minimum[axis],b.minimum[axis]);n.maximum[axis]=std::max(a.maximum[axis],b.maximum[axis]);}
         n.power=a.power+b.power;n.directional=std::max(a.directional,b.directional);n.range=std::max(a.range,b.range);n.leaves=a.leaves+b.leaves;
-        heights[i]=1+std::max(heights[l],heights[r]);dirty.push_back(i);
+        heights[i]=1+std::max(heights[l],heights[r]);Mark(i,dirty);
     }
     uint32_t Left(uint32_t a,std::vector<uint32_t>& dirty){
         uint32_t b=uint32_t(nodes[a].right),beta=uint32_t(nodes[b].left),p=parents[a];
         Replace(p,a,b);parents[b]=p;nodes[b].left=float(a);parents[a]=b;nodes[a].right=float(beta);parents[beta]=a;
-        dirty.push_back(beta);
+        Mark(beta,dirty);
         Refresh(a,dirty);Refresh(b,dirty);return b;
     }
     uint32_t Right(uint32_t a,std::vector<uint32_t>& dirty){
         uint32_t b=uint32_t(nodes[a].left),beta=uint32_t(nodes[b].right),p=parents[a];
         Replace(p,a,b);parents[b]=p;nodes[b].right=float(a);parents[a]=b;nodes[a].left=float(beta);parents[beta]=a;
-        dirty.push_back(beta);
+        Mark(beta,dirty);
         Refresh(a,dirty);Refresh(b,dirty);return b;
     }
     void Fix(uint32_t i,std::vector<uint32_t>& dirty){

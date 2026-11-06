@@ -1,0 +1,3 @@
+SPARSE_DIRTY_JOURNAL PASS repeatedWordMarks=32 queuedNodes=1 nextTransaction=1 fullReset=1
+ADAPTIVE_UPLOAD_CPU PASS cold18MiBOldAllocations=288 newAllocations=22 allocatedBytes=19857408 maximumAdaptivePage=1048576 warmBytes=4194304
+SPARSE_REGIONS PASS sources=25000 probes=2198 denseSwap=true rotations=true colorZeroBytes=true micromotionZeroBytes=true broadRootsSplit=true tombstoneFree=true zeroRootPartialGrowth=true collisionBackshift=true overflowReinsert=true travelNoFullPack=true localBytes=1152 localSpans=14 localFrontierVisited=13 fixedHashBytes=16777216 maxPackedBytes=51380224 hashMoves=870 overflowRetries=3528 scatterFineSpans=9040 scatterMergedSpans=16 scatterMergedBytes=16749568

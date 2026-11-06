@@ -1174,6 +1174,18 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             if(s.rendered<=3 || now-s.memoryReport>=std::chrono::seconds(1)) {
                 RtrMemoryDiagnostics::Checkpoint(s.rendered<=3?"frame.startup":"frame.steady",
                     static_cast<ID3D12Device*>(dm->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)));
+                auto& pass=*static_cast<HostPathTracer*>(s.app->HostRenderPass());auto& sparse=pass.sparseLighting;auto& attributes=pass.nativeLighting;
+                RtrMemoryDiagnostics::Capacity("sparse.records","cpu_payload",sparse.records.size()*sizeof(RtrSparseLighting::Record),sparse.records.capacity()*sizeof(RtrSparseLighting::Record));
+                RtrMemoryDiagnostics::Capacity("sparse.tree","cpu_payload",sparse.tree.nodes.size()*64,sparse.tree.CpuBytes());
+                RtrMemoryDiagnostics::Capacity("sparse.dirty","cpu_payload",(sparse.dirtyNodes.size()+sparse.dirtyRecords.size())*4,(sparse.dirtyNodes.capacity()+sparse.dirtyRecords.capacity())*4);
+                RtrMemoryDiagnostics::Capacity("sparse.regions","cpu_payload",sparse.regions.packed.size()*64,sparse.regions.CpuBytes());
+                auto bufferBytes=[](const nvrhi::BufferHandle& b)->uint64_t{return b?b->getDesc().byteSize:0;};
+                uint64_t retiredBytes=0;for(const auto& old:sparse.retired)retiredBytes+=bufferBytes(old.sources)+bufferBytes(old.nodes);
+                RtrMemoryDiagnostics::Capacity("sparse.buffers","device_local",sparse.records.size()*96+(sparse.queryNodes.size()+sparse.regions.packed.size())*64,bufferBytes(sparse.sourceBuffer)+bufferBytes(sparse.treeBuffer),retiredBytes);
+                RtrMemoryDiagnostics::Capacity("attributes.vertices","device_local",attributes.attributeRanges.end*sizeof(RtrNativeLightingPass::VertexAttributes),bufferBytes(attributes.baselineCoordinates));
+                const auto resource=pass.resourceArena.Snapshot();const auto upload=pass.uploadArena.Statistics();
+                RtrMemoryDiagnostics::Capacity("resource.arena","device_local",resource[2],resource[1],0,pass.resourceArena.IdlePageBytes());
+                RtrMemoryDiagnostics::Capacity("upload.arena","mapped_upload",upload[2],upload[0],0,pass.uploadArena.IdlePageBytes());
                 s.memoryReport=now;
             }
         }

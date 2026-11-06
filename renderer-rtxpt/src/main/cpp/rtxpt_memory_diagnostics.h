@@ -59,6 +59,11 @@ inline unsigned long long Timestamp() {
     ULARGE_INTEGER value;value.LowPart=time.dwLowDateTime;value.HighPart=time.dwHighDateTime;
     return (value.QuadPart-116444736000000000ULL)/10000;
 }
+inline void Capacity(const char* name,const char* domain,uint64_t live,uint64_t capacity,uint64_t retired=0,uint64_t idle=0){
+    if(!Enabled())return;
+    Write("RTXPT_MEMORY_CAPACITY time=%llu name=%s domain=%s live=%llu capacity=%llu retired=%llu idle=%llu\n",Timestamp(),name,domain,
+        (unsigned long long)live,(unsigned long long)capacity,(unsigned long long)retired,(unsigned long long)idle);
+}
 inline PROCESS_MEMORY_COUNTERS_EX ProcessMemory() {
 #ifdef RTR_MEMORY_DIAGNOSTICS_SELFTEST
     ++processQueries;

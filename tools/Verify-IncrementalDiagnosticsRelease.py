@@ -1,4 +1,4 @@
-"""Verify the incremental-diagnostics release bytes without rerunning rendering tests."""
+"""Verify compatible renderer release bytes without rerunning rendering tests."""
 import argparse
 import hashlib
 import importlib.util
@@ -44,15 +44,25 @@ def main():
         return subprocess.check_output(["git", *arguments], cwd=ROOT, text=True).strip()
 
     check("evidence-version", evidence["version"] == version)
+    retained = evidence.get("releaseKind") == "compatible-retained-update-maintenance"
     check("affected-checks-pass", all(c["passed"] and c["exit"] == 0 for c in evidence["correctness"].values())
-          and len(evidence["correctness"]) == 3)
+          and (len(evidence["correctness"]) >= 6 if retained else len(evidence["correctness"]) == 3))
     for group in ("productionSourceSha256", "productionClassSha256", "testClassSha256", "evidenceFileSha256"):
         check(group, bool(evidence[group]) and all(sha((ROOT / p).read_bytes()) == h for p, h in evidence[group].items()))
-    cost = evidence["readCost"]
-    check("frozen-idle-read-cost", cost["samples"] == 32 and cost["frozen"]
-          and cost["cpu_poll"]["returned"] == cost["gpu_poll"]["returned"] == 0
-          and cost["cpu_poll"]["allocated_bytes"] < cost["cpu_rolling"]["allocated_bytes"] / 8
-          and cost["gpu_poll"]["allocated_bytes"] < cost["gpu_rolling"]["allocated_bytes"] / 8)
+    if retained:
+        cost = evidence["updateCost"]
+        check("same-fixture-refit-cost", cost["samples"] == 32 and cost["sources"] == 42191
+              and cost["upserts"] == 4096 and cost["removeInsert"] == 0
+              and set(cost["baseline"]) == set(cost["candidate"]) == {"tree", "prepare", "regions"})
+        check("baseline-mixed-defect-preserved", evidence["baselineMixedRegression"]["exit"] == 1
+              and evidence["baselineMixedRegression"]["correctnessFailure"]
+              and not evidence["baselineMixedRegression"]["usedForSpeedup"])
+    else:
+        cost = evidence["readCost"]
+        check("frozen-idle-read-cost", cost["samples"] == 32 and cost["frozen"]
+              and cost["cpu_poll"]["returned"] == cost["gpu_poll"]["returned"] == 0
+              and cost["cpu_poll"]["allocated_bytes"] < cost["cpu_rolling"]["allocated_bytes"] / 8
+              and cost["gpu_poll"]["allocated_bytes"] < cost["gpu_rolling"]["allocated_bytes"] / 8)
     native_path = ROOT / "build/rtxpt-sdk/bin/rtrenderer_rtxpt.dll"
     check("tested-jni-current", sha(native_path.read_bytes()) == evidence["nativeSha256"])
     guid, age = bytes_tool.pdb_identity(ROOT / "build/rtxpt-sdk/bin/rtrenderer_rtxpt.pdb")

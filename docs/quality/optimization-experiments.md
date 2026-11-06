@@ -1,5 +1,7 @@
 # 性能候选记录
 
+2026-11-07：新授权候选 `transaction-journals-and-region-incidence`，7.3.0→7.3.1。保持原treelet/coverage/查询语义；分离Apply和上传journal、源头节点去重，加入root-cell反向槽位以移除线性查找，补显式CPU/GPU/mapped-upload容量分账。与已撤回的source-leaf frontier不同，不增加区域覆盖或查询工作量。定向合同/真实JNI通过；同夹具CPU三阶段均值合计-7.94%，query准备-72.48%，tree均值+19.48%、regions均值+23.46%及P95+58.64%退化均保留。额外修复旧混合删插的真实漏源，不用错误旧路径算收益。不预报MC FPS或RAM收益，不盲缩池。见[本批记录](retained-update-maintenance.md)。
+
 2026-11-06：宿主明确授权解决 direct-only 移动 FPS 与更新卡顿。当前候选 `bounded-sparse-upload-and-snapshot-capacity` 合并散落小写入，去掉诊断快照无条件最大预留；固定基线为已发布 `7.2.0-rc.7` 完整 runtime。源叶前沿方案已因区域 links +124.22%、packed 数据 +31.58%、常见阶段节点访问 +69.08% 撤回生产源码与默认运行目录，不保留分支或开关；其 54+54 份输出一致只证明正确性，不抵消容量和查询代价。原 treelet 的区域成员重建开销仍在。本批不重试此前失败的 SDK 拓扑准备、shader 分拆、跨队列或 RR 重叠，也不把操作数下降写成 FPS 收益。见[稀疏移动更新](../release-sparse-movement.md)，原始证据 `build/reports/sparse-movement/`。
 
 2026-11-05：`early-blas-submit-scene-preparation-overlap` 正确性通过，四窗完整GPU P95 6.489632→6.751903 ms（+0.262271／+4.04%），吞吐190.136585→190.316058 FPS（+0.179473／+0.09%），未证明整体收益，已撤回源码、默认DLL/PDB并移走候选OBJ。115份生产源码和完整runtime与ce9快照一致，禁止原样重试。见[失败实测及回退](resource-pipeline-overlap.md)。当前没有活动候选；用户继续宏观优化的授权仍有效。

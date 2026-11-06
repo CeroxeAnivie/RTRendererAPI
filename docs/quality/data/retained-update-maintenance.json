@@ -1,0 +1,183 @@
+{
+  "date": "2026-11-07",
+  "version": "7.3.1",
+  "releaseKind": "compatible-retained-update-maintenance",
+  "baselineVersion": "7.3.0",
+  "branch": "codex/resource-root-followup",
+  "baseCommit": "6eacb19",
+  "scope": "Unique Apply/upload journals; inverse incidence; transaction-safe final frontier; explicit capacity attribution. No MC FPS/RAM acceptance.",
+  "nativeSha256": "16b82de59926172a15b99b3550234c2e5d531e0eed5e247ecb19aa248a727560",
+  "initialGpuPercent": 0,
+  "correctness": {
+    "journal": {
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 4.703,
+      "stdout": "docs/quality/data/retained-update/journal.log",
+      "reusedFromEarlierInBatch": true
+    },
+    "regions": {
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 2.37,
+      "stdout": "docs/quality/data/retained-update/regions.log",
+      "reusedFromEarlierInBatch": false
+    },
+    "memory-off": {
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 0.188,
+      "stdout": "docs/quality/data/retained-update/memory-off.log",
+      "reusedFromEarlierInBatch": true
+    },
+    "memory-enabled": {
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 0.099,
+      "stdout": "docs/quality/data/retained-update/memory-enabled.log",
+      "reusedFromEarlierInBatch": true
+    },
+    "candidate-mixed": {
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 0.621,
+      "stdout": "docs/quality/data/retained-update/candidate-mixed.log",
+      "reusedFromEarlierInBatch": false
+    },
+    "baseline-refit": {
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 0.835,
+      "stdout": "docs/quality/data/retained-update/baseline-refit.log",
+      "reusedFromEarlierInBatch": false
+    },
+    "candidate-refit": {
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 0.497,
+      "stdout": "docs/quality/data/retained-update/candidate-refit.log",
+      "reusedFromEarlierInBatch": false
+    },
+    "native-sparse": {
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 5.778,
+      "peakGB": 2.156,
+      "stdout": "docs/quality/data/retained-update/native-sparse-receipt.log",
+      "fullStdoutPreserved": false
+    }
+  },
+  "updateCost": {
+    "sources": 42191,
+    "upserts": 4096,
+    "removeInsert": 0,
+    "warmup": 8,
+    "samples": 32,
+    "order": [
+      "baseline",
+      "candidate"
+    ],
+    "baseline": {
+      "tree": {
+        "meanMs": 0.996647,
+        "p95Ms": 1.4474
+      },
+      "prepare": {
+        "meanMs": 2.27007,
+        "p95Ms": 3.1298
+      },
+      "regions": {
+        "meanMs": 3.79608,
+        "p95Ms": 4.6323
+      }
+    },
+    "candidate": {
+      "tree": {
+        "meanMs": 1.19083,
+        "p95Ms": 1.4031
+      },
+      "prepare": {
+        "meanMs": 0.624666,
+        "p95Ms": 0.7791
+      },
+      "regions": {
+        "meanMs": 4.68661,
+        "p95Ms": 7.3488
+      }
+    },
+    "stageMeanSumMs": {
+      "old": 7.062797,
+      "new": 6.502106
+    },
+    "notAnInterleavedOrMcBenchmark": true
+  },
+  "mixedCandidateCost": {
+    "tree": {
+      "meanMs": 1.55139,
+      "p95Ms": 2.3154
+    },
+    "prepare": {
+      "meanMs": 0.734834,
+      "p95Ms": 1.0403
+    },
+    "regions": {
+      "meanMs": 7.06463,
+      "p95Ms": 8.6678
+    }
+  },
+  "baselineMixedRegression": {
+    "exit": 1,
+    "correctnessFailure": true,
+    "source": 2114,
+    "visits": 0,
+    "point": [
+      56,
+      1,
+      84
+    ],
+    "usedForSpeedup": false,
+    "stdout": "docs/quality/data/retained-update/baseline-mixed-regression.log"
+  },
+  "journal": {
+    "attempts": 77411,
+    "enqueued": 7232,
+    "refitRawDirtyOld": 2155719,
+    "refitRawDirtyNew": 607177
+  },
+  "productionSourceSha256": {
+    "renderer-rtxpt/src/main/cpp/rtxpt_jni.cpp": "7109b73d82256d3b8cf11183ba1532314cade38d046a3ec7811848a43ed5efca",
+    "renderer-rtxpt/src/main/cpp/rtxpt_memory_diagnostics.h": "c278b26e75a50f626777e4a4fb7858261a711b9951a6aa1d727af470f9204f3f",
+    "renderer-rtxpt/src/main/cpp/rtxpt_resource_arena.h": "0ba6c000f5e942e309a6c54598eb16677254fd5f00ca93e47bb7e389353df5c8",
+    "renderer-rtxpt/src/main/cpp/rtxpt_retained_light_tree.h": "647bde6adb5a3a644312b217c840ccdab0df0d8944d6259a3d7ffa2ab5cb326b",
+    "renderer-rtxpt/src/main/cpp/rtxpt_sparse_lighting.h": "baf7e929ad5061abe95a9867a4bad90d0d82327ae2e06dd5fe0d19e332bce195",
+    "renderer-rtxpt/src/main/cpp/rtxpt_sparse_regions.h": "20dc3534eab53bc51e0706d7182ecd8fe54755b849691c99f20a7500e9c9811c",
+    "renderer-rtxpt/src/main/cpp/rtxpt_upload_arena.h": "3a14ccf8d07a2f40a9bba9660e1f9ef1663d3d36e62bedd825f9867e07e15053"
+  },
+  "productionClassSha256": {
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptNative.class": "73ca16342935d661fa07aa1f172973d76359f9bdad20f41680b0e28d6bc47416",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer.class": "4aa6c22422208252de965bab6807fac905e20d79da990c76d5817d389529f0ba",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess.class": "cd278e3f31261d700467af7a8db12f56a0acd066e371ca8673c69459b654d597"
+  },
+  "testClassSha256": {
+    "renderer-rtxpt/build/classes/java/test/top/ceroxe/rt/renderer/rtxpt/RtxptSparseUploadNativeSelfTest.class": "c98ff93cfbdd1e953babe7f0dafef07724a8182acc175cad17fc4b7ae37553f2"
+  },
+  "evidenceFileSha256": {
+    "docs/quality/data/retained-update/baseline-mixed-regression.log": "6fb798e82e45f974e4978634d8a6605f8f4e0528b22398def16978bb2b234804",
+    "docs/quality/data/retained-update/baseline-refit.log": "f3f53d48f8017acb4eb3bf2ca69804efd305ff2c085560e93cc3c2e156ae9105",
+    "docs/quality/data/retained-update/candidate-mixed.log": "a56737dfe59af3240853b2bfcab01c8caa506276dab61de042651afb68b45d38",
+    "docs/quality/data/retained-update/candidate-refit.log": "11ee648caffcc7eda62e0078d5a2ad4c51ab1a3a3901d8a6347b3fc5cd8f30c4",
+    "docs/quality/data/retained-update/initial-gpu.log": "13d824879fd3e9c82a11d8906c1789fb0cde8ff4e23dec4a3d30819cff60b7dd",
+    "docs/quality/data/retained-update/journal.log": "2b79cbe5be7007a68605108a25c93c1cd25d10a67416831352b287aab7936b00",
+    "docs/quality/data/retained-update/memory-enabled.log": "dab3e3d74b8654d5e67c617dddca1747afd14f964461cbceda01989e64045005",
+    "docs/quality/data/retained-update/memory-off.log": "bcbdeeb439096e4339b1ae1ad59076517bc95188ea0a4c8de203d94858c164f3",
+    "docs/quality/data/retained-update/native-sparse-receipt.log": "02461d1b0ca1835214980567c05e5c38339146f58675289b8935e1933b6ccb2b",
+    "docs/quality/data/retained-update/package-receipt.log": "7b8566977a605be1ca7d0c907ae3b15f31abd60e8c758eefdf617a475a86350f",
+    "docs/quality/data/retained-update/regions.log": "5bc8e029a30ca87a17e281d9fa907a205c1b4434ef7ca0f4c8e37e7d9a4ba34d"
+  },
+  "limitations": [
+    "Single same-fixture CPU cost pair, not FPS; regions mean and P95 regressions retained.",
+    "No process working-set or MC crash-stability claim; device-local is not Task Manager memory.",
+    "Earlier transient PowerShell AMSI access violation retried once successfully; no API/JVM crash in this batch.",
+    "Journal and memory contracts reused from earlier in this same batch; no changes to these components since those checks."
+  ]
+}

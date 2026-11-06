@@ -13,6 +13,7 @@ int main(int argc,char** argv) {
     RtrMemoryDiagnostics::Created(nullptr,"test","test",nullptr,nullptr,0);
     RtrMemoryDiagnostics::Released(nullptr);
     RtrMemoryDiagnostics::Checkpoint("selftest");
+    RtrMemoryDiagnostics::Capacity("selftest","cpu_payload",16,64,0,48);
     {RtrMemoryDiagnostics::Scope scope("selftest.scope");}
     if(!RtrMemoryDiagnostics::resources.empty())return 2;
     {
@@ -28,6 +29,7 @@ int main(int argc,char** argv) {
     const auto queries=RtrMemoryDiagnostics::processQueries.load(),clocks=RtrMemoryDiagnostics::clockCalls.load(),writes=RtrMemoryDiagnostics::writes.load();
     for(size_t i=0;i<100000;++i){
         RtrMemoryDiagnostics::Scope scope("selftest.off");RtrMemoryDiagnostics::Checkpoint("off");
+        RtrMemoryDiagnostics::Capacity("selftest.off","cpu_payload",0,64);
         RtrMemoryDiagnostics::Created(nullptr,"test","test",nullptr,nullptr,0);RtrMemoryDiagnostics::Released(nullptr);
     }
     if(RtrMemoryDiagnostics::processQueries!=queries||RtrMemoryDiagnostics::clockCalls!=clocks||RtrMemoryDiagnostics::writes!=writes)return 6;

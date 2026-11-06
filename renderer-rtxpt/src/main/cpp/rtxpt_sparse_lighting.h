@@ -82,7 +82,7 @@ public:
         records.reserve(capacity);proxies.reserve(capacity);ids.reserve(capacity);slots.reserve(capacity);
         // Bulk reset builds its spatial tree once after all records are present.
         // Incremental ancestor logs and a soon-replaced tree reserve are unused.
-        if(!reset){tree.Reserve(capacity);dirtyRecords.reserve(dirtyRecords.size()+changed.size()+removed.size());dirtyNodes.reserve(dirtyNodes.size()+(changed.size()+removed.size())*128);}
+        if(!reset){tree.Reserve(capacity);tree.BeginChanges();dirtyRecords.reserve(dirtyRecords.size()+changed.size()+removed.size());dirtyNodes.reserve(tree.nodes.capacity());}
         if(reset){records.clear();proxies.clear();ids.clear();slots.clear();dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;visibleMaxCount=channelMaxCount=dynamicCount=linearCount=0;regions.Clear();full=true;}
         uint64_t visited=tree.visited;
         for(auto id:removed){uint32_t slot=slots.at(id),last=uint32_t(records.size()-1);Group(records[slot],false);tree.Remove(slot,dirtyNodes);slots.erase(id);
@@ -108,11 +108,10 @@ public:
         headerDirty=true;work[0]=records.size();++work[1];work[2]+=changed.size();work[3]+=removed.size();work[4]+=tree.visited-visited;
     }
     std::vector<uint32_t> PrepareQueryNodes(bool rebuild){
-        RtrDiagnostics::Scope evidence(RtrDiagnostics::SparseQueryPreparation,rebuild?tree.nodes.size():dirtyNodes.size(),0,1,0,0,RtrDiagnostics::revision.load(),rebuild?RtrDiagnostics::CapacityGrowth:0);
+        RtrDiagnostics::Scope evidence(RtrDiagnostics::SparseQueryPreparation,rebuild?tree.nodes.size():tree.changes.size(),0,1,0,0,RtrDiagnostics::revision.load(),rebuild?RtrDiagnostics::CapacityGrowth:0);
         queryNodes.resize(tree.nodes.size());
-        auto changed=dirtyNodes;
+        auto changed=tree.changes;
         if(rebuild){changed.resize(tree.nodes.size());std::iota(changed.begin(),changed.end(),0);}
-        std::sort(changed.begin(),changed.end());changed.erase(std::unique(changed.begin(),changed.end()),changed.end());
         // Rotations can reorder indices. Heights, rather than allocation order,
         // guarantee that every changed child is aggregated before its parent.
         std::sort(changed.begin(),changed.end(),[&](auto a,auto b){return tree.heights[a]<tree.heights[b];});

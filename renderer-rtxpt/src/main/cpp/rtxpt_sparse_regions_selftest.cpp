@@ -5,6 +5,8 @@
 #include <random>
 #include <set>
 #include <stdexcept>
+#include <chrono>
+#include <string>
 
 struct Light {std::array<float,4> positionType{},directionRange{},colorIntensity{};};
 struct RtrSparseRegionsTestAccess {
@@ -48,7 +50,7 @@ static void Oracle(const RtrSparseRegions& regions,const rtr::RetainedLightTree&
         if(n.light>=0){auto& count=visits.at(uint32_t(n.light));Check(++count==1,"Duplicated source across regional/global roots");}
         else{stack.push_back(uint32_t(n.left));stack.push_back(uint32_t(n.right));}}
     for(size_t i=0;i<lights.size();i++){double distance=0;for(int a=0;a<3;a++){double d=std::max(std::abs(double(p[a])-lights[i].positionType[a])-.4,0.);distance+=d*d;}
-        if(distance<double(lights[i].directionRange[3])*lights[i].directionRange[3])Check(visits[i]==1,"Regional index omitted a supported source");}
+        if(distance<double(lights[i].directionRange[3])*lights[i].directionRange[3]&&visits[i]!=1)throw std::runtime_error("Regional exact-once source="+std::to_string(i)+" visits="+std::to_string(visits[i])+" point="+std::to_string(p[0])+","+std::to_string(p[1])+","+std::to_string(p[2]));}
 }
 // Poison retained GPU slack and copy only the production dirty spans, then
 // validate every shader-readable bucket and list word, including root id zero.
@@ -72,7 +74,64 @@ struct UploadOracle {
         r.Uploaded();
     }
 };
-int main(){try{
+static void Incidence(const RtrSparseRegions& r){
+#ifdef RTR_REGION_INCIDENCE
+    size_t links=0;for(const auto& [id,root]:r.roots){Check(root.cells.size()==root.cellSlots.size(),"Root incidence sizes");
+        for(size_t i=0;i<root.cells.size();++i){const auto& cell=r.cells.at(root.cells[i]);auto slot=root.cellSlots[i];
+            Check(slot<cell.roots.size()&&cell.roots[slot]==id&&cell.rootCellIndices.at(slot)==i,"Exact root/cell reverse incidence");++links;}}
+    Check(links==r.links,"Every live incidence is represented once");
+#endif
+}
+static void Journal(){
+#ifdef RTR_RETAINED_UPDATE_JOURNAL
+    std::vector<Light> lights(512);for(uint32_t i=0;i<lights.size();++i){lights[i].positionType={float(i%31),1,float(i/31),1};lights[i].directionRange[3]=3;}
+    rtr::RetainedLightTree tree;double normalization=1;tree.Rebuild(lights,&normalization);std::vector<uint32_t> dirty;
+    for(int batch=0;batch<60;++batch){tree.BeginChanges();const auto before=tree.nodes;const auto parents=tree.parents;
+        for(int edit=0;edit<128;++edit){uint32_t slot=uint32_t(edit*7)%uint32_t(lights.size());lights[slot].positionType[0]+=.25f;tree.Refit(lights,slot,normalization,dirty);}
+        if(batch%3==0){tree.Remove(17,dirty);lights[17]=lights.back();lights.pop_back();lights.push_back({{float(batch),2,3,1},{0,0,0,3},{}});tree.Insert(lights,uint32_t(lights.size()-1),normalization,dirty);}
+        auto unique=dirty;std::sort(unique.begin(),unique.end());Check(std::adjacent_find(unique.begin(),unique.end())==unique.end(),"Upload queue repeats a node");
+        auto delta=tree.changes;std::sort(delta.begin(),delta.end());Check(std::adjacent_find(delta.begin(),delta.end())==delta.end(),"Apply queue repeats a node");
+        for(uint32_t i=0;i<tree.nodes.size();++i)if(i>=before.size()||std::memcmp(&before[i],&tree.nodes[i],64)||parents[i]!=tree.parents[i])Check(std::binary_search(delta.begin(),delta.end(),i),"Changed final state missing from Apply journal");
+        // Failed upload may sort the pending queue but must not consume it.
+        std::sort(dirty.begin(),dirty.end());if(batch%4==3)dirty.clear();
+    }
+    dirty.clear();tree.Rebuild(lights,&normalization);tree.BeginChanges();tree.Refit(lights,0,normalization,dirty);Check(!dirty.empty()&&!tree.changes.empty(),"Rebuild left stale journal epochs");
+    std::cout<<"SPARSE_UPDATE_JOURNAL PASS transactions=60 pendingUploads=true failedUploadSort=true deleteReuse=true rebuild=true attempts="<<tree.dirtyAttempts<<" enqueued="<<tree.dirtyEnqueued<<"\n";
+#endif
+}
+static void Benchmark(bool mixed=true){
+    using Clock=std::chrono::steady_clock;std::vector<Light> lights(42191);
+    for(uint32_t i=0;i<lights.size();++i){lights[i].positionType={float(i%163)*.4f,1,float(i/163)*.4f,1};lights[i].directionRange[3]=3.208f;}
+    rtr::RetainedLightTree tree;double normalization=1;tree.Rebuild(lights,&normalization);auto query=Query(tree,lights);RtrSparseRegions regions;UploadOracle upload;
+    regions.Update(tree,query,true,{},true);upload.Apply(regions);std::vector<uint32_t> dirty;std::array<std::vector<double>,3> times;uint64_t raw=0,uniqueCount=0;
+    for(int batch=0;batch<40;++batch){dirty.clear();
+#ifdef RTR_RETAINED_UPDATE_JOURNAL
+        tree.BeginChanges();
+#endif
+        auto start=Clock::now();for(uint32_t edit=0;edit<4096;++edit){auto slot=(uint32_t(batch)*4096+edit*7)%uint32_t(lights.size());lights[slot].positionType[0]+=(batch%2?1.f:-1.f)*8.125f;tree.Refit(lights,slot,normalization,dirty);}
+        if(mixed)for(int edit=0;edit<128;++edit){uint32_t slot=(uint32_t(batch)*19+uint32_t(edit)*13)%uint32_t(lights.size());tree.Remove(slot,dirty);lights[slot]=lights.back();lights.pop_back();lights.push_back({{float((batch*123+edit)%163)*.4f,1,float((batch*17+edit)%259)*.4f,1},{0,0,0,3.208f},{}});tree.Insert(lights,uint32_t(lights.size()-1),normalization,dirty);}
+        auto prepared=Clock::now();
+#ifdef RTR_RETAINED_UPDATE_JOURNAL
+        auto changed=tree.changes;
+#else
+        auto changed=dirty;std::sort(changed.begin(),changed.end());changed.erase(std::unique(changed.begin(),changed.end()),changed.end());
+#endif
+        std::sort(changed.begin(),changed.end(),[&](auto a,auto b){return tree.heights[a]<tree.heights[b];});query.resize(tree.nodes.size());
+        for(auto id:changed){auto& n=query[id];n=tree.nodes[id];if(n.light< -1)continue;if(n.light>=0){const auto& l=lights[uint32_t(n.light)];for(int a=0;a<3;++a){n.minimum[a]=l.positionType[a]-.4f;n.maximum[a]=l.positionType[a]+.4f;}n.range=l.directionRange[3];}
+            else{const auto& a=query[uint32_t(n.left)];const auto& b=query[uint32_t(n.right)];for(int axis=0;axis<3;++axis){n.minimum[axis]=std::min(a.minimum[axis],b.minimum[axis]);n.maximum[axis]=std::max(a.maximum[axis],b.maximum[axis]);}n.range=std::max(a.range,b.range);}}
+        auto regional=Clock::now();regions.Update(tree,query,true,changed);auto end=Clock::now();
+        if(batch>=8){times[0].push_back(std::chrono::duration<double,std::milli>(prepared-start).count());times[1].push_back(std::chrono::duration<double,std::milli>(regional-prepared).count());times[2].push_back(std::chrono::duration<double,std::milli>(end-regional).count());raw+=dirty.size();uniqueCount+=changed.size();}
+        Incidence(regions);upload.Apply(regions);
+    }
+    const auto expected=Query(tree,lights);for(size_t i=0;i<query.size();++i)if(std::memcmp(&query[i],&expected[i],64))throw std::runtime_error("Incremental query differs from full query at node="+std::to_string(i));
+    for(uint32_t p=0;p<64;++p)Oracle(regions,tree,lights,{float(p%8)*8,1,float(p/8)*12});
+    const char* names[]={"tree","prepare","regions"};for(size_t i=0;i<times.size();++i){auto values=times[i];double sum=0;for(auto n:values)sum+=n;std::sort(values.begin(),values.end());std::cout<<"SPARSE_UPDATE_COST stage="<<names[i]<<" samples=32 meanMs="<<sum/values.size()<<" p95Ms="<<values[30]<<"\n";}
+    std::cout<<"SPARSE_UPDATE_BENCH PASS sources=42191 upserts=4096 removeInsert="<<(mixed?128:0)<<" rawDirty="<<raw<<" queryNodes="<<uniqueCount<<" links="<<regions.links<<" cells="<<regions.cells.size()<<"\n";
+}
+int main(int argc,char** argv){try{
+    if(argc>1&&std::string(argv[1])=="bench"){Benchmark();return 0;}
+    if(argc>1&&std::string(argv[1])=="bench-refit"){Benchmark(false);return 0;}
+    if(argc>1&&std::string(argv[1])=="journal"){Journal();return 0;}
     {RtrSparseRegions journal;journal.buckets=0;journal.packed.resize(4);
         RtrSparseRegionsTestAccess::MarkWords(journal,2,1);RtrSparseRegionsTestAccess::MarkWords(journal,2,17);
         Check(journal.dirtyNodes.size()==1&&journal.dirtyNodes[0]==2,"Repeated words did not coalesce at the owning node");

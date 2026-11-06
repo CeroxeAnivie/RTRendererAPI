@@ -1953,5 +1953,64 @@
         "renderer-rtxpt": "f04ecd0581cf4b0b6a9d10bd6a161d838d7b22baf8e083c642b42974cd143144"
       }
     }
+  },
+  "retainedUpdateCandidate": {
+    "id": "transaction-journals-and-region-incidence",
+    "date": "2026-11-07",
+    "baselineVersion": "7.3.0",
+    "candidateVersion": "7.3.1",
+    "status": "retained-targeted-checks-pass-local-region-regressions-disclosed",
+    "differenceFromRejectedFrontier": "Retains exactly the existing treelet frontier, coverage predicates and packed query layout. Changes journal ownership and adds inverse incidence slots; no source-leaf frontier or larger query structures.",
+    "scope": [
+      "Upload-epoch unique tree journal and Apply-epoch unique query preparation",
+      "Constant-time inverse incidence removal with final transaction cell publication",
+      "Explicit memory-only CPU payload/device-local/mapped-upload capacity and idle-page attribution",
+      "Final-frontier transaction fixes released mixed remove/reuse source omission"
+    ],
+    "limits": "CPU microbenchmark is not MC FPS or Task Manager memory. No unproven device pool shrink.",
+    "measured": {
+      "sources": 42191,
+      "upserts": 4096,
+      "removeInsert": 0,
+      "warmup": 8,
+      "samples": 32,
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "baseline": {
+        "tree": {
+          "meanMs": 0.996647,
+          "p95Ms": 1.4474
+        },
+        "prepare": {
+          "meanMs": 2.27007,
+          "p95Ms": 3.1298
+        },
+        "regions": {
+          "meanMs": 3.79608,
+          "p95Ms": 4.6323
+        }
+      },
+      "candidate": {
+        "tree": {
+          "meanMs": 1.19083,
+          "p95Ms": 1.4031
+        },
+        "prepare": {
+          "meanMs": 0.624666,
+          "p95Ms": 0.7791
+        },
+        "regions": {
+          "meanMs": 4.68661,
+          "p95Ms": 7.3488
+        }
+      },
+      "stageMeanSumMs": {
+        "old": 7.062797,
+        "new": 6.502106
+      },
+      "notAnInterleavedOrMcBenchmark": true
+    }
   }
 }

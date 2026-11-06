@@ -1,0 +1,4 @@
+Execution receipt from actual tool result; not a reconstructed full stdout stream.
+SPARSE_UPLOAD PASS frames=24 grow128to4096=true remove3072=true sameFrame=true initializations=1 maxWriteBytes=1048576 maxStagingAllocationBytes=2097152 defaultCreates=38 cpuResizes=6 ommRefreshes=1 stagingRequests=1720 stagingBytes=24217812 recordBytes=675840 indexBytes=20492480
+Bounded build peak process-tree commit: 2.156 GB; exit=0
+Bounded build timing: wall=5.778s; tree CPU=10.453s; average busy cores=1.81

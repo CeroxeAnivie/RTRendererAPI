@@ -85,6 +85,7 @@ private:
 public:
     RtrUploadArena()=default;RtrUploadArena(const RtrUploadArena&)=delete;
     std::array<uint64_t,4> Statistics()const{std::lock_guard lock(state->mutex);return {state->allocated,state->peakAllocated,state->leased,state->peakLeased};}
+    uint64_t IdlePageBytes()const{std::lock_guard lock(state->mutex);uint64_t bytes=0;for(const auto& page:state->pages)if(page->free==page->used.size())bytes+=page->used.size()*Unit;return bytes;}
     ~RtrUploadArena(){Stop();}
     void Prepare(nvrhi::IDevice* device){
         if(worker.joinable())return;
