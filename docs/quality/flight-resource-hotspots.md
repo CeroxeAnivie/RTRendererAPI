@@ -97,4 +97,33 @@
 
 同一序列的 Import 在 arena pending 后还会重新解码；区域覆盖生成、真实资源索引和上传也未被完全消除。主线使用本批最终制品后继续快飞，不能保证回到 180/200 FPS。
 
-本批全部生产源码、正式工具和文档先在当前分支提交并上传 GitHub，确认成功后四模块发布 Maven Local **7.2.2**，不覆盖 7.2.1，不发 Maven Central。最终制品身份通过 [Verify-FlightHotspotRelease.py](../../tools/Verify-FlightHotspotRelease.py) 核对；发布执行记录随后补入本文件和 JSON，不重发已正确制品。
+本批全部生产源码、正式工具和文档已先在当前分支提交并上传 GitHub。API/core 发布时源码为 eab5c7c，最终包装与身份工具源码为 93f95b0763b7b7aa97b02bc8df40e48ac939c878，均先确认 push 成功。四模块 **7.2.2 Maven Local 已完成**；不覆盖 7.2.1，不发 Maven Central。发布后只补本节记录，不重发正确制品。
+
+## 最终发布身份
+
+正式 [Verify-FlightHotspotRelease.py](../../tools/Verify-FlightHotspotRelease.py) **38 项通过**：四模块 main/sources/javadoc 与 POM/module 均与 Maven Local 相同；543 个公开 API class 与 7.2.1 逐字节相同；1621 个实际 runtime 依赖/shader 文件与旧包逐字节相同；NVIDIA 21 个 native 文件未变；81 项 SDK 文件、版本和 shader ABI 正确。runtime 中 JNI 与最终受测 CA16 完全一致。
+
+| 制品 | SHA256 |
+|---|---|
+| renderer-api main JAR | fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c |
+| renderer-core main JAR | a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69 |
+| renderer-nvidia main JAR | 8e076fb5e98711e4ef599e47116f25c2c050fabc4ae8d4f6d09bdf03a0827f71 |
+| renderer-rtxpt main JAR | 417b4abc0820d89ef248f42bb3a279b15adffbb634243e917315e96f62a40e6c |
+| 内嵌 rtxpt-runtime.zip | b7da9590a9125553d39d84f54472d7beaf4594bde8e631d96bc34ca8ea86b163 |
+| native symbols ZIP | db7a3d219eeeb0cbbb336ceff327a463ae1452c3d1ad145b6b6f576cb367104e |
+| PDB | 1eb1981e044c448b69d79e122475963eb640b1597a838bb0f2967d28ac9030c2 |
+
+Maven Local 根目录为 D:/.m2/repository/top/ceroxe/rt；C:/Users/Administrator/.m2 是其 junction。symbols ZIP 的构建/安装字节一致，PDB 与当前 CA16 构建目录相同。
+
+NVIDIA 未改生产源码，原 DLL 与 7.2.1 发布包逐字节相同。按 package-only 复用现有 DLL，显式核对全部本机 SDK 契约文件与 RTXMU 固定 revision；只跳过 configure/compile，没有跳过 verifyPackagedNvidiaRuntime、shader 六预算或制品身份门禁。SDK 仅由进程环境传入，未下载或重建。
+
+| 发布步骤 | 结果 | wall s | Job 峰值 GiB | 旧/差值 |
+|---|---|---:|---:|---|
+| 首 Maven 配置 | 缺当前 release-index，失败 | 6.779 | 1.307 | 任务不同，不算收益 |
+| api/core 发布 + NVIDIA SDK 门禁 | 前两模块成功，缺 SDK 环境失败 | 26.874 | 2.086 | 不作性能对照 |
+| 仅剩余 nvidia/rtxpt 发布 | 通过 | 77.675 | 1.434 | 未重发 api/core |
+| 四模块正式身份核验 | 38 项通过 | 19.172 | 1.800 | 无旧任务对照 |
+
+前两轮失败日志均保留。最后一次 ignored 包装脚本中，Windows PowerShell 无法自动加载 Get-FileHash，出现非终止辅助预检错误；外层发布前已核对精确哈希，发布后的正式 38 项核验独立确认全部已安装字节，未以该错误掩盖门禁或重发成功任务。Javadoc 的缺注释警告未作为测试失败。
+
+这批仍没有新 MC 快飞 FPS，主线须使用本批完整身份实测。未把夹具改善写成已恢复 180/200 FPS。

@@ -1068,6 +1068,35 @@
       "productionCause": true,
       "root": "Donut vector() leaves components untouched; 384 response tail pairs not initialized",
       "corrected": true
+    },
+    {
+      "kind": "current version missing in release index",
+      "productionCause": false,
+      "retained": true,
+      "corrected": true,
+      "log": "build/reports/flight-resource-hotspots/publish-maven-local-first-failure.log"
+    },
+    {
+      "kind": "NVIDIA SDK environment missing during publication",
+      "productionCause": false,
+      "retained": true,
+      "corrected": true,
+      "alreadyPublished": [
+        "renderer-api",
+        "renderer-core"
+      ],
+      "retryOnly": [
+        "renderer-nvidia",
+        "renderer-rtxpt"
+      ],
+      "log": "build/reports/flight-resource-hotspots/publish-sdk-missing-failure.log"
+    },
+    {
+      "kind": "Windows PowerShell Get-FileHash unavailable in ignored package wrapper",
+      "productionCause": false,
+      "nonTerminating": true,
+      "retained": true,
+      "resolution": "Outer pre-publication hashes were checked; the successful 38-check formal verifier independently compared complete installed artifacts and native bytes. No successful Maven task repeated."
     }
   ],
   "execution": [
@@ -1106,6 +1135,30 @@
       "exit": 0,
       "wallSeconds": 64.18,
       "peakGiB": 2.613
+    },
+    {
+      "name": "maven-release-index-configuration-failure",
+      "exit": 1,
+      "wallSeconds": 6.779,
+      "peakGiB": 1.307
+    },
+    {
+      "name": "maven-api-core-published-nvidia-sdk-gate-failure",
+      "exit": 1,
+      "wallSeconds": 26.874,
+      "peakGiB": 2.086
+    },
+    {
+      "name": "maven-remaining-nvidia-rtxpt-package-only",
+      "exit": 0,
+      "wallSeconds": 77.675,
+      "peakGiB": 1.434
+    },
+    {
+      "name": "four-module-published-identities",
+      "exit": 0,
+      "wallSeconds": 19.172,
+      "peakGiB": 1.8
     }
   ],
   "dependencyLock": {
@@ -1113,8 +1166,143 @@
     "previousNrdSha256": "55b64cd8a144865c2b3c0bc03016db2eae93e6f73bd6e71c11e33316fae34bad"
   },
   "publication": {
-    "sourcePush": "pending",
-    "mavenLocal": "pending",
-    "central": false
+    "sourcePush": "passed",
+    "sourceCommit": "93f95b0763b7b7aa97b02bc8df40e48ac939c878",
+    "earlierApiCoreSourceCommit": "eab5c7c3975fa36a5566973aab4080963169563a",
+    "mavenLocal": "passed",
+    "mavenLocalRoot": "D:/.m2/repository/top/ceroxe/rt",
+    "central": false,
+    "identity": {
+      "version": "7.2.2",
+      "sourceCommit": "93f95b0763b7b7aa97b02bc8df40e48ac939c878",
+      "branch": "codex/resource-root-followup",
+      "githubPushedBeforeMaven": true,
+      "modules": {
+        "renderer-api": {
+          "main": {
+            "sha256": "fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c",
+            "bytes": 795823
+          },
+          "-sources": {
+            "sha256": "f4a824489c82df40615414dce6a679b9c78167fcf30916070a1f33382bd20ac6",
+            "bytes": 367699
+          },
+          "-javadoc": {
+            "sha256": "9890b1f2586a13c4b6025f486d6148996cf176c18a54b6d46a5bf4f570b2fafe",
+            "bytes": 6520166
+          }
+        },
+        "renderer-core": {
+          "main": {
+            "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69",
+            "bytes": 14561563
+          },
+          "-sources": {
+            "sha256": "efc4c96aef8401a8a5a5ab05a568a36227ec9a9d26aa9d4362f3838e114c45b3",
+            "bytes": 12913129
+          },
+          "-javadoc": {
+            "sha256": "be9eeb4530f5d632f4acc3f0d84ae99f466b00a6a6fd8310b03edd0655060ccd",
+            "bytes": 6229529
+          }
+        },
+        "renderer-nvidia": {
+          "main": {
+            "sha256": "8e076fb5e98711e4ef599e47116f25c2c050fabc4ae8d4f6d09bdf03a0827f71",
+            "bytes": 62644787
+          },
+          "-sources": {
+            "sha256": "2cf97cfaadc9a76b203771086eff4d5711db3e573204de4191a1ae1aa646d62e",
+            "bytes": 57017
+          },
+          "-javadoc": {
+            "sha256": "580f1786f8fa6304dc0b057414217664dba6885451c71fa033541143c0519a94",
+            "bytes": 4155746
+          }
+        },
+        "renderer-rtxpt": {
+          "main": {
+            "sha256": "417b4abc0820d89ef248f42bb3a279b15adffbb634243e917315e96f62a40e6c",
+            "bytes": 775084424
+          },
+          "-sources": {
+            "sha256": "d1bb65ae94ab85da3e0da1ee95143a5f7b33584a0defbb87f818f9040a3db51b",
+            "bytes": 83622
+          },
+          "-javadoc": {
+            "sha256": "0dd9289cb14c5bbad0413309ec3819c88911ebbff74b0e0cb02cb07525227865",
+            "bytes": 4370958
+          }
+        }
+      },
+      "nativeSha256": "ca1611e9562b63aad615b2743761992d618a669a593a648530a161773cd779cb",
+      "runtimeZipSha256": "b7da9590a9125553d39d84f54472d7beaf4594bde8e631d96bc34ca8ea86b163",
+      "nvidiaNativeSha256": "e5c4550ef7030b44b9e5e089147c5aac2eaea4183a46ba97bf6b5c79d8e379af",
+      "nvidiaRuntimeFiles": 21,
+      "lockedRuntimeFiles": 1621,
+      "apiClassesUnchanged": 543,
+      "sdkManifestFiles": 81,
+      "shaderAbiSha256": "f7671628cf8d938358c45819bff01276c5c3eb76a3398e4ca3f25f490a9cb3ac",
+      "checks": [
+        "source-HEAD-is-published-commit",
+        "source-current-branch-pushed",
+        "renderer-api-bytes",
+        "renderer-api-sources-bytes",
+        "renderer-api-javadoc-bytes",
+        "renderer-api.pom-metadata",
+        "renderer-api.module-metadata",
+        "renderer-core-bytes",
+        "renderer-core-sources-bytes",
+        "renderer-core-javadoc-bytes",
+        "renderer-core.pom-metadata",
+        "renderer-core.module-metadata",
+        "renderer-nvidia-bytes",
+        "renderer-nvidia-sources-bytes",
+        "renderer-nvidia-javadoc-bytes",
+        "renderer-nvidia.pom-metadata",
+        "renderer-nvidia.module-metadata",
+        "renderer-rtxpt-bytes",
+        "renderer-rtxpt-sources-bytes",
+        "renderer-rtxpt-javadoc-bytes",
+        "renderer-rtxpt.pom-metadata",
+        "renderer-rtxpt.module-metadata",
+        "public-api-class-inventory-unchanged",
+        "public-api-all-class-bytes-unchanged",
+        "nvidia-runtime-inventory-unchanged",
+        "nvidia-runtime-all-bytes-unchanged",
+        "nvidia-runtime-native-current",
+        "runtime-zip-digest",
+        "runtime-jni-tested",
+        "runtime-jni-current",
+        "runtime-dependency-inventory-unchanged",
+        "runtime-prior-dependencies-and-shaders-retained",
+        "runtime-sdk-version-current",
+        "runtime-sdk-format-and-shader-abi-unchanged",
+        "runtime-sdk-manifest-unique-files",
+        "runtime-sdk-manifest-file-identities",
+        "runtime-sdk-shader-abi-inventory",
+        "runtime-shader-sources-current"
+      ],
+      "checksPassed": 38
+    },
+    "nativeSymbols": {
+      "path": "D:/.m2/repository/top/ceroxe/rt/renderer-rtxpt/7.2.2/renderer-rtxpt-7.2.2-native-symbols.zip",
+      "sha256": "db7a3d219eeeb0cbbb336ceff327a463ae1452c3d1ad145b6b6f576cb367104e",
+      "bytes": 26226581,
+      "pdbSha256": "1eb1981e044c448b69d79e122475963eb640b1597a838bb0f2967d28ac9030c2",
+      "pdbMatchesCurrent": true,
+      "builtMatchesMavenLocal": true
+    },
+    "nvidiaPackageOnly": {
+      "nativeSourcesChanged": false,
+      "nativeBytesSameAs721": true,
+      "skippedBuildTasks": [
+        "configureNvidiaBridge",
+        "compileNvidiaBridge"
+      ],
+      "formalRuntimeClosureGate": "passed"
+    },
+    "configuration": "Existing SDK contract files and pinned RTXMU revision checked; process environment only; no SDK download or rebuild. C:/Users/Administrator/.m2 is a junction to D:/.m2.",
+    "passedMatricesRepeated": false
   }
 }
