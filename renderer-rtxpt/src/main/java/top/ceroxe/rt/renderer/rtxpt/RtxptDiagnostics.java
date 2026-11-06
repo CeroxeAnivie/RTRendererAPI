@@ -22,7 +22,15 @@ public final class RtxptDiagnostics {
     public enum SubmissionKind { INITIAL, UPDATE, STEADY, RESIZE, WAIT }
     /** A borrowed thread-safe view. It never enters the renderer or waits for its owner thread.
      * A monitor stays valid across level changes and expires when a new native session replaces it. */
-    @FunctionalInterface public interface Monitor { Snapshot snapshot(); }
+    @FunctionalInterface public interface Monitor {
+        Snapshot snapshot();
+        /** Newly completed events/submissions since registration or the previous poll.
+         * Active scopes remain provisional observations. Independent monitors never drain each other.
+         * Implementations without incremental transport retain the snapshot fallback. */
+        default Snapshot poll(){return snapshot();}
+        /** Submission samples overwritten before this monitor could poll them. */
+        default long missedSubmissions(){return 0;}
+    }
     /** Does not enter the renderer, poll a fence or wait for the owner thread. */
     @FunctionalInterface public interface ProtocolMonitor { ProtocolSnapshot snapshot(); }
     /** flags: published=1, leased=2, returned=4, consumer imported=8. Tick time is monotonic milliseconds. */
@@ -193,6 +201,41 @@ public final class RtxptDiagnostics {
             boolean enabled,List<GpuScope> scopes) {
         public GpuSnapshot { scopes=List.copyOf(scopes); }
     }
+    /** Owner-thread incremental GPU observations; no CSV serialization or parsing. */
+    @FunctionalInterface public interface GpuMonitor {
+        GpuSnapshot poll();
+        default long missedScopes(){return 0;}
+    }
+    static Object[] emptyGpuPacket(){return new Object[]{new long[]{1,15,0,0,0,0,0,0,1,1,0},new String[0]};}
+    static GpuSnapshot decodeGpuPacked(Object[] packet){
+        if(packet==null||packet.length!=2||!(packet[0] instanceof long[] v)||!(packet[1] instanceof String[] names)
+                ||v.length<11||v[0]!=1||v[1]!=15||v[8]<1||v[9]<v[8]||v[10]!=names.length
+                ||v[9]-v[8]>4096||v.length!=11+(v[9]-v[8])*15||v[5]<0||v[6]<0||v[6]>1)
+            throw new IllegalStateException("Incompatible packed GPU snapshot");
+        var scopes=new ArrayList<GpuScope>((int)(v[9]-v[8]));
+        for(int i=11;i<v.length;i+=15){
+            if(v[i]!=v[8]+(i-11)/15||v[i+2]<0||v[i+2]>1||v[i+5]<0||v[i+5]>=names.length
+                    ||v[i+7]<v[i+6]||v[i+8]<=0||v[i+11]<0||v[i+11]>2)
+                throw new IllegalStateException("Invalid packed GPU scope");
+            scopes.add(new GpuScope(v[i+1],v[i+2]==0?"graphics":"compute",Math.toIntExact(v[i+3]),Math.toIntExact(v[i+4]),
+                names[(int)v[i+5]],(v[i+7]-v[i+6])*1000.0/v[i+8],v[i+6],v[i+7],v[i+8],v[i+9],v[i+10],
+                (int)v[i+11],v[i+12],v[i+13],v[i+14]));
+        }
+        return new GpuSnapshot(v[2],v[3],v[4],Math.toIntExact(v[5]),v[6]!=0,scopes);
+    }
+    static GpuMonitor gpuMonitor(java.util.function.LongFunction<Object[]> fetch){
+        var initial=fetch.apply(Long.MAX_VALUE);decodeGpuPacked(initial);var header=(long[])initial[0];
+        return new GpuMonitor(){
+            private long cursor=header[9],generation=header[7],missed;
+            @Override public synchronized GpuSnapshot poll(){
+                var packet=fetch.apply(cursor);var value=decodeGpuPacked(packet);var data=(long[])packet[0];
+                if(generation!=0&&data[7]!=generation)throw new IllegalStateException("GPU diagnostic monitor generation expired");
+                if(generation==0)generation=data[7];
+                missed+=Math.max(0,data[8]-cursor);cursor=data[9];return value;
+            }
+            @Override public synchronized long missedScopes(){return missed;}
+        };
+    }
     static GpuSnapshot decodeGpu(String[] values){
         var status=values[0].split(",");var scopes=new ArrayList<GpuScope>(values.length-1);
         for(int i=1;i<values.length;i++){
@@ -205,9 +248,9 @@ public final class RtxptDiagnostics {
         return new GpuSnapshot(Long.parseLong(status[0]),Long.parseLong(status[1]),Long.parseLong(status[2]),Integer.parseInt(status[3]),status[4].equals("1"),scopes);
     }
     static Snapshot decode(long[] values) {
-        if(values==null||values.length<7||(values[0]<2||values[0]>6))
+        if(values==null||values.length<7||(values[0]<2||values[0]>7))
             throw new IllegalStateException("Incompatible native diagnostic snapshot");
-        boolean current=values[0]>=3;int header=values[0]>=6?19:values[0]>=5?15:current?13:7,width=values[0]>=6?27:values[0]>=5?25:values[0]==4?18:current?16:12;
+        boolean current=values[0]>=3;int header=values[0]>=7?21:values[0]>=6?19:values[0]>=5?15:current?13:7,width=values[0]>=6?27:values[0]>=5?25:values[0]==4?18:current?16:12;
         if(values.length<header||values[1]!=width||values[2]<0||values[3]<0||values[3]>8192||values[4]<0
                 ||values[5]<0||values[5]>(values[0]>=6?4L*65536:2048)||values[6]<0)
             throw new IllegalStateException("Incompatible native diagnostic snapshot");
@@ -219,6 +262,8 @@ public final class RtxptDiagnostics {
             throw new IllegalStateException("Incompatible native diagnostic snapshot");
         if(values[0]>=5&&(values[13]<1||values[14]<values[13]||values[14]-values[13]!=values[3]))
             throw new IllegalStateException("Invalid diagnostic ordinal window");
+        if(values[0]>=7&&(values[19]<1||values[20]<values[19]||values[20]-values[19]!=submitCount))
+            throw new IllegalStateException("Invalid diagnostic submission ordinal window");
         var events=new ArrayList<CpuEvent>((int)values[3]);
         var slow=new ArrayList<CpuEvent>((int)values[5]);var active=new ArrayList<CpuEvent>((int)activeCount);
         int offset=header;
@@ -272,10 +317,13 @@ public final class RtxptDiagnostics {
             width>=25?values[i+18]:0,width>=25?values[i+19]:0,width>=25?values[i+20]:0,width>=25?values[i+21]:0,width>=25?values[i+22]:0,width>=25?(int)values[i+23]:-1,width>=25?values[i+24]:0,width>=27?values[i+25]:0,width>=27?values[i+26]:0);
     }
     static Monitor monitor(long token){
-        var initial=decode(RtxptNative.diagnosticMonitorSnapshot(token));
+        var initialData=RtxptNative.diagnosticMonitorPoll(token,Long.MAX_VALUE,Long.MAX_VALUE,Long.MAX_VALUE);
+        var initial=decode(initialData);
         return new Monitor(){
             private final long registration=initial.nextEventOrdinal();
             private long cursor=registration,missed,slowCursor,slowMissed;
+            private long pollCursor=registration,pollSubmission=initialData[20],
+                pollSlowCursor=initial.slowFrameTriggers(),pollMissed,pollSlowMissed,submissionMissed;
             @Override public synchronized Snapshot snapshot(){
                 var value=decode(RtxptNative.diagnosticMonitorSnapshotAfter(token,slowCursor));
                 if(!value.slowFrameGroups().isEmpty())slowMissed+=Math.max(0,value.slowFrameGroups().getFirst().triggerOrdinal()-slowCursor-1);
@@ -284,6 +332,18 @@ public final class RtxptDiagnostics {
                 missed+=Math.max(0,value.firstEventOrdinal()-cursor);cursor=value.nextEventOrdinal();
                 return value.observed(registration,missed,slowMissed);
             }
+            @Override public synchronized Snapshot poll(){
+                var data=RtxptNative.diagnosticMonitorPoll(token,pollCursor,pollSubmission,pollSlowCursor);
+                var value=decode(data);
+                if(data[0]!=7)throw new IllegalStateException("Incremental diagnostic transport requires version 7");
+                pollMissed+=Math.max(0,value.firstEventOrdinal()-pollCursor);
+                submissionMissed+=Math.max(0,data[19]-pollSubmission);
+                if(!value.slowFrameGroups().isEmpty())pollSlowMissed+=Math.max(0,value.slowFrameGroups().getFirst().triggerOrdinal()-pollSlowCursor-1);
+                else pollSlowMissed+=Math.max(0,value.slowFrameTriggers()-pollSlowCursor);
+                pollCursor=value.nextEventOrdinal();pollSubmission=data[20];pollSlowCursor=value.slowFrameTriggers();
+                return value.observed(registration,pollMissed,pollSlowMissed);
+            }
+            @Override public synchronized long missedSubmissions(){return submissionMissed;}
         };
     }
     static ProtocolMonitor protocolMonitor(long token){

@@ -120,8 +120,25 @@ public final class RtxptDiagnosticsSelfTest {
         words[descriptor+3]=999;rejected(words);words[descriptor+3]=512;words[descriptor+9]=1;rejected(words);
         System.out.println("RTXPT_DIAGNOSTICS_SLOW_ABI PASS v6 completeGroup=true loss=true immutableRoot=true malformedDescriptor=true");
     }
+    private static void incrementalAndGpu(){
+        long[] header={7,27,100,0,0,0,0,0,0,0,7,11,2,101,101,0,0,0,65536,8,8};
+        var empty=RtxptDiagnostics.decode(header);require(empty.events().isEmpty()&&empty.submissionSamples().isEmpty(),"Incremental empty window");
+        header[20]=9;rejected(header);header[20]=8;
+        long[] data={1,15,0,0,0,1,1,11,9,10,1,9,3,0,2,-1,0,10,25,10000,7,42,2,Long.MIN_VALUE,42,1};
+        var gpu=RtxptDiagnostics.decodeGpuPacked(new Object[]{data,new String[]{"ResourceBlasBuild"}});
+        var value=gpu.scopes().getFirst();require(value.inclusiveMillis()==1.5&&value.parent()==-1&&value.resourceIdentity()==Long.MIN_VALUE,"Numeric GPU ABI lost precision/identity");
+        var next=new java.util.concurrent.atomic.AtomicInteger();
+        var monitor=RtxptDiagnostics.gpuMonitor(cursor->{int call=next.getAndIncrement();
+            if(call==0)return new Object[]{new long[]{1,15,0,0,0,1,1,11,7,7,1},new String[]{"ResourceBlasBuild"}};
+            if(call==1){require(cursor==7,"GPU cursor not sent to source");return new Object[]{data,new String[]{"ResourceBlasBuild"}};}
+            require(cursor==10,"GPU cursor not advanced");return new Object[]{new long[]{1,15,0,0,0,1,0,11,10,10,1},new String[]{"ResourceBlasBuild"}};});
+        require(monitor.poll().scopes().size()==1&&monitor.missedScopes()==2,"GPU overwritten prefix not reported");
+        require(monitor.poll().scopes().isEmpty()&&monitor.missedScopes()==2,"GPU idle poll repeats history");
+        var malformed=data.clone();malformed[11]=10;try{RtxptDiagnostics.decodeGpuPacked(new Object[]{malformed,new String[]{"x"}});throw new AssertionError("GPU ordinal mismatch accepted");}catch(IllegalStateException expected){}
+        System.out.println("RTXPT_DIAGNOSTICS_INCREMENTAL_JAVA PASS v7Cursor=true packedGpu=true unsignedIdentity=true gaps=true idle=true");
+    }
     public static void main(String[] args)throws Exception {
-        compatibility();incomplete();resources();slowGroups();enumLookupAllocation();if(args.length==1)fixture(Path.of(args[0]));
+        compatibility();incomplete();resources();slowGroups();incrementalAndGpu();enumLookupAllocation();if(args.length==1)fixture(Path.of(args[0]));
         System.out.println("RTXPT_DIAGNOSTICS_JAVA_ALL PASS");
     }
 }

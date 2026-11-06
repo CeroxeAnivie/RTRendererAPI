@@ -11,6 +11,39 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Small hidden JVM/JNI acceptance. No FPS measurement or desktop interaction. */
 public final class RtxptDiagnosticMonitorNativeSelfTest {
+    private record ReadCost(int returned,long allocatedBytes,double meanMicros,double p95Micros){}
+    private static ReadCost readCost(String name,java.util.function.IntSupplier read){
+        var bean=(com.sun.management.ThreadMXBean)java.lang.management.ManagementFactory.getThreadMXBean();
+        require(bean.isThreadAllocatedMemorySupported(),"Allocation measurement supported");
+        if(!bean.isThreadAllocatedMemoryEnabled())bean.setThreadAllocatedMemoryEnabled(true);
+        for(int i=0;i<8;++i)read.getAsInt();
+        long bytes=0;double total=0;double[] times=new double[32];int count=0;long thread=Thread.currentThread().threadId();
+        for(int i=0;i<times.length;++i){long allocated=bean.getThreadAllocatedBytes(thread),begin=System.nanoTime();
+            count=read.getAsInt();times[i]=(System.nanoTime()-begin)/1000.0;bytes+=bean.getThreadAllocatedBytes(thread)-allocated;total+=times[i];}
+        java.util.Arrays.sort(times);var result=new ReadCost(count,bytes/times.length,total/times.length,times[30]);
+        System.out.println("RTXPT_DIAGNOSTICS_READ_COST name="+name+" samples=32 returned="+count+" allocatedBytesPerRead="+result.allocatedBytes()+" meanUs="+result.meanMicros()+" p95Us="+result.p95Micros());return result;
+    }
+    private static long transportCost(RtxptRenderer r,long sequence,long revision)throws Exception {
+        int frames=0;for(;frames<2048;++frames){r.submit(frame(sequence++,revision));r.renderFrame();
+            if(frames%32==31){r.awaitIdle();r.renderFrame();if(r.diagnosticGpuSnapshot().scopes().size()==4096&&r.diagnosticSnapshot().events().size()==8192)break;}}
+        require(frames<2048,"Real CPU/GPU histories reach capacity");
+        r.diagnosticLevel(RtxptDiagnostics.Level.OFF);r.awaitIdle();for(int i=0;i<3;++i)r.renderFrame();
+        var monitor=r.diagnosticMonitor();var gpu=r.diagnosticGpuMonitor();
+        require(monitor.snapshot().events().size()==8192&&r.diagnosticGpuSnapshot().scopes().size()==4096,"Frozen histories retain complete capacity");
+        var cpuFull=readCost("cpu_rolling",()->monitor.snapshot().events().size());
+        var cpuDelta=readCost("cpu_idle_poll",()->monitor.poll().events().size());
+        var gpuFull=readCost("gpu_rolling_packed",()->r.diagnosticGpuSnapshot().scopes().size());
+        var gpuDelta=readCost("gpu_idle_poll",()->gpu.poll().scopes().size());
+        var field=RtxptRenderer.class.getDeclaredField("handle");require(field.trySetAccessible(),"Test reads its own native renderer identity");long nativeHandle=field.getLong(r);
+        var gpuCsv=readCost("gpu_legacy_csv",()->RtxptDiagnostics.decodeGpu(RtxptNative.diagnosticGpuSnapshot(nativeHandle)).scopes().size());
+        require(cpuDelta.returned()==0&&gpuDelta.returned()==0,"Idle polls repeat retained rows");
+        require(cpuDelta.allocatedBytes()<cpuFull.allocatedBytes()/8&&gpuDelta.allocatedBytes()<gpuFull.allocatedBytes()/8,"Incremental allocation reduction not observed");
+        var output=java.nio.file.Path.of("build/reports/incremental-diagnostic-transport/snapshot-cost.json");java.nio.file.Files.createDirectories(output.getParent());
+        String json=String.format(java.util.Locale.ROOT,"{\"samples\":32,\"frozen\":true,\"cpu_history\":8192,\"gpu_history\":4096,\"cpu_rolling\":%s,\"cpu_poll\":%s,\"gpu_rolling\":%s,\"gpu_poll\":%s,\"gpu_csv\":%s}\n",costJson(cpuFull),costJson(cpuDelta),costJson(gpuFull),costJson(gpuDelta),costJson(gpuCsv));
+        java.nio.file.Files.writeString(output,json,java.nio.charset.StandardCharsets.UTF_8);
+        r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);return sequence;
+    }
+    private static String costJson(ReadCost c){return String.format(java.util.Locale.ROOT,"{\"returned\":%d,\"allocated_bytes\":%d,\"mean_us\":%.6f,\"p95_us\":%.6f}",c.returned(),c.allocatedBytes(),c.meanMicros(),c.p95Micros());}
     private static SceneTransaction scene(){return SceneTransaction.builder(1).resetScene()
         .upsert(MaterialAsset.builder(1).roughness(.8f).build())
         .upsert(RtxptFramePreparationNativeSelfTest.card(1))
@@ -40,7 +73,7 @@ public final class RtxptDiagnosticMonitorNativeSelfTest {
                 try{
                     oldMonitor.snapshot();ready.countDown();
                     while(!stop.get()){
-                        var s=oldMonitor.snapshot();snapshots.incrementAndGet();
+                        var s=oldMonitor.poll();snapshots.incrementAndGet();
                         for(var event:s.activeScopes()){
                             require(event.active()&&event.selfNanos()==0,"Active timing is explicit and provisional");
                             if(event.stage()==RtxptDiagnostics.Stage.SUBMIT)liveSubmits.incrementAndGet();else liveStages.incrementAndGet();
@@ -67,6 +100,7 @@ public final class RtxptDiagnosticMonitorNativeSelfTest {
             require(liveStages.get()>0,"Watchdog observes actual nested native work");
             System.out.println("RTXPT_MONITOR_CONCURRENT PASS snapshots="+snapshots+" liveSubmits="+liveSubmits+" liveStages="+liveStages);
 
+            sequence=transportCost(r,sequence,revision);
             long failedSequence=sequence;
             try{r.submit(frame(failedSequence,revision+1));throw new AssertionError("Future scene revision accepted");}
             catch(IllegalArgumentException expected){ }

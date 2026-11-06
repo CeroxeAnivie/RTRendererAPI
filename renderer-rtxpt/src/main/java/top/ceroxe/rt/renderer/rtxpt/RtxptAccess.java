@@ -68,6 +68,8 @@ public interface RtxptAccess extends RtxptDiagnosticAccess {
     default void diagnosticLevel(RtxptDiagnostics.Level level){throw new UnsupportedOperationException("Native diagnostics unavailable");}
     /** Explicit bounded snapshot; no GPU synchronization or implicit disk output. */
     default RtxptDiagnostics.Snapshot diagnosticSnapshot(){return RtxptDiagnostics.decode(new long[]{2,12,0,0,0,0,0});}
+    /** Incremental GPU scopes. Create and poll on the renderer owner thread. */
+    default RtxptDiagnostics.GpuMonitor diagnosticGpuMonitor(){throw new UnsupportedOperationException("Incremental GPU diagnostics unavailable");}
     /** Per-queue command scopes. Elapsed timestamps include scheduling/preemption, not shader busy time. */
     default RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){return RtxptDiagnostics.decodeGpu(new String[]{"0,0,0,0,0"});}
     /** Native execution counters. Upload time measures CPU command recording, not GPU completion. */

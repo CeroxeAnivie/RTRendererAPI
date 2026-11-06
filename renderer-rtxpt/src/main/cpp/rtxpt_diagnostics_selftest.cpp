@@ -206,6 +206,26 @@ static void completeSlowGroups(){
     const auto root=eventAt(snapshot,size_t(snapshot[3]+snapshot[5]-1));require(root[4]==Submit&&root[0]==1,"Truncated tree lost trigger itself");
     std::puts("RTXPT_DIAGNOSTICS_SLOW_GROUPS PASS rollingIndependent=true cursor=true workerRoot=true groupLoss=true truncatedExplicit=true");
 }
+static void incrementalSnapshots(){
+    Reset();Configure(2);const auto token=MonitorToken();
+    for(uint64_t i=0;i<40;++i){BeginSubmit(i,1,0);{Scope child(ResourceIndex);}EndSubmit(false);}
+    Configure(0);const auto legacy=Snapshot(token);auto poll=Snapshot(token,0,1,1);
+    require(legacy[0]==6&&poll[0]==7&&poll[3]==legacy[3]&&poll[9]==40,"Incremental snapshot omitted new events/submissions");
+    const auto eventCursor=poll[14],submitCursor=poll[20],slowCursor=poll[4];
+    const auto empty=Snapshot(token,slowCursor,eventCursor,submitCursor);
+    require(empty.size()==Header+2&&empty[3]==0&&empty[9]==0&&empty[5]==0,"Idle poll recopied retained history");
+    require(empty[2]==legacy[2],"Consumed ordinals were incorrectly counted as overwritten");
+    require(Snapshot(token)[3]==legacy[3],"Incremental monitor drained legacy rolling evidence");
+    Configure(2);for(uint64_t i=0;i<SubmissionCapacity+200;++i){BeginSubmit(100+i,2,0);for(int k=0;k<8;++k){Scope child(ResourceIndex);}EndSubmit(false);}
+    Configure(0);const auto lost=Snapshot(token,slowCursor,eventCursor,submitCursor);
+    require(lost[13]>eventCursor&&lost[19]>submitCursor&&lost[9]==SubmissionCapacity,"Incremental loss did not expose event/submission gaps");
+    require(lost==Snapshot(token,slowCursor,eventCursor,submitCursor),"Independent readers consumed each other's evidence");
+    const auto quiet=Snapshot(token,lost[4],lost[14],lost[20]);
+    require(quiet.size()==Header+2,"Consumed reader retains or allocates old rows");
+    std::printf("RTXPT_DIAGNOSTICS_INCREMENTAL PASS legacyWords=%llu idleWords=%llu eventGap=%llu submitGap=%llu independent=true\n",
+        static_cast<unsigned long long>(legacy.size()),static_cast<unsigned long long>(empty.size()),
+        static_cast<unsigned long long>(lost[13]-eventCursor),static_cast<unsigned long long>(lost[19]-submitCursor));
+}
 static void benchmark(){
     for(unsigned mode:{0u,1u,2u}){Reset();Configure(mode);std::array<double,9> samples{};
         const auto beforeClocks=clockCalls.load();
@@ -217,7 +237,7 @@ static void benchmark(){
             mode,samples[4],samples[8],static_cast<unsigned long long>(clockCalls.load()-beforeClocks),static_cast<unsigned long long>(written));}
 }
 int main(int argc,char** argv){try{
-    off();eventPoll();hierarchy();workersAndCancellation();activeAndFailure();switchAndReset();auto fixture=categories();bounded();completeSlowGroups();lockAttribution();concurrentSnapshotOverwrite();benchmark();
+    off();eventPoll();hierarchy();workersAndCancellation();activeAndFailure();switchAndReset();auto fixture=categories();bounded();completeSlowGroups();lockAttribution();concurrentSnapshotOverwrite();incrementalSnapshots();benchmark();
     if(argc==2){std::ofstream file(argv[1],std::ios::binary);file.write(reinterpret_cast<const char*>(fixture.data()),std::streamsize(fixture.size()*8));require(bool(file),"Fixture write failed");}
     std::puts("RTXPT_DIAGNOSTICS_ALL PASS");return 0;
 }catch(const std::exception& e){std::fprintf(stderr,"RTXPT_DIAGNOSTICS_FAIL %s\n",e.what());return 1;}}

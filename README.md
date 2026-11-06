@@ -2,7 +2,7 @@
 
 **由 Java 驱动的硬件光线追踪渲染库**
 
-当前版本 **7.2.3**：修复快飞资源更新的重复工作，以及旧 lookup publication 的未初始化尾部。见[本版根因与验收](docs/quality/flight-resource-hotspots.md)。
+当前版本 **7.3.0**：修复诊断监视器重复复制历史和 GPU CSV 往返解析。见[本版根因与验收](docs/quality/incremental-diagnostic-transport.md)。
 
 本批仅执行受影响的定向检查，未重复历史完整矩阵。历史结果保留原制品身份，MC快飞 FPS 回升与完整 GPU P95≤4ms 均未宣称达成。
 
@@ -80,7 +80,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>7.2.3</version>
+    <version>7.3.0</version>
 </dependency>
 ```
 
@@ -88,17 +88,17 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:7.2.3")
+    implementation("top.ceroxe.rt:renderer-api:7.3.0")
 }
 ```
 
 上面是普通 Vulkan 路径。需要 RTXPT 全场景、透明介质或 GPU 组合入口时，再添加可选模块：
 
 ```kotlin
-implementation("top.ceroxe.rt:renderer-rtxpt:7.2.3")
+implementation("top.ceroxe.rt:renderer-rtxpt:7.3.0")
 ```
 
-Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.2.3`。只用公共场景接口时可作为运行依赖；使用
+Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.3.0`。只用公共场景接口时可作为运行依赖；使用
 `RtxptAccess`／`RtxptComposedRenderer` 时需要编译依赖。只部署 RTXPT 的依赖排除方法见[后端路由](docs/backend-routing.md#只部署-rtxpt)。
 
 既有介质、资源增量、连续照明与透明背景能力继续保留。本地构建和 Maven Local 发布命令：

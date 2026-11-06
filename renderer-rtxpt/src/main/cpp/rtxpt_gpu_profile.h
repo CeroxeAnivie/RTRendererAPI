@@ -43,12 +43,23 @@ struct State {
     uint32_t namesUsed=0, stride=16, warmup=240;
     uint64_t frame=0, dropped=0;
     std::unique_ptr<RtrAsyncOutput> output;
-    std::array<std::array<char,512>,4096> completed{};
+    // Numeric records are retained once; text exists only at the export boundary.
+    std::array<std::array<uint64_t,15>,4096> completed{};
     uint64_t completedCount=0, overwritten=0;
+    uint64_t generation=0;
     bool enabled=true,draining=false;
     std::mutex mutex;
 };
 inline std::unique_ptr<State> state;
+inline uint64_t nextGeneration=1;
+inline void FormatRecord(char* line,size_t size,const std::array<uint64_t,15>& r){
+    std::snprintf(line,size,"%llu,%s,%u,%d,%s,%.9f,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
+        static_cast<unsigned long long>(r[1]),r[2]==0?"graphics":"compute",unsigned(r[3]),int(int64_t(r[4])),
+        state->names[r[5]].data(),double(r[7]-r[6])*1000.0/double(r[8]),
+        static_cast<unsigned long long>(r[6]),static_cast<unsigned long long>(r[7]),static_cast<unsigned long long>(r[8]),
+        static_cast<unsigned long long>(r[9]),static_cast<unsigned long long>(r[10]),static_cast<unsigned long long>(r[11]),
+        static_cast<unsigned long long>(r[12]),static_cast<unsigned long long>(r[13]),static_cast<unsigned long long>(r[14]));
+}
 inline uint32_t EnvNumber(const char* name,uint32_t fallback) {
     if(const char* value=std::getenv(name)) {
         char* end=nullptr; const auto n=std::strtoul(value,&end,10);
@@ -70,14 +81,11 @@ inline void Collect(Queue& q,int queueIndex) {
         for(uint32_t i=0;i<s.count;++i) {
             if(!s.events[i].ended || ticks[i*2+1]<ticks[i*2]) {++state->dropped; continue;}
             const auto& e=s.events[i];
-            auto& line=state->completed[state->completedCount%state->completed.size()];
-            std::snprintf(line.data(),line.size(),"%llu,%s,%u,%d,%s,%.9f,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
-                static_cast<unsigned long long>(s.frame),queueIndex==0?"graphics":"compute",i,e.parent,
-                state->names[e.name].data(),double(ticks[i*2+1]-ticks[i*2])*1000.0/double(q.frequency),
-                static_cast<unsigned long long>(ticks[i*2]),static_cast<unsigned long long>(ticks[i*2+1]),
-                static_cast<unsigned long long>(q.frequency),static_cast<unsigned long long>(s.sequence),static_cast<unsigned long long>(s.revision),static_cast<unsigned long long>(e.mode),static_cast<unsigned long long>(e.resource),static_cast<unsigned long long>(e.generation),static_cast<unsigned long long>(e.reason));
+            auto& record=state->completed[state->completedCount%state->completed.size()];
+            record={state->completedCount+1,s.frame,uint64_t(queueIndex),i,uint64_t(int64_t(e.parent)),e.name,
+                ticks[i*2],ticks[i*2+1],q.frequency,s.sequence,s.revision,e.mode,e.resource,e.generation,e.reason};
             ++state->completedCount;if(state->completedCount>state->completed.size())++state->overwritten;
-            if(state->output)state->output->Write(line.data());
+            if(state->output){std::array<char,512> line{};FormatRecord(line.data(),line.size(),record);state->output->Write(line.data());}
         }
         const D3D12_RANGE written{0,0}; q.readback->Unmap(0,&written);
         s.pending=false;
@@ -111,6 +119,7 @@ inline void Init(nvrhi::IDevice* device,bool explicitEnable=false) {
     const char* path=std::getenv("RTR_RTXPT_GPU_PROFILE");
     if(((!path || !*path)&&!explicitEnable) || device->getGraphicsAPI()!=nvrhi::GraphicsAPI::D3D12) return;
     state=std::make_unique<State>();
+    state->generation=nextGeneration++;
     if(path&&*path)state->output=std::make_unique<RtrAsyncOutput>(path);
     state->stride=EnvNumber("RTR_RTXPT_GPU_PROFILE_STRIDE",explicitEnable?1:16);
     state->warmup=explicitEnable?0:EnvNumber("RTR_RTXPT_GPU_PROFILE_WARMUP",240);
@@ -209,8 +218,36 @@ inline std::vector<std::string> Snapshot(){
     result.push_back(std::to_string(state->dropped)+","+std::to_string(state->overwritten)+","+std::to_string(pending)+","+std::to_string(state->stride)+","+std::to_string(state->enabled));
     const uint64_t count=std::min<uint64_t>(state->completedCount,state->completed.size());
     result.reserve(size_t(count)+1);
-    for(uint64_t i=state->completedCount-count;i<state->completedCount;++i)result.emplace_back(state->completed[i%state->completed.size()].data());
+    for(uint64_t i=state->completedCount-count;i<state->completedCount;++i){
+        std::array<char,512> line{};FormatRecord(line.data(),line.size(),state->completed[i%state->completed.size()]);result.emplace_back(line.data());
+    }
     return result;
+}
+struct PackedSnapshot {std::vector<uint64_t> words;std::vector<std::string> names;};
+inline PackedSnapshot SnapshotPacked(uint64_t nextOrdinal){
+    constexpr size_t Header=11,Width=15;PackedSnapshot result;
+    if(!state){result.words={1,Width,0,0,0,0,0,0,1,1,0};return result;}
+    // This endpoint is owner-thread-only, like diagnosticGpuSnapshot. Copy
+    // fixed numeric records under the profiler lock; allocate/encode afterwards.
+    uint64_t cut=0,first=0,pending=0,dropped=0,overwritten=0,generation=0,stride=0,enabled=0;
+    uint32_t namesUsed=0;std::array<std::array<char,160>,NameCount> names{};
+    {std::lock_guard lock(state->mutex);
+        if(state->enabled||state->draining){for(int i=0;i<2;++i)Collect(state->queues[i],i);
+            if(!state->enabled){state->draining=false;for(const auto& q:state->queues){state->draining|=q.active>=0;for(const auto& slot:q.slots)state->draining|=slot.pending;}}}
+        cut=state->completedCount;first=cut-std::min<uint64_t>(cut,state->completed.size())+1;
+        if(nextOrdinal)first=std::max(first,std::min(nextOrdinal,cut+1));
+        for(const auto& q:state->queues)for(const auto& slot:q.slots)pending+=slot.pending?slot.count:0;
+        dropped=state->dropped;overwritten=state->overwritten;generation=state->generation;stride=state->stride;enabled=state->enabled;
+        namesUsed=state->namesUsed;std::copy_n(state->names.begin(),namesUsed,names.begin());
+    }
+    result.words.resize(Header+size_t(cut+1-first)*Width);
+    const std::array<uint64_t,Header> header={1,Width,dropped,overwritten,pending,stride,enabled,generation,first,cut+1,namesUsed};
+    std::copy(header.begin(),header.end(),result.words.begin());
+    {std::lock_guard lock(state->mutex);
+        for(uint64_t ordinal=first;ordinal<=cut;++ordinal){const auto& row=state->completed[(ordinal-1)%state->completed.size()];
+            std::copy(row.begin(),row.end(),result.words.begin()+Header+size_t(ordinal-first)*Width);}
+    }
+    result.names.reserve(namesUsed);for(uint32_t i=0;i<namesUsed;++i)result.names.emplace_back(names[i].data());return result;
 }
 inline void Shutdown() {
     if(!state) return;

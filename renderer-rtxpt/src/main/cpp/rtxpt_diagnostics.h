@@ -246,37 +246,42 @@ inline void SnapshotCopyYield(){
 #endif
     std::this_thread::yield();
 }
-inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0,uint64_t afterTrigger=0){
+inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0,uint64_t afterTrigger=0,uint64_t nextEvent=0,uint64_t nextSubmission=0){
     // Allocate outside the recorder lock. Copy ring/slow data in bounded slices,
     // validating their immutable ordinals after each reacquisition. A concurrent
     // overwrite drops an explicit prefix; never splice different trigger trees.
     constexpr size_t CopyChunk=64;
+    const bool incremental=nextEvent||nextSubmission;
+    const size_t headerWords=Header+(incremental?2:0);
     std::vector<uint64_t> result;
-    result.resize(Header);
-    std::vector<Event> active;active.reserve(ActiveCapacity);
-    std::vector<SubmissionSample> samples;samples.reserve(SubmissionCapacity);
+    result.resize(headerWords);
+    std::array<Event,ActiveCapacity> active;size_t activeCount=0;
+    std::array<SubmissionSample,SubmissionCapacity> samples;size_t sampleCount=0;
     std::array<std::array<uint64_t,SlowDescriptorWidth>,SlowGroupCapacity> descriptions{};
-    std::array<uint64_t,Header> header{};
+    std::array<uint64_t,Header+2> header{};
     uint64_t session=0,cut=0,first=0,groupCount=0;
     {
         DiagnosticLock lock(SnapshotMetadata,0,true);
         session=monitorGeneration.load();
         if(expectedGeneration&&expectedGeneration!=session)throw std::runtime_error("Diagnostic monitor generation expired; acquire a monitor from the current session");
         cut=written;first=cut-std::min<uint64_t>(cut,Capacity)+1;
+        if(incremental)first=std::max(first,std::min(nextEvent,cut+1));
         const auto firstGroup=std::max(slowTriggers-std::min<uint64_t>(slowTriggers,SlowGroupCapacity),std::min(afterTrigger,slowTriggers));
         for(uint64_t i=firstGroup;i<slowTriggers;++i)descriptions[groupCount++]=slowGroups[i%SlowGroupCapacity].description;
-        const uint64_t retainedSubmissions=std::min<uint64_t>(submissionCount,SubmissionCapacity);
+        const uint64_t firstSubmission=std::max(submissionCount-std::min<uint64_t>(submissionCount,SubmissionCapacity)+1,
+            incremental?std::min(nextSubmission,submissionCount+1):uint64_t(1));
+        const uint64_t retainedSubmissions=submissionCount+1-firstSubmission;
         const bool anyActive=std::any_of(live.begin(),live.end(),[](const auto& entry){return entry.occupied;});
         const uint64_t now=anyActive?Now():0;
-        for(const auto& entry:live)if(entry.occupied){auto event=entry.event;event[6]=now-event[5];event[7]=0;event[11]|=Active;active.push_back(event);}
-        for(uint64_t i=submissionCount-retainedSubmissions;i<submissionCount;++i)samples.push_back(submissions[i%SubmissionCapacity]);
-        header={6,Width,dropped,0,slowTriggers,0,slowEventOverwrites,uint64_t(active.size()),activeDropped,
-            retainedSubmissions,submissionDropped,session,level.load(),first,cut+1,0,slowGroupOverwrites,slowEventOverwrites,CaptureCapacity};
+        for(const auto& entry:live)if(entry.occupied){auto event=entry.event;event[6]=now-event[5];event[7]=0;event[11]|=Active;active[activeCount++]=event;}
+        for(uint64_t i=firstSubmission-1;i<submissionCount;++i)samples[sampleCount++]=submissions[i%SubmissionCapacity];
+        header={incremental?uint64_t(7):uint64_t(6),Width,dropped,0,slowTriggers,0,slowEventOverwrites,uint64_t(activeCount),activeDropped,
+            retainedSubmissions,submissionDropped,session,level.load(),first,cut+1,0,slowGroupOverwrites,slowEventOverwrites,CaptureCapacity,firstSubmission,submissionCount+1};
     }
     // The incremental cursor usually consumes every slow group. Reserve only
     // this snapshot's captured upper bound, outside the recorder lock. Any
     // concurrent overwrite can only reduce the number of copied events.
-    size_t words=Header+size_t(cut+1-first+active.size())*Width+samples.size()*6+size_t(groupCount)*SlowDescriptorWidth;
+    size_t words=headerWords+size_t(cut+1-first+activeCount)*Width+sampleCount*6+size_t(groupCount)*SlowDescriptorWidth;
     for(uint64_t group=0;group<groupCount;++group)words+=size_t(descriptions[group][7])*Width;
     result.reserve(words);
     auto checkSession=[&]{if(session!=monitorGeneration.load())throw std::runtime_error("Diagnostic session changed during snapshot; reacquire the monitor");};
@@ -285,13 +290,13 @@ inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0,uint64_t aft
         {
         DiagnosticLock lock(SnapshotRing,CopyChunk*sizeof(Event),true);checkSession();
         const uint64_t oldest=written-std::min<uint64_t>(written,Capacity)+1;
-        if(cursor<oldest){cursor=std::min(oldest,cut+1);first=cursor;result.resize(Header);}
+        if(cursor<oldest){cursor=std::min(oldest,cut+1);first=cursor;result.resize(headerWords);}
         const uint64_t end=std::min(cut+1,cursor+CopyChunk);
         for(;cursor<end;++cursor){const auto& event=events[(cursor-1)%Capacity];result.insert(result.end(),event.begin(),event.end());}
         }
         SnapshotCopyYield();
     }
-    header[3]=cut+1-first;header[13]=first;header[2]=std::max(header[2],first-1);
+    header[3]=cut+1-first;header[13]=first;
     const size_t slowStart=result.size();
     std::array<std::array<uint64_t,SlowDescriptorWidth>,SlowGroupCapacity> retained{};
     uint64_t retainedGroups=0,retainedEvents=0;
@@ -310,15 +315,16 @@ inline std::vector<uint64_t> Snapshot(uint64_t expectedGeneration=0,uint64_t aft
         if(!valid){result.resize(slowStart);retainedGroups=retainedEvents=0;continue;}
         description[9]=retainedEvents;retainedEvents+=description[7];retained[retainedGroups++]=description;
     }
-    for(const auto& event:active)result.insert(result.end(),event.begin(),event.end());
-    for(const auto& sample:samples)result.insert(result.end(),sample.begin(),sample.end());
+    for(size_t i=0;i<activeCount;++i)result.insert(result.end(),active[i].begin(),active[i].end());
+    for(size_t i=0;i<sampleCount;++i)result.insert(result.end(),samples[i].begin(),samples[i].end());
     for(uint64_t i=0;i<retainedGroups;++i)result.insert(result.end(),retained[i].begin(),retained[i].end());
     {
         DiagnosticLock lock(SnapshotFinish,0,true);checkSession();
+        header[2]=dropped;
         header[6]=header[17]=slowEventOverwrites;header[16]=slowGroupOverwrites;
     }
     header[5]=retainedEvents;header[15]=retainedGroups;
-    std::copy(header.begin(),header.end(),result.begin());return result;
+    std::copy_n(header.begin(),headerWords,result.begin());return result;
 }
 
 struct Scope {

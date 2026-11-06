@@ -39,7 +39,9 @@ final class RtxptNative {
     static native long diagnosticMonitorToken(long handle);
     static native long[] diagnosticMonitorSnapshot(long token);
     static native long[] diagnosticMonitorSnapshotAfter(long token,long afterTrigger);
+    static native long[] diagnosticMonitorPoll(long token,long nextEvent,long nextSubmission,long afterTrigger);
     static native String[] diagnosticGpuSnapshot(long handle);
+    static native Object[] diagnosticGpuSnapshotPacked(long handle,long nextOrdinal);
     @FunctionalInterface interface Compositor { void compose(long[] frame); }
     static native void compositor(long handle,Compositor callback);
     static native void title(long handle,String text);

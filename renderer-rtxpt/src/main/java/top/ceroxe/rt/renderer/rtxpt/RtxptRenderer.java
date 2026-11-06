@@ -919,7 +919,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     @Override public RtxptDiagnostics.Monitor diagnosticMonitor(){ready();
         if(handle==0&&!diagnosticPrepared){RtxptNative.prepareDiagnostics(diagnosticLevel.ordinal());diagnosticPrepared=true;}
         long token=RtxptNative.diagnosticMonitorToken(handle);return RtxptDiagnostics.monitor(token);}
-    @Override public RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){ready();return RtxptDiagnostics.decodeGpu(handle==0?new String[]{"0,0,0,0,0"}:RtxptNative.diagnosticGpuSnapshot(handle));}
+    @Override public RtxptDiagnostics.GpuSnapshot diagnosticGpuSnapshot(){ready();return RtxptDiagnostics.decodeGpuPacked(handle==0?RtxptDiagnostics.emptyGpuPacket():RtxptNative.diagnosticGpuSnapshotPacked(handle,0));}
+    @Override public RtxptDiagnostics.GpuMonitor diagnosticGpuMonitor(){ready();return RtxptDiagnostics.gpuMonitor(next->{ready();return handle==0?RtxptDiagnostics.emptyGpuPacket():RtxptNative.diagnosticGpuSnapshotPacked(handle,next);});}
     @Override public void awaitIdle(){ready();if(handle!=0)RtxptNative.awaitIdle(handle);}
     @Override public void setOverlayText(String text){ready();if(handle==0)throw new IllegalStateException("Submit first");RtxptNative.overlay(handle,Objects.requireNonNull(text));}
     @Override public void setOverlayChoices(List<String> labels,int selectedIndex){

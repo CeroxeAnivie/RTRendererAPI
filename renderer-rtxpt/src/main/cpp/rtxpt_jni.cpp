@@ -2040,10 +2040,30 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
         auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
+extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticMonitorPoll(JNIEnv* e,jclass,jlong token,jlong nextEvent,jlong nextSubmission,jlong afterTrigger) {
+    try {if(token==0||nextEvent<1||nextSubmission<1||afterTrigger<0)throw std::invalid_argument("Invalid incremental diagnostic cursor");
+        auto values=RtrDiagnostics::Snapshot(uint64_t(token),uint64_t(afterTrigger),uint64_t(nextEvent),uint64_t(nextSubmission));
+        auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
+}
 extern "C" JNIEXPORT jobjectArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticGpuSnapshot(JNIEnv* e,jclass,jlong h) {
     try {session(h);auto values=RtrGpuProfile::Snapshot();auto type=e->FindClass("java/lang/String");auto result=e->NewObjectArray(jsize(values.size()),type,nullptr);e->DeleteLocalRef(type);
         if(result)for(jsize i=0;i<jsize(values.size());++i){auto text=e->NewStringUTF(values[i].c_str());e->SetObjectArrayElement(result,i,text);e->DeleteLocalRef(text);}return result;}
     catch(const std::exception& x){fail(e,x);return nullptr;}
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticGpuSnapshotPacked(JNIEnv* e,jclass,jlong h,jlong nextOrdinal) {
+    try {session(h);if(nextOrdinal<0)throw std::invalid_argument("Invalid GPU diagnostic cursor");
+        auto packet=RtrGpuProfile::SnapshotPacked(uint64_t(nextOrdinal));
+        auto objectType=e->FindClass("java/lang/Object"),stringType=e->FindClass("java/lang/String");
+        auto result=e->NewObjectArray(2,objectType,nullptr);e->DeleteLocalRef(objectType);
+        if(!result){e->DeleteLocalRef(stringType);return nullptr;}
+        auto words=e->NewLongArray(jsize(packet.words.size()));
+        if(words)e->SetLongArrayRegion(words,0,jsize(packet.words.size()),reinterpret_cast<const jlong*>(packet.words.data()));
+        auto names=e->NewObjectArray(jsize(packet.names.size()),stringType,nullptr);e->DeleteLocalRef(stringType);
+        if(names)for(jsize i=0;i<jsize(packet.names.size());++i){auto name=e->NewStringUTF(packet.names[i].c_str());e->SetObjectArrayElement(names,i,name);e->DeleteLocalRef(name);}
+        if(words){e->SetObjectArrayElement(result,0,words);e->DeleteLocalRef(words);}if(names){e->SetObjectArrayElement(result,1,names);e->DeleteLocalRef(names);}return result;
+    }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
 
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_prepareDiagnostics(JNIEnv* e,jclass,jint level){
