@@ -75,6 +75,18 @@
       "wallSeconds": 86.827,
       "peakGiB": 2.574,
       "exit": 0
+    },
+    {
+      "name": "four-modules-maven-local",
+      "wallSeconds": 92.538,
+      "peakGiB": 1.716,
+      "exit": 0
+    },
+    {
+      "name": "published-identities",
+      "wallSeconds": 14.933,
+      "peakGiB": 1.801,
+      "exit": 0
     }
   ],
   "failures": [
@@ -87,8 +99,129 @@
   ],
   "mc723Measured": false,
   "publication": {
-    "github": "pending",
-    "mavenLocal": "pending",
-    "central": false
+    "github": "passed-before-maven",
+    "mavenLocal": "passed",
+    "central": false,
+    "sourceCommit": "d9e867d657670b2dbd4165f2e5491436d63652fb",
+    "identity": {
+      "version": "7.2.3",
+      "sourceCommit": "d9e867d657670b2dbd4165f2e5491436d63652fb",
+      "branch": "codex/resource-root-followup",
+      "githubPushedBeforeMaven": true,
+      "modules": {
+        "renderer-api": {
+          "main": {
+            "sha256": "fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c",
+            "bytes": 795823
+          },
+          "-sources": {
+            "sha256": "f4a824489c82df40615414dce6a679b9c78167fcf30916070a1f33382bd20ac6",
+            "bytes": 367699
+          },
+          "-javadoc": {
+            "sha256": "27e1986819df1fc76066d6c45df3aced37cf9e583cadd91df5d20900493e24a3",
+            "bytes": 6520185
+          }
+        },
+        "renderer-core": {
+          "main": {
+            "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69",
+            "bytes": 14561563
+          },
+          "-sources": {
+            "sha256": "efc4c96aef8401a8a5a5ab05a568a36227ec9a9d26aa9d4362f3838e114c45b3",
+            "bytes": 12913129
+          },
+          "-javadoc": {
+            "sha256": "acdd04100400c54b95893fad7f8773075ca3989c206bc196940a7874c9e2777e",
+            "bytes": 6229530
+          }
+        },
+        "renderer-nvidia": {
+          "main": {
+            "sha256": "8e076fb5e98711e4ef599e47116f25c2c050fabc4ae8d4f6d09bdf03a0827f71",
+            "bytes": 62644787
+          },
+          "-sources": {
+            "sha256": "2cf97cfaadc9a76b203771086eff4d5711db3e573204de4191a1ae1aa646d62e",
+            "bytes": 57017
+          },
+          "-javadoc": {
+            "sha256": "3a233f51f2b35e5ab86fb27839c2037d379996ee1e0b009cd7e4979e25674279",
+            "bytes": 4155748
+          }
+        },
+        "renderer-rtxpt": {
+          "main": {
+            "sha256": "93d7e02aa4c55962e60f113eb7238ae3f4cddd30dfcbefee33ee50bfa96aebdf",
+            "bytes": 775086656
+          },
+          "-sources": {
+            "sha256": "3b7e724c9fb45588fa6c1f2f064681122b120ea431afd1a1172a5f755c3f2bd6",
+            "bytes": 85246
+          },
+          "-javadoc": {
+            "sha256": "9a9c9d912ddd3f0aa7a272cf4f724df400f8497fc74aa13deff105d5cca0428b",
+            "bytes": 4370955
+          }
+        }
+      },
+      "nativeSha256": "65124a82cb6f39dc7a1799b09292e08d3ac6bc2509ba0e8d7c489cb3049bd393",
+      "runtimeZipSha256": "83de423bac82c088b23e2e9e31c589b0b4069543788d7690e8ce34339d92ec60",
+      "nvidiaNativeSha256": "e5c4550ef7030b44b9e5e089147c5aac2eaea4183a46ba97bf6b5c79d8e379af",
+      "nvidiaRuntimeFiles": 21,
+      "lockedRuntimeFiles": 1621,
+      "apiClassesUnchanged": 543,
+      "sdkManifestFiles": 81,
+      "shaderAbiSha256": "f7671628cf8d938358c45819bff01276c5c3eb76a3398e4ca3f25f490a9cb3ac",
+      "checks": [
+        "source-HEAD-is-published-commit",
+        "source-current-branch-pushed",
+        "renderer-api-bytes",
+        "renderer-api-sources-bytes",
+        "renderer-api-javadoc-bytes",
+        "renderer-api.pom-metadata",
+        "renderer-api.module-metadata",
+        "renderer-core-bytes",
+        "renderer-core-sources-bytes",
+        "renderer-core-javadoc-bytes",
+        "renderer-core.pom-metadata",
+        "renderer-core.module-metadata",
+        "renderer-nvidia-bytes",
+        "renderer-nvidia-sources-bytes",
+        "renderer-nvidia-javadoc-bytes",
+        "renderer-nvidia.pom-metadata",
+        "renderer-nvidia.module-metadata",
+        "renderer-rtxpt-bytes",
+        "renderer-rtxpt-sources-bytes",
+        "renderer-rtxpt-javadoc-bytes",
+        "renderer-rtxpt.pom-metadata",
+        "renderer-rtxpt.module-metadata",
+        "public-api-class-inventory-unchanged",
+        "public-api-all-class-bytes-unchanged",
+        "nvidia-runtime-inventory-unchanged",
+        "nvidia-runtime-all-bytes-unchanged",
+        "nvidia-runtime-native-current",
+        "runtime-zip-digest",
+        "runtime-jni-tested",
+        "runtime-jni-current",
+        "runtime-dependency-inventory-unchanged",
+        "runtime-prior-dependencies-and-shaders-retained",
+        "runtime-sdk-version-current",
+        "runtime-sdk-format-and-shader-abi-unchanged",
+        "runtime-sdk-manifest-unique-files",
+        "runtime-sdk-manifest-file-identities",
+        "runtime-sdk-shader-abi-inventory",
+        "runtime-shader-sources-current"
+      ],
+      "checksPassed": 38
+    },
+    "symbols": {
+      "sha256": "be4bbc369c439d32b8dc19656f065be63d461ffa2666d979cc9100deba9046d1",
+      "bytes": 26281958,
+      "pdbSha256": "c40762d0a60bfb464dd1cb45d72a000e97706ca5fff94b2a7df81910c9f4055f",
+      "builtEqualsMavenLocal": true,
+      "pdbEqualsCurrent": true
+    }
   }
 }

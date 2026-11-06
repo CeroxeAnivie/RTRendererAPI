@@ -53,6 +53,29 @@
 
 ## 发布与剩余项
 
-本批全部源码、正式工具和文档先推 GitHub，再四模块 Maven Local 7.2.3；不覆盖7.2.2，不发Central。最终发布身份和执行记录随后追加，不重发成功制品。
+本批全部源码、正式工具和文档已先推 GitHub（d9e867d657670b2dbd4165f2e5491436d63652fb），随后四模块 Maven Local 7.2.3 已完成；不覆盖7.2.2，不发Central。发布后只补记录，不重发成功制品。
 
 MC 7.2.3 重建和性能未测，不能预签故障消失或180/200FPS。下次 MC 是用户人工窗口验收。移动热点仍包含真实上传页分配尾部、区域拓扑/覆盖工作、mesh import/索引，不能把本批内存修复当作这些耗时已消失。
+
+## 最终制品身份
+
+正式 Verify-FlightHotspotRelease.py 对比7.2.2，38项通过：四模块main/sources/javadoc与POM/module匹配Maven Local；543个公开API class逐字节不变，1621个runtime依赖/shader及NVIDIA21个native文件逐字节不变，81项SDK清单/版本/ABI正确。JNI等于本批最终受测65124。
+
+| 制品 | SHA256 |
+|---|---|
+| renderer-api main JAR | fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c |
+| renderer-core main JAR | a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69 |
+| renderer-nvidia main JAR | 8e076fb5e98711e4ef599e47116f25c2c050fabc4ae8d4f6d09bdf03a0827f71 |
+| renderer-rtxpt main JAR | 93d7e02aa4c55962e60f113eb7238ae3f4cddd30dfcbefee33ee50bfa96aebdf |
+| runtime ZIP | 83de423bac82c088b23e2e9e31c589b0b4069543788d7690e8ce34339d92ec60 |
+| native symbols ZIP | be4bbc369c439d32b8dc19656f065be63d461ffa2666d979cc9100deba9046d1 |
+| PDB | c40762d0a60bfb464dd1cb45d72a000e97706ca5fff94b2a7df81910c9f4055f |
+
+Maven Local 根目录为 D:/.m2/repository/top/ceroxe/rt。symbols ZIP 的构建/安装字节一致，PDB与当前受测构建目录相同。NVIDIA未改生产源码，package-only复用已发布相同native字节，正式闭包门禁保留，SDK仅经进程环境传入。
+
+| 发布步骤 | 旧值 | 新值 | 绝对差 | 百分比 |
+|---|---|---|---|---|
+| 四模块发布 | 无同任务旧对照 | 92.538s，Job峰1.716GiB，通过 | — | — |
+| 正式身份核验 | 无同任务旧对照 | 14.933s，1.801GiB，38项通过 | — | — |
+
+构建输出中的Javadoc缺注释警告不影响任务成功；未为此重复已通过检查。原始证据集中在 build/reports/rebuild-resource-memory。当前分支未切换，没有worktree或启动器部署。
