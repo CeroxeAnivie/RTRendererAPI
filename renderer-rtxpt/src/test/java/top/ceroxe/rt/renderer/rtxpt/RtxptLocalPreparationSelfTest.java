@@ -9,6 +9,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Counts actual list reads and owner-thread allocation; also runs against a published baseline. */
 public final class RtxptLocalPreparationSelfTest {
+    private static final RtxptMemoryResources.PacketPool PACKETS=new RtxptMemoryResources.PacketPool();
     private static final ThreadMXBean ALLOCATION=(ThreadMXBean)ManagementFactory.getThreadMXBean();
     private static final boolean OBSERVE=Boolean.getBoolean("localPreparation.observe");
     private static final class Reads extends AbstractList<RtxptScene.Item> {
@@ -56,7 +57,7 @@ public final class RtxptLocalPreparationSelfTest {
                 changed.retain(tx.build());var before=new Reads(items);var after=new Reads(changed.items(frame));
                 Path parent=Files.createDirectories(output.resolve(count+"-"+kind+"-"+sample));
                 long bytes=allocation(),start=System.nanoTime();
-                result=RtxptDelta.prepare(parent,original,changed,before,after,paths);
+                result=RtxptDelta.prepare(parent,original,changed,before,after,paths,Map.of(),PACKETS);
                 long elapsed=System.nanoTime()-start,allocated=allocation()-bytes;
                 if(sample>=0){allocations[sample]=allocated;wall[sample]=elapsed;oldReads[sample]=before.reads;newReads[sample]=after.reads;}
                 if(!OBSERVE){
@@ -102,21 +103,21 @@ public final class RtxptLocalPreparationSelfTest {
         for(long id=1;id<=256;id++)tx.upsert(SceneInstance.builder(id,1).build());
         tx.upsert(SceneInstance.builder(257,2).build());scene.retain(tx.build());var frame=RtxptAdapterSelfTest.frame(0);
         var shared=new RtxptScene(scene);shared.retain(SceneTransaction.builder(2).upsert(MaterialAsset.builder(1).roughness(.7f).build()).build());
-        var delta=RtxptDelta.prepare(output,scene,shared,scene.items(frame),shared.items(frame),new RtxptPersistentMap<>());
+        var delta=RtxptDelta.prepare(output,scene,shared,scene.items(frame),shared.items(frame),new RtxptPersistentMap<>(),Map.of(),PACKETS);
         require(delta.materials()==1&&delta.meshes()==0&&delta.work().dependencyVisits()>=256,"Shared resource visits all actual users and deduplicates variants");
         var mixed=new RtxptScene(scene);mixed.retain(SceneTransaction.builder(2).upsert(MaterialAsset.builder(2).roughness(.7f).build())
             .upsert(SceneInstance.builder(1,1).transform(new AffineTransform(new float[]{1,0,0,2,0,1,0,0,0,0,1,0})).build()).build());
-        var mixedDelta=RtxptDelta.prepare(output,scene,mixed,scene.items(frame),mixed.items(frame),new RtxptPersistentMap<>());
+        var mixedDelta=RtxptDelta.prepare(output,scene,mixed,scene.items(frame),mixed.items(frame),new RtxptPersistentMap<>(),Map.of(),PACKETS);
         require(mixedDelta.work().dependencyVisits()<16&&mixedDelta.meshes()==0,"Mixed material/pose avoids unrelated users of unchanged pose variant");
         var payload=new byte[mixedDelta.memory().remaining()];mixedDelta.memory().duplicate().get(payload);require(new String(payload,java.nio.charset.StandardCharsets.ISO_8859_1).contains("i1"),"Mixed memory delta publishes changed pose");
         try{scene.validateAssetBudget(new RendererResourceOptions(1,1,1,1,1));throw new AssertionError("Tiny asset budget accepted");}
         catch(IllegalArgumentException expected){ }
         System.out.println("LOCAL_PREPARATION_SHARED PASS users=256 mixedDependencies="+mixedDelta.work().dependencyVisits());
     }
-    public static void main(String[] arguments)throws Exception{
+    public static void main(String[] arguments)throws Exception{try{
         Path output=Path.of(System.getProperty("localPreparation.output","build/reports/local-scene-preparation"));Files.createDirectories(output);
         if(!OBSERVE){persistentDiff();sharedResources(output);}var results=new ArrayList<Object>();for(int count:new int[]{256,4096})results.add(observe(count,output));
         Files.writeString(output.resolve("result.json"),RtxptJson.encode(RtxptJson.object("observationOnly",OBSERVE,"cases",results)));
         System.out.println("LOCAL_PREPARATION_ALL PASS observationOnly="+OBSERVE+" noGpu=true");
-    }
+    }finally{PACKETS.close();}}
 }

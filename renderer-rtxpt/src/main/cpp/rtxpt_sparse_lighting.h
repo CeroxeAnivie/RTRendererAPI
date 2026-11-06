@@ -79,9 +79,11 @@ public:
         }
         size_t count=(reset?0:records.size())+added-removed.size();if(count>Maximum)throw std::invalid_argument("Sparse source capacity exceeded");
         size_t capacity=std::max<size_t>(64,records.capacity());while(capacity<count)capacity*=2;
-        records.reserve(capacity);proxies.reserve(capacity);ids.reserve(capacity);slots.reserve(capacity);tree.Reserve(capacity);
-        dirtyRecords.reserve(dirtyRecords.size()+changed.size()+removed.size());dirtyNodes.reserve(dirtyNodes.size()+(changed.size()+removed.size())*128);
-        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();tree.Rebuild(proxies,&normalization);dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;visibleMaxCount=channelMaxCount=dynamicCount=linearCount=0;regions.Clear();full=true;}
+        records.reserve(capacity);proxies.reserve(capacity);ids.reserve(capacity);slots.reserve(capacity);
+        // Bulk reset builds its spatial tree once after all records are present.
+        // Incremental ancestor logs and a soon-replaced tree reserve are unused.
+        if(!reset){tree.Reserve(capacity);dirtyRecords.reserve(dirtyRecords.size()+changed.size()+removed.size());dirtyNodes.reserve(dirtyNodes.size()+(changed.size()+removed.size())*128);}
+        if(reset){records.clear();proxies.clear();ids.clear();slots.clear();dirtyRecords.clear();dirtyNodes.clear();groupCounts.fill(0);groupMask=0;visibleMaxCount=channelMaxCount=dynamicCount=linearCount=0;regions.Clear();full=true;}
         uint64_t visited=tree.visited;
         for(auto id:removed){uint32_t slot=slots.at(id),last=uint32_t(records.size()-1);Group(records[slot],false);tree.Remove(slot,dirtyNodes);slots.erase(id);
             if(slot!=last){records[slot]=records[last];proxies[slot]=proxies[last];ids[slot]=ids[last];slots.at(ids[slot])=slot;dirtyRecords.push_back(slot);}
@@ -91,7 +93,7 @@ public:
             if(old!=slots.end())Group(records[slot],false);Group(prepared[i],true);
             if(old==slots.end()){slots.emplace(changed[i],slot);records.push_back(prepared[i]);proxies.push_back(MakeProxy(prepared[i]));ids.push_back(changed[i]);if(!reset)tree.Insert(proxies,slot,normalization,dirtyNodes);}
             else{records[slot]=prepared[i];proxies[slot]=MakeProxy(prepared[i]);tree.Refit(proxies,slot,normalization,dirtyNodes);}
-            dirtyRecords.push_back(slot);
+            if(!reset)dirtyRecords.push_back(slot);
         }
         // Bulk publication has every source available. Spatial partitioning avoids
         // insertion-order-dependent overlap in the AVL hierarchy; later small

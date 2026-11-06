@@ -45,10 +45,6 @@ final class RtxptDelta {
         }
     }
     static Prepared prepare(Path parent,RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
-                            List<RtxptScene.Item> items,Map<Long,Path> existingTextures)throws IOException {
-        return prepare(parent,old,scene,previous,items,existingTextures,Map.of(),new RtxptMemoryResources.PacketPool());
-    }
-    static Prepared prepare(Path parent,RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
             List<RtxptScene.Item> items,Map<Long,Path> existingTextures,Map<Long,TextureAsset> residentTextures,RtxptMemoryResources.PacketPool packets)throws IOException {
         var changedTextures=new HashSet<Long>();var changedMaterials=new HashSet<Long>();var changedGeometry=new HashSet<Long>();
         long nodes=scene.textures.forEachChanged(old.textures,(id,value)->{if(!Objects.equals(value,old.textures.get(id)))changedTextures.add(id);});

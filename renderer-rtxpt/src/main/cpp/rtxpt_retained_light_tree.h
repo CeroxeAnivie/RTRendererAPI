@@ -21,7 +21,7 @@ public:
         nodes.reserve(n);parents.reserve(n);heights.reserve(n);free.reserve(n);leaves.reserve(capacity);
     }
     template<class Light> void Rebuild(const std::vector<Light>& lights,double* normalization){
-        nodes=BuildLightTree(lights,normalization);parents.assign(nodes.size(),None);
+        BuildLightTreeInto(lights,nodes,normalization);parents.assign(nodes.size(),None);
         leaves.assign(lights.size(),None);heights.assign(nodes.size(),0);free.clear();root=nodes.empty()?None:0;
         for(uint32_t i=0;i<nodes.size();++i){auto& n=nodes[i];if(n.light>=0)leaves.at(uint32_t(n.light))=i;
             else{parents.at(uint32_t(n.left))=i;parents.at(uint32_t(n.right))=i;}}

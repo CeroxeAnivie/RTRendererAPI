@@ -35,6 +35,11 @@ configurations.named("testRuntimeClasspath") {
     }
 }
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) }; withSourcesJar(); withJavadocJar() }
+tasks.register<JavaExec>("rtxptPacketPoolSelfTest") {
+    group = "verification"; dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptPacketPoolSelfTest")
+}
 tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
 tasks.withType<Test>().configureEach { failOnNoDiscoveredTests = false }
 tasks.withType<JavaExec>().configureEach {

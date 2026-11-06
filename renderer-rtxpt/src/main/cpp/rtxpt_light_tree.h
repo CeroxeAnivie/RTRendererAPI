@@ -31,9 +31,9 @@ template<class Light> void RefitLightTree(std::vector<LightTreeNode>& nodes,cons
         dirty.push_back(index);
     }
 }
-template<class Light> std::vector<LightTreeNode> BuildLightTree(const std::vector<Light>& lights,double* normalization=nullptr) {
-    std::vector<LightTreeNode> nodes;
-    if(lights.empty())return nodes;
+template<class Light> void BuildLightTreeInto(const std::vector<Light>& lights,std::vector<LightTreeNode>& nodes,double* normalization=nullptr) {
+    nodes.clear();
+    if(lights.empty())return;
     std::vector<uint32_t> order(lights.size());std::iota(order.begin(),order.end(),0);
     nodes.reserve(lights.size()*2-1);
     double maximumPower=0;
@@ -69,6 +69,9 @@ template<class Light> std::vector<LightTreeNode> BuildLightTree(const std::vecto
         }
         nodes[index]=node;return index;
     };
-    build(build,0,order.size());return nodes;
+    build(build,0,order.size());
+}
+template<class Light> std::vector<LightTreeNode> BuildLightTree(const std::vector<Light>& lights,double* normalization=nullptr) {
+    std::vector<LightTreeNode> nodes;BuildLightTreeInto(lights,nodes,normalization);return nodes;
 }
 }

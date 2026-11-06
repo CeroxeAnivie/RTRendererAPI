@@ -90,3 +90,7 @@ Remove-Item Env:RTR_RTXPT_MEMORY_LOG -ErrorAction SilentlyContinue
 ## 历史脚本
 
 2026-11-02 删除了 38 个已追踪的一次性性能实验、诊断和回归脚本，并清理本地旧实验脚本及旧发行源码副本。历史质量报告中的命令用于解释当次证据，不再作为当前工具入口；需要追溯时从清理前提交 `eb3bc21` 查阅。正式验证仍使用 Gradle 中维护的 `check` 和对应 native self-test 任务。第三方 SDK 内部的构建脚本属于依赖源码，不是本项目的用户工具。
+
+## Resource packet memory evidence
+
+For the 7.2.3 scoped packet lifecycle, record JFR with renderer diagnostics enabled and export event `top.ceroxe.rt.renderer.rtxpt.ResourcePacketMemory` using the JDK jfr tool. Its action/pool/usedBytes/capacityBytes/releasedBytes fields distinguish real serialized payload, allocation capacity and deterministic release. OFF emits no events. Arena allocations are outside JVM DirectBufferStatistics; use process memory alongside the event. Publication identity remains verified by `Verify-FlightHotspotRelease.py --baseline-version 7.2.2`.

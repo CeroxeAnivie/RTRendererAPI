@@ -1,26 +1,72 @@
 package top.ceroxe.rt.renderer.rtxpt;
 
 import java.nio.*;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
 /** Synchronous borrowed memory packet. Native staging copies finish before JNI returns. */
 final class RtxptMemoryResources {
-    static final class PacketPool {
+    static final class PacketPool implements AutoCloseable {
+        private Arena arena;
         private ByteBuffer buffer;
-        void clear(){buffer=null;}
-        ByteBuffer acquire(int size){
-            if(buffer==null||buffer.capacity()<size){int capacity=Math.max(4096,Integer.highestOneBit(Math.max(1,size-1))<<1);
-                buffer=ByteBuffer.allocateDirect(capacity).order(ByteOrder.LITTLE_ENDIAN);}
-            return buffer.clear().limit(size);
+        private int borrowers;
+        private boolean diagnostics=true;
+        private int used;
+        synchronized void diagnostics(boolean enabled){diagnostics=enabled;}
+        private void report(String action,int released){
+            if(!diagnostics)return;var event=new RtxptResourcePacketEvent();
+            if(!event.isEnabled())return;event.action=action;event.pool=Integer.toUnsignedLong(System.identityHashCode(this));
+            event.usedBytes=used;event.capacityBytes=buffer==null?0:buffer.capacity();event.releasedBytes=released;event.commit();
+        }
+        // Native borrows are synchronous. Pending retries retain this storage,
+        // while replacement and renderer close explicitly release it without GC.
+        synchronized void clear(){
+            if(borrowers!=0)throw new IllegalStateException("Resource packet is borrowed by JNI");
+            int capacity=capacity();buffer=null;var old=arena;arena=null;if(old!=null)old.close();
+            if(capacity!=0)report("RELEASE",capacity);used=0;
+        }
+        @Override public void close(){clear();}
+        synchronized int capacity(){return buffer==null?0:buffer.capacity();}
+        static int storageCapacity(int size){
+            if(size<0||size>512*1024*1024)throw new IllegalArgumentException("Invalid resource packet capacity");
+            return size<=1024*1024?Math.max(4096,Integer.highestOneBit(Math.max(1,size-1))<<1)
+                    :Math.toIntExact(((long)size+65535)&~65535L);
+        }
+        synchronized ByteBuffer acquire(int size){
+            int requestedCapacity=storageCapacity(size);
+            if(borrowers!=0)throw new IllegalStateException("Resource packet is borrowed by JNI");
+            if(buffer==null||buffer.capacity()<size){
+                // Large complete publications must not round e.g. 257 MiB to
+                // 512 MiB. Keep small reuse buckets and bound large slack to 64 KiB.
+                int capacity=requestedCapacity;
+                // No in-flight borrower exists. Retire the obsolete packet first
+                // so growth does not retain old+new native capacities at its peak.
+                clear();var next=Arena.ofShared();
+                try{buffer=next.allocate(capacity,8).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);arena=next;}
+                catch(RuntimeException|Error failure){next.close();throw failure;}
+                used=size;report("ALLOCATE",0);
+            }
+            used=size;return buffer.clear().limit(size);
+        }
+        synchronized void packed(){report("PACK",0);}
+        synchronized Borrow borrow(ByteBuffer packet){
+            if(buffer==null||packet==null||!packet.isDirect()||!MemorySegment.ofBuffer(packet).scope().isAlive()
+                    ||MemorySegment.ofBuffer(packet).address()!=MemorySegment.ofBuffer(buffer).address()
+                    ||packet.capacity()>buffer.capacity())throw new IllegalArgumentException("Packet does not belong to this pool");
+            ++borrowers;return new Borrow(this,packet);
+        }
+        private synchronized void release(){if(--borrowers<0)throw new IllegalStateException("Unbalanced resource packet borrow");}
+        static final class Borrow implements AutoCloseable {
+            private PacketPool owner;private final ByteBuffer buffer;
+            Borrow(PacketPool owner,ByteBuffer buffer){this.owner=owner;this.buffer=buffer;}
+            ByteBuffer buffer(){if(owner==null)throw new IllegalStateException("Resource packet borrow closed");return buffer;}
+            @Override public void close(){if(owner!=null){var pool=owner;owner=null;pool.release();}}
         }
     }
     private record Geometry(RtxptScene.Item item,RtxptScene.ExportGeometry data,List<RtxptAttributeBatch.Group> groups) { }
-    static ByteBuffer pack(RtxptScene old,RtxptScene scene,Collection<RtxptScene.Item> meshes,
-            Collection<RtxptScene.Variant> materials,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage){
-        return pack(old,scene,meshes,materials,nodes,removals,coverage,Map.of(),new PacketPool());
-    }
     static ByteBuffer pack(RtxptScene old,RtxptScene scene,Collection<RtxptScene.Item> meshes,
             Collection<RtxptScene.Variant> materials,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,
             Map<Long,TextureAsset> resident,PacketPool pool){
@@ -34,7 +80,7 @@ final class RtxptMemoryResources {
         var size=new Writer(null);write(size,textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,resident);
         if(size.offset>512L*1024*1024)throw new IllegalArgumentException("Dynamic resource packet exceeds 512 MiB staging capacity; split the transaction");
         var packet=pool.acquire(Math.toIntExact(size.offset));
-        write(new Writer(packet),textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,resident);return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        write(new Writer(packet),textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,resident);pool.packed();return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static void write(Writer w,Map<Long,TextureAsset> textures,Collection<RtxptScene.Variant> materials,
             List<Geometry> meshes,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,RtxptScene scene,List<Long> removedTextures,Map<Long,TextureAsset> resident){

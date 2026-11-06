@@ -6,7 +6,7 @@
 
 ## 使用
 
-需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.2.2 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
+需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.2.3 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
 
 ```powershell
 java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow `

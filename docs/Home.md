@@ -1,6 +1,6 @@
 # RTRendererAPI Java 开发指南
 
-当前版本 **7.2.2** 的快飞资源热点、lookup兼容修复和定向验收见[本版说明](quality/flight-resource-hotspots.md)。历史验收保留原版本身份。
+当前版本 **7.2.3** 的快飞资源热点、lookup兼容修复和定向验收见[本版说明](quality/flight-resource-hotspots.md)。历史验收保留原版本身份。
 
 RTRendererAPI 是一个以 JDK 25 构建、以 Java 25 字节码与运行时为公开基线的多模块工程。所有 Java 编译任务强制
 `--release 25`。`renderer-api` 保持后端无关，`renderer-core` 提供 Windows Vulkan RT，

@@ -1,0 +1,94 @@
+{
+  "date": "2026-11-07",
+  "version": "7.2.3",
+  "baselineVersion": "7.2.2",
+  "branch": "codex/resource-root-followup",
+  "baseCommit": "55dba3d4624bce2c199d70634d6e7817680c05d6",
+  "nativeSha256": "65124a82cb6f39dc7a1799b09292e08d3ac6bc2509ba0e8d7c489cb3049bd393",
+  "changedRuntimeFilesCheckedBeforeTests": 1027,
+  "unrelatedDifferences": [],
+  "trigger": "Same terrain after fast flight: close RT for native screenshot, reopen RT; second sparse full reset failed with bad allocation",
+  "baselineObservation": {
+    "initialGpuPercent": 0,
+    "fastFlightFps": 75.6,
+    "fullRunPassed": false,
+    "nativeException": "CPU allocation in RtxptNative.sparseLighting; precise failing container not recorded",
+    "jobTreePeakBytes": 9504124928,
+    "wrapperLimitBytes": 9500000000,
+    "clientPrivatePeakGB": 8.121,
+    "clientWorkingSetPeakGB": 5.501,
+    "lastPostGcUsedGB": 1.783,
+    "lastPostGcCommittedGB": 2.967,
+    "oldNativeShutdownPrivateReductionGB": 1.58,
+    "jvmDirectCapacityBeforeBytes": 36410172,
+    "jvmDirectCapacityDuringRebuildBytes": 572911900,
+    "oldPacketActualCapacityBytes": null,
+    "newFullPacketActualUsedBytes": null,
+    "warning": "JVM direct totals are not a per-PacketPool measurement; no claim that 512MiB old packet was retained. RESOURCE_PLAN is native planned payload, not serialized packet length."
+  },
+  "changes": [
+    "Scoped JDK25 Arena storage with explicit owner; no Cleaner/System.gc",
+    "JNI Borrow blocks invalidation during synchronous consumption; pending retry retains identical bytes",
+    "Large capacity aligned to 64KiB instead of powers of two; small <=1MiB reuse buckets retained",
+    "Successful full resourcesMemory releases Java native packet before sparseLighting/attributes initialization",
+    "Reset omits unused 128*N dirty ancestor reserve and dirty record writes",
+    "BuildLightTreeInto reuses destination vector with unchanged spatial algorithm and ordering",
+    "Diagnostic-gated ResourcePacketMemory JFR used/capacity/release evidence; Arena is outside JVM DirectBufferStatistics"
+  ],
+  "checks": {
+    "javaPacketOwnership": true,
+    "javaHighFramerateResources": true,
+    "javaDynamicResources": true,
+    "javaLocalPreparation": true,
+    "bulkSources": 27376,
+    "bulkRebuilds": 4,
+    "bulkSameStorageAndBytes": true,
+    "spatialOracleSources": 22000,
+    "spatialOracleReceivers": 320,
+    "regionOracleSources": 25000,
+    "regionOracleQueries": 2198,
+    "nativeMixed": true,
+    "nativeSparseFrames": 24,
+    "nativeSparseInitializations": 1,
+    "nativeSparseSameFrame": true,
+    "initialGpuPercent": 0,
+    "nativeSparseStagingRequests": 1726,
+    "nativeSparseStagingBytes": 24241748,
+    "maxWriteBytes": 1048576,
+    "maxStagingAllocationBytes": 2097152
+  },
+  "execution": [
+    {
+      "name": "java-cpu-affected",
+      "wallSeconds": 19.598,
+      "peakGiB": 2.082,
+      "exit": 0
+    },
+    {
+      "name": "native-incremental-build",
+      "wallSeconds": 21.91,
+      "peakGiB": 0.854,
+      "exit": 0
+    },
+    {
+      "name": "native-bulk-spatial-regions-mixed-sparse",
+      "wallSeconds": 86.827,
+      "peakGiB": 2.574,
+      "exit": 0
+    }
+  ],
+  "failures": [
+    {
+      "kind": "Initial read-only CMake cache selector expected uppercase project name, matched none",
+      "productionCause": false,
+      "buildStarted": false,
+      "corrected": "Read existing build-host path from maintained build script; no reconfigure or SDK download"
+    }
+  ],
+  "mc723Measured": false,
+  "publication": {
+    "github": "pending",
+    "mavenLocal": "pending",
+    "central": false
+  }
+}

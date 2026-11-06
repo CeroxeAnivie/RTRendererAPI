@@ -34,5 +34,6 @@
   "7.2.0-rc.9": "docs/release-upload-retention.md",
   "7.2.0-rc.10": "docs/release-source-visibility.md",
   "7.2.1": "docs/release-project-cleanup.md",
-  "7.2.2": "docs/quality/flight-resource-hotspots.md"
+  "7.2.2": "docs/quality/flight-resource-hotspots.md",
+  "7.2.3": "docs/quality/rebuild-resource-memory.md"
 }

@@ -87,7 +87,21 @@ static void BitstackTraversal(){
     }
     std::cout<<"SPARSE_BITSTACK_TRAVERSAL PASS lights=977 rejectionPatterns=128 exactVisitOrder=true\n";
 }
+static void BulkPublicationReuse(){
+    std::vector<Light> lights;for(uint32_t i=0;i<27376;i++)lights.push_back({{float(i%163),float(i%73),float(i/163),1},{0,-1,0,3},{1,.7f,.4f,.02f},{}});
+    rtr::RetainedLightTree tree;double scale=1;tree.Rebuild(lights,&scale);
+    auto* storage=tree.nodes.data();const auto capacity=tree.nodes.capacity();
+    for(int iteration=0;iteration<4;iteration++){
+        lights[iteration].positionType[0]+=.125f;double expectedScale=1;auto expected=rtr::BuildLightTree(lights,&expectedScale);
+        tree.Rebuild(lights,&scale);
+        Require(tree.nodes.data()==storage&&tree.nodes.capacity()==capacity,"Bulk rebuild reuses the existing tree allocation");
+        Require(scale==expectedScale&&tree.nodes.size()==expected.size(),"Bulk normalization and node count unchanged");
+        for(size_t i=0;i<expected.size();i++)Require(std::equal(reinterpret_cast<const unsigned char*>(&expected[i]),reinterpret_cast<const unsigned char*>(&expected[i])+sizeof(expected[i]),reinterpret_cast<const unsigned char*>(&tree.nodes[i])),"Bulk tree bytes and ordering unchanged");
+    }
+    std::cout<<"SPARSE_BULK_REUSE PASS sources=27376 rebuilds=4 sameStorage=true sameNodeBytes=true\n";
+}
 int main(int argc,char** argv){try{
+    if(argc>1&&std::string(argv[1])=="bulk"){BulkPublicationReuse();return 0;}
     if(argc>1&&std::string(argv[1])=="bitstack"){BitstackTraversal();return 0;}
     if(argc>1&&std::string(argv[1])=="parents"){ParentPublication();return 0;}
     if(argc>1&&std::string(argv[1])=="spatial"){SpatialPublication();return 0;}

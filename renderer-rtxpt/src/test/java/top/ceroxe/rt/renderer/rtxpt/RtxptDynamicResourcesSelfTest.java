@@ -8,6 +8,7 @@ import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
 
 /** Memory ownership, rectangle rows, generation rejection and file-free resource planning. */
 public final class RtxptDynamicResourcesSelfTest {
+    private static final RtxptMemoryResources.PacketPool PACKETS=new RtxptMemoryResources.PacketPool();
     static void reject(Runnable action){try{action.run();}catch(IllegalArgumentException|ArithmeticException expected){return;}throw new AssertionError("Expected invalid input rejection");}
     static void patches(){
         byte[] pixels=new byte[(4*4+2*2+1)*4];Arrays.fill(pixels,(byte)31);
@@ -35,7 +36,7 @@ public final class RtxptDynamicResourcesSelfTest {
         var items=scene.items(RenderFrameRequest.builder(0,64,64,CameraState.lookAt(0,0,4,0,0,0).build()).build());
         Path path=Files.createTempDirectory("resource-plan-");
         try{
-            var result=RtxptDelta.prepare(path,old,scene,List.of(),items,new RtxptPersistentMap<>());
+            var result=RtxptDelta.prepare(path,old,scene,List.of(),items,new RtxptPersistentMap<>(),Map.of(),PACKETS);
             require(result.memory().isDirect()&&result.memory().getInt(0)==0x52445254,"Direct little-endian resource packet");
             require(result.work().exportedModels()==0&&result.directory()==null&&result.manifest()==null,"No file importer path");
             try(var files=Files.list(path)){require(files.findAny().isEmpty(),"Resource planning creates no files");}
@@ -47,5 +48,5 @@ public final class RtxptDynamicResourcesSelfTest {
                     require(mesh.triangleMaterialIds().get(corner/3)==group.material()&&entry.colors()[i]==0xffa0b0c0,"Group and authored color preserved");}}
         }finally{Files.delete(path);}
     }
-    public static void main(String[] args)throws Exception{patches();resources();System.out.println("DYNAMIC_RESOURCES_CPU PASS rows=true mips=true staleRejected=true snapshotIsolation=true noFiles=true primitiveGroups=true");}
+    public static void main(String[] args)throws Exception{try{patches();resources();System.out.println("DYNAMIC_RESOURCES_CPU PASS rows=true mips=true staleRejected=true snapshotIsolation=true noFiles=true primitiveGroups=true");}finally{PACKETS.close();}}
 }

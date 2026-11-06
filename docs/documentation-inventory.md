@@ -11,7 +11,7 @@
 | 文档 | 摘要 |
 | --- | --- |
 | [README.md](../README.md) | 项目定位、统一入口、能力范围、使用方法与候选状态。 |
-| [当前版本资源热点修复](quality/flight-resource-hotspots.md) | 7.2.2 根因、定向验收和发布身份。 |
+| [当前版本资源热点修复](quality/flight-resource-hotspots.md) | 7.2.3 根因、定向验收和发布身份。 |
 | [7.2.1 版本说明](release-project-cleanup.md) | 历史目录清理和回归状态。 |
 | [Home.md](Home.md) | 阅读路线、模块边界、使用层级和本地验证入口。 |
 | [_Sidebar.md](_Sidebar.md) | 开发文档导航索引。 |
@@ -157,10 +157,10 @@ Javadoc 是构建产物；报告不逐条索引构建日志或 HTML 输出文件
 
 | 模块 | 生成内容 |
 | --- | --- |
-| `renderer-api` | 公共消费方 API 文档及 `renderer-api-7.2.2-javadoc.jar`。 |
-| `renderer-core` | 后端实现文档及 `renderer-core-7.2.2-javadoc.jar`。 |
-| `renderer-nvidia` | NVIDIA provider 文档及 `renderer-nvidia-7.2.2-javadoc.jar`。 |
-| `renderer-rtxpt` | RTXPT 公共宿主／组合入口文档及 `renderer-rtxpt-7.2.2-javadoc.jar`。 |
+| `renderer-api` | 公共消费方 API 文档及 `renderer-api-7.2.3-javadoc.jar`。 |
+| `renderer-core` | 后端实现文档及 `renderer-core-7.2.3-javadoc.jar`。 |
+| `renderer-nvidia` | NVIDIA provider 文档及 `renderer-nvidia-7.2.3-javadoc.jar`。 |
+| `renderer-rtxpt` | RTXPT 公共宿主／组合入口文档及 `renderer-rtxpt-7.2.3-javadoc.jar`。 |
 
 Javadoc 制品是否存在及具体版本，以对应 Maven staging 或 runtime distribution 验收为准。
 

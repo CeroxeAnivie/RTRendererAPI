@@ -620,7 +620,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         }
         if(preparedDelta!=null&&preparedDelta.hasWork()){
             long begin=diagnosticClock();long deadline=0;
-            for(;;)try{RtxptNative.resourcesMemory(handle,revision,preparedDelta.memory());break;}
+            for(;;)try(var borrowed=resourcePackets.borrow(preparedDelta.memory())){RtxptNative.resourcesMemory(handle,revision,borrowed.buffer());break;}
             catch(RtxptResourcePendingException deferred){
                 if(admitted)throw deferred;
                 // submit/host preparation are synchronous APIs; trySubmit returns
@@ -629,6 +629,10 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
                 if(Thread.currentThread().isInterrupted()||System.nanoTime()>=deadline)throw new IllegalStateException("GPU heap preparation did not finish within the synchronous admission budget",deferred);
                 RtxptNative.resourcesAdmission(handle);java.util.concurrent.locks.LockSupport.parkNanos(1_000_000);
             }
+            // Successful resourcesMemory owns its native copies. A full-scene
+            // packet has no later reader; release before lighting/index/attributes
+            // initialize rather than keeping a scene-sized native block resident.
+            if(rebuild)resourcePackets.clear();
             nativeResourceNs+=diagnosticElapsed(begin);preparedDelta.translated().uploadInteriors(handle);
             for(var entry:preparedDelta.translated().textures.entrySet())memoryTextures.put(entry.getKey(),entry.getValue());
             scene.textures.forEachChanged(residentScene==null?new RtxptPersistentMap<>():residentScene.textures,(id,value)->{if(value==null)memoryTextures.remove(id);});
@@ -909,7 +913,7 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
     }
     @Override public boolean renderFrame(){ready();if(handle==0)throw new IllegalStateException("Submit a scene first");if(windowClosed)return false;
         long begin=diagnosticClock();int result=RtxptNative.frame(handle);frameNs+=diagnosticElapsed(begin);if(result==2){frames++;completed=submitted;}else if(result==0)windowClosed=true;return result!=0;}
-    @Override public void diagnosticLevel(RtxptDiagnostics.Level level){ready();diagnosticLevel=Objects.requireNonNull(level);if(handle!=0)RtxptNative.diagnosticLevel(handle,level.ordinal());else if(diagnosticPrepared)RtxptNative.prepareDiagnostics(level.ordinal());}
+    @Override public void diagnosticLevel(RtxptDiagnostics.Level level){ready();diagnosticLevel=Objects.requireNonNull(level);resourcePackets.diagnostics(level!=RtxptDiagnostics.Level.OFF);if(handle!=0)RtxptNative.diagnosticLevel(handle,level.ordinal());else if(diagnosticPrepared)RtxptNative.prepareDiagnostics(level.ordinal());}
     @Override public RtxptDiagnostics.LightUpdates lightUpdates(){ready();return RtxptDiagnostics.decodeLights(handle==0?new long[16]:RtxptNative.lightUpdateTelemetry(handle));}
     @Override public RtxptDiagnostics.Snapshot diagnosticSnapshot(){ready();return handle==0?RtxptDiagnostics.decode(new long[]{2,12,0,0,0,0,0}):RtxptDiagnostics.decode(RtxptNative.diagnosticSnapshot(handle));}
     @Override public RtxptDiagnostics.Monitor diagnosticMonitor(){ready();
