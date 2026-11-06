@@ -547,6 +547,17 @@ tasks.register<JavaExec>("rtxptHostSurfaceTransportNativeSelfTest") {
     environment("RTR_RTXPT_SHADER_MANIFEST_DIR", rootProject.file("build/rtxpt-shader-manifests").absolutePath)
 }
 
+tasks.register<JavaExec>("rtxptSharedLightingNativeSelfTest") {
+    group = "verification"
+    description = "Runs five compatible lighting acceptance tasks in one renderer/window."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptSharedLightingNativeSelfTest")
+    jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    systemProperty("top.ceroxe.rt.rtxpt.testOutput",rootProject.file("build/reports/shared-lighting").absolutePath)
+}
+
 tasks.register<JavaExec>("rtxptNativeLightingMatrixNativeSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath

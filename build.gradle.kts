@@ -1032,6 +1032,16 @@ tasks.register("strictAcceptanceTest") {
 // A green bounded GPUScene gate does not establish the medium, generic-command,
 // gallery or packaged-distribution contracts. Keep its fast entry point and make
 // the complete release scope explicit in a separate, opt-in invocation.
+// Focused entry points remain available; complete acceptance executes their shared window once.
+val sharedLightingBatchPath = ":renderer-rtxpt:rtxptSharedLightingNativeSelfTest"
+val sharedLightingTaskPaths = listOf(
+    ":renderer-rtxpt:rtxptNativeLightingMatrixNativeSelfTest",
+    ":renderer-rtxpt:rtxptLightingAttributeNativeSelfTest",
+    ":renderer-rtxpt:rtxptLightingResourceMatrixNativeSelfTest",
+    ":renderer-rtxpt:rtxptMixedResourceNativeSelfTest",
+    ":renderer-rtxpt:rtxptSourceVisibilityNativeSelfTest"
+)
+val sharedLightingCoverage = sharedLightingTaskPaths.map { linkedMapOf("task" to it, "executedBy" to sharedLightingBatchPath) }
 val apiClosureRequiredTasks = listOf(
     ":check", ":renderer-api:check", ":renderer-core:check", ":renderer-nvidia:check", ":renderer-rtxpt:check", ":demos:hex-ball:check",
     ":renderer-core:rendererCoreGpuSceneNativeGate",
@@ -1072,7 +1082,8 @@ val apiClosureRequiredTasks = listOf(
     ":demos:hex-ball:surfacePathNativeSelfTest",
     ":demos:hex-ball:rtxptCompositionSelfTest",
     ":verifyPublishedMavenConsumer", ":verifyReleaseChecksums", ":verifyRuntimeDistribution"
-)
+).map { if (it in sharedLightingTaskPaths) sharedLightingBatchPath else it }.distinct()
+
 tasks.register("verifyApiClosure") {
     group = "verification"
     description = "Runs every current-platform API, medium, vendor, gallery and packaged-consumer release gate."
@@ -1092,6 +1103,7 @@ tasks.register("verifyApiClosure") {
             "completedAtUtc" to Instant.now().toString(),
             "version" to project.version.toString(),
             "scope" to "documented Windows x86_64 Vulkan RT, NVIDIA features and RTXPT native/packaged/composition contracts",
+            "sharedLightingCoverage" to sharedLightingCoverage,
             "requiredTasks" to required.map { task -> linkedMapOf("path" to task.path,
                 "executed" to task.state.executed, "upToDate" to task.state.upToDate) },
             "nativeTasks" to graph.filter { isHardwareAcceptanceTask(it) }.map { task ->
@@ -1131,7 +1143,7 @@ val fullRegression = tasks.register("fullRegression") {
 }
 gradle.projectsEvaluated {
     val selfTests = subprojects.flatMap { child ->
-        child.tasks.withType<JavaExec>().filter { it.name.endsWith("SelfTest") }
+        child.tasks.withType<JavaExec>().filter { it.name.endsWith("SelfTest") && it.path !in sharedLightingTaskPaths }
     }.sortedBy { it.path }
     val nativeContracts = project(":renderer-rtxpt").tasks.filter { it.name.endsWith("ContractNativeSelfTest") }.sortedBy { it.path }
     selfTests.forEach { it.mustRunAfter(":renderer-rtxpt:buildRtxptNativeContracts") }
@@ -1155,6 +1167,7 @@ gradle.projectsEvaluated {
                 "version" to project.version.toString(),
                 "passed" to true,
                 "completedAtUtc" to Instant.now().toString(),
+                "sharedLightingCoverage" to sharedLightingCoverage,
                 "selfTests" to selfTests.map { linkedMapOf("path" to it.path,
                     "executed" to it.state.executed, "upToDate" to it.state.upToDate) },
                 "nativeContracts" to nativeContracts.map { linkedMapOf("path" to it.path,
@@ -1168,12 +1181,13 @@ gradle.projectsEvaluated {
 // Reject subset selectors before executing any part of the complete gate. These
 // properties remain useful for focused development, but cannot certify a release.
 gradle.taskGraph.whenReady {
-    if (allTasks.any { it.path == ":fullRegression" }) {
+    if (!gradle.startParameter.isDryRun && allTasks.any { it.path == ":fullRegression" }) {
         layout.buildDirectory.file("reports/full-regression/result.json").get().asFile.delete()
     }
     if (allTasks.any { it.path == ":verifyApiClosure" }) {
         // A later failed invocation must not leave a previous green result looking current.
-        layout.buildDirectory.file("reports/api-closure/result.json").get().asFile.delete()
+        if (!gradle.startParameter.isDryRun)
+            layout.buildDirectory.file("reports/api-closure/result.json").get().asFile.delete()
         val selectors = listOf("externalSemaphoreParamsOnly", "shaderContractsOnly", "opticalBenchmark",
             "opticalCaustics", "opticalVolumeCaustics", "opticalOnlyThinCase", "precompiledSceneOnly",
             "productionBenchmark", "productionControl", "productionControlJar", "galleryTestScene", "galleryControlJar")
