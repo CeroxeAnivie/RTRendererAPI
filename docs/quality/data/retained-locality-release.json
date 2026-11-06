@@ -1,0 +1,330 @@
+{
+  "date": "2026-11-07",
+  "version": "7.3.2",
+  "sourceCommit": "e4c755398fda349d6789e83d0f826f10f048dc3f",
+  "publicationOrder": [
+    "package-only checks",
+    "source/tools/docs GitHub push",
+    "four modules Maven Local",
+    "Local byte identity checks"
+  ],
+  "package": {
+    "version": "7.3.2",
+    "baselineVersion": "7.3.1",
+    "branch": "codex/resource-root-followup",
+    "sourceCommit": null,
+    "phase": "package-only",
+    "githubPushedBeforeMaven": false,
+    "modules": {
+      "renderer-api": {
+        "main": {
+          "sha256": "fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c",
+          "bytes": 795823
+        },
+        "-sources": {
+          "sha256": "f4a824489c82df40615414dce6a679b9c78167fcf30916070a1f33382bd20ac6",
+          "bytes": 367699
+        },
+        "-javadoc": {
+          "sha256": "7fb44553c4b667c308c27de0a36431cd01349eaf96dd5fe35d2d0a9aa3f9f629",
+          "bytes": 6520185
+        }
+      },
+      "renderer-core": {
+        "main": {
+          "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69",
+          "bytes": 14561563
+        },
+        "-sources": {
+          "sha256": "efc4c96aef8401a8a5a5ab05a568a36227ec9a9d26aa9d4362f3838e114c45b3",
+          "bytes": 12913129
+        },
+        "-javadoc": {
+          "sha256": "2bb595f9cfb3ea3d349ec740a7e47d73db7317bab41d028d126610f84275840c",
+          "bytes": 6229530
+        }
+      },
+      "renderer-nvidia": {
+        "main": {
+          "sha256": "39b9f11445013704465776361dabccadc6a381e35d2923970ecd306266835095",
+          "bytes": 62644788
+        },
+        "-sources": {
+          "sha256": "2cf97cfaadc9a76b203771086eff4d5711db3e573204de4191a1ae1aa646d62e",
+          "bytes": 57017
+        },
+        "-javadoc": {
+          "sha256": "aa8a784b37a49285a3755cb4c477f99861fb8377f369b7278791a33ac2490b92",
+          "bytes": 4155748
+        }
+      },
+      "renderer-rtxpt": {
+        "main": {
+          "sha256": "d09bc3985af2587906c2f7014b350573c7c5cfa1824def3f18398c16e38d3d9d",
+          "bytes": 775074818
+        },
+        "-sources": {
+          "sha256": "d3fd4a1e57a52e9764e3458b2efc7df94bdde9860b3f764f317a57f236d23f6c",
+          "bytes": 82813
+        },
+        "-javadoc": {
+          "sha256": "0d00f1ead0248390f38f41be5dcac20dec961c6c2b93de9e6180238808d64ea5",
+          "bytes": 4374582
+        }
+      }
+    },
+    "nativeSha256": "4960e5284e256c032338e0d5f3d5003305bc76065708fdb55b9a428320e7147a",
+    "runtimeZipSha256": "08b87a2bbe9d33af4090409dd30d1d66fe9fa7c79d30d0c37689e7d95af672f5",
+    "pdbGuidBytes": "42b75afe1d929142be32e164448828b6",
+    "pdbAge": 275,
+    "nvidiaNativeSha256": "d8067ff0102895ec8bddff24065ffa53afdd1b582b7b7d0beb5f561980ff6633",
+    "nvidiaRuntimeFiles": 21,
+    "nvidiaChangedFromBaseline": [],
+    "lockedRuntimeFiles": 1621,
+    "sdkManifestFiles": 81,
+    "shaderAbiSha256": "f7671628cf8d938358c45819bff01276c5c3eb76a3398e4ca3f25f490a9cb3ac",
+    "checksPassed": 55,
+    "checks": [
+      "evidence-version",
+      "affected-checks-pass",
+      "productionSourceSha256",
+      "productionClassSha256",
+      "testClassSha256",
+      "evidenceFileSha256",
+      "managed-baseline-version",
+      "same-fixture-mixed-update-cost",
+      "bounded-topology-frontier",
+      "same-fixture-managed-scale",
+      "mixed-update-timings-finite-nonnegative",
+      "managed-scale-timings-finite-nonnegative",
+      "managed-resource-correctness",
+      "equivalent-output-file-inventory",
+      "equivalent-output-sha256",
+      "tested-jni-current",
+      "tested-jni-matching-pdb",
+      "authorized-branch",
+      "renderer-api-current-class-inventory-and-bytes",
+      "renderer-api-current-sources",
+      "renderer-api-javadoc",
+      "renderer-api-pom-version",
+      "renderer-api-pom-internal-dependencies",
+      "renderer-api-module-version",
+      "renderer-core-current-class-inventory-and-bytes",
+      "renderer-core-current-sources",
+      "renderer-core-javadoc",
+      "renderer-core-pom-version",
+      "renderer-core-pom-internal-dependencies",
+      "renderer-core-module-version",
+      "renderer-nvidia-current-class-inventory-and-bytes",
+      "renderer-nvidia-current-sources",
+      "renderer-nvidia-javadoc",
+      "renderer-nvidia-pom-version",
+      "renderer-nvidia-pom-internal-dependencies",
+      "renderer-nvidia-module-version",
+      "renderer-rtxpt-current-class-inventory-and-bytes",
+      "renderer-rtxpt-current-sources",
+      "renderer-rtxpt-javadoc",
+      "renderer-rtxpt-pom-version",
+      "renderer-rtxpt-pom-internal-dependencies",
+      "renderer-rtxpt-module-version",
+      "renderer-api-baseline-class-bytes-retained",
+      "renderer-core-baseline-class-bytes-retained",
+      "nvidia-native-current",
+      "nvidia-runtime-file-manifest",
+      "nvidia-runtime-inventory-retained",
+      "runtime-zip-digest",
+      "runtime-tested-jni",
+      "runtime-dependency-inventory-retained",
+      "runtime-dependency-and-shader-bytes-retained",
+      "sdk-version",
+      "sdk-files",
+      "sdk-shader-abi",
+      "sdk-current-shader-sources"
+    ]
+  },
+  "local": {
+    "version": "7.3.2",
+    "baselineVersion": "7.3.1",
+    "branch": "codex/resource-root-followup",
+    "sourceCommit": "e4c755398fda349d6789e83d0f826f10f048dc3f",
+    "phase": "maven-local",
+    "githubPushedBeforeMaven": true,
+    "modules": {
+      "renderer-api": {
+        "main": {
+          "sha256": "fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c",
+          "bytes": 795823
+        },
+        "-sources": {
+          "sha256": "f4a824489c82df40615414dce6a679b9c78167fcf30916070a1f33382bd20ac6",
+          "bytes": 367699
+        },
+        "-javadoc": {
+          "sha256": "7fb44553c4b667c308c27de0a36431cd01349eaf96dd5fe35d2d0a9aa3f9f629",
+          "bytes": 6520185
+        }
+      },
+      "renderer-core": {
+        "main": {
+          "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69",
+          "bytes": 14561563
+        },
+        "-sources": {
+          "sha256": "efc4c96aef8401a8a5a5ab05a568a36227ec9a9d26aa9d4362f3838e114c45b3",
+          "bytes": 12913129
+        },
+        "-javadoc": {
+          "sha256": "2bb595f9cfb3ea3d349ec740a7e47d73db7317bab41d028d126610f84275840c",
+          "bytes": 6229530
+        }
+      },
+      "renderer-nvidia": {
+        "main": {
+          "sha256": "39b9f11445013704465776361dabccadc6a381e35d2923970ecd306266835095",
+          "bytes": 62644788
+        },
+        "-sources": {
+          "sha256": "2cf97cfaadc9a76b203771086eff4d5711db3e573204de4191a1ae1aa646d62e",
+          "bytes": 57017
+        },
+        "-javadoc": {
+          "sha256": "aa8a784b37a49285a3755cb4c477f99861fb8377f369b7278791a33ac2490b92",
+          "bytes": 4155748
+        }
+      },
+      "renderer-rtxpt": {
+        "main": {
+          "sha256": "d09bc3985af2587906c2f7014b350573c7c5cfa1824def3f18398c16e38d3d9d",
+          "bytes": 775074818
+        },
+        "-sources": {
+          "sha256": "d3fd4a1e57a52e9764e3458b2efc7df94bdde9860b3f764f317a57f236d23f6c",
+          "bytes": 82813
+        },
+        "-javadoc": {
+          "sha256": "0d00f1ead0248390f38f41be5dcac20dec961c6c2b93de9e6180238808d64ea5",
+          "bytes": 4374582
+        }
+      }
+    },
+    "nativeSha256": "4960e5284e256c032338e0d5f3d5003305bc76065708fdb55b9a428320e7147a",
+    "runtimeZipSha256": "08b87a2bbe9d33af4090409dd30d1d66fe9fa7c79d30d0c37689e7d95af672f5",
+    "pdbGuidBytes": "42b75afe1d929142be32e164448828b6",
+    "pdbAge": 275,
+    "nvidiaNativeSha256": "d8067ff0102895ec8bddff24065ffa53afdd1b582b7b7d0beb5f561980ff6633",
+    "nvidiaRuntimeFiles": 21,
+    "nvidiaChangedFromBaseline": [],
+    "lockedRuntimeFiles": 1621,
+    "sdkManifestFiles": 81,
+    "shaderAbiSha256": "f7671628cf8d938358c45819bff01276c5c3eb76a3398e4ca3f25f490a9cb3ac",
+    "checksPassed": 77,
+    "checks": [
+      "evidence-version",
+      "affected-checks-pass",
+      "productionSourceSha256",
+      "productionClassSha256",
+      "testClassSha256",
+      "evidenceFileSha256",
+      "managed-baseline-version",
+      "same-fixture-mixed-update-cost",
+      "bounded-topology-frontier",
+      "same-fixture-managed-scale",
+      "mixed-update-timings-finite-nonnegative",
+      "managed-scale-timings-finite-nonnegative",
+      "managed-resource-correctness",
+      "equivalent-output-file-inventory",
+      "equivalent-output-sha256",
+      "tested-jni-current",
+      "tested-jni-matching-pdb",
+      "authorized-branch",
+      "source-commit-required",
+      "source-HEAD-pushed-before-local",
+      "renderer-api-local-bytes",
+      "renderer-api-current-class-inventory-and-bytes",
+      "renderer-api-sources-local-bytes",
+      "renderer-api-current-sources",
+      "renderer-api-javadoc-local-bytes",
+      "renderer-api-javadoc",
+      "renderer-api.pom-local-bytes",
+      "renderer-api-pom-version",
+      "renderer-api-pom-internal-dependencies",
+      "renderer-api.module-local-bytes",
+      "renderer-api-module-version",
+      "renderer-core-local-bytes",
+      "renderer-core-current-class-inventory-and-bytes",
+      "renderer-core-sources-local-bytes",
+      "renderer-core-current-sources",
+      "renderer-core-javadoc-local-bytes",
+      "renderer-core-javadoc",
+      "renderer-core.pom-local-bytes",
+      "renderer-core-pom-version",
+      "renderer-core-pom-internal-dependencies",
+      "renderer-core.module-local-bytes",
+      "renderer-core-module-version",
+      "renderer-nvidia-local-bytes",
+      "renderer-nvidia-current-class-inventory-and-bytes",
+      "renderer-nvidia-sources-local-bytes",
+      "renderer-nvidia-current-sources",
+      "renderer-nvidia-javadoc-local-bytes",
+      "renderer-nvidia-javadoc",
+      "renderer-nvidia.pom-local-bytes",
+      "renderer-nvidia-pom-version",
+      "renderer-nvidia-pom-internal-dependencies",
+      "renderer-nvidia.module-local-bytes",
+      "renderer-nvidia-module-version",
+      "renderer-rtxpt-local-bytes",
+      "renderer-rtxpt-current-class-inventory-and-bytes",
+      "renderer-rtxpt-sources-local-bytes",
+      "renderer-rtxpt-current-sources",
+      "renderer-rtxpt-javadoc-local-bytes",
+      "renderer-rtxpt-javadoc",
+      "renderer-rtxpt.pom-local-bytes",
+      "renderer-rtxpt-pom-version",
+      "renderer-rtxpt-pom-internal-dependencies",
+      "renderer-rtxpt.module-local-bytes",
+      "renderer-rtxpt-module-version",
+      "renderer-api-baseline-class-bytes-retained",
+      "renderer-core-baseline-class-bytes-retained",
+      "nvidia-native-current",
+      "nvidia-runtime-file-manifest",
+      "nvidia-runtime-inventory-retained",
+      "runtime-zip-digest",
+      "runtime-tested-jni",
+      "runtime-dependency-inventory-retained",
+      "runtime-dependency-and-shader-bytes-retained",
+      "sdk-version",
+      "sdk-files",
+      "sdk-shader-abi",
+      "sdk-current-shader-sources"
+    ]
+  },
+  "jobs": {
+    "package": {
+      "wallSeconds": 88.591,
+      "peakProcessTreeCommitGB": 2.405,
+      "exit": 0
+    },
+    "verifyPackage": {
+      "wallSeconds": 16.027,
+      "peakProcessTreeCommitGB": 1.803,
+      "exit": 0
+    },
+    "publishLocal": {
+      "wallSeconds": 11.653,
+      "peakProcessTreeCommitGB": 1.199,
+      "exit": 0
+    },
+    "verifyLocal": {
+      "wallSeconds": 16.496,
+      "peakProcessTreeCommitGB": 1.803,
+      "exit": 0
+    }
+  },
+  "notRun": [
+    "Minecraft client",
+    "MC FPS or movement validation",
+    "old complete rendering matrix"
+  ],
+  "limits": "Targeted correctness and one CPU-scale pair only. Original MC crash not attributed to the introduced/fixed API bootstrap fixture crash. Receipt is a later documentation-only commit; artifacts correspond to sourceCommit.",
+  "evidence": "retained-update-locality.json"
+}
