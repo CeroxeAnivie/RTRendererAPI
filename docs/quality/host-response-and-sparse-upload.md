@@ -81,4 +81,15 @@ Windows 线程 CPU 是 15.625ms 粒度。父子 inclusive 不能直接相加；�
 
 全部串行、10GiB Job、Gradle --no-daemon。native主重建178.447s/6.486GiB；头文件/区域增量10.530s/0.742GiB；GPU+GL55.377s/2.069GiB；96帧ABBA132.488s/2.466GiB；真实碎写ABBA5.790s/0.260GiB。未重跑历史完整矩阵。
 
-六预算shader包1143个上游排列、所有已捕获配置、源码与命令身份核对通过（45.065s/0.127GiB）。当前正在收尾打包；源码/正式工具/文档先在当前分支完整提交上传GitHub，成功后四模块7.2.1发布Maven Local。生成制品不上传，不切分支、不新建worktree，发布后另给最终哈希。
+六预算shader包1143个上游排列、所有已捕获配置、源码与命令身份核对通过（45.065s/0.127GiB）。源码/正式工具/文档已在原分支codex/resource-root-followup完整提交e14289c161061820cc7d7fb509f5703be581423b并上传GitHub，随后四模块7.2.1已发布Maven Local。发布233.790s、Job峰1.497GiB；28项包/源码/文档/POM/module/SDK与native身份检查通过，包内JNI仍为最终已测B7FA字节。生成制品未上传，不切分支、不新建worktree。
+
+## 最终发布身份
+
+| 主JAR | SHA256 |
+|---|---|
+| renderer-api | fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c |
+| renderer-core | a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69 |
+| renderer-nvidia | 8e076fb5e98711e4ef599e47116f25c2c050fabc4ae8d4f6d09bdf03a0827f71 |
+| renderer-rtxpt | f04ecd0581cf4b0b6a9d10bd6a161d838d7b22baf8e083c642b42974cd143144 |
+
+运行时ZIP SHA256：afff76bd4cf9788e03e59802629e223de371147f375c8cb045fa021c11099166。完整分类包、大小和28项清单已写入对应JSON。首次身份脚本误把SDK backend源码当作动态源码路径，按正式ZIP契约纠正后通过；制品没有为此改动或重发。Javadoc既有缺注释警告不阻塞发布，不作新的完整回归通过声明。

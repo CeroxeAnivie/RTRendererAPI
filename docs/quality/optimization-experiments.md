@@ -204,4 +204,4 @@ rc.6受影响正确性已通过：CPU锁/并发覆盖、Java v6、实际DLL moni
 
 ## 宿主响应与自适应上传
 
-2026-11-06，本批在当前未发布7.2.1修复宿主响应契约，并针对真实SparseUpload→StagingAcquire→CreateCommittedResource链加入单recording自适应页（最多max(default,1MiB)，4MiB warm不变）和按拓扑变化维护区域成员。原失败候选不恢复，不降低质量或复用旧帧。代码完成，定向验证进行中；尚无FPS收益结论。根因、口径和验收见[本批记录](host-response-and-sparse-upload.md)。
+2026-11-06，本批在当前分支7.2.1修复宿主响应契约，并针对真实SparseUpload→StagingAcquire→CreateCommittedResource链加入单recording自适应页（最多max(default,1MiB)，4MiB warm不变）和按拓扑变化维护区域成员。原失败候选不恢复，不降低质量或复用旧帧。新增定向验证、真实碎写GPU读回和28项发布身份检查通过；源码先上传GitHub，随后四模块发布Maven Local。真实碎写创建页288→22，原24帧夹具25→25及分配bytes退化保留；尚无MC FPS收益结论。根因、口径和验收见[本批记录](host-response-and-sparse-upload.md)。

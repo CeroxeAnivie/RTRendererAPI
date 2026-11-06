@@ -1,7 +1,7 @@
 {
   "date": "2026-11-06",
   "version": "7.2.1",
-  "status": "focused-validation-complete-github-pending",
+  "status": "published-and-focused-verified",
   "nativeSha256": "b7faab55677bc5a16806ab00a66c6d2a00a221029e17ed7b5ccfea69b03537ee",
   "apiAbiSha256": "16d0c753bb7adc5e7538843d39b62285ebc93cf8c0f0dde02d8e088db3ee6571",
   "hostResponse": {
@@ -1677,8 +1677,7 @@
     "No MC static or fast-flight FPS measured.",
     "GPU workloads started above10 percent; times are observations, not unloaded GPU or MC FPS benefits.",
     "First DLL disappeared after initial7-frame test; same-source/OBJ relinkB7FA separately revalidated7frames and96-frame ABBA.",
-    "No old full matrix rerun.",
-    "GitHub push and Maven Local publication pending in this snapshot."
+    "No old full matrix rerun."
   ],
   "shaderBundle": {
     "permutations": 1143,
@@ -1686,5 +1685,104 @@
     "sourceAndCommandIdentityVerified": true,
     "seconds": 45.065,
     "jobPeakGiB": 0.127
+  },
+  "publication": {
+    "version": "7.2.1",
+    "sourceCommit": "e14289c161061820cc7d7fb509f5703be581423b",
+    "branch": "codex/resource-root-followup",
+    "githubPushedBeforeMaven": true,
+    "modules": {
+      "renderer-api": {
+        "main": {
+          "sha256": "fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c",
+          "bytes": 795823
+        },
+        "-sources": {
+          "sha256": "f4a824489c82df40615414dce6a679b9c78167fcf30916070a1f33382bd20ac6",
+          "bytes": 367699
+        },
+        "-javadoc": {
+          "sha256": "7c39a1cceddd20936ee6f2ece9e674006878bceceb18ea99aaab13169210f372",
+          "bytes": 6520132
+        }
+      },
+      "renderer-core": {
+        "main": {
+          "sha256": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69",
+          "bytes": 14561563
+        },
+        "-sources": {
+          "sha256": "efc4c96aef8401a8a5a5ab05a568a36227ec9a9d26aa9d4362f3838e114c45b3",
+          "bytes": 12913129
+        },
+        "-javadoc": {
+          "sha256": "c9e758f2baa17d67daf90d8dd1f1620ff3137e25968c35d5cd8c9a968304bf80",
+          "bytes": 6229536
+        }
+      },
+      "renderer-nvidia": {
+        "main": {
+          "sha256": "8e076fb5e98711e4ef599e47116f25c2c050fabc4ae8d4f6d09bdf03a0827f71",
+          "bytes": 62644787
+        },
+        "-sources": {
+          "sha256": "2cf97cfaadc9a76b203771086eff4d5711db3e573204de4191a1ae1aa646d62e",
+          "bytes": 57017
+        },
+        "-javadoc": {
+          "sha256": "23df43fafed52b9477db5f267c7b17c61c4c40a64efa4d3bcf259af261e0edae",
+          "bytes": 4155745
+        }
+      },
+      "renderer-rtxpt": {
+        "main": {
+          "sha256": "f04ecd0581cf4b0b6a9d10bd6a161d838d7b22baf8e083c642b42974cd143144",
+          "bytes": 775080582
+        },
+        "-sources": {
+          "sha256": "d1bb65ae94ab85da3e0da1ee95143a5f7b33584a0defbb87f818f9040a3db51b",
+          "bytes": 83622
+        },
+        "-javadoc": {
+          "sha256": "d4d9c78045b6a6f1b2feb84a4a1e21a07a1285fb24faa26a6fb08eb7771baece",
+          "bytes": 4370956
+        }
+      }
+    },
+    "nativeSha256": "b7faab55677bc5a16806ab00a66c6d2a00a221029e17ed7b5ccfea69b03537ee",
+    "runtimeZipSha256": "afff76bd4cf9788e03e59802629e223de371147f375c8cb045fa021c11099166",
+    "checks": [
+      "renderer-api-published-bytes",
+      "renderer-api-sources-published-bytes",
+      "renderer-api-javadoc-published-bytes",
+      "renderer-api.pom-published-metadata",
+      "renderer-api.module-published-metadata",
+      "renderer-core-published-bytes",
+      "renderer-core-sources-published-bytes",
+      "renderer-core-javadoc-published-bytes",
+      "renderer-core.pom-published-metadata",
+      "renderer-core.module-published-metadata",
+      "renderer-nvidia-published-bytes",
+      "renderer-nvidia-sources-published-bytes",
+      "renderer-nvidia-javadoc-published-bytes",
+      "renderer-nvidia.pom-published-metadata",
+      "renderer-nvidia.module-published-metadata",
+      "renderer-rtxpt-published-bytes",
+      "renderer-rtxpt-sources-published-bytes",
+      "renderer-rtxpt-javadoc-published-bytes",
+      "renderer-rtxpt.pom-published-metadata",
+      "renderer-rtxpt.module-published-metadata",
+      "api-host-response-class-current",
+      "runtime-archive-digest",
+      "runtime-jni-current",
+      "runtime-jni-tested-B7FA",
+      "runtime-sdk-source-RtrNativeLighting.hlsl",
+      "runtime-sdk-source-RtrNativeLightingStyle.hlsli",
+      "runtime-gpu-encode-precompiled",
+      "runtime-direct-shaders-current"
+    ],
+    "checksPassed": 28,
+    "buildSeconds": 233.79,
+    "jobPeakGiB": 1.497
   }
 }

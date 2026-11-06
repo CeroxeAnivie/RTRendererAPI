@@ -1739,7 +1739,7 @@
   "hostResponseAndAdaptiveUploadRepair": {
     "date": "2026-11-06",
     "version": "7.2.1",
-    "status": "focused-validation-complete-packaging-in-progress",
+    "status": "published-and-focused-verified",
     "candidate": "adaptive-recording-upload-pages-and-retained-root-membership",
     "sameFrameSemantics": true,
     "qualityReduced": false,
@@ -1936,6 +1936,21 @@
         "new": 19857408.0,
         "delta": 983040.0,
         "percent": 5.208333333333326
+      }
+    },
+    "publication": {
+      "sourceCommit": "e14289c161061820cc7d7fb509f5703be581423b",
+      "branch": "codex/resource-root-followup",
+      "githubPushedBeforeMaven": true,
+      "mavenLocalVersion": "7.2.1",
+      "identityChecksPassed": 28,
+      "nativeSha256": "b7faab55677bc5a16806ab00a66c6d2a00a221029e17ed7b5ccfea69b03537ee",
+      "runtimeZipSha256": "afff76bd4cf9788e03e59802629e223de371147f375c8cb045fa021c11099166",
+      "mainJars": {
+        "renderer-api": "fcd22ffc4dc3fc6fbeed809e43e3bb596e4b3db8bc769863670e591829bd399c",
+        "renderer-core": "a2e59ce9b4f84846827b3b0c255101fda9945e27d1379c38123c8129c55f3a69",
+        "renderer-nvidia": "8e076fb5e98711e4ef599e47116f25c2c050fabc4ae8d4f6d09bdf03a0827f71",
+        "renderer-rtxpt": "f04ecd0581cf4b0b6a9d10bd6a161d838d7b22baf8e083c642b42974cd143144"
       }
     }
   }
