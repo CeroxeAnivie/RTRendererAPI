@@ -29,3 +29,11 @@ hs_err_pid*.jfr
 *.log.old
 *.log.bak
 *.log.gz
+
+# One-off captures and editor leftovers are not source artifacts.
+*.jfr
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej

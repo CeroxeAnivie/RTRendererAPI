@@ -4,7 +4,7 @@
 struct RtrLightingStyle
 {
     float4 correction; // local dim, local boost, daylight dim, moonlight dim
-    float4 moonAndMode; // moon RGB, 0=dynamic-only-v1 / 1=classic-all-local-v1
+    float4 moonAndMode; // moon RGB; 0=dynamic-only / 1=classic-all-local / 2=host-response-ratio
     float4 limits; // minimum gain, maximum gain, maximum GI, reserved
 };
 float3 RtrStyleGain(RtrLightingStyle style,float2 baseline,float visibility,float fog,

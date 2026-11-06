@@ -1024,7 +1024,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative
             ptr->probePhase(2);
             if(static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->nativeLighting.active) {
                 auto& lighting=static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->nativeLighting;
-                ptr->signalFrames.Publish(dm.GetDevice(),lighting.Outputs(),ptr->signalSequence,ptr->signalRevision,lighting.publication,lighting.timeNanos,lighting.deltaNanos,lighting.compactEncoding?1:0,lighting.maximumGi());
+                ptr->signalFrames.Publish(dm.GetDevice(),lighting.Outputs(),ptr->signalSequence,ptr->signalRevision,lighting.publication,lighting.timeNanos,lighting.deltaNanos,lighting.compactResponseEncoding?2:lighting.compactEncoding?1:0,lighting.maximumGi());
             } else if(static_cast<HostPathTracer*>(ptr->app->HostRenderPass())->hostSurface.active){
                 auto* host=static_cast<HostPathTracer*>(ptr->app->HostRenderPass());
                 int reconstruction=host->hostSurface.composition==0?0:g_sampleUIData.RealtimeMode?(g_sampleUIData.RealtimeAA==3?2:g_sampleUIData.RealtimeAA==2?1:0):0;
@@ -1477,9 +1477,10 @@ extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
             keys.push_back(std::move(key));
         }
         auto nextLookup=pass.baselineLookup;
-        if(lookup){if(e->GetArrayLength(lookup)!=512)throw std::invalid_argument("Baseline lookup must be 16x16 float2");
-            e->GetFloatArrayRegion(lookup,0,512,reinterpret_cast<float*>(nextLookup.data()));if(e->ExceptionCheck())return;
-            for(auto value:nextLookup)if(!std::isfinite(value.x)||!std::isfinite(value.y)||value.x<0||value.x>1||value.y<0||value.y>1)throw std::invalid_argument("Invalid baseline lookup value");}
+        if(lookup){const auto length=e->GetArrayLength(lookup);
+            if(length!=512&&length!=1280)throw std::invalid_argument("Baseline lookup requires 512 floats, optionally followed by 768 host RGB response floats");
+            e->GetFloatArrayRegion(lookup,0,length,reinterpret_cast<float*>(nextLookup.data()));if(e->ExceptionCheck())return;
+            for(auto value:nextLookup)if(!std::isfinite(value.x)||!std::isfinite(value.y)||value.x<0||value.x>1||value.y<0||value.y>1)throw std::invalid_argument("Invalid baseline or host response lookup value");}
         std::vector<uint8_t> bytes;
         if(application){const auto length=e->GetArrayLength(application);if(length%4!=0||length>16*1024*1024)throw std::invalid_argument("Application publication exceeds its aligned capacity");
             bytes.resize(length);if(length)e->GetByteArrayRegion(application,0,length,reinterpret_cast<jbyte*>(bytes.data()));if(e->ExceptionCheck())return;}

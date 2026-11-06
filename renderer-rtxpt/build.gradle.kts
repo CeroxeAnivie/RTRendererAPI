@@ -54,7 +54,10 @@ tasks.withType<JavaExec>().configureEach {
 tasks.register<Exec>("buildRtxptBridge") {
     group = "build"
     workingDir(rootProject.projectDir)
-    commandLine("pwsh", "-NoProfile", "-File", "tools/Build-RtxptBridge.ps1")
+    val arguments = mutableListOf("pwsh", "-NoProfile", "-File", "tools/Build-RtxptBridge.ps1")
+    providers.gradleProperty("cmakeExecutable").orNull?.let { arguments += listOf("-CMakeExecutable", it) }
+    providers.gradleProperty("streamlineSdkRoot").orNull?.let { arguments += listOf("-StreamlineSdk", it) }
+    commandLine(arguments)
 }
 tasks.register<JavaExec>("rtxptAdapterSelfTest") {
     group = "verification"; dependsOn(tasks.testClasses)
@@ -104,8 +107,26 @@ listOf("RtxptTexturePatchNativeSelfTest", "RtxptDynamicResourcesNativeSelfTest",
         doFirst { rootProject.file("build/renderer-validation-classpath.txt").writeText(classpath.asPath, Charsets.UTF_8) }
     }
 }
+val buildNativeLightingExtensionExample = tasks.register<Exec>("buildNativeLightingExtensionExample") {
+    group = "verification"
+    description = "Builds the receiver extension against the current native shader ABI."
+    workingDir(rootProject.projectDir)
+    inputs.files(rootProject.fileTree("examples/native-lighting-extension") { include("*.hlsli") },
+        rootProject.fileTree("renderer-rtxpt/src/main/cpp") { include("*.hlsl", "*.hlsli") },
+        rootProject.fileTree("build/rtxpt-sdk/External/Donut/include/donut/shaders"),
+        rootProject.file("tools/Build-NativeLightingExtension.ps1"),
+        rootProject.file("tools/Invoke-BoundedBuild.ps1"),
+        rootProject.file("build/rtxpt-sdk/bin/ShaderDynamic/Tools/d3d12/x64/dxc.exe"))
+    outputs.dir(rootProject.layout.buildDirectory.dir("native-lighting-extension-example"))
+    commandLine("pwsh", "-NoProfile", "-File", "tools/Build-NativeLightingExtension.ps1",
+        "-ExtensionSource", "examples/native-lighting-extension/ReceiverTint.hlsli",
+        "-OutputDirectory", "build/native-lighting-extension-example",
+        "-RuntimeDirectory", "build/rtxpt-sdk/bin", "-Name", "receiver-tint-v1",
+        "-ApplicationSchema", "rtr.receiver-tint/v1", "-MinimumApplicationBytes", "16")
+}
+
 tasks.register<JavaExec>("rtxptNativeLightingExtensionNativeSelfTest") {
-    group = "verification"; dependsOn(tasks.testClasses)
+    group = "verification"; dependsOn(tasks.testClasses, buildNativeLightingExtensionExample)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeLightingExtensionNativeSelfTest")
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
@@ -344,6 +365,38 @@ tasks.register<JavaExec>("rtxptPackagedNativeSelfTest") {
 tasks.named("check") { dependsOn("rtxptAdapterSelfTest", "rtxptBudgetContractSelfTest") }
 
 val nativeRuntime = rootProject.layout.buildDirectory.dir("rtxpt-sdk/bin")
+val nativeContractNames = listOf("capacity", "diagnostics", "memory_diagnostics", "resource_protocol",
+    "retained_light_tree", "sparse_regions", "upload_pool", "streamline_cache", "task_batch", "surface_inputs", "native_application_ranges")
+val buildNativeContracts = tasks.register<Exec>("buildRtxptNativeContracts") {
+    group = "verification"
+    dependsOn("buildRtxptBridge")
+    workingDir(rootProject.projectDir)
+    val cmake = providers.gradleProperty("cmakeExecutable").orElse(providers.environmentVariable("CMAKE_EXECUTABLE")).orElse("cmake")
+    commandLine(listOf(cmake.get(), "--build", rootProject.file("build/rtxpt-sdk/build-host").absolutePath,
+        "--config", "Release", "--target", "rtrenderer_rtxpt", "rtxpt_native_control") +
+        nativeContractNames.map { "rtxpt_${it}_selftest" } + listOf("--parallel", "1"))
+}
+val nativeContractTasks = nativeContractNames.map { contract ->
+    tasks.register<Exec>("rtxpt" + contract.split('_').joinToString("") { it.replaceFirstChar(Char::uppercase) } + "ContractNativeSelfTest") {
+        group = "verification"
+        dependsOn(buildNativeContracts)
+        workingDir(rootProject.projectDir)
+        executable(nativeRuntime.get().file("rtxpt_${contract}_selftest.exe").asFile)
+        usesService(rootProject.gradle.sharedServices.registrations.named("rendererHardwareGateLock").get().service)
+    }
+}
+val enabledMemoryContract = tasks.register<Exec>("rtxptEnabledMemoryDiagnosticsContractNativeSelfTest") {
+    group = "verification"
+    dependsOn(buildNativeContracts)
+    workingDir(rootProject.projectDir)
+    commandLine(nativeRuntime.get().file("rtxpt_memory_diagnostics_selftest.exe").asFile, "enabled")
+    usesService(rootProject.gradle.sharedServices.registrations.named("rendererHardwareGateLock").get().service)
+}
+tasks.register("rtxptNativeContractGate") {
+    group = "verification"
+    description = "Builds and runs every RTXPT C++ contract, including both memory-diagnostics modes."
+    dependsOn(nativeContractTasks, enabledMemoryContract)
+}
 val nativeSymbols = tasks.register<Zip>("rtxptNativeSymbols") {
     group = "distribution"
     archiveClassifier.set("native-symbols")
@@ -392,6 +445,7 @@ val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
     group = "distribution"
     description = "Packages the pinned RTXPT native renderer, runtime shaders and upstream licenses."
     dependsOn(verifyRtxptShaderBudgets, stageNativeLightingSdk)
+    mustRunAfter(buildNativeContracts)
     from(nativeLightingSdk)
     archiveFileName.set("rtxpt-runtime.zip")
     destinationDirectory.set(layout.buildDirectory.dir("native-bundle"))
@@ -460,7 +514,7 @@ tasks.register<JavaExec>("rtxptHostSurfaceNativeSelfTest") {
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
 }
 tasks.register<JavaExec>("rtxptNativeLightingApplicationPatchNativeSelfTest") {
-    group = "verification"; dependsOn(tasks.testClasses)
+    group = "verification"; dependsOn(tasks.testClasses, buildNativeLightingExtensionExample)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.RtxptNativeLightingApplicationPatchNativeSelfTest")
     environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
@@ -569,5 +623,33 @@ listOf("RtxptResourceLatencyMatrixNativeSelfTest", "RtxptResourceLifecycleNative
         jvmArgs("-Xmx2g")
         environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
         systemProperties(System.getProperties().stringPropertyNames().filter { it.startsWith("resourceMatrix.") }.associateWith(System::getProperty))
+    }
+}
+
+// Keep focused regression sources reachable through the maintained Gradle entry point.
+listOf(
+    "RtxptAttributeTopologyNativeSelfTest",
+    "RtxptGiGridNativeSelfTest",
+    "RtxptGiGridProjectionNativeSelfTest",
+    "RtxptLightingBoundNativeSelfTest",
+    "RtxptOwnerThreadNativeSelfTest",
+    "RtxptResourceRemovalNativeSelfTest",
+    "RtxptSceneAdmissionSelfTest",
+    "RtxptSourceVisibilityNativeSelfTest",
+    "RtxptHostResponseNativeSelfTest",
+    "RtxptSparseQueryOrderingNativeSelfTest",
+    "RtxptSparseRegionalNativeSelfTest",
+    "RtxptSparseUploadNativeSelfTest",
+    "RtxptTlasCapacityNativeSelfTest",
+    "RtxptTopologyPreparationNativeSelfTest"
+).forEach { name ->
+    tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
+        group = "verification"
+        dependsOn(tasks.testClasses)
+        classpath = sourceSets.test.get().runtimeClasspath
+        mainClass.set("top.ceroxe.rt.renderer.rtxpt.$name")
+        jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
+        environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+        if (name == "RtxptLightingBoundNativeSelfTest") args(rootProject.file("build/reports/lighting-bounds").absolutePath)
     }
 }

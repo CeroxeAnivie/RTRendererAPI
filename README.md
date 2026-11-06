@@ -2,9 +2,9 @@
 
 **由 Java 驱动的硬件光线追踪渲染库**
 
-当前开发版本 **7.1.7**：修复动态场景剩余TLAS／辅助buffer容量与退休链，归并属性迁移上传，精确聚合DEEP工作计数。Java公共API兼容，见[本版变更](docs/release-7.1.7.md)。
+当前版本 **7.2.1**：汇总资源链、宿主输入契约、稀疏移动、上传生命周期和光源可见性修复，统一版本并清理项目目录。见[本版变更](docs/release-project-cleanup.md)。
 
-7.1.6最终36格证据保留原身份。7.1.7本次只做必要正确性与制品验证，不运行MC／新旧性能矩阵，不宣称实测收益；完整GPU P95≤4ms仍未达标。
+7.2.1 执行当前平台全量回归；历史性能数据保留原版本与制品身份。完整 GPU P95≤4ms 的历史目标仍未达标，本次不新增性能优化候选。
 
 可编程场景 / Vulkan 通用图形、计算与硬件 RT / RTXPT 托管光学与 GPU 直显
 
@@ -80,7 +80,7 @@
 <dependency>
     <groupId>top.ceroxe.rt</groupId>
     <artifactId>renderer-api</artifactId>
-    <version>7.1.7</version>
+    <version>7.2.1</version>
 </dependency>
 ```
 
@@ -88,17 +88,17 @@
 
 ```kotlin
 dependencies {
-    implementation("top.ceroxe.rt:renderer-api:7.1.7")
+    implementation("top.ceroxe.rt:renderer-api:7.2.1")
 }
 ```
 
 上面是普通 Vulkan 路径。需要 RTXPT 全场景、透明介质或 GPU 组合入口时，再添加可选模块：
 
 ```kotlin
-implementation("top.ceroxe.rt:renderer-rtxpt:7.1.7")
+implementation("top.ceroxe.rt:renderer-rtxpt:7.2.1")
 ```
 
-Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.1.7`。只用公共场景接口时可作为运行依赖；使用
+Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.2.1`。只用公共场景接口时可作为运行依赖；使用
 `RtxptAccess`／`RtxptComposedRenderer` 时需要编译依赖。只部署 RTXPT 的依赖排除方法见[后端路由](docs/backend-routing.md#只部署-rtxpt)。
 
 既有介质、资源增量、连续照明与透明背景能力继续保留。本地构建和 Maven Local 发布命令：

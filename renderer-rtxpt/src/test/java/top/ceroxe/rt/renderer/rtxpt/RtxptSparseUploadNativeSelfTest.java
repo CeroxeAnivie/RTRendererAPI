@@ -24,8 +24,10 @@ public final class RtxptSparseUploadNativeSelfTest {
                 for(int id=0;id<count;id++)sources.add(source(id,step));
                 long[] removed=new long[step==16?3072:0];for(int i=0;i<removed.length;i++)removed[i]=1024+i;
                 r.apply(transaction.build(),sources,LongBuffer.wrap(removed));
+                long requestStart=System.nanoTime();
                 r.submit(RtxptFramePreparationNativeSelfTest.frame(step,revision,128,96).toBuilder()
                     .environment(EnvironmentState.neutral()).build());
+                long requestNanos=System.nanoTime()-requestStart;
                 try(var lease=r.acquireLightingFrame().orElseThrow()){
                     require(lease.frame().sequence()==step&&lease.frame().sceneRevision()==revision,"Fresh matching lighting output");
                 }
@@ -35,6 +37,7 @@ public final class RtxptSparseUploadNativeSelfTest {
                     r.captureNativeLighting(output.resolve("upload-"+step+".pfm"),0);
                 }
                 var snapshot=r.diagnosticSnapshot();
+                long allocationCount=0,allocationSelfNanos=0,sparseRegionSelfNanos=0;
                 for(var event:snapshot.events())if(event.sequence()==step){
                     if(event.stage()==RtxptDiagnostics.Stage.SPARSE_REGION_INITIALIZE){
                         require(step==0,"Moving/growing/removing sources rebuilt the regional pool");initializations++;
@@ -47,11 +50,14 @@ public final class RtxptSparseUploadNativeSelfTest {
                         require(step==0,"Independent native lighting refreshed beauty OMM debug data after activation");ommRefreshes++;
                     }
                     if(event.stage()==RtxptDiagnostics.Stage.STAGING_ACQUIRE){maxRequest=Math.max(maxRequest,event.bytes());++stagingRequests;stagingBytes+=event.bytes();}
-                    if(event.stage()==RtxptDiagnostics.Stage.STAGING_ALLOCATE)maxAllocation=Math.max(maxAllocation,event.bytes());
+                    if(event.stage()==RtxptDiagnostics.Stage.STAGING_ALLOCATE){maxAllocation=Math.max(maxAllocation,event.bytes());allocationCount++;allocationSelfNanos+=event.selfNanos();}
+                    if(event.stage()==RtxptDiagnostics.Stage.SPARSE_REGIONS)sparseRegionSelfNanos+=event.selfNanos();
                 }
                 var status=r.sparseLightingStatus();
                 System.out.println("SPARSE_UPLOAD_FRAME step="+step+" recordBytes="+(status.uploadedRecordBytes()-recordUploadBytes)
-                    +" indexBytes="+(status.uploadedIndexBytes()-indexUploadBytes));
+                    +" indexBytes="+(status.uploadedIndexBytes()-indexUploadBytes)+" requestNanos="+requestNanos
+                    +" allocationCount="+allocationCount+" allocationSelfNanos="+allocationSelfNanos
+                    +" sparseRegionSelfNanos="+sparseRegionSelfNanos+" overwrittenEvents="+snapshot.overwrittenEvents());
                 recordUploadBytes=status.uploadedRecordBytes();indexUploadBytes=status.uploadedIndexBytes();
             }
             r.awaitIdle();

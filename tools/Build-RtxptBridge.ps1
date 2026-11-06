@@ -47,6 +47,12 @@ if($LASTEXITCODE -eq 0){
     & git -C $sdk apply --reverse --ignore-space-change $topologyJournalPatch
     if($LASTEXITCODE -ne 0){throw 'RTXPT topology-journal overlay could not be removed'}
 }
+$adaptiveUploadPatch=Join-Path $PSScriptRoot 'patches/rtxpt-adaptive-upload.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $adaptiveUploadPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $adaptiveUploadPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT adaptive-upload overlay could not be removed'}
+}
 $uploadRetentionPatch=Join-Path $PSScriptRoot 'patches/rtxpt-upload-retention.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $uploadRetentionPatch 2>$null
 if($LASTEXITCODE -eq 0){
@@ -1729,6 +1735,10 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT staging diagnostics overlay could not be ap
 if($LASTEXITCODE -ne 0){throw 'RTXPT upload-retention overlay does not match its pinned base'}
 & git -C $sdk apply --ignore-space-change $uploadRetentionPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT upload-retention overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $adaptiveUploadPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT adaptive-upload overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $adaptiveUploadPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT adaptive-upload overlay could not be applied'}
 & git -C $sdk apply --check --ignore-space-change $topologyJournalPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT topology-journal overlay does not match its pinned base'}
 & git -C $sdk apply --ignore-space-change $topologyJournalPatch

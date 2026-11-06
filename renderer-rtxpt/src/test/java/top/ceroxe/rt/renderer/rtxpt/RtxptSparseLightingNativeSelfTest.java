@@ -48,8 +48,14 @@ public final class RtxptSparseLightingNativeSelfTest {
                 System.out.printf(Locale.ROOT,"RTXPT_SPARSE_EDIT round=%d submitMs=%.6f%n",round,(System.nanoTime()-begin)/1e6);
             }
             var after=r.sparseLightingStatus();
-            require(after.uploadedRecordBytes()-before.uploadedRecordBytes()<300*96,"Unchanged sparse source records retained");
-            require(after.uploadedIndexBytes()-before.uploadedIndexBytes()<30000*64,"Spatial index updates remain local");
+            System.out.println("RTXPT_SPARSE_UPLOAD before="+before+" after="+after);
+            // Each upsert or swap-removal dirties at most one source record; each
+            // patch also updates its header. Coalescing may copy a 4 KiB gap
+            // between dirty records, and those real copied bytes remain counted.
+            long dirtyRecords=after.upserts()-before.upserts()+after.removals()-before.removals()+after.patches()-before.patches();
+            require(after.uploadedRecordBytes()-before.uploadedRecordBytes()<=dirtyRecords*(96+4096),
+                "Source upload stays bounded by local edits and allowed coalescing gaps: "+after);
+            require(after.uploadedIndexBytes()-before.uploadedIndexBytes()<30000*64,"Spatial index updates remain local: "+after);
             require(r.submitStages().pipelineBuilds()==pipelines,"Sparse changes do not create PSOs");
             var snapshot=r.diagnostics();
             try {r.apply(SceneTransaction.builder(20).build(),List.of(source(1,0,1,0,0),source(1,0,0,1,0)),LongBuffer.allocate(0));throw new AssertionError("Duplicate source accepted");}

@@ -480,9 +480,14 @@ void RecycleMesh(const ResidentMesh& mesh,RetiredResources& retired){
 }
 nvrhi::CommandListHandle ResourceCommand(){
     RtrDiagnostics::Scope acquire(RtrDiagnostics::CommandAcquire);
-    if(!resourceCommandPool.empty()){auto command=resourceCommandPool.back();resourceCommandPool.pop_back();return command;}
+    while(!resourceCommandPool.empty()){
+        auto command=std::move(resourceCommandPool.back());resourceCommandPool.pop_back();
+        if(command)return command;
+    }
     if(RtrDiagnostics::level.load()!=0)++dynamicWork[18];
-    return GetDevice()->createCommandList(nvrhi::CommandListParameters().setScratchChunkSize(4*1024*1024).setScratchMaxMemory(64*1024*1024));
+    auto command=GetDevice()->createCommandList(nvrhi::CommandListParameters().setScratchChunkSize(4*1024*1024).setScratchMaxMemory(64*1024*1024));
+    if(!command)throw std::runtime_error("Resource command-list allocation failed");
+    return command;
 }
 void PollResourceRetirement(){
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::ResourceRetirement);
@@ -516,7 +521,13 @@ void PollResourceRetirement(){
             if(i->recycleCursor<i->meshes.size())break;
             i->recycled=true;
         }
-        if(i->recycleCommands)for(auto& command:i->commands)if(resourceCommandPool.size()<8)resourceCommandPool.push_back(std::move(command));
+        if(i->recycleCommands){
+            for(auto& command:i->commands)if(command&&resourceCommandPool.size()<8)resourceCommandPool.push_back(std::move(command));
+            // RecycleMesh can fill the release queue after Available() succeeded.
+            // A rejected Enqueue leaves this generation for a later poll; its
+            // moved command handles must never be inserted into the pool again.
+            i->recycleCommands=false;
+        }
         const bool cacheQueries=resourceQueryPool.size()<16;auto done=cacheQueries?i->done:nvrhi::EventQueryHandle{};auto computeDone=cacheQueries?i->computeDone:nvrhi::EventQueryHandle{};
         {RtrDiagnostics::Scope enqueue(RtrDiagnostics::ReclaimEnqueue,1,i->referencedBytes);
             if(!nativeLighting.reclaimer->Enqueue(*i,i->referencedBytes))break;}

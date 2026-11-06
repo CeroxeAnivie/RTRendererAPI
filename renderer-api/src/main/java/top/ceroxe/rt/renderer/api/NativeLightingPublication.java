@@ -4,9 +4,15 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Objects;
 
-/** Immutable attribute delta. Generation increases independently from geometry and scene revisions. */
+/** Immutable attribute delta. Generation increases independently from geometry and scene revisions.
+ * Null baseline lookup, application data or host response retains its previous publication. */
 public record NativeLightingPublication(long generation,List<Instance> instances,List<MeshBaseline> baselines,
-        float[] baselineLookup,ByteBuffer applicationData) {
+        float[] baselineLookup,ByteBuffer applicationData,NativeLightingHostResponse hostResponse) {
+    /** Compatibility constructor. Null response retains the previously published table. */
+    public NativeLightingPublication(long generation,List<Instance> instances,List<MeshBaseline> baselines,
+            float[] baselineLookup,ByteBuffer applicationData) {
+        this(generation,instances,baselines,baselineLookup,applicationData,null);
+    }
     /** Roles: receiver=1, shadow=2, bounce=4, cull receiver backfaces=8, double-sided shadow=16. */
     public record Instance(long id,int roles,float visibility,float fog,float localScale,float skyScale,float localBias,float skyBias) {
         public Instance {

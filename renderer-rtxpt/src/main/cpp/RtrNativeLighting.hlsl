@@ -38,7 +38,7 @@ StructuredBuffer<RtrInstance> t_InstanceAttributes : register(t6);
 StructuredBuffer<RtrVertexAttributes> t_Baselines : register(t7);
 StructuredBuffer<uint2> t_GeometryBaselines : register(t8); // offset, triangle count
 ByteAddressBuffer t_Application : register(t9);
-StructuredBuffer<float2> t_BaselineLookup : register(t10); // 16x16, linear interpolation
+StructuredBuffer<float2> t_BaselineLookup : register(t10); // baseline float2[256], packed host-response RGB[256]
 StructuredBuffer<RtrAnalytic> t_Analytic : register(t11); // resident lights followed by their exact support tree
 ByteAddressBuffer t_Buffers[] : register(t0,space1);
 Texture2D<float4> t_Textures[] : register(t0,space2);
@@ -256,7 +256,8 @@ float3 RtrShadow(RtrReceiver receiver,float3 direction,float distance)
 float3 RtrSupportShadow(RtrReceiver receiver,RtrSource source,float3 direction,float distance,uint visibilityMode)
 {
     float end;
-    if(visibilityMode==2)end=max(.002,distance-source.extent.x-.004);
+    float radius=(uint(source.identity.w)&16)!=0?source.cone.x:source.extent.x;
+    if(visibilityMode==2)end=max(.002,distance-radius-.004);
     else {
         float3 a=abs(direction);
         float3 slab=float3(a.x>0?source.extent.x/a.x:1e30,a.y>0?source.extent.y/a.y:1e30,a.z>0?source.extent.z/a.z:1e30);
@@ -423,7 +424,8 @@ bool RtrNodeCanImprove(uint mask,float3 upper,RtrSourceGroups groups,uint compos
 }
 // Each declared composition/group is independent, including the dynamic-only
 // subset used by the default baseline correction. Visibility precedes selection.
-void RtrEvaluateSource(RtrReceiver receiver,uint slot,bool separateDynamic,inout RtrSourceGroups allSources,inout RtrSourceGroups dynamicSources)
+void RtrEvaluateSource(RtrReceiver receiver,uint slot,bool separateDynamic,inout RtrSourceGroups allSources,inout RtrSourceGroups dynamicSources,
+    inout bool staticCovered,bool needStaticCoverage)
 {
     RtrSource source=t_Sources[slot+1];float3 origin=source.position.xyz;
     if(source.position.w==1)origin=clamp(receiver.position,origin-source.extent.xyz,origin+source.extent.xyz);
@@ -433,20 +435,28 @@ void RtrEvaluateSource(RtrReceiver receiver,uint slot,bool separateDynamic,inout
     [branch] if(isLinear){
         attenuation=saturate(1-dot(abs(delta),float3(1,1,1))/source.direction.w);
         float3 upper=source.color.rgb*source.color.w*attenuation;
-        if(!RtrCanImprove(allSources,source,upper)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,upper)))return;
+        if(!needStaticCoverage||staticCovered)
+            if(!RtrCanImprove(allSources,source,upper)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,upper)))return;
     }
     float distance=length(delta);if(distance>=source.direction.w)return;
-    uint visibilityMode=uint(source.identity.w)>>2;bool centerSupport=visibilityMode!=0;
+    uint visibilityMode=(uint(source.identity.w)>>2)&3;bool centerSupport=visibilityMode!=0;
     float3 centerDelta=source.position.xyz-receiver.position;
-    bool insideSupport=centerSupport&&(visibilityMode==2?length(centerDelta)<=source.extent.x+.005:all(abs(centerDelta)<=source.extent.xyz+.005));
+    float visibilityRadius=(uint(source.identity.w)&16)!=0?source.cone.x:source.extent.x;
+    bool insideSupport=centerSupport&&(visibilityMode==2?length(centerDelta)<=visibilityRadius+.005:all(abs(centerDelta)<=source.extent.xyz+.005));
     float3 visibilityDelta=centerSupport?source.position.xyz-receiver.position:delta;
     float visibilityDistance=length(visibilityDelta);
     float3 direction=visibilityDistance>1e-5?visibilityDelta/visibilityDistance:receiver.normal;
-    if(!insideSupport&&dot(receiver.normal,direction)<=(centerSupport?.0001:0))return;
+    bool outsideHemisphere=!insideSupport&&dot(receiver.normal,direction)<=(centerSupport?.0001:0);
+    if(!needStaticCoverage&&outsideHemisphere)return;
     [branch] if(!isLinear)attenuation=RtrFalloff(saturate(1-distance/source.direction.w),source.extent.w)/max(distance*distance,1);
     if(source.position.w==2){float cosine=dot(source.direction.xyz,-direction);
         attenuation*=source.cone.x==source.cone.y?step(source.cone.y,cosine):smoothstep(source.cone.y,source.cone.x,cosine);}
     float3 contribution=source.color.rgb*source.color.w*attenuation;
+    // Coverage is a support property before visibility. A fully occluded static
+    // source must still replace its baked host contribution, while a missing
+    // static capture must leave unrelated host illumination intact.
+    if(needStaticCoverage&&(uint(source.identity.w)&1)==0&&any(contribution>0))staticCovered=true;
+    if(outsideHemisphere)return;
     if(!isLinear||source.position.w==2)
         if(!RtrCanImprove(allSources,source,contribution)&&(!isDynamic||!RtrCanImprove(dynamicSources,source,contribution)))return;
     if(source.identity.x>0&&!insideSupport&&any(contribution!=0)){
@@ -456,7 +466,7 @@ void RtrEvaluateSource(RtrReceiver receiver,uint slot,bool separateDynamic,inout
     RtrAccumulate(allSources,source,contribution,slot);if(isDynamic)RtrAccumulate(dynamicSources,source,contribution,slot);
 }
 void RtrTraverseSparse(RtrReceiver receiver,uint root,uint count,bool separateDynamic,uint bounded,bool linearL1,
-    inout RtrSourceGroups allSources,inout RtrSourceGroups dynamicSources)
+    inout RtrSourceGroups allSources,inout RtrSourceGroups dynamicSources,inout bool staticCovered,bool needStaticCoverage)
 {
 #if RTR_MAX_COMPOSITION
     // Only the branch choice and pending bits need per-ray storage. Parent
@@ -466,7 +476,7 @@ void RtrTraverseSparse(RtrReceiver receiver,uint root,uint count,bool separateDy
     while(next!=0xffffffff){
         RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position,linearL1);
         bool nodeDynamic=separateDynamic&&(asuint(node.right.z)&0x80000000u)!=0;
-        if(supported&&bounded){uint mask=asuint(node.right.w);
+        if(supported&&bounded&&(!needStaticCoverage||staticCovered)){uint mask=asuint(node.right.w);
             // A missing winner accepts the node regardless of its score. Avoid
             // sqrt/falloff/division until both queried subsets have winners.
             [branch]if(!RtrNodeHasUnseenGroup(mask,allSources,bounded)&&(!nodeDynamic||!RtrNodeHasUnseenGroup(mask,dynamicSources,bounded))){
@@ -481,7 +491,7 @@ void RtrTraverseSparse(RtrReceiver receiver,uint root,uint count,bool separateDy
             uint bit=1u<<depth;pending|=bit;deferredLeft=(deferredLeft&~bit)|(leftFirst?0:bit);++depth;
             next=leftFirst?left:right;continue;
         }
-        if(supported){uint slot=uint(node.upper.w);if(slot<count){RtrCount(5);RtrEvaluateSource(receiver,slot,separateDynamic,allSources,dynamicSources);}}
+        if(supported){uint slot=uint(node.upper.w);if(slot<count){RtrCount(5);RtrEvaluateSource(receiver,slot,separateDynamic,allSources,dynamicSources,staticCovered,needStaticCoverage);}}
         next=0xffffffff;uint parent=asuint(node.right.z)&0x7fffffffu;
         while(depth!=0){
             uint bit=1u<<--depth;RtrNode ancestor=t_SourceTree[parent];
@@ -495,7 +505,7 @@ void RtrTraverseSparse(RtrReceiver receiver,uint root,uint count,bool separateDy
     {
         RtrNode node=t_SourceTree[next];RtrCount(4);bool supported=RtrSupport(node,receiver.position,linearL1);
         bool nodeDynamic=separateDynamic&&(asuint(node.right.z)&0x80000000u)!=0;
-        if(supported&&bounded){uint mask=asuint(node.right.w);
+        if(supported&&bounded&&(!needStaticCoverage||staticCovered)){uint mask=asuint(node.right.w);
             [branch]if(!RtrNodeHasUnseenGroup(mask,allSources,bounded)&&(!nodeDynamic||!RtrNodeHasUnseenGroup(mask,dynamicSources,bounded))){
                 float3 upper=RtrNodeUpperBound(node,receiver.position,linearL1);
                 supported=RtrNodeCanImprove(mask,upper,allSources,bounded)||(nodeDynamic&&RtrNodeCanImprove(mask,upper,dynamicSources,bounded));}}
@@ -510,7 +520,7 @@ void RtrTraverseSparse(RtrReceiver receiver,uint root,uint count,bool separateDy
         if(pending>0)next=stack[--pending];else next=0xffffffff;
         if(!supported)continue;
         uint slot=uint(node.upper.w);if(slot>=count)continue;RtrCount(5);
-        RtrEvaluateSource(receiver,slot,separateDynamic,allSources,dynamicSources);
+        RtrEvaluateSource(receiver,slot,separateDynamic,allSources,dynamicSources,staticCovered,needStaticCoverage);
     }
 #endif
 }
@@ -532,21 +542,22 @@ bool RtrRegionLookup(float3 position,out uint start,out uint count)
     }
     return false;
 }
-void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool needDynamic=true,bool primary=false)
+void RtrSparseLocalWithCoverage(RtrReceiver receiver,out float3 local,out float3 dynamic,out bool staticCovered,bool needDynamic=true,bool primary=false,bool needStaticCoverage=false)
 {
-    local=dynamic=0;uint count=uint(t_Sources[0].position.x);if(count==0)return;
+    local=dynamic=0;staticCovered=false;uint count=uint(t_Sources[0].position.x);if(count==0)return;
 #if defined(RTR_ALL_DYNAMIC) && RTR_ALL_DYNAMIC
     bool allDynamic=true,separateDynamic=false;
 #else
     bool allDynamic=t_Sources[0].direction.x!=0;
     bool separateDynamic=needDynamic&&!allDynamic&&t_Sources[0].direction.y==0;
 #endif
+    needStaticCoverage=needStaticCoverage&&!allDynamic;
     RtrSourceGroups allSources=(RtrSourceGroups)0,dynamicSources=(RtrSourceGroups)0;
 #if RTR_SOURCE_HISTORY
     bool history=primary&&(g.publication.w&8)!=0;
     if(history){[unroll]for(uint group=0;group<RTR_LIGHT_GROUP_CAPACITY;group++){
         uint encoded=t_SourceWinners.Load(int4(rtrSourcePixel,group,0));
-        if(encoded>0&&encoded<=count)RtrEvaluateSource(receiver,encoded-1,separateDynamic,allSources,dynamicSources);
+        if(encoded>0&&encoded<=count)RtrEvaluateSource(receiver,encoded-1,separateDynamic,allSources,dynamicSources,staticCovered,needStaticCoverage);
     }}
 #endif
     uint bounded=uint(t_Sources[0].position.w);bool linearL1=t_Sources[0].extent.x!=0;
@@ -561,19 +572,19 @@ void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,boo
         for(uint i=0;i<globalCount+regionalCount;i++){
             bool globalRoot=i<globalCount;uint root=RtrRegionWord(base,globalRoot?i:start+i-globalCount);
             RtrCount(10);if(globalRoot)RtrCount(11);
-            RtrTraverseSparse(receiver,root,count,separateDynamic,bounded,linearL1,allSources,dynamicSources);
+            RtrTraverseSparse(receiver,root,count,separateDynamic,bounded,linearL1,allSources,dynamicSources,staticCovered,needStaticCoverage);
         }
     }else{
-        RtrCount(9);RtrTraverseSparse(receiver,uint(t_Sources[0].position.y),count,separateDynamic,bounded,linearL1,allSources,dynamicSources);
+        RtrCount(9);RtrTraverseSparse(receiver,uint(t_Sources[0].position.y),count,separateDynamic,bounded,linearL1,allSources,dynamicSources,staticCovered,needStaticCoverage);
     }
 #if RTR_SOURCE_HISTORY
     if(history){[unroll]for(uint group=0;group<RTR_LIGHT_GROUP_CAPACITY;group++)u_SourceWinners[uint3(rtrSourcePixel,group)]=allSources.slots[group];}
 #endif
     local=RtrGroupTotal(allSources);dynamic=needDynamic&&allDynamic?local:RtrGroupTotal(dynamicSources);
 }
-void RtrLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool needDynamic=true,bool primary=false)
+void RtrLocalWithCoverage(RtrReceiver receiver,out float3 local,out float3 dynamic,out bool staticCovered,bool needDynamic=true,bool primary=false,bool needStaticCoverage=false)
 {
-    RtrSparseLocal(receiver,local,dynamic,needDynamic,primary);
+    RtrSparseLocalWithCoverage(receiver,local,dynamic,staticCovered,needDynamic,primary,needStaticCoverage);
 #ifndef RTR_ANALYTIC_LIGHTS
 #define RTR_ANALYTIC_LIGHTS 1
 #endif
@@ -600,6 +611,41 @@ void RtrLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool need
         local+=contribution;dynamic+=contribution;
     }
 #endif
+}
+// Preserve extension source compatibility; coverage is needed only by the
+// explicit host-response contract, never by legacy correction or GI.
+void RtrSparseLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool needDynamic=true,bool primary=false)
+{
+    bool ignored;RtrSparseLocalWithCoverage(receiver,local,dynamic,ignored,needDynamic,primary,false);
+}
+void RtrLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool needDynamic=true,bool primary=false)
+{
+    bool ignored;RtrLocalWithCoverage(receiver,local,dynamic,ignored,needDynamic,primary,false);
+}
+float RtrHostResponseValue(uint channel,uint local,uint sky)
+{
+    uint scalar=(sky*16+local)*3+channel;float2 packed=t_BaselineLookup[256+scalar/2];
+    return (scalar&1)!=0?packed.y:packed.x;
+}
+float RtrHostResponseSample(uint channel,float2 levels)
+{
+    float2 p=saturate(levels)*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
+    return lerp(lerp(RtrHostResponseValue(channel,lo.x,lo.y),RtrHostResponseValue(channel,hi.x,lo.y),f.x),
+        lerp(RtrHostResponseValue(channel,lo.x,hi.y),RtrHostResponseValue(channel,hi.x,hi.y),f.x),f.y);
+}
+float3 RtrHostResponseGain(RtrReceiver receiver,float3 local,float3 dynamic,bool staticCovered,float3 sunVisibility,float3 moonVisibility)
+{
+    float3 targetLocal=staticCovered?saturate(local):max(receiver.baseline.x,saturate(dynamic));
+    float weight=g.sun.w>0?saturate(g.sun.w):saturate(g.moon.w);
+    float3 directionalVisibility=g.sun.w>0?sunVisibility:moonVisibility;
+    float3 targetSky=receiver.baseline.y*lerp(1,directionalVisibility,weight),gain=1;
+    [unroll]for(uint channel=0;channel<3;channel++){
+        float before=RtrHostResponseSample(channel,receiver.baseline);
+        float after=RtrHostResponseSample(channel,float2(targetLocal[channel],targetSky[channel]));
+        gain[channel]=before>0?after/before:after==0?1:g.style.limits.y;
+    }
+    float influence=saturate(receiver.visibility)*(1-saturate(receiver.fog));
+    return clamp(lerp(1,gain,influence),g.style.limits.x,g.style.limits.y);
 }
 float3 RtrIncident(RtrReceiver receiver)
 {
@@ -630,10 +676,12 @@ float3 RtrDirectGain(RtrReceiver receiver)
     float3 gain=1;
     if((g.grid.z&1)!=0)
     {
-        float3 local,dynamic;RtrLocal(receiver,local,dynamic,true,true);float3 sunVisibility=1,moonVisibility=1;
+        bool response=g.style.moonAndMode.w==2,staticCovered;
+        float3 local,dynamic;RtrLocalWithCoverage(receiver,local,dynamic,staticCovered,true,true,response);float3 sunVisibility=1,moonVisibility=1;
         if(g.sun.w>0&&dot(receiver.normal,g.sun.xyz)>0)sunVisibility=RtrShadow(receiver,g.sun.xyz,1e20);
         if(g.moon.w>0&&dot(receiver.normal,g.moon.xyz)>0)moonVisibility=RtrShadow(receiver,g.moon.xyz,1e20);
-        gain=RtrStyleGain(g.style,receiver.baseline,receiver.visibility,receiver.fog,local,dynamic,g.sun.w,sunVisibility,g.moon.w,moonVisibility);
+        gain=response?RtrHostResponseGain(receiver,local,dynamic,staticCovered,sunVisibility,moonVisibility)
+            :RtrStyleGain(g.style,receiver.baseline,receiver.visibility,receiver.fog,local,dynamic,g.sun.w,sunVisibility,g.moon.w,moonVisibility);
     }
     return gain;
 }

@@ -200,3 +200,8 @@ DEEP 同批解耦六项精确计数与 max-only 执行器选择，使用无历�
 rc.6受影响正确性已通过：CPU锁/并发覆盖、Java v6、实际DLL monitor、24帧上传及raw/GI与真实RR各54份HDR对rc.5逐字节一致。初始GPU3%；native/Java/GPU Job峰值2.919/1.078/2.923GiB。空场景OMM refresh被初次夹具误判为扩容，保留失败并修正夹具，生产不变。诊断三scope小夹具DEEP P50历史875.025→1046.065ns（+171.040ns/+19.55%，非配对FPS测量）；新增测量成本照留，宿主收益待测。
 
 2026-11-06 独立 rc.7 `independent-gi-rr-grid-budget` 以 rc.6 冻结包为基线：默认 divisor1 不变，显式 divisor2 让真实 GI RR 在每轴一半的网格执行 DLAA，当前帧一致选择 receiver/guides，再按当前身份/距离/normal/albedo/validity 约束上采样，无兼容点回本帧 raw GI；直接光/阴影/gain 和发布 HDR 尺寸不变。这是明确的画质预算取舍，与已撤回的拆 shader／跨队列等价优化实质不同，不恢复旧失败方案。native／Java 构建、32 帧实际低网格、16 帧投影专项和默认 raw/GI、真实 RR 各54份HDR逐字节等价对照通过。719 mesh、1280×800、GI1、真实RR、SUMMARY、禁用复用，divisor1／2／2／1各3秒，初始GPU4%／1%／0%／0%；完整请求GPU mean 6.318164→3.865595ms（-2.452569／-38.82%），P95 7.726624→4.769087ms（-2.957537／-38.28%）。这是短时预算对照，不是MC FPS或等画质收益；4ms未达，分阶段GPU未启用，不猜分摊。主线随后明确改走direct-only（GI0、RR NONE），API仅收尾Maven Local与制品核验，不再追加GI/RR优化或GPU测试。详见[候选实测及限制](../release-7.2.0-rc.7.md)。
+
+
+## 宿主响应与自适应上传
+
+2026-11-06，本批在当前未发布7.2.1修复宿主响应契约，并针对真实SparseUpload→StagingAcquire→CreateCommittedResource链加入单recording自适应页（最多max(default,1MiB)，4MiB warm不变）和按拓扑变化维护区域成员。原失败候选不恢复，不降低质量或复用旧帧。代码完成，定向验证进行中；尚无FPS收益结论。根因、口径和验收见[本批记录](host-response-and-sparse-upload.md)。

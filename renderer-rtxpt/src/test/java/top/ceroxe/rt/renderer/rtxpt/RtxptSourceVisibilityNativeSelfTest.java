@@ -54,6 +54,11 @@ public final class RtxptSourceVisibilityNativeSelfTest {
     static void cpu(){
         var original=source(1,.5f,SparseLightSource.Visibility.NEAREST_POINT,SparseLightSource.Layer.STATIC,SparseLightSource.Composition.VISIBLE_GROUP_CHANNEL_MAX,1,1,1);
         require(original.visibility()==SparseLightSource.Visibility.NEAREST_POINT,"Existing constructors preserve nearest-point declaration");
+        var independent=original.withVisibility(SparseLightSource.Visibility.CENTER_SPHERE_SUPPORT_V1,.08f)
+            .withLayer(SparseLightSource.Layer.DYNAMIC).withAttenuation(SparseLightSource.Attenuation.MANHATTAN_LINEAR);
+        var independentWords=RtxptSparseSources.pack(List.of(independent));
+        require(independent.halfX()==original.halfX()&&independent.visibilityRadius()==.08f,"Independent radius preserves emitter attenuation extent");
+        require(independentWords[16]==.08f&&((int)independentWords[23]&16)!=0,"Independent visibility radius has an explicit native flag");
         for(var visibility:SparseLightSource.Visibility.values())for(var layer:SparseLightSource.Layer.values())for(var attenuation:SparseLightSource.Attenuation.values()){
             var s=original.withVisibility(visibility).withLayer(layer).withAttenuation(attenuation).withComposition(SparseLightSource.Composition.VISIBLE_GROUP_CHANNEL_MAX,2);
             require(RtxptSparseSources.pack(List.of(s))[23]==layer.ordinal()+2*attenuation.ordinal()+4*visibility.ordinal(),"Packed flags preserve all orthogonal source semantics");
@@ -65,8 +70,8 @@ public final class RtxptSourceVisibilityNativeSelfTest {
         double distance=Math.sqrt(8),cubeEnd=distance-.5/Math.sqrt(.5)-.004,sphereEnd=distance-.5-.004;
         require(cubeEnd<2.2&&sphereEnd>2.2,"Independent diagonal endpoints separate box/sphere visibility");
         require((.505<=.5+.005)&&Math.sqrt(.3*.3+.4*.4)<=.5+.005,"Closed support tolerances include boundary receivers");
-        require(NativeLightingStyle.AdditionMode.values().length==2,"No response mode added");
-        System.out.println("SOURCE_VISIBILITY_CPU PASS checks="+checks+" constructorsCompatible=true packedFlags=true distinctEndpoints=true responseModeAbsent=true");
+        require(NativeLightingStyle.AdditionMode.HOST_RESPONSE_RATIO_V1.ordinal()==2,"Host response is appended without renumbering legacy modes");
+        System.out.println("SOURCE_VISIBILITY_CPU PASS checks="+checks+" constructorsCompatible=true packedFlags=true distinctEndpoints=true legacyModeOrdinalsStable=true");
     }
     public static void main(String[] args)throws Exception {
         cpu();if(args.length>0&&args[0].equals("cpu"))return;Files.createDirectories(OUT);

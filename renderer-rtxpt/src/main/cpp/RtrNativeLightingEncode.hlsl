@@ -6,8 +6,10 @@ RWTexture2D<float4> directOutput : register(u0);
 RWTexture2D<float4> indirectOutput : register(u1);
 float GainCode(float value)
 {
-    float g=isfinite(value)?clamp(value,0,15.65):1;
-    return clamp(floor((g<=1?128*g:128+32*log2(g))+.5),0,255)/255;
+    bool response=(signals&0x10000)!=0;
+    float g=isfinite(value)?clamp(value,0,response?255:15.65):1;
+    float scale=response?127/log2(255):32;
+    return clamp(floor((g<=1?128*g:128+scale*log2(g))+.5),0,255)/255;
 }
 [numthreads(8,8,1)]
 void main(uint2 p:SV_DispatchThreadID)

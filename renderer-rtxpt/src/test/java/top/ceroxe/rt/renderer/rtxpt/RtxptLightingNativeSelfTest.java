@@ -26,7 +26,12 @@ public final class RtxptLightingNativeSelfTest {
         var di=name.contains("di")?RendererFeaturePreference.REQUIRED:RendererFeaturePreference.DISABLED;
         var gi=name.contains("gi")?RendererFeaturePreference.REQUIRED:RendererFeaturePreference.DISABLED;
         var cache=name.contains("sharc")?RendererFeaturePreference.REQUIRED:RendererFeaturePreference.DISABLED;
-        path=new PathTracingOptions(1,8,2,cache,di,gi,4,quality);
+        // Retained removal uses swap-compaction, while a fresh scene sorts IDs.
+        // The same frozen random sample can therefore select different emitters.
+        // Raw/analytic have no temporal reconstruction to average that noise;
+        // compare both paths at the same higher sample budget, not a wider tolerance.
+        int samples=name.equals("raw")||name.equals("analytic")?64:1;
+        path=new PathTracingOptions(samples,8,2,cache,di,gi,4,quality);
         var builder=base.copyBuilder().pathTracing(path).frameGeneration(FrameGenerationOptions.disabled());
         if(name.equals("sr"))builder.denoising(DenoisingOptions.disabled());
         if(name.equals("nrd"))builder.denoising(DenoisingOptions.builder().preference(RendererFeaturePreference.REQUIRED).strategy(DenoisingOptions.Strategy.RESPONSIVE).build());

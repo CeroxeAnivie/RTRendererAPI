@@ -12,6 +12,8 @@ ownership boundary 内；不得通过更新 ABI baseline 掩盖尚未解释的�
 native RTX 验收需要文档规定的 SDK 根目录和可信 Windows RTX runner。来自 fork 的 Pull Request 不得在
 self-hosted GPU runner 上执行；该门禁仅由 merge queue 或维护者拥有的分支触发。
 
+发布前的当前平台全量回归入口为 `fullRegression`，包含 `verifyApiClosure` 和全部维护中的 Java self-test。配置 SDK 后用 `tools/Invoke-BoundedBuild.ps1` 限制进程树内存，并传入 `--no-parallel --max-workers=1` 串行执行。原始日志与一次性输出不提交，正式结果写入版本说明。
+
 ## 公共 API 变更
 
 - 遵守 `docs/COMPATIBILITY.md` 中的兼容级别与版本策略。
@@ -38,5 +40,5 @@ self-hosted GPU runner 上执行；该门禁仅由 merge queue 或维护者拥�
 1. 选择 SemVer 版本并同步全部版本事实。
 2. 通过确定性检查、当前 major ABI 验证、published-consumer 验证和有界 RTX 验收。
 3. 构建并验证已签名的 Central Portal bundle。
-4. 通过 Maven Central 发布，并确认三个模块均可解析。
+4. 通过 Maven Central 发布，并确认四个模块均可解析。
 5. 创建对应的 annotated `vMAJOR.MINOR.PATCH` 源码 tag。GitHub Releases 不是本项目的二进制分发渠道。

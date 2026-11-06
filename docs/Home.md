@@ -1,6 +1,6 @@
 # RTRendererAPI Java 开发指南
 
-当前版本 **7.1.2** 的局部准备修复与命名清理见[本批变更](release-local-scene-preparation.md)。既有 GI RR 入口与性能实测见 [消费方交接](consumer-agent-handoff.md)及[累计验收](quality/lighting-repair-validation.md)。
+当前版本 **7.2.1** 的改动、目录清理和回归范围见[本版说明](release-project-cleanup.md)。历史验收保留原版本身份。
 
 RTRendererAPI 是一个以 JDK 25 构建、以 Java 25 字节码与运行时为公开基线的多模块工程。所有 Java 编译任务强制
 `--release 25`。`renderer-api` 保持后端无关，`renderer-core` 提供 Windows Vulkan RT，

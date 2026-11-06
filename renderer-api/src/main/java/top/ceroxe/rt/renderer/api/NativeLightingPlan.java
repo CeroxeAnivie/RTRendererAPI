@@ -7,7 +7,10 @@ import java.util.Set;
 public record NativeLightingPlan(int width,int height,Set<Signal> signals,int giSamples,float giDistance,
         float giStrength,NativeLightingStyle style,Directional sun,Directional moon,boolean opaqueFastPath,Encoding encoding) {
     public enum Signal { DIRECT_GAIN, INDIRECT_DIFFUSE, NORMAL_DISTANCE, RECEIVER_IDENTITY }
-    public enum Encoding { HDR_FLOAT16,COMPACT_UNORM8 }
+    /** Compact response extends the upper range to 255: neutral is code 128,
+     * low codes are 128*gain and high codes are 128+127*log(gain)/log(255).
+     * COMPACT_UNORM8 retains its original 15.65 maximum and 32*log2 slope. */
+    public enum Encoding { HDR_FLOAT16,COMPACT_UNORM8,COMPACT_RESPONSE_UNORM8 }
     /** Toward-source normalized direction, style weight in [0,1], and linear RGB. */
     public record Directional(float x,float y,float z,float weight,float red,float green,float blue) {
         public Directional {
@@ -22,6 +25,8 @@ public record NativeLightingPlan(int width,int height,Set<Signal> signals,int gi
         if(style.maximumGain()>65504)throw new IllegalArgumentException("Native gain must fit the declared RGBA16_FLOAT output range");
         if(encoding==Encoding.COMPACT_UNORM8&&style.maximumGain()>15.65f)
             throw new IllegalArgumentException("Compact gain supports a declared maximum of 15.65");
+        if(encoding==Encoding.COMPACT_RESPONSE_UNORM8&&style.maximumGain()>255)
+            throw new IllegalArgumentException("Compact response gain supports a declared maximum of 255");
         if(signals.isEmpty())throw new IllegalArgumentException("Request at least one lighting signal");
         if(giSamples<0||giSamples>8||!Float.isFinite(giDistance)||giDistance<=0||!Float.isFinite(giStrength)||giStrength<0)
             throw new IllegalArgumentException("GI requires 0..8 samples, positive finite distance and nonnegative finite strength");

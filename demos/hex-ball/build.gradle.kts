@@ -296,3 +296,21 @@ tasks.register<JavaExec>("rtxptHexBallDemo") {
     workingDir(rootProject.projectDir)
     jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
 }
+
+// Keep focused regression sources reachable through the maintained Gradle entry point.
+listOf(
+    "RtxptBallMaterialNativeSelfTest",
+    "RtxptHexBallQualitySelfTest",
+    "RtxptMediumDemoSelfTest"
+).forEach { name ->
+    tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
+        group = "verification"
+        dependsOn(tasks.testClasses)
+        classpath = sourceSets.test.get().runtimeClasspath
+        mainClass.set("demo.$name")
+        jvmArgs("-Xmx512m", "-XX:-UseJVMCICompiler")
+        environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+        if (name == "RtxptMediumDemoSelfTest") args(rootProject.file("build/reports/medium-demo").absolutePath)
+        usesService(rootProject.gradle.sharedServices.registrations.named("rendererHardwareGateLock").get().service)
+    }
+}

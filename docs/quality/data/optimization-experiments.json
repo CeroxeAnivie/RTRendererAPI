@@ -6,8 +6,22 @@
     "candidateVersion": "7.2.0-rc.8",
     "status": "targeted-correctness-passed-awaiting-host-movement",
     "evidence": "build/reports/sparse-movement/",
-    "changes": ["Authoritative CPU upload ranges merge gaps up to 4096 bytes with writes bounded to 1048576 bytes", "Diagnostic snapshot reserves only the captured upper bound outside recorder locks"],
-    "rejectedFrontier": {"status":"rejected-and-reverted","evidence":"build/reports/sparse-movement/rejected-frontier/","oldLinks":339108,"newLinks":760345,"oldPackedBytes":19922944,"newPackedBytes":26214400,"oldSourceNodeVisits":1818747,"newSourceNodeVisits":3075140,"rawExactCaptures":54,"rrExactCaptures":54},
+    "changes": [
+      "Authoritative CPU upload ranges merge gaps up to 4096 bytes with writes bounded to 1048576 bytes",
+      "Diagnostic snapshot reserves only the captured upper bound outside recorder locks"
+    ],
+    "rejectedFrontier": {
+      "status": "rejected-and-reverted",
+      "evidence": "build/reports/sparse-movement/rejected-frontier/",
+      "oldLinks": 339108,
+      "newLinks": 760345,
+      "oldPackedBytes": 19922944,
+      "newPackedBytes": 26214400,
+      "oldSourceNodeVisits": 1818747,
+      "newSourceNodeVisits": 3075140,
+      "rawExactCaptures": 54,
+      "rrExactCaptures": 54
+    },
     "limits": "Treelet regional membership rebuilding remains unresolved. Extra unchanged upload bytes must be reported. An operation-count reduction alone does not establish end-to-end FPS benefit. No light, shape, attenuation, composition, or visibility semantics changed."
   },
   "date": "2026-11-05",
@@ -1688,23 +1702,241 @@
         "Exact current alpha restoration; proportion and grid changes reset history; existing command-list and lease lifetimes retained",
         "Actual evaluation/output extents, explicit texture bytes and reduce/RR/upsample GPU zones; no silent fallback"
       ],
-      "notClaimed": ["Equal GI quality for divisor2", "180 FPS", "Full GPU P95 budget achieved", "Opaque network allocation byte counts"],
+      "notClaimed": [
+        "Equal GI quality for divisor2",
+        "180 FPS",
+        "Full GPU P95 budget achieved",
+        "Opaque network allocation byte counts"
+      ],
       "performanceMeasured": true,
       "performanceEvidence": "build/reports/resource-root-followup/rc7-check/performance-summary.json",
       "performanceConditions": "Same rc7 DLL;719 meshes;1280x800 dual HDR;GI1;real RR;SUMMARY;signal reuse disabled;divisor1/2/2/1 each3s;initial GPU4/1/0/0 percent;complete request boundary",
       "performanceLimits": "Short focused budget comparison, not full matrix or MC FPS; divisor2 changes GI reconstruction detail; GPU P95 above4ms; SUMMARY per-stage GPU was not enabled",
-      "completeGpuMeanMs": {"old":6.318163522513089,"new":3.8655946767546685,"delta":-2.4525688457584205,"percent":-38.817748812916065},
-      "completeGpuP95Ms": {"old":7.726624,"new":4.769087,"delta":-2.9575370000000003,"percent":-38.277221720637634},
-      "gridFramesPassed":32,
-      "projectionFramesPassed":16,
-      "invalidGiPixelsExactZero":544982,
-      "defaultRawGiHdrByteExactRc6":54,
-      "defaultActualRrHdrByteExactRc6":54,
-      "mainlineUsesGiRr":false,
-      "githubPublished":false,
+      "completeGpuMeanMs": {
+        "old": 6.318163522513089,
+        "new": 3.8655946767546685,
+        "delta": -2.4525688457584205,
+        "percent": -38.817748812916065
+      },
+      "completeGpuP95Ms": {
+        "old": 7.726624,
+        "new": 4.769087,
+        "delta": -2.9575370000000003,
+        "percent": -38.277221720637634
+      },
+      "gridFramesPassed": 32,
+      "projectionFramesPassed": 16,
+      "invalidGiPixelsExactZero": 544982,
+      "defaultRawGiHdrByteExactRc6": 54,
+      "defaultActualRrHdrByteExactRc6": 54,
+      "mainlineUsesGiRr": false,
+      "githubPublished": false,
       "nativeBuildSeconds": 145.18,
       "nativeBuildJobPeakGiB": 6.627,
       "initialFixtureCompileFailure": "Java fixture used a compound var declaration; fixed test-only syntax; original failure log retained"
     }
-  ]
+  ],
+  "hostResponseAndAdaptiveUploadRepair": {
+    "date": "2026-11-06",
+    "version": "7.2.1",
+    "status": "focused-validation-complete-packaging-in-progress",
+    "candidate": "adaptive-recording-upload-pages-and-retained-root-membership",
+    "sameFrameSemantics": true,
+    "qualityReduced": false,
+    "failedCandidateRestored": false,
+    "methodDifference": "Non-scratch NVRHI staging pages grow only after exhaustion within one recording, at most max(default,1MiB); existing 4MiB warm and fence retirement remain. Region membership is rebuilt only on child-link/kind topology changes. No leaf-frontier, selective scene preparation, queue split or early BLAS overlap is restored.",
+    "sourceEvidence": "MCVulkanRT/build/renderer-audit/manual-lighting-performance-root/diagnostics",
+    "observedSteadySubmitMs": {
+      "count": 17014,
+      "mean": 0.7938,
+      "p95": 1.1589
+    },
+    "observedUpdateSubmitMs": {
+      "count": 3766,
+      "mean": 4.6434,
+      "p95": 10.6066
+    },
+    "observedSparseStaging": {
+      "allocations": 821,
+      "selfWallMs": 179.5854,
+      "bytes": 84320256
+    },
+    "initialGpuPercent": 2,
+    "limits": [
+      "Other fullRegression overlapped original host diagnosis; CPU task wait is not algorithm CPU.",
+      "Windows thread CPU resolution is15.625ms.",
+      "No measured FPS gain yet.",
+      "Root-membership reuse alone cannot explain112ms; a treelet has at most15nodes."
+    ],
+    "validationReport": "docs/quality/host-response-and-sparse-upload.md",
+    "validationEvidence": "docs/quality/data/host-response-and-sparse-upload.json",
+    "actualNvrhiPool": {
+      "allocations": {
+        "mean": {
+          "old": 288.0,
+          "new": 22.0,
+          "delta": -266.0,
+          "percent": -92.36111111111111
+        },
+        "p95": {
+          "old": 288.0,
+          "new": 22.0,
+          "delta": -266.0,
+          "percent": -92.36111111111111
+        },
+        "max": {
+          "old": 288.0,
+          "new": 22.0,
+          "delta": -266.0,
+          "percent": -92.36111111111111
+        }
+      },
+      "allocatedBytes": {
+        "mean": {
+          "old": 18874368.0,
+          "new": 19857408.0,
+          "delta": 983040.0,
+          "percent": 5.208333333333326
+        },
+        "p95": {
+          "old": 18874368.0,
+          "new": 19857408.0,
+          "delta": 983040.0,
+          "percent": 5.208333333333326
+        },
+        "max": {
+          "old": 18874368.0,
+          "new": 19857408.0,
+          "delta": 983040.0,
+          "percent": 5.208333333333326
+        }
+      },
+      "recordNanos": {
+        "mean": {
+          "old": 47.5724375,
+          "new": 14.39894375,
+          "delta": -33.17349375,
+          "percent": -69.73259200771456
+        },
+        "p95": {
+          "old": 79.7037,
+          "new": 20.1568,
+          "delta": -59.546899999999994,
+          "percent": -74.71033339732031
+        },
+        "max": {
+          "old": 79.7037,
+          "new": 20.1568,
+          "delta": -59.546899999999994,
+          "percent": -74.71033339732031
+        }
+      },
+      "completeNanos": {
+        "mean": {
+          "old": 107.1575375,
+          "new": 74.2085125,
+          "delta": -32.949025000000006,
+          "percent": -30.748210316049864
+        },
+        "p95": {
+          "old": 139.0064,
+          "new": 80.0694,
+          "delta": -58.93700000000001,
+          "percent": -42.39876725100428
+        },
+        "max": {
+          "old": 139.0064,
+          "new": 80.0694,
+          "delta": -58.93700000000001,
+          "percent": -42.39876725100428
+        }
+      }
+    },
+    "sparseUpload24Frame": {
+      "requestNanos": {
+        "mean": {
+          "old": 6.334691304347826,
+          "new": 4.527693478260869,
+          "delta": -1.806997826086957,
+          "percent": -28.525428300613807
+        },
+        "p95": {
+          "old": 24.2265,
+          "new": 20.0661,
+          "delta": -4.160400000000003,
+          "percent": -17.17293046870164
+        },
+        "max": {
+          "old": 46.3076,
+          "new": 31.8322,
+          "delta": -14.4754,
+          "percent": -31.2592317459769
+        }
+      },
+      "allocationSelfNanos": {
+        "mean": {
+          "old": 0.0,
+          "new": 0.0,
+          "delta": 0.0,
+          "percent": null
+        },
+        "p95": {
+          "old": 0.0,
+          "new": 0.0,
+          "delta": 0.0,
+          "percent": null
+        },
+        "max": {
+          "old": 0.0,
+          "new": 0.0,
+          "delta": 0.0,
+          "percent": null
+        }
+      },
+      "sparseRegionSelfNanos": {
+        "mean": {
+          "old": 0.44116304347826085,
+          "new": 0.31574347826086957,
+          "delta": -0.12541956521739128,
+          "percent": -28.429300022174587
+        },
+        "p95": {
+          "old": 1.7852,
+          "new": 1.1595,
+          "delta": -0.6256999999999999,
+          "percent": -35.04929419672865
+        },
+        "max": {
+          "old": 6.2402,
+          "new": 4.4459,
+          "delta": -1.7942999999999998,
+          "percent": -28.753886093394442
+        }
+      }
+    },
+    "qualityChecks": {
+      "finalNativeGpuFrames": 7,
+      "sparseUploadFrames": 96,
+      "byteExactImageComparisons": 12,
+      "poolReadbackTrials": 32
+    },
+    "regressions": {
+      "same24FrameCreatedChunks": {
+        "old": 25,
+        "new": 25
+      },
+      "same24FrameCreatedBytes": {
+        "old": 19070976,
+        "new": 20512768,
+        "delta": 1441792,
+        "percent": 7.560137457044669
+      },
+      "poolCreatedBytes": {
+        "old": 18874368.0,
+        "new": 19857408.0,
+        "delta": 983040.0,
+        "percent": 5.208333333333326
+      }
+    }
+  }
 }

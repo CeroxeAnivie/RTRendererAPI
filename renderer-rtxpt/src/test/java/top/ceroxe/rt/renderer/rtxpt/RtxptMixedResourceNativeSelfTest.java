@@ -21,13 +21,16 @@ public final class RtxptMixedResourceNativeSelfTest {
             publication(r,1,NativeLightingPublication.Instance.shadowOnly(2));
             r.submit(frame(0,1));near(capture(r,"mixed-initial",0)[CENTER],.45,.002,"Initial shadow");packet(r,0,1,FrameClock.of(0,0));
             for(int step=0;step<2;step++){
-                long revision=step+2,sequence=step+1;long before=r.retainedUpdateTimings().builtBlases();
+                long revision=step+2,sequence=step+1;var before=r.resourceMaintenance();
+                long retainedBefore=r.retainedUpdateTimings().retainedBlases();
                 r.apply(SceneTransaction.builder(revision).upsert(alpha(step==0?0:255))
                     .upsert(plane(2,2,step==0?3.5f:4,1,0,0,false)).build());
                 r.submit(frame(sequence,revision));double gain=capture(r,"mixed-geometry-alpha-"+step,0)[CENTER];
                 near(gain,step==0?1:.45,.002,"Mixed geometry and shared coverage");packet(r,sequence,revision,FrameClock.of(0,0));
-                require(r.retainedUpdateTimings().builtBlases()-before==2,"Exactly two real coverage dependents, including the replacement generation");
-                rows.add(RtxptJson.object("case",step==0?"open":"restore","gain",gain,"builtBlases",2,"native",r.nativePreparationStatistics().toString()));
+                var after=r.resourceMaintenance();long builds=after.blasBuilds()-before.blasBuilds(),refits=after.blasRefits()-before.blasRefits();
+                require(builds+refits==1,"Exactly the replacement geometry is built/refit: before="+before+" after="+after);
+                require(r.retainedUpdateTimings().retainedBlases()-retainedBefore==2,"Both unchanged geometries retain their BLAS after alpha edits");
+                rows.add(RtxptJson.object("case",step==0?"open":"restore","gain",gain,"builtBlases",builds,"refittedBlases",refits,"native",r.nativePreparationStatistics().toString()));
             }
             r.apply(SceneTransaction.builder(4).upsert(MaterialAsset.builder(2).baseColorTextureId(7)
                 .blendMode(MaterialAsset.BlendMode.MASKED).alphaCutoff(.5f).roughness(.7f).build()).build());

@@ -131,7 +131,7 @@ public final class GlLightingPacketConsumer implements AutoCloseable {
         glUseProgram(program);glBindVertexArray(vao);glBindTextureUnit(0,linearHostTexture);
         int direct=packet.texture(NativeLightingPlan.Signal.DIRECT_GAIN),indirect=packet.texture(NativeLightingPlan.Signal.INDIRECT_DIFFUSE);
         glBindTextureUnit(1,direct);glBindTextureUnit(2,indirect);glProgramUniform1i(program,0,direct!=0?1:0);glProgramUniform1i(program,1,indirect!=0?1:0);
-        glProgramUniform1i(program,2,packet.frame().encoding()==NativeLightingPlan.Encoding.COMPACT_UNORM8?1:0);
+        glProgramUniform1i(program,2,packet.frame().encoding().ordinal());
         glProgramUniform1f(program,3,packet.frame().maximumGi());
         glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -149,7 +149,7 @@ public final class GlLightingPacketConsumer implements AutoCloseable {
             layout(binding=2) uniform sampler2D indirectContribution;
             layout(location=0) uniform bool hasDirect;
             layout(location=1) uniform bool hasIndirect;
-            layout(location=2) uniform bool compactEncoding;
+            layout(location=2) uniform int compactEncoding;
             layout(location=3) uniform float maximumGi;
             in vec2 uv;layout(location=0) out vec4 color;
             void main(){
@@ -157,8 +157,8 @@ public final class GlLightingPacketConsumer implements AutoCloseable {
                 vec2 signalUv=vec2(uv.x,1-uv.y);
                 vec4 d=hasDirect?texture(directGain,signalUv):vec4(1,1,1,0);
                 vec4 i=hasIndirect?texture(indirectContribution,signalUv):vec4(0);
-                if(compactEncoding){
-                    if(hasDirect){vec3 code=round(d.rgb*255);d.rgb=mix(code/128,exp2((code-128)/32),greaterThan(code,vec3(128)));}
+                if(compactEncoding!=0){
+                    if(hasDirect){vec3 code=round(d.rgb*255);float slope=compactEncoding==2?log2(255.0)/127:1.0/32;d.rgb=mix(code/128,exp2((code-128)*slope),greaterThan(code,vec3(128)));}
                     if(hasIndirect)i.rgb=i.rgb*i.rgb*maximumGi;
                 }
                 color=vec4(base*mix(vec3(1),d.rgb,clamp(d.a,0,1))+i.rgb*clamp(i.a,0,1),1);

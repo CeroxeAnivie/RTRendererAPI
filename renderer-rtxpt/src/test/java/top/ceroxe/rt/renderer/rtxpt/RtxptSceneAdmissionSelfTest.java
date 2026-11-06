@@ -90,6 +90,11 @@ public final class RtxptSceneAdmissionSelfTest {
     }
     public static void main(String[] arguments)throws Exception {
         hostProjection();oracle();for(var level:RtxptDiagnostics.Level.values())renderer(level);
+        var removedDirectory=java.nio.file.Files.createTempDirectory("rtrenderer-close-removed-");
+        java.nio.file.Files.delete(removedDirectory);
+        var closed=new RtxptRenderer(RtxptRenderers.nativeLightingConfiguration(),true);
+        var directory=RtxptRenderer.class.getDeclaredField("directory");directory.setAccessible(true);directory.set(closed,removedDirectory);
+        closed.close();closed.close();require(closed.status()==Renderer.Status.CLOSED,"External temporary cleanup preserves idempotent renderer shutdown");
         System.out.println("SCENE_ADMISSION_CPU PASS checks="+checks+" oracleGenerations=500 diagnosticLevels=3 activePayloadExact=true deletedPayloadZero=true typedBudgetAtomic=true sparseValidationAtomic=true oldMeshReleased=true closeCachesReleased=true noDevice=true");
     }
 }

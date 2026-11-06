@@ -14,7 +14,7 @@ public final class RtxptLightingResourceMatrixNativeSelfTest {
         r.submit(frame(sequence,revision));near(capture(r,"resource-"+name,0)[CENTER],expected,.002,name);
         packet(r,sequence++,revision,FrameClock.of(0,0));
         ROWS.add(RtxptJson.object("case",name,"attributes",r.lightingAttributeUpdateStatistics().toString(),
-            "retained",r.retainedUpdateTimings().toString(),"centerGain",expected));
+            "retained",r.retainedUpdateTimings().toString(),"maintenance",r.resourceMaintenance().toString(),"centerGain",expected));
         Files.writeString(OUT.resolve("resource-matrix-progress.json"),RtxptJson.encode(ROWS));
     }
     static void sameAttributes(NativeLightingControl.AttributeUpdateStatistics before,RtxptRenderer r,String name){
@@ -51,16 +51,24 @@ public final class RtxptLightingResourceMatrixNativeSelfTest {
             var appBefore=r.nativeLightingApplicationTransfers();r.patchLightingApplicationData(new NativeLightingApplicationPatch(5,12,ByteBuffer.allocate(4).putInt(7).flip()));
             check(r,4,"four-byte-application",.625);var appAfter=r.nativeLightingApplicationTransfers();
             require(appAfter[1]-appBefore[1]==4&&appAfter[2]-appBefore[2]==1,"Exactly one four-byte upload in a 256-mesh scene");
+            var mixedBefore=r.resourceMaintenance();long retainedBefore=r.retainedUpdateTimings().retainedBlases();
             r.apply(SceneTransaction.builder(5).upsert(material(1,64,128,255)).upsert(plane(255,1,.2f,-10,0,0,false))
                 .upsert(SceneInstance.builder(254,254).transform(new AffineTransform(new float[]{1,0,0,999,0,1,0,0,0,0,1,0})).build()).build());
             check(r,5,"mixed-local-geometry",.625);
-            require(r.retainedUpdateTimings().builtBlases()-blases==1,"Mixed transaction rebuilds only the edited geometry BLAS");
+            requireOneLocalBlasUpdate(r,mixedBefore,retainedBefore);
             r.apply(SceneTransaction.builder(6).removeInstance(256).build());check(r,6,"remove",.625);
             r.apply(SceneTransaction.builder(7).upsert(SceneInstance.builder(256,256).transform(new AffineTransform(new float[]{1,0,0,356,0,1,0,0,0,0,1,0})).build()).build());
             check(r,7,"restore",.625);require(r.nativeLightingExecution().fullBeautyFrames()==0,"No beauty work");
         }
         Files.writeString(OUT.resolve("resource-matrix.json"),RtxptJson.encode(RtxptJson.object("passed",true,"meshes",256,"rows",ROWS)));
         System.out.println("LIGHTING_RESOURCE_MATRIX PASS meshes=256 cases="+ROWS.size()+" applicationPatchBytes=4 unrelatedBlasPreserved=true");
+    }
+    static void requireOneLocalBlasUpdate(RtxptRenderer r,RtxptAccess.ResourceMaintenance before,long retainedBefore){
+        var after=r.resourceMaintenance();
+        require(after.blasBuilds()-before.blasBuilds()+after.blasRefits()-before.blasRefits()==1,
+            "Mixed transaction builds or refits exactly one edited geometry BLAS: before="+before+" after="+after);
+        require(r.retainedUpdateTimings().retainedBlases()-retainedBefore==255,
+            "Mixed transaction preserves all 255 unrelated resident BLAS");
     }
     static void tail()throws Exception{
         try(var r=new RtxptRenderer(RtxptLightTreeNativeSelfTest.config(4),true)){
@@ -79,9 +87,10 @@ public final class RtxptLightingResourceMatrixNativeSelfTest {
             var before=r.nativeLightingApplicationTransfers();r.patchLightingApplicationData(new NativeLightingApplicationPatch(2,12,ByteBuffer.allocate(4).putInt(7).flip()));
             check(r,2,"tail-application",.625);var after=r.nativeLightingApplicationTransfers();
             require(after[1]-before[1]==4&&after[2]-before[2]==1,"Four-byte patch emits only four bytes");
+            var mixedBefore=r.resourceMaintenance();long retainedBefore=r.retainedUpdateTimings().retainedBlases();
             r.apply(SceneTransaction.builder(3).upsert(material(1,64,128,255)).upsert(plane(255,1,.2f,-10,0,0,false))
                 .upsert(SceneInstance.builder(254,254).transform(new AffineTransform(new float[]{1,0,0,999,0,1,0,0,0,0,1,0})).build()).build());
-            check(r,3,"tail-mixed-local-geometry",.625);require(r.retainedUpdateTimings().builtBlases()-blases==1,"Only edited geometry rebuilds its BLAS");
+            check(r,3,"tail-mixed-local-geometry",.625);requireOneLocalBlasUpdate(r,mixedBefore,retainedBefore);
             r.apply(SceneTransaction.builder(4).removeInstance(256).build());check(r,4,"tail-remove",.625);
             r.apply(SceneTransaction.builder(5).upsert(SceneInstance.builder(256,256).transform(new AffineTransform(new float[]{1,0,0,356,0,1,0,0,0,0,1,0})).build()).build());check(r,5,"tail-restore",.625);
         }

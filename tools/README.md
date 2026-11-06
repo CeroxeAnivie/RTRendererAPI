@@ -1,6 +1,10 @@
 # 用户工具
 
-本页介绍从源码构建本项目使用的三个 PowerShell 工具。通过 Maven 或成品 JAR 使用渲染 API 时，不需要运行这些脚本，也不需要安装 RTXPT SDK、CMake 或 Python。
+本目录保留源码构建、SDK 扩展、正式验收与证据分析工具。通过 Maven 或成品 JAR 使用渲染 API 时，不需要运行这些脚本，也不需要安装 RTXPT SDK、CMake 或 Python。
+
+`Build-*`、`Stage-*` 和 `Invoke-BoundedBuild.ps1` 服务于构建与打包；`Test-*`、`Check-FileNaming.ps1` 和 `Verify-*` 是维护中的验收入口；`Analyze-*`、`Collect-*`、`Compare-*` 和光照成本工具用于读取正式验收数据。这些 `.ps1`／`.py` 是源码，不按扩展名当作临时文件删除。一次性日志、驱动脚本、实验覆盖层和缓存放在仓库外，已归档的正式 JSON／CSV 记录保留在 `docs/quality/data/`。
+
+当前平台全量回归使用 `./gradlew.bat fullRegression --no-parallel --max-workers=1 --dependency-verification=strict --no-daemon --console=plain`，并按下文配置本机 SDK。该任务包含完整发布闭包、全部已注册 Java self-test 和 RTXPT C++ 契约测试；纯 benchmark 不自动加入。两个独立的 GPU buffer／pipeline 内存调查探针需要人工指定工作量，不作为功能回归入口。
 
 | 工具 | 用途 | 常用参数 |
 | --- | --- | --- |
@@ -8,7 +12,7 @@
 | [Build-RtxptShaderBudgets.ps1](Build-RtxptShaderBudgets.ps1) | 使用已采集的上游编译清单生成 1～6 光学界面预算的 shader 包，或校验已有包。 | `-ManifestDirectory`、`-RuntimeDirectory`、`-OutputDirectory`、`-VerifyOnly` |
 | [Invoke-BoundedBuild.ps1](Invoke-BoundedBuild.ps1) | 通过 Windows Job Object 限制构建进程及其子进程的总内存。 | `-FilePath`、`-ArgumentList`、`-WorkingDirectory`、`-MemoryLimitGB` |
 
-三者均需 Windows 与 PowerShell 7。保留工具均提供 `-CheckPaths`：只解析、检查路径，不修改 RTXPT 源码、不构建、不启动目标进程。可用 `Get-Help <脚本路径> -Detailed` 查看参数。
+上述三个构建工具均需 Windows 与 PowerShell 7，并提供 `-CheckPaths`：只解析、检查路径，不修改 RTXPT 源码、不构建、不启动目标进程。可用 `Get-Help <脚本路径> -Detailed` 查看参数。
 
 所有相对 SDK、CMake、shader 和工作目录参数都以仓库根目录为基准；可从任意当前目录使用脚本的绝对路径调用。`Invoke-BoundedBuild.ps1` 的相对可执行文件路径则以选定的工作目录为基准；不带目录的命令从 `PATH` 查找。`Build-RtxptBridge.ps1` 通过自身目录定位 `Invoke-BoundedBuild.ps1`，请保留三者的目录关系。
 

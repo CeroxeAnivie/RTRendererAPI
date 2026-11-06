@@ -1121,9 +1121,56 @@ tasks.register("verifyApiClosure") {
     }
 }
 
+// Include newer focused self-tests as well as the curated release closure. Benchmarks without
+// a SelfTest suffix remain explicit experiments, rather than being silently run by regression.
+val fullRegression = tasks.register("fullRegression") {
+    group = "verification"
+    description = "Runs the complete release closure and every maintained Java self-test."
+    dependsOn("verifyApiClosure")
+    dependsOn(":renderer-rtxpt:rtxptNativeContractGate")
+}
+gradle.projectsEvaluated {
+    val selfTests = subprojects.flatMap { child ->
+        child.tasks.withType<JavaExec>().filter { it.name.endsWith("SelfTest") }
+    }.sortedBy { it.path }
+    val nativeContracts = project(":renderer-rtxpt").tasks.filter { it.name.endsWith("ContractNativeSelfTest") }.sortedBy { it.path }
+    selfTests.forEach { it.mustRunAfter(":renderer-rtxpt:buildRtxptNativeContracts") }
+    project(":renderer-rtxpt").tasks.named("buildNativeLightingExtensionExample") {
+        mustRunAfter(":renderer-rtxpt:buildRtxptNativeContracts")
+    }
+    project(":renderer-rtxpt").tasks.named("rtxptNativeSymbols") {
+        mustRunAfter(":renderer-rtxpt:buildRtxptNativeContracts")
+    }
+    selfTests.filter { it.project.path != ":renderer-nvidia" && isHardwareAcceptanceTask(it) }
+        .forEach { it.mustRunAfter(":renderer-nvidia:nvidiaNativeAcceptanceGate") }
+    fullRegression.configure {
+        dependsOn(selfTests)
+        doLast {
+            val incomplete = (selfTests + nativeContracts).filter { !it.state.executed || it.state.failure != null
+                || it.state.skipMessage == "SKIPPED" || it.state.skipMessage == "NO-SOURCE" }
+            check(incomplete.isEmpty()) { "Full regression has incomplete self-tests: " + incomplete.map { it.path } }
+            val report = layout.buildDirectory.file("reports/full-regression/result.json").get().asFile
+            report.parentFile.mkdirs()
+            report.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(linkedMapOf(
+                "version" to project.version.toString(),
+                "passed" to true,
+                "completedAtUtc" to Instant.now().toString(),
+                "selfTests" to selfTests.map { linkedMapOf("path" to it.path,
+                    "executed" to it.state.executed, "upToDate" to it.state.upToDate) },
+                "nativeContracts" to nativeContracts.map { linkedMapOf("path" to it.path,
+                    "executed" to it.state.executed, "upToDate" to it.state.upToDate) }
+            ))) + "\n", StandardCharsets.UTF_8)
+            logger.lifecycle("Full regression passed: {} self-tests; {}", selfTests.size, report)
+        }
+    }
+}
+
 // Reject subset selectors before executing any part of the complete gate. These
 // properties remain useful for focused development, but cannot certify a release.
 gradle.taskGraph.whenReady {
+    if (allTasks.any { it.path == ":fullRegression" }) {
+        layout.buildDirectory.file("reports/full-regression/result.json").get().asFile.delete()
+    }
     if (allTasks.any { it.path == ":verifyApiClosure" }) {
         // A later failed invocation must not leave a previous green result looking current.
         layout.buildDirectory.file("reports/api-closure/result.json").get().asFile.delete()

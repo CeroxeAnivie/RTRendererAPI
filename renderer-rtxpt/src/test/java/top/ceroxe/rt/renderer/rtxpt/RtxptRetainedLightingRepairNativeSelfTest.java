@@ -58,7 +58,7 @@ public final class RtxptRetainedLightingRepairNativeSelfTest {
             require(afterMaterial.layoutBuilds()==beforeMaterial.layoutBuilds(),"Material edit does not rebuild attribute mapping");
             r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);r.lightingWorkStatisticsEnabled(true);sample(r,6,6,"statistics-on");
             long counted=r.lightingWorkStatistics().sequence();r.diagnosticLevel(RtxptDiagnostics.Level.OFF);
-            r.diagnosticLevel(RtxptDiagnostics.Level.DEEP);r.lightingWorkStatisticsEnabled(true); // must not bypass unified OFF
+            r.lightingWorkStatisticsEnabled(true); // explicit counter intent must not bypass unified OFF
             sample(r,7,6,"off-drain");r.lightingWorkStatistics();var drained=r.lightingStatisticsCollection();
             for(long sequence=8;sequence<=13;sequence++){sample(r,sequence,6,"off-"+sequence);r.lightingWorkStatistics();}
             var stopped=r.lightingStatisticsCollection();

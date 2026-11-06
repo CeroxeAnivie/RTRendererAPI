@@ -23,7 +23,7 @@ public final class GlGuidedLightingComposer implements AutoCloseable {
         int[] textures={hostColor,direct,indirect,hostNormalDistance,hostIdentity,lowNormal,lowIdentity};
         for(int i=0;i<textures.length;i++)glBindTextureUnit(i,textures[i]);
         glProgramUniform1i(program,0,direct!=0?1:0);glProgramUniform1i(program,1,indirect!=0?1:0);
-        glProgramUniform1i(program,2,packet.frame().encoding()==NativeLightingPlan.Encoding.COMPACT_UNORM8?1:0);
+        glProgramUniform1i(program,2,packet.frame().encoding().ordinal());
         glProgramUniform1f(program,3,packet.frame().maximumGi());glProgramUniform1f(program,4,relativeDepthTolerance);glProgramUniform1f(program,5,minimumNormalDot);
         glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -44,13 +44,13 @@ public final class GlGuidedLightingComposer implements AutoCloseable {
             layout(binding=6) uniform usampler2D lowIdentity;
             layout(location=0) uniform bool hasDirect;
             layout(location=1) uniform bool hasIndirect;
-            layout(location=2) uniform bool compactEncoding;
+            layout(location=2) uniform int compactEncoding;
             layout(location=3) uniform float maximumGi;
             layout(location=4) uniform float depthTolerance;
             layout(location=5) uniform float minimumNormalDot;
             in vec2 uv;layout(location=0) out vec4 color;
-            vec4 decodeDirect(vec4 d){if(compactEncoding){vec3 code=round(d.rgb*255);d.rgb=mix(code/128,exp2((code-128)/32),greaterThan(code,vec3(128)));}return d;}
-            vec4 decodeGi(vec4 i){if(compactEncoding)i.rgb=i.rgb*i.rgb*maximumGi;return i;}
+            vec4 decodeDirect(vec4 d){if(compactEncoding!=0){vec3 code=round(d.rgb*255);float slope=compactEncoding==2?log2(255.0)/127:1.0/32;d.rgb=mix(code/128,exp2((code-128)*slope),greaterThan(code,vec3(128)));}return d;}
+            vec4 decodeGi(vec4 i){if(compactEncoding!=0)i.rgb=i.rgb*i.rgb*maximumGi;return i;}
             void main(){
                 vec3 base=texture(hostColor,uv).rgb;vec4 hg=texture(hostGeometry,uv);uvec4 hi=texture(hostIdentity,uv);
                 if(hi.w==0u||hg.w<=0||dot(hg.xyz,hg.xyz)<1e-10){color=vec4(base,1);return;}

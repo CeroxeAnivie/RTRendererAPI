@@ -16,12 +16,18 @@ import java.util.Objects;
  * clamped to [0,15.65], and sqrt(clamp(GI/maximumGi,0,1)), rounded to UNORM8.
  * Neutral gain has exact byte code 128. GI is in the declared host working domain;
  * sRGB decoding a tone-mapped host image does not turn it into scene-linear HDR.</p>
+ *
+ * <p>HOST_RESPONSE_RATIO_V1 instead evaluates a published
+ * {@link NativeLightingHostResponse}. Covered static sources replace the baked
+ * local level; without static support the original level is preserved and raised
+ * only by dynamic sources. The final response ratio receives visibility/fog
+ * once. The legacy correction coefficients are not applied in that mode.</p>
  */
 public record NativeLightingStyle(AdditionMode additionMode,float localDimming,float localBoost,
         float daylightDimming,float moonlightDimming,float moonRed,float moonGreen,float moonBlue,
         float minimumGain,float maximumGain,float maximumGi) {
     public static final int ABI_VERSION=1;
-    public enum AdditionMode { DYNAMIC_ONLY_V1, CLASSIC_ALL_LOCAL_V1 }
+    public enum AdditionMode { DYNAMIC_ONLY_V1, CLASSIC_ALL_LOCAL_V1, HOST_RESPONSE_RATIO_V1 }
     public NativeLightingStyle {
         Objects.requireNonNull(additionMode,"additionMode");
         for(float v:new float[]{localDimming,localBoost,daylightDimming,moonlightDimming,moonRed,moonGreen,moonBlue,
@@ -40,6 +46,8 @@ public record NativeLightingStyle(AdditionMode additionMode,float localDimming,f
     /** CPU reference, one RGB channel. All values are linear numerical values in the declared host domain. */
     public float directGain(int channel,float baselineLocal,float baselineSky,float visibility,float fog,
             float local,float dynamic,float daylight,float sunVisibility,float moonlight,float moonVisibility) {
+        if(additionMode==AdditionMode.HOST_RESPONSE_RATIO_V1)
+            throw new IllegalStateException("HOST_RESPONSE_RATIO_V1 requires NativeLightingHostResponse.directGain");
         if(channel<0||channel>2)throw new IllegalArgumentException("RGB channel must be 0, 1 or 2");
         for(float v:new float[]{baselineLocal,baselineSky,visibility,fog,daylight,sunVisibility,moonlight,moonVisibility})
             if(!Float.isFinite(v)||v<0||v>1)throw new IllegalArgumentException("Baseline, visibility, fog and directional weights must be in [0,1]");
@@ -57,6 +65,20 @@ public record NativeLightingStyle(AdditionMode additionMode,float localDimming,f
     public int encodeGain8(float gain) {
         float g=Math.clamp(finiteNonnegative(gain),0,15.65f);
         return Math.clamp(Math.round(g<=1?128*g:128+32*(float)(Math.log(g)/Math.log(2))),0,255);
+    }
+    /** Encoding-specific compact reference. The legacy format remains unchanged. */
+    public int encodeGain8(float gain,NativeLightingPlan.Encoding encoding) {
+        Objects.requireNonNull(encoding,"encoding");
+        if(encoding==NativeLightingPlan.Encoding.HDR_FLOAT16)throw new IllegalArgumentException("HDR gain is not UNORM8 encoded");
+        if(encoding==NativeLightingPlan.Encoding.COMPACT_UNORM8)return encodeGain8(gain);
+        float g=Math.clamp(finiteNonnegative(gain),0,255);
+        return Math.clamp(Math.round(g<=1?128*g:128+127*(float)(Math.log(g)/Math.log(255))),0,255);
+    }
+    public float decodeGain8(int code,NativeLightingPlan.Encoding encoding) {
+        Objects.requireNonNull(encoding,"encoding");
+        if(encoding==NativeLightingPlan.Encoding.HDR_FLOAT16)throw new IllegalArgumentException("HDR gain is not UNORM8 encoded");
+        if(encoding==NativeLightingPlan.Encoding.COMPACT_UNORM8)return decodeGain8(code);
+        return checkedCode(code)<=128?code/128f:(float)Math.pow(255,(code-128)/127f);
     }
     public float decodeGain8(int code) {return checkedCode(code)<=128?code/128f:(float)Math.pow(2,(code-128)/32f);}
     public int encodeGi8(float contribution) {return unorm8((float)Math.sqrt(Math.clamp(finiteNonnegative(contribution)/maximumGi,0,1)));}

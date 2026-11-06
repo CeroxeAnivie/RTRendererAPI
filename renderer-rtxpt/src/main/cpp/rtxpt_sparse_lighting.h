@@ -49,11 +49,13 @@ public:
         int shape=int(r.position[3]),group=int(r.cone[2]),composition=int(r.cone[3]);
         if(shape<0||shape>2||float(shape)!=r.position[3]||group<0||group>=32||float(group)!=r.cone[2]
             ||composition<0||composition>2||float(composition)!=r.cone[3]||r.direction[3]<=0
-            ||r.extent[3]<=0||r.extent[3]>32||r.cone[0]<r.cone[1]||r.cone[0]>1||r.cone[1]<-1
-            ||(r.identity[0]!=0&&r.identity[0]!=1)||r.identity[3]<0||r.identity[3]>11||r.identity[3]!=float(uint32_t(r.identity[3])))throw std::invalid_argument("Invalid sparse source record");
-        const auto visibility=uint32_t(r.identity[3])>>2;
+            ||r.extent[3]<=0||r.extent[3]>32
+            ||(r.identity[0]!=0&&r.identity[0]!=1)||r.identity[3]<0||r.identity[3]>27||r.identity[3]!=float(uint32_t(r.identity[3])))throw std::invalid_argument("Invalid sparse source record");
+        const auto flags=uint32_t(r.identity[3]),visibility=(flags>>2)&3u;const bool radius=(flags&16u)!=0;
+        if(visibility>2||(radius&&(visibility!=2||r.cone[0]<0)))throw std::invalid_argument("Invalid independent visibility radius");
+        if(!radius&&(r.cone[0]<r.cone[1]||r.cone[0]>1||r.cone[1]<-1))throw std::invalid_argument("Invalid sparse source cone");
         if(visibility&&shape==2)throw std::invalid_argument("Center support visibility applies to POINT or BOX");
-        if(visibility==2&&(r.extent[0]!=r.extent[1]||r.extent[0]!=r.extent[2]))throw std::invalid_argument("Sphere visibility requires equal half extents");
+        if(visibility==2&&!radius&&(r.extent[0]!=r.extent[1]||r.extent[0]!=r.extent[2]))throw std::invalid_argument("Sphere visibility requires equal half extents or an explicit radius");
         double length=0;for(int a=0;a<3;a++){
             if(r.extent[a]<0||r.color[a]<0||(shape!=1&&r.extent[a]!=0))throw std::invalid_argument("Invalid sparse source extent/color");
             length+=double(r.direction[a])*r.direction[a];

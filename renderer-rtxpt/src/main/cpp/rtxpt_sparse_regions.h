@@ -31,7 +31,7 @@ public:
     std::vector<uint32_t> global,dirtyNodes;
     std::vector<Shape> shapes;
     std::vector<uint32_t> owners;
-    std::vector<uint64_t> affectedEpochs;
+    std::vector<uint64_t> affectedEpochs,topologyEpochs;
     std::unordered_map<uint32_t,std::vector<Cell>> overflowByHome;
     std::vector<uint32_t> hashHoles;
     uint64_t affectedEpoch=0;
@@ -40,12 +40,13 @@ public:
     size_t links=0;
     bool dirty=false,full=false,indexed=true,initialized=false;
     uint64_t frontierVisited=0,fullPacks=0;
+    uint64_t membershipBuilds=0,membershipNodes=0;
     uint64_t hashMoves=0,overflowRetries=0;
     // builds, coverage changes, roots, cells, links, global roots, bytes,
     // bounded hash-probe overflows, uploaded bytes.
     std::array<uint64_t,9> work{};
     void Clear(){
-        roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();affectedEpoch=0;dirtyNodes.clear();overflowByHome.clear();hashHoles.clear();
+        roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();affectedEpoch=0;dirtyNodes.clear();overflowByHome.clear();hashHoles.clear();
         for(auto& blocks:freeBlocks)blocks.clear();buckets=poolNodes=tombstones=0;globalWords=GlobalWordCapacity;links=0;
         dirty=full=true;indexed=true;initialized=false;for(size_t i=2;i<=6;i++)work[i]=0;
     }
@@ -94,14 +95,20 @@ private:
         roots.erase(old);
     }
     void UpdateRoot(const std::vector<rtr::LightTreeNode>& nodes,uint32_t id,ChangedCells& changed){
-        const auto bound=Bounds(nodes[id]);std::vector<uint32_t> members;Members(nodes,id,members);
-        // Newly merged roots replace every previous child frontier exactly once.
-        for(auto member:members){uint32_t previous=owners[member];if(previous!=None&&previous!=id)RemoveRoot(previous,changed);}
-        auto old=roots.find(id);if(old!=roots.end()){
-            if(old->second.members!=members){
+        const auto bound=Bounds(nodes[id]);auto old=roots.find(id);std::vector<uint32_t> members;
+        // Bounds/refits do not change ownership. Keep the resident membership
+        // list until a child link actually changes, instead of recursively
+        // rebuilding and allocating it for every moving support update.
+        if(old==roots.end()||topologyEpochs[id]==affectedEpoch){
+            Members(nodes,id,members);++membershipBuilds;membershipNodes+=members.size();
+            // Newly merged roots replace each previous child frontier once.
+            for(auto member:members){uint32_t previous=owners[member];if(previous!=None&&previous!=id)RemoveRoot(previous,changed);}
+            if(old!=roots.end()&&old->second.members!=members){
                 for(auto member:old->second.members)if(owners[member]==id)owners[member]=None;
                 old->second.members=members;for(auto member:members)owners[member]=id;
             }
+        }
+        if(old!=roots.end()){
             if(old->second.bounds==bound)return;
             auto coverage=Coverage(bound);
             if(!old->second.global&&old->second.cells==coverage){old->second.bounds=bound;return;}
@@ -122,6 +129,7 @@ private:
                 }
                 old->second.bounds=bound;old->second.cells=std::move(coverage);++work[1];return;
             }
+            if(members.empty())members=old->second.members;
             RemoveRoot(id,changed);
         }
         Root root;root.bounds=bound;root.members=std::move(members);root.cells=Coverage(bound);
@@ -245,10 +253,16 @@ public:
         ChangedCells changed;const auto oldGlobal=global;
         const bool rebuilding=!initialized;owners.resize(nodes.size(),None);
         shapes.resize(nodes.size());
-        affectedEpochs.resize(nodes.size());if(++affectedEpoch==0){std::fill(affectedEpochs.begin(),affectedEpochs.end(),0);++affectedEpoch;}
+        affectedEpochs.resize(nodes.size());topologyEpochs.resize(nodes.size());
+        if(++affectedEpoch==0){std::fill(affectedEpochs.begin(),affectedEpochs.end(),0);std::fill(topologyEpochs.begin(),topologyEpochs.end(),0);++affectedEpoch;}
         bool affected=false;
         auto inspect=[&](uint32_t id){if(id>=nodes.size())return;auto shape=Describe(tree,nodes,id);
             if(rebuilding||!(shape==shapes[id])){
+                const auto& old=shapes[id];
+                const bool topology=rebuilding||shape.kind!=old.kind||shape.left!=old.left||shape.right!=old.right;
+                if(topology&&tree.heights[id]>=0)for(uint32_t parent=id;parent!=None;parent=tree.parents[parent]){
+                    if(topologyEpochs[parent]==affectedEpoch)break;topologyEpochs[parent]=affectedEpoch;
+                }
                 shapes[id]=shape;if(tree.heights[id]<0)RemoveRoot(id,changed);
                 else for(uint32_t parent=id;parent!=None;parent=tree.parents[parent]){
                     if(affectedEpochs[parent]==affectedEpoch)break;affectedEpochs[parent]=affectedEpoch;affected=true;

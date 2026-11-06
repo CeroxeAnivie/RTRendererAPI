@@ -6,6 +6,7 @@ $paths=@(& git -C $repo ls-files --cached --others --exclude-standard) | Sort-Ob
 if($LASTEXITCODE -ne 0){throw 'Cannot inventory repository paths'}
 $violations=@($paths | Where-Object {
     (Test-Path -LiteralPath (Join-Path $repo $_) -PathType Leaf) -and
+    ($_ -notmatch '^(docs/|renderer-api/abi/)') -and
     ([IO.Path]::GetFileName($_) -match '(?i)(?:v?\d+\.\d+\.\d+|(?:^|[-_])(?:70\d|71\d)(?:[-_.]|$)|Rtxpt(?:70\d|71\d))')
 })
 if($violations.Count){$violations | ForEach-Object {Write-Output $_};throw "Version-coupled file names: $($violations.Count)"}

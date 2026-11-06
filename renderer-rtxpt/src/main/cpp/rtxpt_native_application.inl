@@ -45,7 +45,8 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
         auto& s=session(handle);auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());
         auto* device=s.app->HostDeviceManager()->GetDevice();
         constexpr uint32_t width=4096,height=25,count=100001;
-        RtrNativeLightingPass probe;probe.width=width;probe.height=height;probe.mask=3;probe.compactEncoding=true;probe.constants.words[70]=1;
+        const bool response=host.nativeLighting.compactResponseEncoding;const float maximumGain=response?255.f:15.65f;
+        RtrNativeLightingPass probe;probe.width=width;probe.height=height;probe.mask=3;probe.compactEncoding=true;probe.compactResponseEncoding=response;probe.constants.words[70]=1;
         auto desc=nvrhi::TextureDesc().setWidth(width).setHeight(height).setFormat(nvrhi::Format::RGBA32_FLOAT)
             .setInitialState(nvrhi::ResourceStates::ShaderResource).setKeepInitialState(true);
         probe.direct=device->createTexture(desc);probe.indirect=device->createTexture(desc);
@@ -56,7 +57,7 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
         if(!directRead||!indirectRead)throw std::runtime_error("Could not allocate encoder diagnostic readback");
         std::vector<float4> direct(width*height),indirect(width*height);
         for(uint32_t i=0;i<width*height;i++){const float value=float((std::min)(i,count-1))/float(count-1);
-            direct[i]=float4(value*15.65f,1,0,1);indirect[i]=float4(value,0,1,1);}
+            direct[i]=float4(value*maximumGain,1,0,1);indirect[i]=float4(value,0,1,1);}
         auto command=device->createCommandList();command->open();
         command->writeTexture(probe.direct,0,0,direct.data(),width*sizeof(float4));command->writeTexture(probe.indirect,0,0,indirect.data(),width*sizeof(float4));
         probe.EncodeOutputs(device,command);command->copyTexture(directRead,nvrhi::TextureSlice(),probe.compactDirect,nvrhi::TextureSlice());
@@ -69,8 +70,8 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
         if(!gi){device->unmapStagingTexture(directRead);throw std::runtime_error("Could not map diagnostic GI output");}
         for(uint32_t i=0;i<count;i++){
             const auto offset=(i%width)*4;const auto* g=gain+(i/width)*directPitch+offset;const auto* b=gi+(i/width)*indirectPitch+offset;
-            const double value=double(i)/double(count-1),original=value*15.65;
-            const double decoded=g[0]<=128?double(g[0])/128:std::exp2((double(g[0])-128)/32);
+            const double value=double(i)/double(count-1),original=value*maximumGain;
+            const double decoded=g[0]<=128?double(g[0])/128:response?std::pow(255.,(double(g[0])-128)/127):std::exp2((double(g[0])-128)/32);
             const double error=std::abs(decoded-original);
             if(original<=1)result[0]=(std::max)(result[0],error);else result[1]=(std::max)(result[1],error/original);
             const double normalized=double(b[0])/255;result[2]=(std::max)(result[2],std::abs(normalized*normalized-value));
@@ -84,10 +85,11 @@ extern "C" JNIEXPORT jdoubleArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_Rtxp
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingEncoding(
     JNIEnv* e,jclass,jlong handle,jint encoding){
     try{
-        if(encoding<0||encoding>1)throw std::invalid_argument("Unknown native lighting output encoding");
+        if(encoding<0||encoding>2)throw std::invalid_argument("Unknown native lighting output encoding");
         auto& pass=static_cast<HostPathTracer*>(session(handle).app->HostRenderPass())->nativeLighting;
         if(encoding==1&&pass.constants.words[69]>15.65f)throw std::invalid_argument("Compact gain exceeds its representable range");
-        pass.compactEncoding=encoding==1;
+        if(encoding==2&&pass.constants.words[69]>255.f)throw std::invalid_argument("Compact response gain exceeds its representable range");
+        pass.compactEncoding=encoding!=0;pass.compactResponseEncoding=encoding==2;
     }catch(const std::exception& failure){fail(e,failure);}
 }
 extern "C" JNIEXPORT void JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingActivateValidatedExtension(

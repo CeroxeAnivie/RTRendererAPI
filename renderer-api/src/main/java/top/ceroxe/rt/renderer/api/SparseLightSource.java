@@ -17,7 +17,7 @@ import java.util.Objects;
 public record SparseLightSource(long id,Shape shape,double x,double y,double z,
         float halfX,float halfY,float halfZ,float directionX,float directionY,float directionZ,
         float red,float green,float blue,float intensity,float range,float falloffExponent,
-        float innerConeCosine,float outerConeCosine,Composition composition,int group,boolean castsShadow,Layer layer,Attenuation attenuation,Visibility visibility) {
+        float innerConeCosine,float outerConeCosine,Composition composition,int group,boolean castsShadow,Layer layer,Attenuation attenuation,Visibility visibility,float visibilityRadius) {
     public enum Shape { POINT, BOX, SPOT }
     public enum Composition { PHYSICAL_SUM, VISIBLE_GROUP_MAX, VISIBLE_GROUP_CHANNEL_MAX }
     public enum Layer { STATIC, DYNAMIC }
@@ -29,7 +29,9 @@ public record SparseLightSource(long id,Shape shape,double x,double y,double z,
      * cutoff .0001. BOX stops at the center ray's near AABB boundary and treats
      * points in its expanded AABB as visible. SPHERE treats the common half extent
      * as radius, uses distance-radius-.004 (at least .002) and direct visibility
-     * at distance<=radius+.005. No instance/occluder is globally excluded.
+     * at {@code distance <= radius + .005}. No instance/occluder is globally excluded.
+     * An explicit visibilityRadius overrides only the SPHERE radius; the emitting
+     * BOX and its attenuation are unchanged. -1 retains the common half extent.
      * NEAREST_POINT preserves the original behavior and does not use these rules. */
     public enum Visibility { NEAREST_POINT, CENTER_BOX_SUPPORT_V1, CENTER_SPHERE_SUPPORT_V1 }
     public SparseLightSource {
@@ -48,9 +50,19 @@ public record SparseLightSource(long id,Shape shape,double x,double y,double z,
             throw new IllegalArgumentException("Source direction must be normalized and cone cosines ordered in [-1,1]");
         if(shape!=Shape.BOX&&(halfX!=0||halfY!=0||halfZ!=0))throw new IllegalArgumentException("Only BOX has a spatial extent");
         if(visibility!=Visibility.NEAREST_POINT&&shape==Shape.SPOT)throw new IllegalArgumentException("Center support visibility applies to POINT or BOX");
-        if(visibility==Visibility.CENTER_SPHERE_SUPPORT_V1&&(halfX!=halfY||halfX!=halfZ))throw new IllegalArgumentException("Sphere visibility requires equal BOX half extents");
+        if(!Float.isFinite(visibilityRadius)||visibilityRadius< -1||(visibilityRadius<0&&visibilityRadius!= -1))throw new IllegalArgumentException("Visibility radius must be -1 (emitter extent) or finite and nonnegative");
+        if(visibilityRadius>=0&&visibility!=Visibility.CENTER_SPHERE_SUPPORT_V1)throw new IllegalArgumentException("Independent visibility radius requires sphere support");
+        if(visibility==Visibility.CENTER_SPHERE_SUPPORT_V1&&visibilityRadius<0&&(halfX!=halfY||halfX!=halfZ))throw new IllegalArgumentException("Sphere visibility requires equal BOX half extents or an explicit radius");
         double bound=(double)range+Math.max(halfX,Math.max(halfY,halfZ));
         if(bound>Float.MAX_VALUE/4)throw new IllegalArgumentException("Source support bounds overflow");
+    }
+    /** Compatibility constructor: visibility support uses the emitting extent. */
+    public SparseLightSource(long id,Shape shape,double x,double y,double z,
+            float halfX,float halfY,float halfZ,float directionX,float directionY,float directionZ,
+            float red,float green,float blue,float intensity,float range,float falloffExponent,
+            float innerConeCosine,float outerConeCosine,Composition composition,int group,boolean castsShadow,Layer layer,Attenuation attenuation,Visibility visibility) {
+        this(id,shape,x,y,z,halfX,halfY,halfZ,directionX,directionY,directionZ,red,green,blue,intensity,range,
+            falloffExponent,innerConeCosine,outerConeCosine,composition,group,castsShadow,layer,attenuation,visibility,-1);
     }
     public SparseLightSource(long id,Shape shape,double x,double y,double z,
             float halfX,float halfY,float halfZ,float directionX,float directionY,float directionZ,
@@ -75,19 +87,25 @@ public record SparseLightSource(long id,Shape shape,double x,double y,double z,
     }
     public SparseLightSource withLayer(Layer value) {
         return new SparseLightSource(id,shape,x,y,z,halfX,halfY,halfZ,directionX,directionY,directionZ,red,green,blue,
-            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,composition,group,castsShadow,value,attenuation,visibility);
+            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,composition,group,castsShadow,value,attenuation,visibility,visibilityRadius);
     }
     public SparseLightSource withComposition(Composition value,int group) {
         return new SparseLightSource(id,shape,x,y,z,halfX,halfY,halfZ,directionX,directionY,directionZ,red,green,blue,
-            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,value,group,castsShadow,layer,attenuation,visibility);
+            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,value,group,castsShadow,layer,attenuation,visibility,visibilityRadius);
     }
     public SparseLightSource withAttenuation(Attenuation value) {
         return new SparseLightSource(id,shape,x,y,z,halfX,halfY,halfZ,directionX,directionY,directionZ,red,green,blue,
-            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,composition,group,castsShadow,layer,value,visibility);
+            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,composition,group,castsShadow,layer,value,visibility,visibilityRadius);
     }
     public SparseLightSource withVisibility(Visibility value) {
         return new SparseLightSource(id,shape,x,y,z,halfX,halfY,halfZ,directionX,directionY,directionZ,red,green,blue,
-            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,composition,group,castsShadow,layer,attenuation,value);
+            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,composition,group,castsShadow,layer,attenuation,value,
+            value==Visibility.CENTER_SPHERE_SUPPORT_V1?visibilityRadius:-1);
+    }
+    /** Sphere visibility is independent of the BOX field used for attenuation. */
+    public SparseLightSource withVisibility(Visibility value,float radius) {
+        return new SparseLightSource(id,shape,x,y,z,halfX,halfY,halfZ,directionX,directionY,directionZ,red,green,blue,
+            intensity,range,falloffExponent,innerConeCosine,outerConeCosine,composition,group,castsShadow,layer,attenuation,value,radius);
     }
     public static SparseLightSource point(long id,double x,double y,double z,float red,float green,float blue,float intensity,float range) {
         return new SparseLightSource(id,Shape.POINT,x,y,z,0,0,0,0,-1,0,red,green,blue,intensity,range,2,1,-1,Composition.PHYSICAL_SUM,0,true);

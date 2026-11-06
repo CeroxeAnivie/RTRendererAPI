@@ -695,3 +695,30 @@ tasks.register("rendererCore1080pBenchmarkMatrix") {
     description = "Runs the ordered host-independent 1080p Vulkan RT correctness and GPU-timing matrix."
     dependsOn(native1080pMatrixScenarios.keys)
 }
+
+// Focused contracts must also be reachable from fullRegression.
+listOf(
+    "top.ceroxe.rt.renderer.rt.acceleration.RtAccelerationStructureBuildSupportSelfTest",
+    "top.ceroxe.rt.renderer.rt.acceleration.RtAccelerationStructureCommandRecorderSelfTest",
+    "top.ceroxe.rt.renderer.rt.acceleration.RtTlasInstanceEncoderSelfTest",
+    "top.ceroxe.rt.renderer.rt.device.RtAcceptedSceneAuthoritySelfTest",
+    "top.ceroxe.rt.renderer.rt.device.RtWorldSceneCoverageAuthoritySelfTest",
+    "top.ceroxe.rt.renderer.rt.device.VulkanAcceptFrameTimingSelfTest",
+    "top.ceroxe.rt.renderer.rt.device.VulkanMemoryBudgetPolicySelfTest",
+    "top.ceroxe.rt.renderer.rt.device.VulkanRtDeviceTelemetrySelfTest",
+    "top.ceroxe.rt.renderer.rt.device.VulkanRtSchedulingConfigSelfTest",
+    "top.ceroxe.rt.renderer.rt.pipeline.RtDescriptorGenerationStateSelfTest",
+    "top.ceroxe.rt.renderer.rt.pipeline.RtDynamicSceneFrontSelfTest",
+    "top.ceroxe.rt.renderer.rt.pipeline.RtFrameDispatchCpuWindowSelfTest",
+    "top.ceroxe.rt.renderer.rt.pipeline.RtFrameDispatchStatisticsSelfTest",
+    "top.ceroxe.rt.renderer.backend.vulkan.BoundaryConnectionTraversalNativeSelfTest",
+    "top.ceroxe.rt.renderer.backend.vulkan.BoundaryIntersectionPredicatesNativeSelfTest",
+    "top.ceroxe.rt.renderer.backend.vulkan.VulkanFrameAdmissionLimitsSelfTest",
+    "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericIndirectCountNativeSelfTest",
+    "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericTextureLayoutStateSelfTest",
+    "top.ceroxe.rt.renderer.backend.vulkan.VulkanGenericTextureUploadPackerSelfTest",
+    "top.ceroxe.rt.renderer.backend.vulkan.VulkanGpuDeviceCatalogNativeSelfTest"
+).forEach { className ->
+    registerCoreSelfTest(className.substringAfterLast('.').replaceFirstChar { it.lowercase() },
+        className, "Runs the focused renderer-core regression $className.")
+}

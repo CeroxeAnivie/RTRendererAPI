@@ -120,7 +120,12 @@ public final class VulkanGpuSceneThroughputNativeSelfTest {
          // This test reports throughput without an FPS floor. A fixed 30-second
          // range deadline silently imposed one; keep a strict no-progress
          // watchdog and a separate bounded wall-time budget for all 256 frames.
-         if (latestCompleted < finalSequence && (end - lastCompletion >= COMPLETION_STALL_TIMEOUT_NANOS
+         // The initial warmup also owns first-use pipeline/driver preparation. Before its
+         // first completion, use the existing total range budget; after progress (and for
+         // every measured range), retain the 30-second completion-stall watchdog.
+         long stallBudget = firstSequence == 0 && latestCompleted < 0
+                 ? RANGE_TIMEOUT_NANOS : COMPLETION_STALL_TIMEOUT_NANOS;
+         if (latestCompleted < finalSequence && (end - lastCompletion >= stallBudget
                  || end - start >= RANGE_TIMEOUT_NANOS))
             throw new AssertionError("GPUScene throughput run timed out: submitted=" + (nextSequence - 1)
                     + ", completed=" + latestCompleted + ", final=" + finalSequence

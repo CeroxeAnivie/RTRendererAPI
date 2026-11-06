@@ -72,6 +72,7 @@ public:
     }
     nvrhi::TextureHandle direct,indirect,geometry,identity,dummyColor,dummyIdentity;
     bool compactEncoding=false;
+    bool compactResponseEncoding=false;
     nvrhi::TextureHandle compactDirect,compactIndirect,compactDummy;
     nvrhi::BufferHandle compactConstants;
     nvrhi::BindingLayoutHandle compactLayout;
@@ -169,7 +170,9 @@ public:
         std::copy(bytes.begin(),bytes.end(),applicationData.begin()+offset);
         applicationDirtyRanges=std::move(next);publication=generation;++applicationPatches;
     }
-    std::array<float2,256> baselineLookup=[] {std::array<float2,256> values{};for(int y=0;y<16;y++)for(int x=0;x<16;x++)values[y*16+x]=float2(x/15.f,y/15.f);return values;}();
+    // Baseline float2[256], followed by packed host-response RGB[256]. The
+    // Java contract requires an explicit table before selecting response mode.
+    std::array<float2,640> baselineLookup=[] {std::array<float2,640> values{};for(int y=0;y<16;y++)for(int x=0;x<16;x++)values[y*16+x]=float2(x/15.f,y/15.f);return values;}();
     nvrhi::IBuffer* previousSceneInstances=nullptr;
     nvrhi::IBuffer* previousSceneGeometry=nullptr;
     size_t previousInstanceCount=0,previousGeometryCount=0;
@@ -384,7 +387,7 @@ public:
     void EncodeOutputs(nvrhi::IDevice* device,nvrhi::ICommandList* command){
         if(!compactEncoding||!(mask&3))return;
         struct EncodeParameters {uint32_t width,height;float maximumGi;uint32_t mask;};
-        const EncodeParameters parameters{width,height,maximumGi(),mask};
+        const EncodeParameters parameters{width,height,maximumGi(),mask|(compactResponseEncoding?0x10000u:0u)};
         const auto scope=RtrGpuProfile::Begin(command,"NativeLightingEncode",-1);
         command->writeBuffer(compactConstants,&parameters,sizeof(parameters));
         nvrhi::BindingSetDesc desc;desc.bindings={nvrhi::BindingSetItem::ConstantBuffer(0,compactConstants),

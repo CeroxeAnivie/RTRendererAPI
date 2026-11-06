@@ -132,6 +132,8 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         preparationTransforms,preparationAttributeInstances,allocationBean==null||!allocationBean.isThreadAllocatedMemorySupported()
             ||!allocationBean.isThreadAllocatedMemoryEnabled()?-1:preparationAllocatedBytes);}
     private float[] pendingBaselineLookup;
+    private float[] lightingBaselineLookup;
+    private NativeLightingHostResponse lightingHostResponse;
     private byte[] pendingApplicationData;
     private final ArrayDeque<NativeLightingApplicationPatch> pendingApplicationPatches=new ArrayDeque<>();
     private int lightingApplicationBytes,lightingExtensionSignals=15,lightingExtensionMinimumBytes;
@@ -212,7 +214,19 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         for(var value:publication.instances())lightingInstances.put(value.id(),value);
         for(var value:publication.baselines())lightingBaselines.put(value.meshId(),value.coordinates());
         pendingLightingInstances.addAll(instanceIds);pendingLightingBaselines.addAll(meshIds);
-        if(publication.baselineLookup()!=null)pendingBaselineLookup=publication.baselineLookup();
+        var lookup=publication.baselineLookup();
+        if(lookup!=null)lightingBaselineLookup=lookup;
+        if(publication.hostResponse()!=null)lightingHostResponse=publication.hostResponse();
+        if(lookup!=null||publication.hostResponse()!=null){
+            if(lightingBaselineLookup==null){
+                lightingBaselineLookup=new float[512];
+                for(int sky=0;sky<16;sky++)for(int local=0;local<16;local++){
+                    int index=(sky*16+local)*2;lightingBaselineLookup[index]=local/15f;lightingBaselineLookup[index+1]=sky/15f;
+                }
+            }
+            pendingBaselineLookup=Arrays.copyOf(lightingBaselineLookup,lightingHostResponse==null?512:1280);
+            if(lightingHostResponse!=null)System.arraycopy(lightingHostResponse.values(),0,pendingBaselineLookup,512,NativeLightingHostResponse.SAMPLES);
+        }
         if(publication.applicationData()!=null){var bytes=publication.applicationData();pendingApplicationData=new byte[bytes.remaining()];bytes.get(pendingApplicationData);lightingApplicationBytes=pendingApplicationData.length;pendingApplicationPatches.clear();}
         lightingAttributeGeneration=publication.generation();
     }
@@ -528,6 +542,9 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
         if(backgroundChanged)historyCauses.add(HistoryCause.BACKGROUND);
         if(!f.temporalHistoryResets().isEmpty())historyCauses.add(HistoryCause.EXPLICIT);
         RtxptInputContract.validateFrame(f,nativeLightingPlan!=null||hostSurfacePlan!=null);
+        var activeLightingPlan=nativeLightingPlan!=null?nativeLightingPlan:hostAugmentationActive()?hostSurfaceAugmentation().lighting():null;
+        if(activeLightingPlan!=null&&activeLightingPlan.style().additionMode()==NativeLightingStyle.AdditionMode.HOST_RESPONSE_RATIO_V1&&lightingHostResponse==null)
+            throw new IllegalStateException("Publish a NativeLightingHostResponse before submitting HOST_RESPONSE_RATIO_V1");
         if(nativeLightingPlan!=null)RtxptNativeLightingParameters.pack(nativeLightingPlan,f);
         else if(hostAugmentationActive())RtxptNativeLightingParameters.pack(hostSurfaceAugmentation().lighting(),f);
         if(nativeContractPending&&nativeScene==null){scene.validate();nativeContractPending=false;}
@@ -968,11 +985,23 @@ final class RtxptRenderer implements Renderer,RtxptAccess,SceneLightingControl,S
             scene=new RtxptScene();residentScene=null;textureFiles.clear();memoryTextures.clear();resourcePackets.clear();pendingLightIds.clear();visibleBackground=null;previous=List.of();camera=null;lighting=null;compositor=null;nativeScene=null;
             attributeGroups.clear();lightingInstances.clear();lightingBaselines.clear();pendingGeometryVariants=List.of();
             pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingSparseIds.clear();
-            pendingBaselineLookup=null;pendingApplicationData=null;pendingApplicationPatches.clear();lightingApplicationBytes=0;
+            pendingBaselineLookup=null;lightingBaselineLookup=null;lightingHostResponse=null;pendingApplicationData=null;pendingApplicationPatches.clear();lightingApplicationBytes=0;
             hostRequests.clear();lastHostCamera=null;hostSurfaceAugmentation=null;
             preparedHostHistory.clear();preparedHostReasons.clear();
-            if(directory!=null)try(var files=Files.walk(directory)){
-                for(var p:files.sorted(Comparator.reverseOrder()).toList())Files.delete(p);
+            if(directory!=null)try{
+                Files.walkFileTree(directory,new SimpleFileVisitor<Path>(){
+                    @Override public FileVisitResult visitFile(Path file,java.nio.file.attribute.BasicFileAttributes attributes)throws IOException{
+                        Files.deleteIfExists(file);return FileVisitResult.CONTINUE;
+                    }
+                    @Override public FileVisitResult visitFileFailed(Path file,IOException error)throws IOException{
+                        if(error instanceof NoSuchFileException)return FileVisitResult.CONTINUE;
+                        throw error;
+                    }
+                    @Override public FileVisitResult postVisitDirectory(Path folder,IOException error)throws IOException{
+                        if(error!=null&&!(error instanceof NoSuchFileException))throw error;
+                        Files.deleteIfExists(folder);return FileVisitResult.CONTINUE;
+                    }
+                });
             }catch(IOException e){
                 var cleanup=new IllegalStateException("Failed to remove temporary scene assets",e);
                 if(failure!=null)failure.addSuppressed(cleanup);else throw cleanup;

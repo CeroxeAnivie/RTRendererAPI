@@ -60,5 +60,6 @@
     "7.1.4": "snapshots/22b55f2a9020aaf8eecdca8e23c7c0c176be932c895c9d4bdb1d9e197ed600f7.abi",
     "7.1.5": "snapshots/22b55f2a9020aaf8eecdca8e23c7c0c176be932c895c9d4bdb1d9e197ed600f7.abi",
     "7.1.6": "snapshots/22b55f2a9020aaf8eecdca8e23c7c0c176be932c895c9d4bdb1d9e197ed600f7.abi",
-    "7.1.7": "snapshots/22b55f2a9020aaf8eecdca8e23c7c0c176be932c895c9d4bdb1d9e197ed600f7.abi"
+    "7.1.7": "snapshots/22b55f2a9020aaf8eecdca8e23c7c0c176be932c895c9d4bdb1d9e197ed600f7.abi",
+    "7.2.1": "snapshots/16d0c753bb7adc5e7538843d39b62285ebc93cf8c0f0dde02d8e088db3ee6571.abi"
 }

@@ -18,7 +18,9 @@ public final class RtxptNativeLightingCompactContractSelfTest {
         var v2=Arrays.copyOf(v1,22);v2[0]=2;v2[17]=4;v2[18]=48*32*4;v2[20]=1;v2[21]=Integer.toUnsignedLong(Float.floatToRawIntBits(2.5f));
         var compact=new RtxptLightingFrameLease(0,v2).frame();
         require(compact.encoding()==NativeLightingPlan.Encoding.COMPACT_UNORM8&&compact.maximumGi()==2.5f&&compact.planes().getFirst().format()==LightingFrameLease.Format.RGBA8_UNORM,"Encoding, decode scale and exact format are packet facts");
-        var invalid=v2.clone();invalid[20]=2;reject(()->new RtxptLightingFrameLease(0,invalid));
+        var response=v2.clone();response[20]=2;
+        require(new RtxptLightingFrameLease(0,response).frame().encoding()==NativeLightingPlan.Encoding.COMPACT_RESPONSE_UNORM8,"Response encoding retains its exact packet identity");
+        var invalid=v2.clone();invalid[20]=3;reject(()->new RtxptLightingFrameLease(0,invalid));
         reject(()->new RtxptLightingFrameLease(0,Arrays.copyOf(v2,21)));
         System.out.println("NATIVE_LIGHTING_COMPACT_CONTRACT PASS legacyHDR=true v1=true v2=true maxGi=2.5 format=RGBA8_UNORM");
     }

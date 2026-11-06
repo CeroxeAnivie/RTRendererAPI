@@ -1,4 +1,5 @@
 #include "rtxpt_sparse_regions.h"
+#include "rtxpt_upload_retention.h"
 #include "rtxpt_upload_ranges.h"
 #include <iostream>
 #include <random>
@@ -67,6 +68,16 @@ struct UploadOracle {
     }
 };
 int main(){try{
+    uint64_t page=0,remaining=0,allocations=0,bytes=0;
+    for(uint64_t copied=0;copied<18*1024*1024;copied+=4096){
+        if(remaining<4096){page=RtrUploadRetention::NextChunkSize(65536,page,allocations!=0);remaining=page;++allocations;bytes+=page;}
+        remaining-=4096;
+    }
+    Check(allocations<=24&&bytes<19*1024*1024,"Adaptive upload did not amortize a long recording");
+    Check(RtrUploadRetention::NextChunkSize(65536,0,false)==65536,"Small uploads grew before exhausting a page");
+    Check(RtrUploadRetention::NextChunkSize(65536,1024*1024,false)==65536,"A new recording inherited an oversized upload page");
+    Check(RtrUploadRetention::NextChunkSize(16*1024*1024,0,true)==16*1024*1024,"Existing large default chunk changed");
+    std::cout<<"ADAPTIVE_UPLOAD_CPU PASS cold18MiBOldAllocations=288 newAllocations="<<allocations<<" allocatedBytes="<<bytes<<" maximumAdaptivePage=1048576 warmBytes="<<RtrUploadRetention::WarmBytes<<"\n";
     std::mt19937 rng(719);std::uniform_real_distribution<float> coordinate(-96,96);std::vector<Light> lights;
     for(int i=0;i<25000;i++){Light l;l.positionType={coordinate(rng),coordinate(rng)*.25f,coordinate(rng),1};l.directionRange[3]=1+float(i%15);lights.push_back(l);}
     rtr::RetainedLightTree tree;double normalization;tree.Rebuild(lights,&normalization);RtrSparseRegions regions;UploadOracle upload;
@@ -94,7 +105,9 @@ int main(){try{
     Check(regions.dirtyNodes.empty()&&!regions.full,"Color/intensity-only update wrote regional data");upload.Apply(regions);Check(upload.bytes==0,"Color-only regional upload was nonzero");
     std::vector<Light> pair(2);pair[0].positionType={1,1,1,1};pair[1].positionType={2,1,1,1};for(auto& l:pair)l.directionRange[3]=1;
     tree.Rebuild(pair,&normalization);query=Query(tree,pair);regions.Update(tree,query,true,{},true);upload.Apply(regions);auto builds=regions.work[0];
+    const auto pairMemberships=regions.membershipBuilds;
     dirty.clear();pair[0].positionType[0]+=.001f;tree.Refit(pair,0,normalization,dirty);query=Query(tree,pair);regions.Update(tree,query,true,dirty);
+    Check(regions.membershipBuilds==pairMemberships,"Bounds-only refit rebuilt retained root members");
     Check(regions.work[0]==builds&&!regions.dirty&&regions.dirtyNodes.empty(),"Unchanged coverage repacked regional index");upload.Apply(regions);
     regions.Update(tree,query,false,{});Check(!regions.buckets&&regions.packed.empty(),"Disable/reset retained regional data");
     std::vector<Light> distant(8);for(size_t i=0;i<distant.size();++i){distant[i].positionType={float(i)*5000,0,0,1};distant[i].directionRange[3]=15;}
@@ -105,10 +118,12 @@ int main(){try{
     Check(regions.global.size()==1&&tree.nodes[regions.global.front()].light>=0,"Huge leaf needs one exact global fallback");Oracle(regions,tree,distant,{12345,0,0});
     std::vector<Light> traveler(1);traveler[0].positionType={1,1,1,1};traveler[0].directionRange[3]=1;
     tree.Rebuild(traveler,&normalization);query=Query(tree,traveler);regions.Update(tree,query,true,{},true);upload.Apply(regions);auto initialPacks=regions.fullPacks;
+    const auto travelMemberships=regions.membershipBuilds;
     for(int step=0;step<256;step++){
         dirty.clear();traveler[0].positionType[0]=float(step)*24+1;tree.Refit(traveler,0,normalization,dirty);query=Query(tree,traveler);regions.Update(tree,query,true,dirty);upload.Apply(regions);
         Oracle(regions,tree,traveler,{traveler[0].positionType[0],1,1});Check(regions.tombstones<=std::max(8u,regions.buckets/8),"Travel left excessive hash tombstones");}
     Check(regions.fullPacks==initialPacks&&regions.tombstones==0,"Ordinary travel rebuilt or retained hash tombstones");
+    Check(regions.membershipBuilds==travelMemberships,"Moving unchanged topology rebuilt root ownership");
     // Oversized hash and GPU reservations are legitimate retained capacities.
     // Grow the list pool inside these capacities with root id0 in every cell.
     traveler[0].positionType={1,1,1,1};traveler[0].directionRange[3]=1;tree.Rebuild(traveler,&normalization);query=Query(tree,traveler);regions.Update(tree,query,true,{},true);
