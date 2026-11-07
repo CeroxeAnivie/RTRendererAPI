@@ -22,3 +22,18 @@ The bridge retains the native scene, material baker, BLAS/TLAS builders and uplo
 - Final publication and consumer validation remain pending at this source checkpoint.
 
 The second same-frame native Scene::Refresh is retained where the staged pose and SubgraphPrevTransforms lifecycle requires it. Copying private native packing or previous-transform algorithms to suppress this call would expand maintenance and break ownership. Newly registered materials and actual graph topology remain visible limits, not claimed eliminated work.
+
+## Final candidate checks
+
+The final weak dependency implementation passed the 46-frame lifecycle/registry contract, the 11-frame geometry/mixed-sampler/unused-material contract, and the 20-frame shared-material mutation contract. Related policy updates touch exactly two users and read a shared material policy once; opacity touches those users with zero policy reads; RGB, transmission, roughness, emission and pixel-only updates do neither. Keys, layouts and corner repacking remain unchanged.
+
+The per-packet new-material gate is now evaluated against final users, and each mesh is classified against its own changed domains. Actual domain changes use the original complete AS rebuild once, without an extra deformation prebuild.
+
+| Profile | Movement full refresh old/new | TLAS allocation old/new | Fresh old/new |
+| --- | ---: | ---: | ---: |
+| medium | 5/0 | 5/0 | 466/466 |
+| fast | 8/3 | 8/0 | 466/466 |
+
+Detailed mean/P95/P99/max observations and initial GPU samples are in data/scene-incremental-comparison.json. These measurements do not certify application FPS. The first medium baseline had 466 fresh frames and exit zero but its compiler-guard log was absent, so that wrapper result was kept as failed; the complete retry is used here.
+
+The original UpdateTLAS still owns its per-frame GPU culling/build behavior. Allocation reuse does not mean every native GPU TLAS build was removed. Its original Baker is also required by native AS flags and SceneRenderCache/SubInstanceData, even though the independent lighting shader reads Donut MaterialConstants. Private native algorithms are not duplicated to bypass these dependencies.

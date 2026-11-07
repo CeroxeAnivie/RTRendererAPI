@@ -1,0 +1,658 @@
+{
+  "schema": "scene-incremental-comparison-v1",
+  "fixturesSameClassBytes": 12,
+  "serialRuns": true,
+  "records": [
+    {
+      "profile": "medium",
+      "sameInput": true,
+      "freshOld": 466,
+      "freshNew": 466,
+      "baselineGpu": [
+        43.0,
+        46.0,
+        44.0
+      ],
+      "currentGpu": [
+        46.0,
+        38.0,
+        45.0
+      ],
+      "absoluteComparisonAllowed": false,
+      "operations": [
+        {
+          "phase": "stationary",
+          "stage": "SceneFullRefresh",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "stationary",
+          "stage": "Materials",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "stationary",
+          "stage": "TlasAllocate",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "stationary",
+          "stage": "BlasBuild",
+          "old": 30,
+          "new": 30,
+          "delta": 0,
+          "percent": 0.0
+        },
+        {
+          "phase": "stationary",
+          "stage": "ResourceIndex",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "movement",
+          "stage": "SceneFullRefresh",
+          "old": 5,
+          "new": 0,
+          "delta": -5,
+          "percent": -100.0
+        },
+        {
+          "phase": "movement",
+          "stage": "Materials",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "movement",
+          "stage": "TlasAllocate",
+          "old": 5,
+          "new": 0,
+          "delta": -5,
+          "percent": -100.0
+        },
+        {
+          "phase": "movement",
+          "stage": "BlasBuild",
+          "old": 180,
+          "new": 180,
+          "delta": 0,
+          "percent": 0.0
+        },
+        {
+          "phase": "movement",
+          "stage": "ResourceIndex",
+          "old": 95,
+          "new": 5,
+          "delta": -90,
+          "percent": -94.73684210526316
+        }
+      ],
+      "latencies": [
+        {
+          "phase": "stationary",
+          "stage": "apply_to_fresh_wall",
+          "old": {
+            "samples": 30,
+            "mean_ms": 8.690463333333334,
+            "p50_ms": 8.4894,
+            "p95_ms": 10.3551,
+            "p99_ms": 10.6624,
+            "max_ms": 10.6624
+          },
+          "new": {
+            "samples": 30,
+            "mean_ms": 8.488996666666665,
+            "p50_ms": 8.1771,
+            "p95_ms": 9.8706,
+            "p99_ms": 11.928,
+            "max_ms": 11.928
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "stationary",
+          "stage": "Frame",
+          "old": {
+            "samples": 30,
+            "mean_ms": 7.32238,
+            "p50_ms": 7.0408,
+            "p95_ms": 9.1995,
+            "p99_ms": 9.2792,
+            "max_ms": 9.2792,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 30,
+            "mean_ms": 7.07683,
+            "p50_ms": 6.8745,
+            "p95_ms": 8.4355,
+            "p99_ms": 8.9922,
+            "max_ms": 8.9922,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "stationary",
+          "stage": "ResourcePlan",
+          "old": {
+            "samples": 30,
+            "mean_ms": 0.5760133333333334,
+            "p50_ms": 0.628,
+            "p95_ms": 1.6759,
+            "p99_ms": 1.6777,
+            "max_ms": 1.6777,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 30,
+            "mean_ms": 0.25521666666666665,
+            "p50_ms": 0.1922,
+            "p95_ms": 0.6211,
+            "p99_ms": 1.7862,
+            "max_ms": 1.7862,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "stationary",
+          "stage": "ResourceIndex",
+          "old": null,
+          "new": null,
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "stationary",
+          "stage": "SceneFullRefresh",
+          "old": null,
+          "new": null,
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "apply_to_fresh_wall",
+          "old": {
+            "samples": 180,
+            "mean_ms": 18.464773333333333,
+            "p50_ms": 18.3119,
+            "p95_ms": 25.737,
+            "p99_ms": 27.5921,
+            "max_ms": 34.4917
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 17.580894444444443,
+            "p50_ms": 17.1041,
+            "p95_ms": 22.5124,
+            "p99_ms": 25.1933,
+            "max_ms": 29.8144
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "Frame",
+          "old": {
+            "samples": 180,
+            "mean_ms": 12.479882777777778,
+            "p50_ms": 12.4934,
+            "p95_ms": 18.4634,
+            "p99_ms": 21.6411,
+            "max_ms": 26.9626,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 11.095687222222223,
+            "p50_ms": 10.7846,
+            "p95_ms": 14.7729,
+            "p99_ms": 17.3348,
+            "max_ms": 19.2732,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "ResourcePlan",
+          "old": {
+            "samples": 180,
+            "mean_ms": 0.6930727777777778,
+            "p50_ms": 0.6351,
+            "p95_ms": 1.3787,
+            "p99_ms": 1.6032,
+            "max_ms": 2.0034,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 0.6940538888888889,
+            "p50_ms": 0.5869,
+            "p95_ms": 1.4038,
+            "p99_ms": 1.8036,
+            "max_ms": 2.2432,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "ResourceIndex",
+          "old": {
+            "samples": 180,
+            "mean_ms": 0.124635,
+            "p50_ms": 0.0291,
+            "p95_ms": 0.0658,
+            "p99_ms": 2.8287,
+            "max_ms": 7.4546,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 0.10100555555555556,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 3.6904,
+            "max_ms": 4.6181,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "SceneFullRefresh",
+          "old": {
+            "samples": 180,
+            "mean_ms": 0.13635777777777777,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 5.2219,
+            "max_ms": 5.2778,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": null,
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        }
+      ]
+    },
+    {
+      "profile": "fast",
+      "sameInput": true,
+      "freshOld": 466,
+      "freshNew": 466,
+      "baselineGpu": [
+        29.0,
+        28.0,
+        28.0
+      ],
+      "currentGpu": [
+        49.0,
+        51.0,
+        41.0
+      ],
+      "absoluteComparisonAllowed": false,
+      "operations": [
+        {
+          "phase": "stationary",
+          "stage": "SceneFullRefresh",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "stationary",
+          "stage": "Materials",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "stationary",
+          "stage": "TlasAllocate",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "stationary",
+          "stage": "BlasBuild",
+          "old": 30,
+          "new": 30,
+          "delta": 0,
+          "percent": 0.0
+        },
+        {
+          "phase": "stationary",
+          "stage": "ResourceIndex",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "movement",
+          "stage": "SceneFullRefresh",
+          "old": 8,
+          "new": 3,
+          "delta": -5,
+          "percent": -62.5
+        },
+        {
+          "phase": "movement",
+          "stage": "Materials",
+          "old": 0,
+          "new": 0,
+          "delta": 0,
+          "percent": null
+        },
+        {
+          "phase": "movement",
+          "stage": "TlasAllocate",
+          "old": 8,
+          "new": 0,
+          "delta": -8,
+          "percent": -100.0
+        },
+        {
+          "phase": "movement",
+          "stage": "BlasBuild",
+          "old": 363,
+          "new": 363,
+          "delta": 0,
+          "percent": 0.0
+        },
+        {
+          "phase": "movement",
+          "stage": "ResourceIndex",
+          "old": 97,
+          "new": 8,
+          "delta": -89,
+          "percent": -91.75257731958763
+        }
+      ],
+      "latencies": [
+        {
+          "phase": "stationary",
+          "stage": "apply_to_fresh_wall",
+          "old": {
+            "samples": 30,
+            "mean_ms": 7.045516666666667,
+            "p50_ms": 6.6349,
+            "p95_ms": 10.4751,
+            "p99_ms": 13.0718,
+            "max_ms": 13.0718
+          },
+          "new": {
+            "samples": 30,
+            "mean_ms": 7.458763333333333,
+            "p50_ms": 7.1606,
+            "p95_ms": 8.8541,
+            "p99_ms": 12.7746,
+            "max_ms": 12.7746
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "stationary",
+          "stage": "Frame",
+          "old": {
+            "samples": 30,
+            "mean_ms": 5.84886,
+            "p50_ms": 5.5554,
+            "p95_ms": 7.7822,
+            "p99_ms": 12.0675,
+            "max_ms": 12.0675,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 30,
+            "mean_ms": 6.181133333333333,
+            "p50_ms": 5.9234,
+            "p95_ms": 7.8546,
+            "p99_ms": 9.6468,
+            "max_ms": 9.6468,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "stationary",
+          "stage": "ResourcePlan",
+          "old": {
+            "samples": 30,
+            "mean_ms": 0.3263233333333333,
+            "p50_ms": 0.1807,
+            "p95_ms": 0.7538,
+            "p99_ms": 0.7807,
+            "max_ms": 0.7807,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 30,
+            "mean_ms": 0.3592633333333333,
+            "p50_ms": 0.1963,
+            "p95_ms": 1.0211,
+            "p99_ms": 1.162,
+            "max_ms": 1.162,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "stationary",
+          "stage": "ResourceIndex",
+          "old": null,
+          "new": null,
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "stationary",
+          "stage": "SceneFullRefresh",
+          "old": null,
+          "new": null,
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "apply_to_fresh_wall",
+          "old": {
+            "samples": 180,
+            "mean_ms": 21.942082222222226,
+            "p50_ms": 18.8661,
+            "p95_ms": 29.6362,
+            "p99_ms": 176.9853,
+            "max_ms": 181.9557
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 16.969294444444444,
+            "p50_ms": 14.216,
+            "p95_ms": 20.1614,
+            "p99_ms": 152.3965,
+            "max_ms": 163.8029
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "Frame",
+          "old": {
+            "samples": 180,
+            "mean_ms": 14.66506,
+            "p50_ms": 13.4379,
+            "p95_ms": 21.9304,
+            "p99_ms": 122.8902,
+            "max_ms": 150.645,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 11.847189444444444,
+            "p50_ms": 9.9983,
+            "p95_ms": 13.6209,
+            "p99_ms": 139.2975,
+            "max_ms": 143.6363,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "ResourcePlan",
+          "old": {
+            "samples": 180,
+            "mean_ms": 0.647905,
+            "p50_ms": 0.5853,
+            "p95_ms": 1.311,
+            "p99_ms": 1.6575,
+            "max_ms": 1.714,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 0.4821288888888889,
+            "p50_ms": 0.5805,
+            "p95_ms": 1.0292,
+            "p99_ms": 1.4295,
+            "max_ms": 1.452,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "ResourceIndex",
+          "old": {
+            "samples": 180,
+            "mean_ms": 0.22772,
+            "p50_ms": 0.0207,
+            "p95_ms": 0.1207,
+            "p99_ms": 6.7373,
+            "max_ms": 6.8096,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 0.18595888888888887,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 6.5762,
+            "max_ms": 7.0747,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        },
+        {
+          "phase": "movement",
+          "stage": "SceneFullRefresh",
+          "old": {
+            "samples": 180,
+            "mean_ms": 0.8781383333333334,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 38.5543,
+            "max_ms": 59.0799,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "new": {
+            "samples": 180,
+            "mean_ms": 0.8564361111111112,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 52.8685,
+            "max_ms": 52.9862,
+            "unmatched_event_frame_identities": 0,
+            "aggregation": "sum of same-stage events per native sequence/revision; different stages are not added",
+            "zero_work_frames_included": true,
+            "cpu_unavailable_work_frames_excluded": false
+          },
+          "meaning": "observation; no gain claim when initial GPU >10%"
+        }
+      ]
+    }
+  ]
+}

@@ -196,7 +196,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
         System.out.println("BRIDGE_MIGRATION PASS frames="+FRAMES+" noOpGenerations=true rectangleParents=true samplerMetadata=true samplerPixels=true mixedAttributes=true mixedTopology=true denseReindex=true maskedScalarPixels=true independentMonitors=true diagnosticOff=true retainedLease=true poseFastPathFrames=3 materialRegistryFrames=3");
     }
 
-    /** Seven fresh frames: deformation, index edits and growth/shrink keep graph identity. */
+    /** Eleven fresh frames: unrelated publications cannot turn geometry into topology. */
     private static void checkDeformationContract(Path output) throws Exception {
         var rows=new ArrayList<String>();
         rows.add("sequence,case,apply_to_fresh_ms,materials_events,blas_events,attribute_events,native_events");
@@ -209,7 +209,8 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             var handleField=RtxptRenderer.class.getDeclaredField("handle");handleField.setAccessible(true);
             var camera=CameraState.lookAt(0,0,3,0,0,0).build();
             renderer.apply(SceneTransaction.builder(1).resetScene()
-                    .upsert(MaterialAsset.builder(2).doubleSided(true).build())
+                    .upsert(texture(opaquePixels(),false))
+                    .upsert(MaterialAsset.builder(2).baseColorTextureId(TEXTURE).doubleSided(true).build())
                     .upsert(deformationMesh(0,false)).upsert(SceneInstance.builder(22,2).build()).build());
             publish(lighting,1);
             renderer.submit(RenderFrameRequest.builder(1,SIZE,SIZE,camera).minimumSceneRevision(1).build());
@@ -221,14 +222,19 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             var monitor=access.nativeDiagnosticMonitor();monitor.poll();
             double[] previous=RtxptNative.meshResourceState(handle,"i22");
             double[] stableMetadata=RtxptNative.lightingMetadataState(handle,"i22",meshName(2)+":0");
-            for(int sequence=2;sequence<=7;sequence++) {
+            double previousPolicy=stableMetadata[4];
+            for(int sequence=2;sequence<=11;sequence++) {
                 boolean reshaped=sequence==4||sequence==5||sequence==7;
-                boolean subdivided=sequence==5||sequence==6,away=sequence==2||sequence==5;
+                boolean mixedSampler=sequence==8||sequence==9;
+                boolean subdivided=sequence==5||sequence==6,away=sequence==2||sequence==5||sequence==8||sequence==10;
                 long[] commandsBefore=RtxptNative.commandWorkState(handle);
                 long[] metadataBefore=RtxptNative.lightingMetadataWork(handle);
                 long begin=System.nanoTime();
-                renderer.apply(SceneTransaction.builder(sequence).upsert(subdivided
-                        ?subdividedMesh(away?3:0):deformationMesh(away?3:0,sequence==4)).build());
+                var update=SceneTransaction.builder(sequence).upsert(subdivided
+                        ?subdividedMesh(away?3:0):deformationMesh(away?3:0,sequence==4));
+                if(mixedSampler)update.upsert(texture(opaquePixels(),sequence==8));
+                if(sequence>=10)update.upsert(MaterialAsset.builder(999).roughness(sequence==10?.3f:.7f).build());
+                renderer.apply(update.build());
                 publish(lighting,sequence);
                 renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,camera).minimumSceneRevision(sequence).build());
                 access.awaitIdle();
@@ -241,7 +247,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 require(materials==0&&blas>0,"Geometry edit lost its native BLAS build or reimported materials");
                 require(full==0&&tlas==0&&attributes>0,"Stable graph edit rebuilt the whole native scene/TLAS");
                 require(previous[1]!=current[1],"Geometry edit omitted its new immutable vertex input");
-                if(sequence==3||sequence==6)
+                if(sequence==3||sequence==6||mixedSampler||sequence>=10)
                     require(previous[0]==current[0],"Same-layout deformation failed to reuse the ordinary native BLAS");
                 if(reshaped)require(previous[0]!=current[0],"Changed geometry input retained an incompatible BLAS");
                 double[] metadata=RtxptNative.lightingMetadataState(handle,"i22",meshName(2)+":0");
@@ -251,12 +257,18 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 long[] metadataAfter=RtxptNative.lightingMetadataWork(handle);
                 require(metadataAfter.length==11&&metadataAfter[0]==metadataBefore[0],
                         "Stable geometry edit rebuilt its cached attribute identity keys");
-                require(metadataAfter[1]==metadataBefore[1],
-                        "Geometry-only edit needlessly re-read unchanged material sampling policies");
+                if(mixedSampler) {
+                    require(metadataAfter[1]>metadataBefore[1]&&metadata[4]!=previousPolicy,
+                            "Mixed sampler/deformation lost its real sampling-policy update");
+                } else require(metadataAfter[1]==metadataBefore[1],
+                            "Geometry-only edit needlessly re-read unchanged material sampling policies");
+                previousPolicy=metadata[4];
                 long[] after=RtxptNative.commandWorkState(handle);
                 require(after[7]-commandsBefore[7]==1&&after[8]==commandsBefore[8],"Geometry edit did not execute exactly one lean frame");
                 String name=sequence==4?"geometry-index-reorder":sequence==5?"geometry-grow-away":
-                        sequence==6?"geometry-grown-back":sequence==7?"geometry-shrink-back":away?"deformation-away":"deformation-back";
+                        sequence==6?"geometry-grown-back":sequence==7?"geometry-shrink-back":
+                        sequence==8?"sampler-deformation-away":sequence==9?"sampler-deformation-back":
+                        sequence==10?"unused-material-deformation-away":sequence==11?"unused-material-deformation-back":away?"deformation-away":"deformation-back";
                 Path image=output.resolve(name+".pfm");
                 RtxptNative.nativeLightingCapture(handle,image.toString(),2);checkCenterGeometry(image,!away);
                 rows.add(sequence+","+name+","+elapsed+","+materials+","+blas+","+attributes+","+snapshot.events().size());
@@ -264,7 +276,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 System.out.println("BRIDGE_DEFORMATION sequence="+sequence+" case="+name+" fullRefresh="+full+" tlasAllocate="+tlas+" PASS");
             }
         }finally {Files.write(output.resolve("deformation-cases.csv"),rows,StandardCharsets.UTF_8);}
-        System.out.println("BRIDGE_DEFORMATION PASS frames=7 freshPixels=true stableIdentity=true blasReuse=true geometryResize=true indexReorder=true");
+        System.out.println("BRIDGE_DEFORMATION PASS frames=11 freshPixels=true stableIdentity=true blasReuse=true geometryResize=true indexReorder=true mixedSampler=true unusedMaterial=true");
     }
     private static MeshAsset subdividedMesh(float x) {
         return MeshAsset.builder(2,new float[]{x-1,-1,0,x+1,-1,0,x+1,1,0,x-1,1,0,x,0,0},

@@ -483,7 +483,10 @@ public:
                 retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
                 if(!retainRemoved){RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();}
             });
-        if(!changed.deformedMeshes.empty()||!changed.reshapedMeshes.empty())RefreshDeformedDirectStructures(changed,commands);
+        // A real domain edit below requires the original complete AS rebuild.
+        // Do not build unrelated stable meshes once here and again in that pass.
+        if(!changed.materialDomainsChanged&&(!changed.deformedMeshes.empty()||!changed.reshapedMeshes.empty()))
+            RefreshDeformedDirectStructures(changed,commands);
         if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty()
             ||!changed.retiredStructures.empty()||!changed.retiredTextures.empty())){
             if(m_resourceRetirement.size()>=64){GetDevice()->waitForIdle();m_resourceRetirement.clear();}
@@ -538,8 +541,8 @@ public:
                 }
             }
         }
-        if (changed.topology || changed.materials || changed.textures || !changed.reshapedMeshes.empty()) lighting.metadataDirty = true;
-        if (changed.materials || changed.textures) lighting.materialMetadataDirty = true;
+        if (changed.topology || !changed.reshapedMeshes.empty()) lighting.metadataDirty = true;
+        lighting.InvalidateMaterialMetadata(changed.materialPolicyChanges,changed.materialOpacityChanges);
         if (changed.topology || changed.transforms || changed.attributes) ++lighting.geometryGeneration;
         if(changed.topology||changed.materials||changed.textures||changed.transforms||changed.attributes)
             m_ui.ResetAccumulation = true;

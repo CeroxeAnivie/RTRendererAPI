@@ -104,6 +104,8 @@ public:
         bool materialDomainsChanged = false;
         bool coverageChanged = false;
         bool requiresCoverageRebuild = false;
+        std::unordered_set<std::string> materialPolicyChanges;
+        std::unordered_set<std::string> materialOpacityChanges;
         std::vector<std::string> retiredInstances;
         std::vector<std::string> retiredGeometries;
     };
@@ -320,18 +322,46 @@ public:
         for(auto i=packet.materials.begin();i!=packet.materials.end();)
             if(auto old=m_materials.find(i->first);old!=m_materials.end()&&SameMaterial(old->second,i->second))i=packet.materials.erase(i);
             else ++i;
+        Changes changes;
+        std::unordered_set<std::string> referencedNewMaterials,domainChangedMaterials;
+        const bool hasNewMaterial=std::any_of(packet.materials.begin(),packet.materials.end(),[&](const auto& entry){
+            return !m_materials.contains(entry.first);
+        });
+        if(hasNewMaterial) {
+            // A new definition can gain graph users only through this packet's
+            // meshes. Resolve their final users after removals and node rebinding;
+            // keep the existing resource ownership/cleanup contract unchanged.
+            std::unordered_set<std::string> publishedMeshes,replacedNodes(packet.removeNodes.begin(),packet.removeNodes.end());
+            for(const auto& node:packet.nodes){publishedMeshes.insert(node.mesh);replacedNodes.insert(node.name);}
+            for(const auto& [name,mesh]:packet.meshes) {
+                bool referenced=publishedMeshes.contains(name);
+                if(!referenced)if(auto users=m_meshNodes.find(name);users!=m_meshNodes.end())
+                    referenced=std::any_of(users->second.begin(),users->second.end(),[&](const auto& node){return !replacedNodes.contains(node);});
+                if(referenced)for(const auto& geometry:mesh->geometries)
+                    if(!m_materials.contains(geometry->material->name))referencedNewMaterials.insert(geometry->material->name);
+            }
+        }
         bool requiresMaterialLifecycle=false;
         for(const auto& [name,entry]:packet.materials) {
             const auto previous=m_materials.find(name);
-            requiresMaterialLifecycle|=previous==m_materials.end()
-                ||previous->second.material->domain!=entry.material->domain;
+            const bool isNew=previous==m_materials.end();
+            const bool domainChanged=!isNew&&previous->second.material->domain!=entry.material->domain;
+            requiresMaterialLifecycle|=isNew?referencedNewMaterials.contains(name):domainChanged;
+            if(domainChanged)domainChangedMaterials.insert(name);
+            if(isNew||previous->second.textures!=entry.textures)changes.materialPolicyChanges.insert(name);
+            if(isNew||previous->second.material->opacity!=entry.material->opacity)changes.materialOpacityChanges.insert(name);
         }
         std::unordered_set<std::string> attributeMeshes,deformedMeshes,reshapedMeshes;
         // Position changes are not graph topology changes when indices, groups,
         // materials and vertex layouts stay identical. The external direct path
         // can rebuild this one native BLAS without replacing its MeshInfo/leaf.
-        const bool allowDeformation=m_externalTextureSampling&&!requiresMaterialLifecycle&&packet.coverage.empty();
+        // This pass evaluates coverage itself; a simultaneous sampler/pixel
+        // delta does not turn an otherwise stable mesh into graph topology.
         for(const auto& [name,mesh]:packet.meshes) {
+            const bool allowDeformation=m_externalTextureSampling
+                &&std::none_of(mesh->geometries.begin(),mesh->geometries.end(),[&](const auto& geometry){
+                    return domainChangedMaterials.contains(geometry->material->name);
+                });
             if(CanUpdateAttributes(name,*mesh))attributeMeshes.insert(name);
             else if(allowDeformation&&CanUpdateAttributes(name,*mesh,true)) {
                 attributeMeshes.insert(name);deformedMeshes.insert(name);
@@ -342,7 +372,6 @@ public:
                 attributeMeshes.insert(name);reshapedMeshes.insert(name);
             }
         }
-        Changes changes;
         changes.attributes=!attributeMeshes.empty();
         // A generation/rectangle publication can contain identical pixels. It
         // still advances the parent-generation contract below, but must not
@@ -352,6 +381,9 @@ public:
             const auto old=m_textures.find(id);
             changes.textures |= old==m_textures.end()||!old->second.SameLayout(texture)
                 ||!texture.unchangedPixels;
+            if(old!=m_textures.end()&&(old->second.u!=texture.u||old->second.v!=texture.v||old->second.filter!=texture.filter))
+                if(auto users=m_textureMaterials.find(id);users!=m_textureMaterials.end())
+                    changes.materialPolicyChanges.insert(users->second.begin(),users->second.end());
         }
         changes.materials = !packet.materials.empty();
         changes.coverageChanged = !packet.coverage.empty();
