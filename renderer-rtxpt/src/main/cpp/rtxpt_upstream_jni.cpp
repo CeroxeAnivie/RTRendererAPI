@@ -459,6 +459,12 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_presentationState(JNIEnv* env,jcla
         const auto state=app.Renderer().PresentationState();result.assign(state.begin(),state.end());
     });return LongArray(env,result);}catch(const std::exception& error){Throw(env,error);return nullptr;}
 }
+extern "C" JNIEXPORT jstring JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frameStatistics(JNIEnv* env,jclass,jlong handle) {
+    try {std::string value;Get(handle)->session->Invoke([&](auto& app){value=app.Renderer().GetFPSInfo();});
+        return env->NewStringUTF(value.c_str());}
+    catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_exposure(JNIEnv* env,jclass,jlong handle,jfloat compensation) {
     try {

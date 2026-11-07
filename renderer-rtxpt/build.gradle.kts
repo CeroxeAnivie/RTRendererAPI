@@ -109,6 +109,8 @@ val runtimeDigest = tasks.register("hashRtxptRuntime") {
     }
 }
 tasks.named<Jar>("jar") {
+    // The native ZIP is already compressed. Avoid a second multi-gigabyte deflate.
+    entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
     dependsOn(runtimeDigest)
     from(layout.buildDirectory.dir("native-package")) {
         include("rtxpt-runtime.zip", "rtxpt-runtime.sha256")

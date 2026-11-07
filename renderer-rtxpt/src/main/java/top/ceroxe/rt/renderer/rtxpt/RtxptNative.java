@@ -33,6 +33,7 @@ final class RtxptNative {
     static native void denoiser(long handle,boolean relax);
     static native int denoiserState(long handle);
     static native long[] renderingState(long handle);
+    static native String frameStatistics(long handle);
     static native double[] instanceTransformState(long handle,String instance);
     static native long[] windowState(long handle);
     static native void overlayText(long handle,String text);

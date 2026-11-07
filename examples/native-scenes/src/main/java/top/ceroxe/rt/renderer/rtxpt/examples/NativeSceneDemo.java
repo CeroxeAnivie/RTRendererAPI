@@ -91,7 +91,7 @@ public final class NativeSceneDemo {
             access.diagnosticLevel(config.diagnostics());
             access.setWindowTitle(NativeSceneHud.title(animated));
             access.setOverlayChoices(NativeSceneHud.choices(animated), NativeSceneHud.selection(animated, material, preset));
-            access.setOverlayText(NativeSceneHud.text(animated, material, preset, null, null, null, null, null, null));
+            access.setOverlayText(NativeSceneHud.text(animated, material, preset, null, null, null, null, null, null, null));
             physics = animated ? new BouncingBallPhysics() : null;
             long previousClock = -1;
             long readyAt = 0;
@@ -185,7 +185,7 @@ public final class NativeSceneDemo {
                     stats.observeNative(access, sequence);
                     access.setOverlayText(NativeSceneHud.text(animated, material, preset, stats.hudNativeFps(finished),
                             stats.nativeWindow, stats.nativePresentation, stats.nativeExposure, stats.nativeDenoiser,
-                            stats.nativeRendering));
+                            stats.nativeRendering, access.frameStatistics()));
                     stats.hudUpdates++;
                     hudAt = finished;
                 }

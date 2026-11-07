@@ -32,15 +32,17 @@ final class NativeSceneHud {
 
     static String text(boolean balls, BouncingBallScene.BallMaterial material, String preset,
             Double nativeSubmitFps, RtxptAccess.WindowState window, RtxptAccess.PresentationState presentation,
-            RtxptAccess.ExposureState exposure, RtxptAccess.Denoiser denoiser, RtxptAccess.RenderingState rendering) {
+            RtxptAccess.ExposureState exposure, RtxptAccess.Denoiser denoiser, RtxptAccess.RenderingState rendering,
+            String upstreamFrameStatistics) {
         String version = Renderer.class.getPackage().getImplementationVersion();
         var text = new StringBuilder("RTRendererAPI");
         if (version != null && !version.isBlank()) text.append(' ').append(version);
         text.append('\n').append(window == null ? "OUTPUT NOT MEASURED"
                 : String.format(Locale.ROOT, "%dx%d", window.displayWidth(), window.displayHeight()));
-        text.append(" | NATIVE FPS ").append(rate(nativeSubmitFps))
-                .append(" | PRESENT/GEN N/A")
-                .append("\nGPU RENDER TIME: N/A")
+        text.append("\nRTXPT: ").append(upstreamFrameStatistics == null || upstreamFrameStatistics.isBlank()
+                        ? "WARMING UP" : upstreamFrameStatistics)
+                .append("\nAPI COMPLETED SUBMIT FPS: ").append(rate(nativeSubmitFps))
+                .append("\nGPU TIME: native Tracy capture; not a HUD counter")
                 .append("\nDLSS SR: ").append(reconstruction(rendering, false))
                 .append("\nDLAA: ").append(reconstruction(rendering, true))
                 .append("\nNIS: NOT SUPPORTED")
@@ -77,7 +79,7 @@ final class NativeSceneHud {
         else text.append("\nSCENE ").append(preset.toUpperCase(Locale.ROOT)).append(" | ")
                 .append(OpticalMediumScene.description(preset))
                 .append("\n[1] Mixed [2] Glass [3] Nested [4] Absorption [5] Rough [6] IOR [Esc] Quit");
-        return text.append("\nNative mode flags; present/gen FPS not measured").toString();
+        return text.append("\nRTXPT/title share stats; '*' = FG estimate, not measured presents").toString();
     }
 
     private static String generation(RtxptAccess.PresentationState state, boolean multiple) {

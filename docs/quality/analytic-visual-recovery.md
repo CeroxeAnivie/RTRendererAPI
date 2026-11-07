@@ -1,5 +1,7 @@
 # 独立解析光路恢复
 
+> 当前补充：此前 20261107-144150 人工场在尺寸／管线重建后黑屏，不能算通过。API 已修复解析 binding set 引用旧常量缓冲的问题；新尺寸往返 36 帧及默认 FG 弹球隐藏场通过。最新 DLL 为 e7297fea195b9a59ed8821696c9d02b6d4b709a5ccb7b686b86eae10d4c8ecda。完整根因、最新数据、HUD 统计口径及全部历史修复去向见 [历史修复对照](historical-fix-migration.md)。下文旧 DLL／旧场数据保留各自身份，不转签新人工验收。
+
 2026-11-07。视觉实现与验证由主线程完成，未创建 worktree。此后依用户新授权将 API 全部工作合入 main，GitHub 与 Maven Local 8.0.0 已交付，详见 main-branch-consolidation.md。只跑隐藏弹球和独立公共消费者，不启动介质或人工窗口，不用 computer use。
 
 ## 原则与通用接入

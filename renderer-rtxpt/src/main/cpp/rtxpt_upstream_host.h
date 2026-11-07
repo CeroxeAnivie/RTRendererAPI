@@ -404,6 +404,9 @@ private:
             m_adapterShaders=std::make_shared<donut::engine::ShaderFactory>(GetDevice(),fs,GetLocalPath("AdapterShaders"));
         }
         if(!m_analyticBeautyPipeline){
+            // Recreated layouts/constants invalidate the cached binding set even
+            // when the retained light buffer did not change (e.g. output resize).
+            m_analyticBeautyBindings=nullptr;m_analyticBeautyLights=nullptr;
             nvrhi::BindingLayoutDesc layout;layout.visibility=nvrhi::ShaderType::Compute;layout.registerSpace=3;
             layout.bindings={nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0)};
             m_analyticBeautyLayout=GetDevice()->createBindingLayout(layout);

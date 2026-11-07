@@ -337,6 +337,10 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         if(n<0||n>=Denoiser.values().length)throw new IllegalStateException("Invalid native denoiser state");
         return Denoiser.values()[n];
     }
+    @Override public String frameStatistics(){
+        ready();if(handle==0)throw new IllegalStateException("Submit first");
+        return RtxptNative.frameStatistics(handle);
+    }
     @Override public RenderingState renderingState(){
         ready();if(handle==0)throw new IllegalStateException("Submit first");
         var n=RtxptNative.renderingState(handle);
