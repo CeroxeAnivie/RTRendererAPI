@@ -14,6 +14,14 @@
 #include <vector>
 #include "rtxpt_process_policy.h"
 
+// Hybrid graphics drivers inspect the process executable before creating GL
+// contexts. A JVM-time hint is too late, and OS preferences for an older cache
+// path do not cover a new runtime bundle. These are exports of our own host.
+extern "C" {
+__declspec(dllexport) DWORD NvOptimusEnablement = 1;
+__declspec(dllexport) DWORD AmdPowerXpressRequestHighPerformance = 1;
+}
+
 #if defined(RTXPT_D3D_AGILITY_SDK_VERSION)
 // D3D12 reads Agility selection from the process executable. Use the same SDK
 // selection as upstream; the API DLL does not change the process-wide default.

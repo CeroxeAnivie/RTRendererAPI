@@ -253,6 +253,45 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_meshResourceState(JNIEnv* env,jcla
     }catch(const std::exception& error){Throw(env,error);return nullptr;}
 }
 
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourceWorkState(JNIEnv* env,jclass,jlong handle) {
+    try {
+        std::array<uint64_t,9> state{};
+        Get(handle)->session->Invoke([&](auto& app){state=app.Renderer().ResourceWorkState();});
+        return LongArray(env,std::vector<jlong>(state.begin(),state.end()));
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingMetadataState(
+        JNIEnv* env,jclass,jlong handle,jstring instanceName,jstring geometryName) {
+    try {
+        const auto instance=String(env,instanceName),geometry=String(env,geometryName);
+        std::array<double,17> state{};
+        Get(handle)->session->Invoke([&](auto& app) {
+            const auto& pass=app.Renderer().lighting;
+            const auto slot=pass.instanceSlots.find(instance);
+            const auto mapping=pass.geometryIndices.find(geometry);
+            const auto attributes=pass.geometrySlots.find(geometry);
+            if(slot==pass.instanceSlots.end()||mapping==pass.geometryIndices.end()
+                ||attributes==pass.geometrySlots.end())
+                throw std::invalid_argument("No published lighting metadata for the requested identities");
+            const auto& value=attributes->second;
+            state[0]=slot->second;state[1]=mapping->second.index;
+            state[2]=value.offset;state[3]=value.triangles;
+            for(size_t i=0;i<4;++i)state[4+i]=value.texturePolicies[i];
+            state[8]=value.maskedOpacity;
+            const auto found=pass.instanceAttributes.find(instance);
+            const auto roles=found==pass.instanceAttributes.end()
+                ?RtrNativeLightingPass::InstanceAttributes{}:found->second;
+            for(size_t i=0;i<4;++i){state[9+i]=roles.rolesVisibility[i];state[13+i]=roles.baseline[i];}
+        });
+        auto result=env->NewDoubleArray(static_cast<jsize>(state.size()));
+        if(result)env->SetDoubleArrayRegion(result,0,static_cast<jsize>(state.size()),state.data());
+        return result;
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesMemory(JNIEnv* env, jclass, jlong handle, jlong, jobject packet) {
     try {

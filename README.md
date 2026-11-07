@@ -43,9 +43,11 @@ Renderer 核心只保留生命周期、SceneTransaction 的 apply／submit 与�
 
 ## 诊断与验证
 
+通用流式负载入口为 [Invoke-StreamingSceneLoad.ps1](tools/Invoke-StreamingSceneLoad.ps1)，CPU 入口检查为 [Test-StreamingScenePerformance.ps1](tools/Test-StreamingScenePerformance.ps1)。本轮[分窗结果与三组对照表](docs/quality/streaming-scene-results.md)分别记录完整新包矩阵、同 bytecode 短窗控制与 fast20 前后观测；机器数据见 [streaming-scene-results.json](docs/quality/data/streaming-scene-results.json)。完整移动尚未达到 180，不能将无 tile 跨界短窗的倍数当成完整移动收益。
+
 诊断只记录适配层实际调用边界；RTXPT 官方没有可读取数值的内部 observer 时，明确写“未展开”。RTXPT_FRAME 是包含原生等待的墙钟耗时，不能当成 GPU 忙时，也不能与嵌套耗时相加。[诊断契约](docs/rtxpt-diagnostics.md)说明采集级别、固定容量及游标。
 
-截至 2026-11-07，官方 source 导出的 20 个仓库／4426 个原文件保持原样；构建工作副本允许前述唯一非交互进度补丁，不能再把最终构建概括为“零 patch”。历史生产 29 帧及 beauty 24 帧 proof、此前 CPU／宿主／shader／提取／POM／符号记录均保留各自受测身份。最新两模块 Java 编译及 API 边界检查记录为 12.918s／采集峰值 1.220GB（构建口径，不是客户端内存）；不证明新增控窗逻辑的 GPU 行为或画面效果。完整动态负载、用户人工验收和消费方性能尚未通过。[视觉迁移总账](docs/quality/visual-migration-audit.md)保留 finite fade、coverage、host-primary、full-float 等未恢复缺口；[修复迁移映射](docs/consumer-agent-handoff.md#既有修复的迁移映射)区分保留、原生接管、退役和待验证。
+截至 2026-11-07，官方 source 导出的 20 个仓库／4426 个原文件保持原样；构建工作副本允许前述唯一非交互进度补丁，不能再把最终构建概括为“零 patch”。历史生产 29 帧及 beauty 24 帧 proof、此前 CPU／宿主／shader／提取／POM／符号记录均保留各自受测身份。此前两模块 Java 编译及 API 边界检查记录为 12.918s／采集峰值 1.220GB（构建口径，不是客户端内存）；不证明新增控窗逻辑的 GPU 行为或画面效果。本轮通用分窗负载已通过正确性；完整移动180目标、用户人工验收和消费方整体性能仍未通过。[视觉迁移总账](docs/quality/visual-migration-audit.md)保留 finite fade、coverage、host-primary、full-float 等未恢复缺口；[修复迁移映射](docs/consumer-agent-handoff.md#既有修复的迁移映射)区分保留、原生接管、退役和待验证。
 
 当前人工场景入口为 [examples/native-scenes](examples/native-scenes/README.md)，主类 top.ceroxe.rt.renderer.rtxpt.examples.NativeSceneDemo。先运行 balls，由用户关闭且进程退出后再运行 mixed；目标为 1600×1000 窗口、VSync 关闭、无软件帧上限、请求 2×FG，不自动接管窗口。Java 参数支持 --denoising scene|off|relax|rr；默认 scene 保留场景策略，不能为遮盖差异擅自改去噪或 SPP。光学 --native 必须显式取 true 或 false，balls 不支持 --native true。请求 FG 不等于已激活或呈现帧率，须看真实原生状态；光学场景不宣称体散射。
 

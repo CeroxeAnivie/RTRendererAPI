@@ -14,6 +14,9 @@ public final class RtxptHighFramerateResourcesSelfTest {
     public static void main(String[] args){try{
         var old=new RtxptScene();byte[] pixels=new byte[16*16*4];Arrays.fill(pixels,(byte)255);
         var base=TextureAsset.color(1,16,16,pixels);
+        require(RtxptDelta.alphaEquivalent(base,TextureAsset.color(1,16,16,pixels.clone())),"Full identical generation preserves coverage");
+        var alphaPixels=pixels.clone();alphaPixels[alphaPixels.length-1]=0;
+        require(!RtxptDelta.alphaEquivalent(base,TextureAsset.color(1,16,16,alphaPixels)),"Full generation alpha change is not skipped");
         old.retain(SceneTransaction.builder(1).upsert(base).upsert(MaterialAsset.builder(1).baseColorTextureId(1).normalTextureId(1).build()).build());
         var scene=new RtxptScene(old);scene.retain(SceneTransaction.builder(2).upsert(old.materials.get(1L).toBuilder().roughness(.71f).build()).build());
         var pool=PACKETS;var resident=new HashMap<Long,TextureAsset>();resident.put(1L,base);

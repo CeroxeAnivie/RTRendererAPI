@@ -1,4 +1,166 @@
 {
+  "bridgeReferenceAndTextureWorkDeduplication": {
+    "id": "bridge-reference-and-texture-work-deduplication",
+    "date": "2026-11-07",
+    "version": "8.0.0",
+    "status": "final-correctness-and-split-window-validation-completed-target-not-met-awaiting-publication",
+    "changes": [
+      "Resident mesh tangent checks run only when a previously disabled normal-map requirement is first enabled; all texture-reference and changed-mesh checks remain",
+      "Texture-only bridge transactions omit the redundant SceneFullRefresh and leave the original per-frame Sample Refresh to consume changes",
+      "Exact no-op full and rectangle Decode paths omit full-image copies and duplicate comparisons",
+      "Java full-image ByteBuffer.equals short-circuits an equivalent alpha scan",
+      "Two ReferenceWork counters join seven texture-work counters to report nine actual work quantities"
+    ],
+    "historicalRejectedStrategiesRemainRejected": [
+      "selective-topology-preparation",
+      "source-leaf-frontier",
+      "shader-split",
+      "cross-queue-overlap"
+    ],
+    "upstreamSourceChanged": false,
+    "renderingAlgorithmChanged": false,
+    "qualityReduced": false,
+    "correctness": {
+      "nativeContractLog": "build/reports/bridge-migration-contract-final/stdout.log",
+      "nativeContractFrames": 40,
+      "nativeContractPassed": true,
+      "addedAssertions": [
+        "resident tangent visits=0 and skipped>0",
+        "texture-only SceneFullRefresh=0"
+      ],
+      "preservedChecks": [
+        "GPU pixels",
+        "mixed attributes",
+        "mixed topology",
+        "retained lease",
+        "diagnostic OFF",
+        "BLAS/VB identity"
+      ],
+      "cpuHighFrameratePassed": true,
+      "upstreamPurity": {
+        "repositories": 20,
+        "originalFiles": 4426,
+        "unexpectedChanges": 0
+      }
+    },
+    "performance": {
+      "status": "split-window-results-completed",
+      "cancelledLongControl": {
+        "evidence": "build/reports/bridge-heavy-final/baseline-medium-OFF/cancelled.json",
+        "status": "cancelled-control-window",
+        "elapsedSeconds": 185.0100174,
+        "reason": "Repeated whole-scene material import and acceleration rebuild made the 540-frame control project beyond the 600-second case limit",
+        "notAPass": true,
+        "notACrash": true,
+        "throughputInferred": false
+      },
+      "currentFullMatrix": {
+        "evidenceRoot": "build/reports/bridge-heavy-current-final",
+        "variants": [
+          "current"
+        ],
+        "profiles": [
+          "medium",
+          "fast"
+        ],
+        "diagnosticLevels": [
+          "OFF",
+          "DEEP"
+        ],
+        "cases": 4,
+        "ticks": 60,
+        "movementFrames": 540,
+        "warmupFrames": 30,
+        "stationaryFrames": 90,
+        "scope": "Real regional inflow and the complete current path; no matched completed long baseline",
+        "status": "four-cases-passed",
+        "verifiedFreshFramesPerCase": 661,
+        "movementSimulationFramesPerSecond": {
+          "current-medium-OFF": 105.0315234612415,
+          "current-medium-DEEP": 104.48408949178358,
+          "current-fast-OFF": 97.91369665564346,
+          "current-fast-DEEP": 93.84588409939468
+        },
+        "movementPipelineFramesPerSecond": {
+          "current-medium-OFF": 119.67515376262672,
+          "current-medium-DEEP": 119.9447161476085,
+          "current-fast-OFF": 110.36296375896909,
+          "current-fast-DEEP": 106.18196722268854
+        }
+      },
+      "requiredTables": [
+        "stationary and movement throughput",
+        "optimization work hits",
+        "stage mean and P95"
+      ],
+      "requiredComparisonColumns": [
+        "old",
+        "new",
+        "new minus old",
+        "change percent"
+      ],
+      "regressionsMustRemainVisible": true,
+      "missingValuesAreNotZero": true,
+      "crossWindowPercentageMergeAllowed": false,
+      "targetFramesPerSecond": 180,
+      "targetPassed": false,
+      "resultDocument": "streaming-scene-results.md",
+      "resultData": "streaming-scene-results.json",
+      "matchedShortPair": {
+        "status": "both-passed",
+        "variants": [
+          "baseline-f962-cache",
+          "current"
+        ],
+        "sameBytecode": true,
+        "profile": "fast",
+        "ticks": 2,
+        "movementFrames": 18,
+        "scope": "Texture, pose and source churn only; no tile crossing; does not replace full regional-inflow validation",
+        "evidenceRoot": "build/reports/bridge-heavy-short-control",
+        "testClassHashesMatch": true,
+        "configurationsMatch": true,
+        "actualInputsMatch": true,
+        "verifiedFreshFramesPerCase": 139,
+        "comparisonConclusion": "Large accumulated runtime migration difference on texture/pose/source churn only; no tile crossing and not a per-change ablation"
+      },
+      "fast20Observation": {
+        "status": "both-runs-passed-observation-only",
+        "historicalEvidence": "build/reports/bridge-heavy-fast/current-fast-DEEP/result.json",
+        "sameSemanticsRequired": true,
+        "sameClassClaim": false,
+        "mustRemainSeparateFromOtherWindowLengths": true,
+        "currentEvidence": "build/reports/bridge-heavy-fast-final/current-fast-DEEP/result.json",
+        "configurationMatches": true,
+        "historicalActualFieldsMatch": true,
+        "verifiedFreshFramesPerCase": 219
+      },
+      "offDeepConclusion": "Each level ran once sequentially. Full fast simulation DEEP minus OFF is an observation, not isolated causal diagnostic overhead."
+    },
+    "timingBoundary": "Native Frame is a caller-thread wall interval including waits for resource work on another thread. It is neither pure GPU busy time nor additive with child scopes or Java parent intervals.",
+    "publicationCompleted": false,
+    "threadCpuGranularityMs": 15.625,
+    "zeroThreadCpuSamplesMeanExactZeroCost": false,
+    "finalPackageVerification": {
+      "source": "build/reports/bridge-final-package-verification.json",
+      "sourceSha256": "061a318235144f7ae1b94bf1a135a0e399ca1ec7837dd64a2c568c60b1361405",
+      "success": true,
+      "checksPassed": 398,
+      "precompiledEntries": 150,
+      "precompiledSourceEntries": 236,
+      "dllSha256": "151f86b94fcfa8c869d8d6bc2ecdaf937e28ea476ee3d9f126db28a1c50dce09",
+      "runtimeZipSha256": "118d01b056a3f7e28c76f70257ab56e95d7a18425d2d48e65f1fb3714b78b785",
+      "rtxptJarSha256": "5a9c379e7b41ee6a1b87e265c6de75a8f636688c020d3e7c033dc181c39195b9",
+      "apiJarSha256": "8f7a6c06ccaa3d08c3e7c70eb44fe72ffc84564d25f10202f5ddf1a06541a62c",
+      "jarEmbeddedZipMatchesStandaloneZip": true,
+      "testedDllMatchesPackagedDll": true,
+      "runtimeHotCachePackaged": false,
+      "packageWallSeconds": 120.11,
+      "jobCommitPeakDecimalGb": 1.609,
+      "githubPublicationCompleted": false,
+      "mavenLocalPublicationCompleted": false
+    }
+  },
   "sparseMovementCandidate": {
     "id": "bounded-sparse-upload-and-snapshot-capacity",
     "date": "2026-11-06",

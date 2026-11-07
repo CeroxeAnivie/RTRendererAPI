@@ -183,6 +183,12 @@ public:
         AdvancedPathTracer::SceneUnloading();
     }
     std::array<double,2> MeshResourceState(const std::string& name)const{return m_resources.MeshResourceState(name);}
+    std::array<uint64_t,9> ResourceWorkState()const{
+        const auto& textures=m_resources.TextureWork();
+        const auto& references=m_resources.ReferenceWork();
+        return {textures[0],textures[1],textures[2],textures[3],textures[4],textures[5],textures[6],
+            references[0],references[1]};
+    }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
         if(m_presentationConfigured)ApplyPresentation();
@@ -409,7 +415,7 @@ public:
             throw std::logic_error("In-memory resources require the loaded managed scene");
         RtrDiagnostics::Scope resourceScope(RtrDiagnostics::ResourcePlan);
         PollResourceRetirement();
-        m_resources.SetTextureCache(m_TextureCache);
+        m_resources.SetTextureResources(GetDevice(),m_DescriptorTable);
         auto commands = GetDevice()->createCommandList();
         commands->open();
         bool retainRemoved=false;
@@ -418,13 +424,13 @@ public:
                 retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
                 if(!retainRemoved){RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();}
             });
-        if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty())){
+        if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty()||!changed.retiredTextures.empty())){
             if(m_resourceRetirement.size()>=64){GetDevice()->waitForIdle();m_resourceRetirement.clear();}
             RetiredResources retired;
             retired.graphics=GetDevice()->createEventQuery();retired.compute=GetDevice()->createEventQuery();
             GetDevice()->setEventQuery(retired.graphics,nvrhi::CommandQueue::Graphics);
             GetDevice()->setEventQuery(retired.compute,nvrhi::CommandQueue::Compute);
-            retired.meshes=changed.retiredMeshes;retired.buffers=changed.retiredBuffers;
+            retired.meshes=changed.retiredMeshes;retired.buffers=changed.retiredBuffers;retired.textures=changed.retiredTextures;
             m_resourceRetirement.push_back(std::move(retired));
         }
         for(const auto& name:changed.retiredInstances)lighting.RetireInstance(name);
@@ -438,30 +444,30 @@ public:
                 nvrhi::CommandQueue::Graphics,submitted);
         }
         if (changed.topology || changed.materials || changed.textures) {
-            // The original baker exposes scene-wide reimport rather than an
-            // incremental material-registration API. Reuse that lifecycle; do
-            // not maintain a second PT material table or rebuild SceneLoaded.
+            // Register new/reconfigured materials through the original baker.
+            // A texture publication is not a material-definition publication:
+            // existing PTTexture slots have their own public rebinding contract.
             const auto& currentMaterials=m_scene->GetSceneGraph()->GetMaterials();
             bool materialSetChanged=currentMaterials.size()!=m_importedMaterials.size();
             if(!materialSetChanged)
                 for(const auto& material:currentMaterials)
                     if(!m_importedMaterials.contains(material.get())){materialSetChanged=true;break;}
-            if(changed.materials||changed.textures||materialSetChanged) ReimportMaterials();
+            if(changed.materials||materialSetChanged) ReimportMaterials();
             else if(changed.topology) {
                 InvalidateBindingSet();
                 m_ui.AccelerationStructRebuildRequested=true;
             }
+            if(changed.textures)m_resources.RebindMaterialTextures(GetLocalPath(c_AssetsFolder));
             // These original scene consumers cache geometry-sized state. A
             // host graph edit does not pass through Sample::SceneLoaded again.
-            if(m_ommBaker)m_ommBaker->SceneLoaded(*m_scene);
+            if(m_ommBaker){m_ommBaker->SceneLoaded(*m_scene);m_ui.AccelerationStructRebuildRequested=true;}
             if(m_lightsBaker)m_lightsBaker->SceneReloaded();
             if(auto* sharc=GetSharc())sharc->NotifySceneReloaded();
             // Direct consumers use ordinary, non-OMM BLASes. The sample's
             // scene-wide rebuild discards every pooled handle; its public
             // compactor can instead build just the newly published meshes.
             // Keep policy edits on the original complete rebuild path.
-            if(changed.topology&&!changed.existingMaterialsChanged&&!changed.coverageChanged
-                &&!changed.textures) {
+            if(changed.topology&&!changed.existingMaterialsChanged&&!changed.requiresCoverageRebuild) {
                 if(!RefreshRetainedDirectStructures()){
                     GetDevice()->waitForIdle();m_resourceRetirement.clear();
                 }
@@ -469,7 +475,8 @@ public:
         }
         if (changed.topology || changed.materials || changed.textures) lighting.metadataDirty = true;
         if (changed.topology || changed.transforms || changed.attributes) ++lighting.geometryGeneration;
-        m_ui.ResetAccumulation = true;
+        if(changed.topology||changed.materials||changed.textures||changed.transforms||changed.attributes)
+            m_ui.ResetAccumulation = true;
     }
 
     std::unique_ptr<SampleUI> CreateUI(donut::app::DeviceManager* manager,
@@ -501,6 +508,7 @@ private:
         nvrhi::CommandListHandle commands;
         std::vector<std::shared_ptr<donut::engine::MeshInfo>> meshes;
         std::vector<std::shared_ptr<donut::engine::BufferGroup>> buffers;
+        std::vector<std::shared_ptr<donut::engine::LoadedTexture>> textures;
     };
     std::vector<RetiredResources> m_resourceRetirement;
     void PollResourceRetirement(){

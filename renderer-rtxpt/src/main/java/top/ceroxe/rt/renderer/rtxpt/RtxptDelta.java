@@ -17,7 +17,11 @@ final class RtxptDelta {
             for(int y=0;y<patch.height();y++)for(int x=0;x<patch.width();x++)if(original.get(offset+(patch.y()+y)*stride+(patch.x()+x)*4+3)!=pixels.get(y*patch.rowPitch()+x*4+3))return false;
             return true;
         }
-        var x=a.rgba8();var y=b.rgba8();for(int i=3;i<x.remaining();i+=4)if(x.get(i)!=y.get(i))return false;return true;
+        var x=a.rgba8();var y=b.rgba8();
+        // Exact full-content republishes are common immutable generations. Let
+        // the JDK compare their contiguous bytes before walking alpha channels.
+        if(x.equals(y))return true;
+        for(int i=3;i<x.remaining();i+=4)if(x.get(i)!=y.get(i))return false;return true;
     }
     private static final class Selection {
         final RtxptScene scene;final List<RtxptScene.Item> items;

@@ -21,6 +21,7 @@
 #include <donut/core/vfs/VFS.h>
 #include <donut/engine/Scene.h>
 #include <donut/engine/TextureCache.h>
+#include <donut/engine/DescriptorTableManager.h>
 #include "SampleCommon/ExtendedScene.h"
 #include "Materials/MaterialsBaker.h"
 #include "rtxpt_memory_resources.h"
@@ -50,8 +51,10 @@ public:
 };
 
 // Converts the private, synchronous resource packet into original scene objects.
-// GPU buffers, upload pages, descriptors, BLAS/TLAS and their retirement belong
-// to the original Scene/TextureCache/PathTracer; this class does not manage them.
+// GPU allocation, upload pages, descriptors and AS execution use original
+// Scene/NVRHI/DescriptorTable services. This class only maps authored identities.
+// Immutable texture generations use NVRHI directly: file TextureCache marks its
+// images permanently ShaderResource and cannot represent copy-on-write updates.
 class Resources final {
 public:
     struct Changes {
@@ -62,16 +65,25 @@ public:
         bool attributes = false;
         std::vector<std::shared_ptr<donut::engine::MeshInfo>> retiredMeshes;
         std::vector<std::shared_ptr<donut::engine::BufferGroup>> retiredBuffers;
+        std::vector<std::shared_ptr<donut::engine::LoadedTexture>> retiredTextures;
         bool existingMaterialsChanged = false;
         bool coverageChanged = false;
+        bool requiresCoverageRebuild = false;
         std::vector<std::string> retiredInstances;
         std::vector<std::string> retiredGeometries;
     };
 
-    void SetTextureCache(std::shared_ptr<donut::engine::TextureCache> cache) {
-        m_textureCache = std::move(cache);
+    void SetTextureResources(nvrhi::IDevice* device,
+        std::shared_ptr<donut::engine::DescriptorTableManager> descriptors) {
+        m_textureDevice=device;m_textureDescriptors=std::move(descriptors);
     }
     bool HasInstance(const std::string& name) const { return m_nodes.contains(name); }
+    // Full-upload count/bytes, rectangle count/bytes, GPU-copy bytes, identical
+    // generation count, sampler-only count. Actual commands, not predicted work.
+    const std::array<uint64_t,7>& TextureWork() const {return m_textureWork;}
+    // Old-mesh tangent revalidation visits, and redundant dependency iterations
+    // skipped because the normal-mapping requirement was already satisfied.
+    const std::array<uint64_t,2>& ReferenceWork() const {return m_referenceWork;}
     std::array<double,24> InstanceTransformState(const std::string& name) const {
         auto node=m_nodes.find(name);
         if(node==m_nodes.end())throw std::invalid_argument("Unknown adapter instance: "+name);
@@ -132,13 +144,12 @@ public:
         m_meshes.clear();
         m_meshSources.clear();
         m_materials.clear();
-        if(m_textureCache)for(const auto& [id,texture]:m_textures)
-            if(texture.loaded)m_textureCache->UnloadTexture(texture.loaded);
         m_textures.clear();
         m_meshNodes.clear();
         m_materialMeshes.clear();
         m_textureMaterials.clear();
         m_pendingMaterials.clear();
+        m_pendingTextureMaterials.clear();
         m_pendingTransforms.clear();
         m_graph.reset();
     }
@@ -188,6 +199,27 @@ public:
         m_pendingMaterials.clear();
     }
 
+    // Existing texture identities do not change a PT material's shader features.
+    // Rebind through the public PTTexture adapter and GPUDataDirty contract;
+    // the original baker remains the owner of material GPU rows and uploads.
+    void RebindMaterialTextures(const std::filesystem::path& mediaPath) {
+        for(const auto& name:m_pendingTextureMaterials) {
+            auto resident=m_materials.find(name);
+            if(resident==m_materials.end())continue;
+            auto material=std::dynamic_pointer_cast<MaterialEx>(resident->second.material);
+            if(!material||!material->PTMaterial)
+                throw std::logic_error("Original material must be imported before rebinding textures");
+            auto& target=*material->PTMaterial;
+            target.BaseTexture.InitFromLoadedTexture(material->baseOrDiffuseTexture,true,false,mediaPath);
+            target.NormalTexture.InitFromLoadedTexture(material->normalTexture,false,true,mediaPath);
+            target.OcclusionRoughnessMetallicTexture.InitFromLoadedTexture(
+                material->metalRoughOrSpecularTexture,material->useSpecularGlossModel,false,mediaPath);
+            target.EmissiveTexture.InitFromLoadedTexture(material->emissiveTexture,true,false,mediaPath);
+            target.GPUDataDirty=true;
+        }
+        m_pendingTextureMaterials.clear();
+    }
+
     Changes Apply(const void* bytes, size_t size, donut::engine::Scene& scene,
         nvrhi::ICommandList* commands, uint32_t frameIndex,
         const std::function<void(bool)>& beforeStructural = {}) {
@@ -213,12 +245,24 @@ public:
             if(CanUpdateAttributes(name,*mesh))attributeMeshes.insert(name);
         Changes changes;
         changes.attributes=!attributeMeshes.empty();
-        changes.textures = !packet.textures.empty() || !packet.removeTextures.empty();
+        // A generation/rectangle publication can contain identical pixels. It
+        // still advances the parent-generation contract below, but must not
+        // invalidate materials, history or acceleration structures.
+        changes.textures = !packet.removeTextures.empty();
+        for(const auto& [id,texture]:packet.textures) {
+            const auto old=m_textures.find(id);
+            changes.textures |= old==m_textures.end()||!old->second.SameLayout(texture)
+                ||!texture.unchangedPixels;
+        }
         changes.materials = !packet.materials.empty();
-        changes.topology = packet.meshes.size()!=attributeMeshes.size() || !packet.removeNodes.empty()
-            || !packet.coverage.empty();
-        changes.transforms = !packet.nodes.empty();
         changes.coverageChanged = !packet.coverage.empty();
+        // The independent pass evaluates opacity itself without OMMs, so pixel/
+        // sampler coverage changes do not change its BLAS geometry flags. Native
+        // beauty retains the original conservative coverage rebuild lifecycle.
+        changes.requiresCoverageRebuild=changes.coverageChanged&&!m_externalTextureSampling;
+        changes.topology = packet.meshes.size()!=attributeMeshes.size() || !packet.removeNodes.empty()
+            || changes.requiresCoverageRebuild;
+        changes.transforms = !packet.nodes.empty();
         bool structural=changes.topology||changes.materials||changes.textures||changes.attributes;
         for(const auto& node:packet.nodes){
             const auto old=m_nodes.find(node.name);
@@ -226,27 +270,18 @@ public:
         }
         // The sample's TLAS holds device addresses, not leases on removed pooled
         // BLASes. Retire previous GPU readers before graph edits can free them.
-        if(structural&&beforeStructural)beforeStructural(!changes.materials&&!changes.textures&&!changes.coverageChanged);
+        if(structural&&beforeStructural)beforeStructural(!changes.materials&&!changes.requiresCoverageRebuild);
 
-        if (!packet.textures.empty() && !m_textureCache)
-            throw std::logic_error("Inject the original TextureCache before importing textures");
+        if (!packet.textures.empty() && (!m_textureDevice||!m_textureDescriptors))
+            throw std::logic_error("Inject native texture resources before importing textures");
         for (auto& [id, texture] : packet.textures) {
-            auto old = m_textures.find(id);
-            if (old != m_textures.end() && old->second.SameLayout(texture)
-                && old->second.pixels == texture.pixels) {
-                texture.loaded = old->second.loaded;
-                continue;
-            }
-            donut::engine::TextureLoadOptions options;
-            options.sRGBMode = texture.color ? donut::engine::SRGBMode::ForceSRGB
-                : donut::engine::SRGBMode::ForceLinear;
-            auto blob = std::make_shared<TextureBlob>(texture);
-            texture.loaded = m_textureCache->LoadTextureFromMemory(blob,
-                "external/texture-" + std::to_string(id) + "-"
-                    + std::to_string(texture.generation) + ".dds",
-                "image/vnd-ms.dds", options, nullptr, commands);
-            if (!texture.loaded || !texture.loaded->texture)
-                throw std::runtime_error("Original TextureCache rejected the RGBA8 texture");
+            const auto old=m_textures.find(id);
+            const Texture* previous=old==m_textures.end()?nullptr:&old->second;
+            if(previous&&texture.unchangedPixels) {
+                texture.loaded=previous->loaded;
+                ++m_textureWork[previous->SameLayout(texture)?5:6];
+            } else
+                texture.loaded=UploadTexture(id,texture,previous,commands);
         }
 
         auto findTexture = [&](int64_t id) -> std::shared_ptr<donut::engine::LoadedTexture> {
@@ -280,13 +315,13 @@ public:
             }
         }
         for (const auto& [id, texture] : packet.textures) {
+            if(auto old=m_textures.find(id);old!=m_textures.end()&&old->second.loaded==texture.loaded)continue;
             auto users = m_textureMaterials.find(id);
             if (users == m_textureMaterials.end()) continue;
             for (const auto& name : users->second) {
                 if (packet.materials.count(name)) continue;
                 assignTextures(m_materials.at(name));
-                m_pendingMaterials.insert(name);
-                changes.materials = true;
+                m_pendingTextureMaterials.insert(name);
             }
         }
         for (auto& [name, entry] : packet.materials) {
@@ -295,12 +330,18 @@ public:
             m_materials.insert_or_assign(name, std::move(entry));
         }
         for (auto& [id, texture] : packet.textures) {
-            if(auto old=m_textures.find(id);old!=m_textures.end()&&old->second.loaded!=texture.loaded)
-                m_textureCache->UnloadTexture(old->second.loaded);
+            if(auto old=m_textures.find(id);old!=m_textures.end()) {
+                if(old->second.loaded!=texture.loaded)changes.retiredTextures.push_back(old->second.loaded);
+                // Decode proved exact equality without copying the full image.
+                // Retain its shadow only after all packet validation has passed.
+                if(texture.unchangedPixels)texture.pixels=std::move(old->second.pixels);
+            }
+            texture.unchangedPixels=false;
             m_textures.insert_or_assign(id, std::move(texture));
         }
         for (auto id : packet.removeTextures) if(auto old=m_textures.find(id);old!=m_textures.end()){
-            m_textureCache->UnloadTexture(old->second.loaded);m_textures.erase(old);
+            changes.retiredTextures.push_back(old->second.loaded);
+            m_textures.erase(old);
         }
 
         std::unordered_set<std::string> touchedMeshes, touchedMaterials;
@@ -351,7 +392,7 @@ public:
             for (const auto& name : users->second)
                 m_nodes.at(name).node->SetLeaf(m_factory.CreateMeshInstance(m_meshes.at(meshName)));
         }
-        if (changes.materials || !packet.coverage.empty()) graph->GetRootNode()->InvalidateContent();
+        if (changes.materials || changes.requiresCoverageRebuild) graph->GetRootNode()->InvalidateContent();
         for (const auto& input : packet.nodes) {
             auto old = m_nodes.find(input.name);
             const bool created=old==m_nodes.end();
@@ -406,9 +447,18 @@ public:
         // Structural/material initialization still needs original buffer allocation
         // before its bakers run. Existing-node poses remain staged until Render.
         // A transform-only packet needs neither this refresh nor a GPU submission.
-        if(changes.topology||changes.materials||changes.textures)
+        const bool originalUploadsAttributes=graph->HasPendingStructureChanges();
+        // A texture replacement leaves the original Material dirty. Sample::Render
+        // refreshes that same current frame before MaterialsBaker::Update and our
+        // lighting pass; an eager texture-only refresh would scan the scene twice.
+        // New structure and material definitions still need immediate preparation.
+        if(changes.topology||changes.materials)
             {RtrDiagnostics::Scope refreshScope(RtrDiagnostics::SceneFullRefresh);scene.Refresh(commands,frameIndex);}
-        else if(!attributeUpdates.empty())
+        // A texture/material refresh need not have a structural dirty flag, so the original
+        // Scene does not upload replacement attribute buffers or geometry rows.
+        // Do not lose those updates merely because a texture shares the packet.
+        // Actual structural refreshes already run the original complete uploader.
+        if(!attributeUpdates.empty()&&!originalUploadsAttributes)
             {RtrDiagnostics::Scope attributeScope(RtrDiagnostics::AttributePreparation,attributeUpdates.size());dynamic_cast<ManagedScene&>(scene).RefreshAttributes(commands,attributeUpdates);}
         return changes;
     }
@@ -421,13 +471,20 @@ private:
     struct Texture {
         uint32_t width = 0, height = 0, mips = 0, color = 0, u = 0, v = 0, filter = 0;
         uint64_t generation = 0;
+        bool rectangle=false,unchangedPixels=false;
+        uint32_t patchMip=0,patchX=0,patchY=0,patchWidth=0,patchHeight=0;
         // Required only for the packet's parent-generation rectangle semantics.
         // There is no upload cache, spare-resource list or GPU allocation policy.
         std::vector<uint8_t> pixels;
         std::shared_ptr<donut::engine::LoadedTexture> loaded;
-        bool SameLayout(const Texture& other) const {
+        bool SameImageLayout(const Texture& other) const {
             return width == other.width && height == other.height && mips == other.mips
-                && color == other.color && u == other.u && v == other.v && filter == other.filter;
+                && color == other.color;
+        }
+        bool SameLayout(const Texture& other) const {
+            // Sampler policy belongs to the external pass metadata. It is not
+            // part of the original TextureCache image or descriptor identity.
+            return SameImageLayout(other) && u == other.u && v == other.v && filter == other.filter;
         }
     };
     struct MaterialEntry {
@@ -498,26 +555,60 @@ private:
         std::vector<NodeInput> nodes;
     };
 
-    // Raw RGBA8 is represented as an uncompressed DX10 DDS container so that
-    // original TextureCache owns decoding, texture creation and upload as usual.
-    class TextureBlob final : public donut::vfs::IBlob {
-        std::vector<uint8_t> m_bytes;
-        void Put(size_t offset, uint32_t value) {
-            for (size_t i = 0; i < 4; ++i) m_bytes[offset + i] = uint8_t(value >> (i * 8));
+    // Authored raw RGBA8 needs no container decode. Use the native allocator,
+    // descriptor table and uploader directly; no second pool or upload arena.
+    // Each changed generation is immutable while older GPU work can read it.
+    std::shared_ptr<donut::engine::LoadedTexture> UploadTexture(int64_t id,const Texture& input,
+        const Texture* previous,nvrhi::ICommandList* commands) {
+        std::array<uint64_t,7> work{};
+        auto loaded=std::make_shared<donut::engine::LoadedTexture>();
+        loaded->path="external/texture-"+std::to_string(id)+"-"+std::to_string(input.generation)+".rgba8";
+        loaded->mimeType="application/x-rgba8";loaded->originalBitsPerPixel=32;
+        loaded->loadOptions.sRGBMode=input.color?donut::engine::SRGBMode::ForceSRGB:donut::engine::SRGBMode::ForceLinear;
+        nvrhi::TextureDesc desc;desc.width=input.width;desc.height=input.height;desc.mipLevels=input.mips;
+        desc.format=input.color?nvrhi::Format::SRGBA8_UNORM:nvrhi::Format::RGBA8_UNORM;
+        desc.debugName=loaded->path;desc.initialState=nvrhi::ResourceStates::ShaderResource;desc.keepInitialState=true;
+        loaded->texture=m_textureDevice->createTexture(desc);
+        if(!loaded->texture)throw std::runtime_error("Native authored texture allocation failed");
+        loaded->bindlessDescriptor=m_textureDescriptors->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0,loaded->texture));
+        const bool compatible=previous&&previous->SameImageLayout(input);
+        size_t offset=0;
+        for(uint32_t mip=0;mip<input.mips;++mip) {
+            const auto width=std::max(1u,input.width>>mip),height=std::max(1u,input.height>>mip);
+            const size_t bytes=size_t(width)*height*4;
+            // Rectangle decode already proved the authored mip changed and all
+            // other mips stayed equal; do not rescan the complete CPU image.
+            const bool unchanged=compatible&&(input.rectangle?mip!=input.patchMip
+                :std::memcmp(input.pixels.data()+offset,previous->pixels.data()+offset,bytes)==0);
+            if(unchanged) {
+                commands->copyTexture(loaded->texture,nvrhi::TextureSlice().setMipLevel(mip),
+                    previous->loaded->texture,nvrhi::TextureSlice().setMipLevel(mip));
+                work[4]+=bytes;
+            } else if(compatible&&input.rectangle&&mip==input.patchMip
+                &&uint64_t(input.patchWidth)*input.patchHeight<uint64_t(width)*height) {
+                commands->copyTexture(loaded->texture,nvrhi::TextureSlice().setMipLevel(mip),
+                    previous->loaded->texture,nvrhi::TextureSlice().setMipLevel(mip));
+                work[4]+=bytes;
+                auto patchDesc=desc;patchDesc.width=input.patchWidth;patchDesc.height=input.patchHeight;patchDesc.mipLevels=1;
+                patchDesc.debugName="Authored texture rectangle upload";
+                auto patch=m_textureDevice->createTexture(patchDesc);
+                if(!patch)throw std::runtime_error("Native texture rectangle allocation failed");
+                commands->writeTexture(patch,0,0,input.pixels.data()+offset+(size_t(input.patchY)*width+input.patchX)*4,size_t(width)*4);
+                auto target=nvrhi::TextureSlice().setMipLevel(mip);target.x=input.patchX;target.y=input.patchY;
+                target.width=input.patchWidth;target.height=input.patchHeight;
+                commands->copyTexture(loaded->texture,target,patch,nvrhi::TextureSlice());
+                ++work[2];work[3]+=uint64_t(input.patchWidth)*input.patchHeight*4;
+                // NVRHI command-list references keep this temporary image and its
+                // native upload storage alive through GPU execution.
+            } else {
+                commands->writeTexture(loaded->texture,0,mip,input.pixels.data()+offset,size_t(width)*4);
+                ++work[0];work[1]+=bytes;
+            }
+            offset+=bytes;
         }
-    public:
-        explicit TextureBlob(const Texture& texture) : m_bytes(148 + texture.pixels.size()) {
-            Put(0, 0x20534444); Put(4, 124); Put(8, 0x2100f);
-            Put(12, texture.height); Put(16, texture.width); Put(20, texture.width * 4);
-            Put(28, texture.mips); Put(76, 32); Put(80, 4); Put(84, 0x30315844);
-            Put(108, texture.mips > 1 ? 0x401008 : 0x1000);
-            Put(128, texture.color ? 29 : 28); // DXGI R8G8B8A8_UNORM[_SRGB]
-            Put(132, 3); Put(140, 1); // D3D10_RESOURCE_DIMENSION_TEXTURE2D, one slice
-            std::memcpy(m_bytes.data() + 148, texture.pixels.data(), texture.pixels.size());
-        }
-        const void* data() const override { return m_bytes.data(); }
-        size_t size() const override { return m_bytes.size(); }
-    };
+        for(size_t i=0;i<work.size();++i)m_textureWork[i]+=work[i];
+        return loaded;
+    }
 
     static donut::math::float3 Color(uint32_t rgba) {
         return donut::math::float3(float(rgba & 255), float((rgba >> 8) & 255),
@@ -595,32 +686,50 @@ private:
                     throw std::invalid_argument("Texture mip chain exceeds its extent");
                 width = std::max(1u, width / 2); height = std::max(1u, height / 2);
             }
-            if (!transport) texture.pixels = reader.bytes();
+            if (!transport) {
+                const auto count=reader.count();const auto* pixels=reader.take(count);
+                if(count!=expected)throw std::invalid_argument("Invalid RGBA8 texture byte count");
+                const auto old=m_textures.find(id);
+                texture.unchangedPixels=old!=m_textures.end()&&old->second.SameImageLayout(texture)
+                    &&old->second.pixels.size()==expected
+                    &&std::memcmp(old->second.pixels.data(),pixels,expected)==0;
+                if(!texture.unchangedPixels)texture.pixels.assign(pixels,pixels+count);
+            }
             else {
                 const auto parent = reader.value<uint64_t>();
                 const auto mip = reader.value<uint32_t>(), x = reader.value<uint32_t>();
                 const auto y = reader.value<uint32_t>(), patchWidth = reader.value<uint32_t>();
                 const auto patchHeight = reader.value<uint32_t>(), pitch = reader.value<uint32_t>();
-                auto pixels = reader.bytes();
+                const auto count=reader.count();const auto* pixels=reader.take(count);
                 auto old = m_textures.find(id);
                 if (old == m_textures.end() || old->second.generation != parent
                     || !old->second.SameLayout(texture) || mip >= texture.mips
-                    || !patchWidth || !patchHeight)
+                    || !patchWidth || !patchHeight || old->second.pixels.size()!=expected)
                     throw std::invalid_argument("Stale or invalid texture patch");
                 width = std::max(1u, texture.width >> mip); height = std::max(1u, texture.height >> mip);
                 if (uint64_t(x) + patchWidth > width || uint64_t(y) + patchHeight > height
                     || uint64_t(pitch) < uint64_t(patchWidth) * 4
-                    || uint64_t(pitch) * (patchHeight - 1) + uint64_t(patchWidth) * 4 != pixels.size())
+                    || uint64_t(pitch) * (patchHeight - 1) + uint64_t(patchWidth) * 4 != count)
                     throw std::invalid_argument("Invalid texture patch range");
-                texture.pixels = old->second.pixels;
+                texture.rectangle=true;texture.patchMip=mip;texture.patchX=x;texture.patchY=y;
+                texture.patchWidth=patchWidth;texture.patchHeight=patchHeight;
                 size_t offset = 0;
                 for (uint32_t i = 0; i < mip; ++i)
                     offset += size_t(std::max(1u, texture.width >> i)) * std::max(1u, texture.height >> i) * 4;
-                for (uint32_t row = 0; row < patchHeight; ++row)
-                    std::memcpy(texture.pixels.data() + offset + (size_t(y + row) * width + x) * 4,
-                        pixels.data() + size_t(row) * pitch, size_t(patchWidth) * 4);
+                texture.unchangedPixels=true;
+                for(uint32_t row=0;row<patchHeight;++row)
+                    if(std::memcmp(old->second.pixels.data()+offset+(size_t(y+row)*width+x)*4,
+                        pixels+size_t(row)*pitch,size_t(patchWidth)*4)!=0) {
+                        texture.unchangedPixels=false;break;
+                    }
+                if(!texture.unchangedPixels) {
+                    texture.pixels=old->second.pixels;
+                    for (uint32_t row = 0; row < patchHeight; ++row)
+                        std::memcpy(texture.pixels.data() + offset + (size_t(y + row) * width + x) * 4,
+                            pixels + size_t(row) * pitch, size_t(patchWidth) * 4);
+                }
             }
-            if (texture.pixels.size() != expected)
+            if (!texture.unchangedPixels && texture.pixels.size() != expected)
                 throw std::invalid_argument("Invalid RGBA8 texture byte count");
             if (!packet.textures.emplace(id, std::move(texture)).second)
                 throw std::invalid_argument("Duplicate texture identity");
@@ -757,7 +866,7 @@ private:
         return packet;
     }
 
-    void ValidateReferences(const Packet& packet) const {
+    void ValidateReferences(const Packet& packet) {
         const std::unordered_set<int64_t> removed(packet.removeTextures.begin(), packet.removeTextures.end());
         auto validateMaterial = [&](const MaterialEntry& entry) {
             for (auto id : entry.textures) {
@@ -781,8 +890,20 @@ private:
         for (const auto& [name, entry] : packet.materials) {
             auto users = m_materialMeshes.find(name);
             if (users == m_materialMeshes.end()) continue;
+            // Existing meshes were checked when their normal map was enabled.
+            // Pixel, sampler, scalar or normal-texture identity edits cannot add
+            // a missing vertex requirement; changed meshes are checked above.
+            // Keep all material texture-ID validation before this fast path.
+            const auto previous=m_materials.find(name);
+            if(entry.textures[1]<0 || (previous!=m_materials.end()&&previous->second.textures[1]>=0)) {
+                m_referenceWork[1]+=users->second.size();
+                continue;
+            }
             for (const auto& mesh : users->second)
-                if (!packet.meshes.count(mesh)) validateMesh(m_meshes.at(mesh));
+                if (!packet.meshes.count(mesh)) {
+                    ++m_referenceWork[0];
+                    validateMesh(m_meshes.at(mesh));
+                }
         }
         for (const auto& input : packet.nodes)
             if (!packet.meshes.count(input.mesh) && !m_meshes.count(input.mesh))
@@ -792,7 +913,10 @@ private:
 
     ExtendedSceneTypeFactory m_factory;
     bool m_externalTextureSampling = false;
-    std::shared_ptr<donut::engine::TextureCache> m_textureCache;
+    std::array<uint64_t,7> m_textureWork{};
+    std::array<uint64_t,2> m_referenceWork{};
+    nvrhi::IDevice* m_textureDevice=nullptr;
+    std::shared_ptr<donut::engine::DescriptorTableManager> m_textureDescriptors;
     std::weak_ptr<donut::engine::SceneGraph> m_graph;
     std::unordered_map<int64_t, Texture> m_textures;
     std::unordered_map<std::string, MaterialEntry> m_materials;
@@ -804,6 +928,7 @@ private:
     std::unordered_map<std::string, std::unordered_set<std::string>> m_materialMeshes;
     std::unordered_map<int64_t, std::unordered_set<std::string>> m_textureMaterials;
     std::unordered_set<std::string> m_pendingMaterials;
+    std::unordered_set<std::string> m_pendingTextureMaterials;
     std::unordered_map<std::string,NodeInput> m_pendingTransforms;
 };
 

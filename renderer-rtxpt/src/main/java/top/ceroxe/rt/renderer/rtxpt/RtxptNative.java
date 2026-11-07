@@ -59,6 +59,9 @@ final class RtxptNative {
     static native void nativeLightingClearAttributes(long handle);
     static native void nativeLightingAttributeBatch(long handle,long revision,String[] names,float[][] baselines,int[][] colors);
     static native long[] nativeLightingTelemetry(long handle);
+    // Owner-thread contract inspection; never performs a GPU readback.
+    static native double[] lightingMetadataState(long handle,String instanceName,String geometryName);
+    static native long[] resourceWorkState(long handle);
     static native void nativeLightingCapture(long handle,String path,int signal);
     static native boolean nativeLightingCanPublish(long handle);
     static native boolean nativeLightingConsumersRetired(long handle);

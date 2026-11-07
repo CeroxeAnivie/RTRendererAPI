@@ -1,5 +1,7 @@
 #pragma once
 #include "rtxpt_upstream_host.h"
+#include "rtxpt_shutdown.h"
+#include <optional>
 #include <chrono>
 #include <condition_variable>
 #include <exception>
@@ -147,6 +149,9 @@ private:
             InstallPrecompiledShaders(donut::app::GetDirectoryWithExecutable());
             std::vector<const char*> argv;
             for (const auto& option : options) argv.push_back(option.c_str());
+            // The guard outlives Application, whose original destructor calls
+            // DeviceManager::Shutdown and drains Streamline destruction callbacks.
+            std::optional<ShutdownModuleReference> retainedModules;
             Application application(options, managedScene);
             // The pinned sample reads the CRT arguments instead of Init's parameters.
             // Scope the embedding arguments to its synchronous initialization and restore
@@ -173,6 +178,7 @@ private:
                     + std::to_string(static_cast<int>(status)));
             // Official DeviceManager applies this requested public setting before
             // the next render. There is no extra frame-rate timer in the adapter.
+            retainedModules.emplace();
             application.DeviceManager().SetVsyncEnabled(false);
             bool active = false;
             bool actionsApplied = false;

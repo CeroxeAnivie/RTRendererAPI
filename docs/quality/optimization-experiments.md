@@ -1,5 +1,19 @@
 # 性能候选记录
 
+## 2026-11-07 当前 8.0.0 桥接候选：重复资源工作收口
+
+候选 `bridge-reference-and-texture-work-deduplication` 只调整自有桥接代码：纹理依赖变化不再连带遍历全部 resident mesh 的 tangent 校验，仅在 normal 首次启用时验证；纯纹理事务不再额外调用 `SceneFullRefresh`，由原版 `Sample.cpp` 本帧 `Refresh` 消费；Decode 对 exact no-op full/rectangle 跳过整图复制和重复 `memcmp`。Java `RtxptDelta` 的完整图像 exact `ByteBuffer.equals` 短路重复 alpha 扫描。新增 `ReferenceWork` 两项与七项 texture-work 合为九项实际工作 counter，记录真实命中而非按资源总数推算。
+
+这与历史已撤回的 `selective-topology-preparation`、跨队列重叠、shader 分拆及 frontier 方案不同：不修改上游源码、渲染算法、采样或资源默认策略，不跳过真实拓扑与属性变化，不降低分辨率或质量；只删除桥接层已确认重复的校验、刷新和字节工作。历史失败记录继续有效，不借本轮重新接受旧方案。
+
+最终集中合同 `build/reports/bridge-migration-contract-final/stdout.log` 明确 `BRIDGE_MIGRATION PASS frames=40`；新增断言覆盖 resident tangent visits=0/skipped>0、纯纹理 `SceneFullRefresh=0`，并保留真实 GPU 像素、mixed 属性/拓扑、资源 lease、OFF 停采及原 BLAS/VB 身份约束。CPU high-framerate 检查通过；统一构建的上游纯度检查为 20 仓库、4426 原文件、Unexpected=0。这里只记录本轮正确性，不代签完整画面、性能目标或发布。
+
+原计划八 case 长窗对照已调整。旧包 `baseline-medium-OFF` 在 185.0100174s 后因重复全场景材质导入/AS 构建、预计超过 600s 单 case 限制而按核实的 host PID 主动停止；证据 `build/reports/bridge-heavy-final/baseline-medium-OFF/cancelled.json`。这是取消长窗，不是通过、自然退出或真实崩溃；不能从部分日志推算吞吐。
+
+完整新包矩阵 `build/reports/bridge-heavy-current-final` 四 case 均 PASS：medium/fast × OFF/DEEP，各 60 tick、540 移动帧、30 warmup、90 静止帧，真实区域流入183/610 mesh。完整 fast 模拟率 OFF/DEEP 97.913697/93.845884，未达180。同 bytecode fast 2 tick、18移动帧旧/新控制已 PASS，但不含 tile 跨界，不能把其倍数当完整移动收益。fast20同输入前后观测也已完成，非同 class；移动 pipeline +32.86%，静止 −31.90%，两者照录。三组详细旧/新/新减旧/百分比表见[通用流式结果](streaming-scene-results.md)，缺项不补零，不跨窗口合并。OFF→DEEP fast 完整模拟 −4.15% 仅为顺序观测，不能称近零诊断成本已证。
+
+计时边界：native `Frame` 是调用线程的壁钟区间，包含等待另一线程完成资源工作；它不是纯 GPU 忙时，也不能与 ResourcePlan、子 stage 或 Java 父区间相加。当前候选尚未完成正式交付，不预先宣布 180 达标。机器记录见 [optimization-experiments.json](data/optimization-experiments.json)。
+
 2026-11-07：新授权候选 `transaction-journals-and-region-incidence`，7.3.0→7.3.1。保持原treelet/coverage/查询语义；分离Apply和上传journal、源头节点去重，加入root-cell反向槽位以移除线性查找，补显式CPU/GPU/mapped-upload容量分账。与已撤回的source-leaf frontier不同，不增加区域覆盖或查询工作量。定向合同/真实JNI通过；同夹具CPU三阶段均值合计-7.94%，query准备-72.48%，tree均值+19.48%、regions均值+23.46%及P95+58.64%退化均保留。额外修复旧混合删插的真实漏源，不用错误旧路径算收益。不预报MC FPS或RAM收益，不盲缩池。见[本批记录](retained-update-maintenance.md)。
 
 2026-11-06：宿主明确授权解决 direct-only 移动 FPS 与更新卡顿。当前候选 `bounded-sparse-upload-and-snapshot-capacity` 合并散落小写入，去掉诊断快照无条件最大预留；固定基线为已发布 `7.2.0-rc.7` 完整 runtime。源叶前沿方案已因区域 links +124.22%、packed 数据 +31.58%、常见阶段节点访问 +69.08% 撤回生产源码与默认运行目录，不保留分支或开关；其 54+54 份输出一致只证明正确性，不抵消容量和查询代价。原 treelet 的区域成员重建开销仍在。本批不重试此前失败的 SDK 拓扑准备、shader 分拆、跨队列或 RR 重叠，也不把操作数下降写成 FPS 收益。见[稀疏移动更新](../release-sparse-movement.md)，原始证据 `build/reports/sparse-movement/`。

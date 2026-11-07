@@ -1,4 +1,5 @@
 #pragma once
+#include "rtxpt_scene_delta.h"
 #include <array>
 #include <unordered_map>
 #include <unordered_set>
@@ -26,6 +27,7 @@ public:
     std::function<std::array<uint32_t,4>(const std::string&)> texturePolicies;
     std::array<nvrhi::SamplerHandle,8> textureSamplers;
     Constants constants;
+    RtrSceneDelta sceneDelta;
     bool active=false,metadataDirty=true;
     bool metadataInitialized=false;
     std::unordered_set<std::string> specialInstances;
@@ -402,14 +404,89 @@ public:
         }
         geometryIndices.erase(name);meshBaselines.erase(name);meshColors.erase(name);alphaMeshes.erase(name);dirtyBaselines.erase(name);dirtyColors.erase(name);metadataDirty=true;
     }
-    // The unmodified upstream graph owns its dense indices. Topology changes may
-    // reindex unchanged objects, so rebuild this adapter's mapping on those updates;
-    // camera-only and attribute-only frames still take the stable incremental path.
-    // No external state is injected into SceneGraph.
+    // Upstream owns dense indices and may renumber them after topology edits.
+    // Keep the old incremental upload policy on an API-owned journal instead
+    // of adding HostDelta or any other member to the original SceneGraph.
+    void CollectSceneDelta(const std::shared_ptr<donut::engine::Scene>& scene) {
+        sceneDelta.Clear();maskedScalarCandidates=false;
+        const auto graph=scene->GetSceneGraph();
+        for(const auto& instance:graph->GetMeshInstances()) {
+            const auto& name=instance->GetNode()->GetName();
+            const auto slot=instance->GetInstanceIndex();
+            const auto previous=instanceSlots.find(name);
+            if(previous==instanceSlots.end()||previous->second!=uint32_t(slot))
+                sceneDelta.instances.emplace(instance.get(),instance);
+        }
+        for(const auto& mesh:graph->GetMeshes()) {
+            bool changed=false;
+            for(size_t group=0;group<mesh->geometries.size();++group) {
+                const auto& geometry=mesh->geometries[group];
+                const auto name=mesh->name+":"+std::to_string(group);
+                const auto mapping=geometryIndices.find(name);
+                const auto previous=geometrySlots.find(name);
+                const auto policies=texturePolicies&&geometry->material
+                    ?texturePolicies(geometry->material->name):std::array<uint32_t,4>{};
+                const float opacity=geometry->material?geometry->material->opacity:1.f;
+                if(geometry->material&&(geometry->material->domain==donut::engine::MaterialDomain::AlphaTested
+                    ||geometry->material->domain==donut::engine::MaterialDomain::TransmissiveAlphaTested)
+                    &&opacity!=1.f)maskedScalarCandidates=true;
+                changed|=mapping==geometryIndices.end()||mapping->second.index!=uint32_t(geometry->globalGeometryIndex)
+                    ||previous==geometrySlots.end()||previous->second.triangles*3!=geometry->numIndices
+                    ||previous->second.texturePolicies!=policies||previous->second.maskedOpacity!=opacity;
+            }
+            if(changed)sceneDelta.meshes.emplace(mesh.get(),mesh);
+        }
+    }
+    void UploadChangedAttributes(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene){
+        const auto graph=scene->GetSceneGraph();auto& changes=sceneDelta;
+        RtrDiagnostics::Scope indexScope(RtrDiagnostics::ResourceIndex,changes.instances.size()+changes.meshes.size());
+        EnsureAttributeBuffer(device,command,instances,std::max<size_t>(1,graph->GetMeshInstances().size())*sizeof(InstanceAttributes),sizeof(InstanceAttributes),"Native receiver roles");
+        EnsureAttributeBuffer(device,command,geometryBaselines,std::max<size_t>(1,graph->GetGeometryCount())*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
+        instanceUploadScratch.resize(graph->GetMeshInstances().size());instanceUploadIndices.clear();
+        geometryUploadScratch.resize(graph->GetGeometryCount());geometryUploadIndices.clear();
+        for(auto& [identity,instance]:changes.instances){
+            const auto& name=instance->GetNode()->GetName();const auto slot=instance->GetInstanceIndex();
+            if(slot<0||size_t(slot)>=graph->GetMeshInstances().size())throw std::runtime_error("Invalid changed instance index");
+            instanceSlots.insert_or_assign(name,uint32_t(slot));dirtyInstances.insert(name);++attributeTableVisits;
+        }
+        std::unordered_set<std::string> upload=dirtyBaselines;upload.insert(dirtyColors.begin(),dirtyColors.end());
+        for(auto& [identity,mesh]:changes.meshes)for(size_t group=0;group<mesh->geometries.size();++group){
+            auto& geometry=mesh->geometries[group];const auto key=mesh->name+":"+std::to_string(group);
+            const auto index=uint32_t(geometry->globalGeometryIndex);++attributeTableVisits;
+            if(index>=graph->GetGeometryCount())throw std::runtime_error("Invalid changed geometry index");
+            auto found=geometrySlots.find(key);
+            if(found==geometrySlots.end()||found->second.triangles*3!=geometry->numIndices){
+                if(found!=geometrySlots.end())FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);
+                found=geometrySlots.insert_or_assign(key,GeometryAttributes{AllocateAttributeRange(geometry->numIndices),geometry->numIndices/3}).first;upload.insert(key);
+            }
+            auto [mapping,inserted]=geometryIndices.insert_or_assign(key,GeometryIndex{index,geometryIndexEpoch,&found->second});
+            found->second.texturePolicies=texturePolicies&&geometry->material
+                ?texturePolicies(geometry->material->name):std::array<uint32_t,4>{};
+            found->second.maskedOpacity=geometry->material?geometry->material->opacity:1.f;
+            geometryUploadScratch[index]=found->second;geometryUploadIndices.push_back(index);attributeWork[3]+=sizeof(GeometryAttributes);
+        }
+        for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found==instanceSlots.end())continue;
+            auto attribute=instanceAttributes.find(name);InstanceAttributes value=attribute==instanceAttributes.end()?InstanceAttributes{}:attribute->second;
+            instanceUploadScratch[found->second]=value;instanceUploadIndices.push_back(found->second);TrackInstanceRole(name,value);++attributeWork[2];attributeWork[3]+=sizeof(value);
+        }
+        UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
+        UploadAttributeRuns(command,instances,instanceUploadScratch,instanceUploadIndices);
+        specialRoleCount=specialInstances.size();
+        EnsureAttributeBuffer(device,command,baselineCoordinates,attributeRanges.end*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
+        for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
+            auto values=PackVertices(name,size_t(found->second.triangles)*3);
+            if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
+            attributeWork[3]+=values.size()*sizeof(VertexAttributes);++attributeWork[4];
+        }
+        UploadPublications(device,command);previousSceneInstances=scene->GetInstanceBuffer();previousSceneGeometry=scene->GetGeometryBuffer();
+        previousInstanceCount=graph->GetMeshInstances().size();previousGeometryCount=graph->GetGeometryCount();
+        metadataDirty=false;changes.Clear();dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();++metadataUploads;
+    }
     void UploadAttributes(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene){
         const auto graph=scene->GetSceneGraph();
         const size_t instanceCount=graph->GetMeshInstances().size(),geometryCount=graph->GetGeometryCount();
         if(previousInstanceCount!=instanceCount||previousGeometryCount!=geometryCount)metadataDirty=true;
+        if(metadataDirty&&metadataInitialized){CollectSceneDelta(scene);UploadChangedAttributes(device,command,scene);return;}
         if(!metadataDirty){
             bool changed=!dirtyInstances.empty()||!dirtyBaselines.empty()||!dirtyColors.empty()||lookupDirty||applicationDirty||!applicationDirtyRanges.empty();
             for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found!=instanceSlots.end()){
