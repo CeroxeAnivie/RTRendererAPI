@@ -45,7 +45,9 @@
       "lostOrFailedNativeEvents": 0,
       "absolutePerformanceComparisonAllowed": false
     },
-    "pending": ["actual previously failing workload"],
+    "pending": [
+      "actual previously failing workload"
+    ],
     "noUnmeasuredPerformanceClaim": true
   },
   "bridgeReferenceAndTextureWorkDeduplication": {
@@ -2244,5 +2246,40 @@
       "tree/prepare mixed bench regressions retained without attribution"
     ],
     "limits": "One sequential pair, CPU inclusive timings, mostly offscreen, no MC FPS claim; rejected repeated-sort and failed bootstrap/ABI fixtures retained."
+  },
+  "combinedNativePreparationSubmission": {
+    "id": "combined-native-preparation-submission",
+    "date": "2026-11-08",
+    "version": "8.0.0",
+    "status": "parked-user-requested-historical-baseline-restore",
+    "baselineSource": "cb0789bc3bc3ca22454f46ab9a183364ad946969",
+    "baselineNativeSha256": "027636831c9aaee313818ce6c4db94e93ccd8125a2bf29ef957701a0694415b0",
+    "differenceFromRejectedOverlap": "Same native graphics command list for final mesh/table uploads and BLAS builds; no concurrent queue execution, new allocator, copied packing, upstream patch or quality change. Preserve one compute dependency after complete submission.",
+    "changes": [
+      "Combine final scene preparation and BLAS/TLAS allocation recording into one submission",
+      "Invalidate binding cache only when its sub-instance allocation changes",
+      "Measure native command acquire/submit and pending resource release separately",
+      "Preserve GPU profile rows across renderer session recreation"
+    ],
+    "performanceVerified": false,
+    "observedComparison": {
+      "baselinePipelineRate": 57.50577517721044,
+      "candidatePipelineRate": 56.984005634325214,
+      "baselineCompleteRate": 51.17479852695048,
+      "candidateCompleteRate": 51.04389587884629,
+      "freshFramesEach": 466,
+      "initialGpuEach": [
+        0,
+        0,
+        0
+      ],
+      "targetMet": false,
+      "scope": "single sequential generic streaming pair; no end-application gain established",
+      "evidence": [
+        "build/reports/chain-reconciliation/submission-flow-clean",
+        "build/reports/chain-reconciliation/submission-candidate-flow"
+      ]
+    },
+    "verificationBoundary": "Combined submission built and topology/migration/deformation/material/full-renderer contracts passed. Final timestamp-identity diagnostic edits after this build remain uncompiled and unpublished. Official Local remains cb0789 source."
   }
 }

@@ -741,6 +741,7 @@ private:
         ++m_nativeFrameWork[0];
     }
     nvrhi::CommandListHandle OpenResourceCommands(){
+        RtrDiagnostics::Scope acquire(RtrDiagnostics::CommandAcquire);
         if(!m_resourceCommands){
             m_resourceCommands=GetDevice()->createCommandList();
             if(!m_resourceCommands)throw std::runtime_error("Native resource command-list allocation failed");
@@ -803,15 +804,24 @@ private:
         }
         if(lighting.active&&!m_ommBaker&&(!merged.deformedMeshes.empty()||!merged.reshapedMeshes.empty()))
             RefreshDeformedDirectStructures(merged,commands);
+        // Uploads, transitions and independent BLAS builds belong to the same
+        // graphics transaction. The native command list orders them and owns
+        // their inputs; no intermediate queue submission or compute wait is
+        // needed before recording those builds. Publish one dependency only
+        // after the complete scene preparation has been submitted.
+        const bool structuresPrepared=!structuralResources||RefreshRetainedDirectStructures(merged,commands);
         RtrGpuProfile::End(commands,prepareTiming);
-        commands->close();
-        const auto submitted=GetDevice()->executeCommandList(commands);
-        GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,submitted);
-        if(structuralResources&&!RefreshRetainedDirectStructures(merged)){
+        {RtrDiagnostics::Scope submit(RtrDiagnostics::CommandSubmit);
+            commands->close();
+            const auto submitted=GetDevice()->executeCommandList(commands);
+            GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,submitted);}
+        if(!structuresPrepared){
             m_ui.AccelerationStructRebuildRequested=true;
             GetDevice()->waitForIdle();m_resourceRetirement.clear();
         }
-        m_pendingDirectPreparation.clear();m_pendingDirectGraphRefresh=false;
+        {RtrDiagnostics::Scope release(RtrDiagnostics::DriverRelease);
+            m_pendingDirectPreparation.clear();}
+        m_pendingDirectGraphRefresh=false;
     }
     void PollResourceRetirement(){
         for(auto i=m_resourceRetirement.begin();i!=m_resourceRetirement.end();)
@@ -894,7 +904,7 @@ private:
         }
         return true;
     }
-    bool RefreshRetainedDirectStructures(const Resources::Changes& changed) {
+    bool RefreshRetainedDirectStructures(const Resources::Changes& changed,nvrhi::ICommandList* preparedCommands=nullptr) {
         RtrDiagnostics::Scope structureScope(RtrDiagnostics::Acceleration);
         if(!lighting.active||m_ommBaker||!m_blasPool)return false;
         const auto& instances=m_scene->GetSceneGraph()->GetMeshInstances();
@@ -903,11 +913,11 @@ private:
         if(instances.empty()&&(!m_topLevelAS||!m_subInstanceBuffer))return false;
         for(const auto& mesh:changed.buildMeshes)
             if(!mesh->isSkinPrototype&&bvh::IsSkinnedMesh(*mesh))return false;
-        if(!m_structureCommands){
+        if(!preparedCommands&&!m_structureCommands){
             m_structureCommands=GetDevice()->createCommandList();
             if(!m_structureCommands)throw std::runtime_error("Native structure command-list allocation failed");
             ++m_commandWork[2];
-        }else ++m_commandWork[3];
+        }else if(!preparedCommands)++m_commandWork[3];
         // Only this transaction's actually vacated allocations participate.
         // No spare pool survives the call, and no new instance inherits an old
         // node or previous pose. Unknown concurrent compute readers keep the
@@ -926,7 +936,8 @@ private:
             }
         }
 #endif
-        auto commands=m_structureCommands;commands->open();
+        auto* commands=preparedCommands?preparedCommands:m_structureCommands.Get();
+        if(!preparedCommands){RtrDiagnostics::Scope acquire(RtrDiagnostics::CommandAcquire);commands->open();}
         const auto structureTiming=RtrGpuProfile::Begin(commands,"NativeStructures",-1);
         struct PlannedBuild {
             std::shared_ptr<donut::engine::MeshInfo> mesh;
@@ -983,7 +994,6 @@ private:
         for(const auto& build:builds)
             commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructBuildBlas);
         commands->commitBarriers();
-        InvalidateBindingSet();m_bindingCache->Clear();
         size_t subInstances=0;
         for(const auto& instance:instances)subInstances+=instance->GetMesh()->geometries.size();
         // Native descriptors state maximum capacity, not the previous live count.
@@ -993,19 +1003,26 @@ private:
         const bool capacityFits=m_topLevelAS&&m_subInstanceBuffer
             &&m_topLevelAS->getDesc().topLevelMaxInstances>=instances.size()
             &&m_subInstanceBuffer->getDesc().byteSize/sizeof(SubInstanceData)>=subInstances;
-        if(!capacityFits){RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasAllocate);CreateTlas(commands);}
+        if(!capacityFits){
+            // Native binding sets reference allocations, not dense row values.
+            // Only replacement of the sub-instance allocation invalidates
+            // those cached bindings (Sample::RecreateAccelStructs).
+            InvalidateBindingSet();m_bindingCache->Clear();
+            RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasAllocate);CreateTlas(commands);}
         else {
             m_subInstanceCount=static_cast<uint32_t>(subInstances);
             m_subInstanceData.assign(subInstances,SubInstanceData::Default());
         }
         m_tlasInstanceDataDirty=true;
         RtrGpuProfile::End(commands,structureTiming);
-        commands->close();
-        const auto submitted=GetDevice()->executeCommandList(commands);
-        // UpdateTLAS runs in the original async compute prefix. Its ordinary
-        // frame fence predates this external build; add the missing GPU edge.
-        GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,
-            nvrhi::CommandQueue::Graphics,submitted);
+        if(!preparedCommands){
+            RtrDiagnostics::Scope submit(RtrDiagnostics::CommandSubmit);
+            commands->close();
+            const auto submitted=GetDevice()->executeCommandList(commands);
+            // The complete renderer can consume these writes on compute.
+            GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,
+                nvrhi::CommandQueue::Graphics,submitted);
+        }
         // The retained command list owns its scratch for the full renderer
         // lifetime. Its native submission versions, not a bridge retirement
         // record per batch, govern reuse while previous builds are in flight.

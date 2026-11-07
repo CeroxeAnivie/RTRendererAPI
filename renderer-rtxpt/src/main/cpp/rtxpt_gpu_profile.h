@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 
@@ -25,7 +26,7 @@ struct Event {
     nvrhi::ICommandList* command=nullptr;
     Phase phase=Phase::Free;
     uint32_t name=0;int queue=-1,parent=-1;
-    uint64_t serial=0,frame=0,sequence=0,revision=0,mode=0,resource=0,generation=0,reason=0;
+    uint64_t serial=0,frame=0,sequence=0,revision=0,mode=0,resource=0,generation=0,reason=0,beginNative=0;
     bool ended=false,incompleteReported=false;
 };
 struct Counters {
@@ -64,12 +65,13 @@ inline void WriteRecord(State& s,const Event& e,const char* status,double millis
     std::array<char,512> line{};std::array<char,48> elapsed{};
     if(duration)std::snprintf(elapsed.data(),elapsed.size(),"%.9f",milliseconds);
     const int size=std::snprintf(line.data(),line.size(),
-        "%llu,%s,%llu,%d,%s,%s,%llu,%llu,%llu,%llu,%llu,%llu,%s\n",
+        "%llu,%s,%llu,%d,%s,%s,%llu,%llu,%llu,%llu,%llu,%llu,%s,%llu,%llu\n",
         static_cast<unsigned long long>(e.frame),e.queue==0?"graphics":"compute",
         static_cast<unsigned long long>(e.serial),e.parent,s.names[e.name].data(),elapsed.data(),
         static_cast<unsigned long long>(e.sequence),static_cast<unsigned long long>(e.revision),
         static_cast<unsigned long long>(e.mode),static_cast<unsigned long long>(e.resource),
-        static_cast<unsigned long long>(e.generation),static_cast<unsigned long long>(e.reason),status);
+        static_cast<unsigned long long>(e.generation),static_cast<unsigned long long>(e.reason),status,
+        static_cast<unsigned long long>(s.session),static_cast<unsigned long long>(e.beginNative));
     if(size<0||size>=int(line.size())){++s.counters.dropped;return;}
     s.output->Write(line.data());
 }
@@ -115,8 +117,9 @@ inline void Init(nvrhi::IDevice* device,bool explicitEnable=false){
     // File creation is an explicit cold lifecycle operation, never Begin/End or
     // FrameBoundary. A path is required even when timing is explicitly enabled.
     if(requested&&path&&*path){
-        next->output=std::make_unique<RtrAsyncOutput>(path);
-        next->output->Write("frame,queue,event,parent,name,duration_ms,sequence,revision,mode,resource,generation,reason,status\n");
+        const bool hasHeader=std::filesystem::exists(path)&&std::filesystem::file_size(path)>0;
+        next->output=std::make_unique<RtrAsyncOutput>(path,true);
+        if(!hasHeader)next->output->Write("frame,queue,event,parent,name,duration_ms,sequence,revision,mode,resource,generation,reason,status,session,begin_native_ns\n");
         next->output->Write("# time_semantics=NVRHI_elapsed_seconds_times_1000; absolute_timestamps_unavailable; only_status_complete_has_a_duration\n");
     }
     state=std::move(next);
@@ -158,7 +161,7 @@ inline Token Begin(nvrhi::ICommandList* list,const char* name,int parent,uint64_
         const uint32_t index=(s.next+probe)%QueryCount;auto& event=s.events[index];
         if(!event.query||event.phase!=Phase::Free)continue;
         event.command=list;event.phase=Phase::Recording;event.name=nameIndex;event.queue=queue;event.parent=parent;
-        event.serial=s.nextSerial++;event.frame=s.counters.frames;
+        event.serial=s.nextSerial++;event.frame=s.counters.frames;event.beginNative=RtrDiagnostics::Now();
         event.sequence=RtrDiagnostics::frame.load(std::memory_order_relaxed);event.revision=RtrDiagnostics::revision.load(std::memory_order_relaxed);
         event.mode=RtrDiagnostics::level.load(std::memory_order_relaxed);event.resource=resource;event.generation=generation;event.reason=reason;
         event.ended=false;event.incompleteReported=false;s.next=(index+1)%QueryCount;

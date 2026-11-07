@@ -28,8 +28,8 @@ class RtrAsyncOutput {
     }
 public:
     uint64_t dropped=0;
-    explicit RtrAsyncOutput(const char* path){
-        if(fopen_s(&file,path,"wb")!=0)throw std::runtime_error("Cannot open GPU diagnostic output");
+    explicit RtrAsyncOutput(const char* path,bool append=false){
+        if(fopen_s(&file,path,append?"ab":"wb")!=0)throw std::runtime_error("Cannot open GPU diagnostic output");
         Start();
     }
     explicit RtrAsyncOutput(FILE* target,bool closeFile=false):file(target),ownsFile(closeFile){Start();}
