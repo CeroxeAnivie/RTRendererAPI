@@ -88,6 +88,9 @@ val buildPrecompiledRuntime = tasks.register<Exec>("buildPrecompiledRuntime") {
 }
 val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
     group = "build"
+    // GPU binaries and textures are already encoded. Avoid serial deflation
+    // of the complete runtime on every bridge release; contents stay identical.
+    entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
     dependsOn(buildPrecompiledRuntime)
     archiveFileName.set("rtxpt-runtime.zip")
     destinationDirectory.set(layout.buildDirectory.dir("native-package"))
@@ -129,7 +132,7 @@ val runtimeDigest = tasks.register("hashRtxptRuntime") {
     }
 }
 tasks.named<Jar>("jar") {
-    // The native ZIP is already compressed. Avoid a second multi-gigabyte deflate.
+    // Store the nested runtime without a multi-gigabyte deflate pass.
     entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
     dependsOn(runtimeDigest)
     from(layout.buildDirectory.dir("native-package")) {
