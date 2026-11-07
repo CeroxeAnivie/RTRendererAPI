@@ -1,6 +1,6 @@
 # 运行时与 JVM 宿主
 
-本文对应未发布的 **8.0.0 迁移候选**。实际交付完成前，不能按版本号推定 Maven Local 已存在可用包，也不能混用 7.x 的 native DLL、私有 shader ABI 或 overlay。
+本文对应已合入 GitHub main 并发布 Maven Local 的 **8.0.0 人工验收候选**。两模块制品及内嵌运行时身份已核对，见主分支收拢记录；人眼效果与介质尚未签收。不能混用 7.x 的 native DLL、私有 shader ABI 或 overlay。
 
 ## 两模块运行图
 

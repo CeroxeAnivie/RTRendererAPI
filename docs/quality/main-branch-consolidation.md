@@ -19,3 +19,17 @@ GitHub 与 Maven Local 最终状态在实际完成后追加，不将准备阶段
 tools/Invoke-NativeSceneDemo.ps1 的 balls／mixed 两项 CheckPaths 均通过，LaunchPerformed=False；默认不覆盖 Java 的 FG／画质／窗口尺寸策略，不自动启动下一场。最终源码、测试、ABI 快照和正式启动工具均进入 GitHub 主线，MC 仓库没有参与本次修改。
 
 Java 主／测试源码编译、8.0.0 两模块 Maven 拓扑和 ABI 校验通过。最终分发包构建与 Maven Local 发布按实际结果续记，不把源码目录启动验证写成正式 JAR 启动验证。下一次人工验收尚未启动。
+
+## 最终分发与 Maven Local
+
+先完成上述 GitHub 源码／工具／文档上传，再发布 renderer-api 和 renderer-rtxpt 两个 8.0.0 模块到 Maven Local；没有发布 Central。最终 assemble／ABI／拓扑构建成功，155.296 秒；本地发布成功，19.535 秒。已复用此次验证过的桥接和 shader，不重新编译所有 shader，也未重复 GPU 性能场。
+
+发布后逐字节身份核对通过：6 个主／源码／Javadoc JAR、2 个 POM、2 个 Gradle metadata；RTXPT 只依赖同版本 API，无旧 core／nvidia 依赖。JAR 内嵌 runtime ZIP 与构建 ZIP 及其 SHA256 一致，ZIP 中 DLL／JVM host／解析 shader 与最终工作运行时一致。两 JAR 的 180／62 个 class 均有当前源文件，没有已删除旧路线的残留 class。
+
+| 制品 | SHA256 |
+| --- | --- |
+| renderer-api-8.0.0.jar | 8f7a6c06ccaa3d08c3e7c70eb44fe72ffc84564d25f10202f5ddf1a06541a62c |
+| renderer-rtxpt-8.0.0.jar | f67ee2dd5f0b3a7300e4b996dab096f290a41939098cdacad6d331562aa8fef9 |
+| 内嵌 runtime ZIP | 079f2aca4f04ea775afa2b84250d4d3c577b23239fbbc599af2afd93786ec8c6 |
+
+原始身份记录位于 build/reports/visual-recovery/maven-local-ready.json。最后检查仅到启动入口 CheckPaths；人工验收窗口未启动，介质未启动，未修改 MC。人眼效果、介质恢复和实际 FG 呈现仍待用户验收，不能由默认请求或隐藏测试代签。
