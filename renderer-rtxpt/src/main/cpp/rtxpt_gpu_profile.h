@@ -1,14 +1,13 @@
-// Optional, sampled export of upstream RTXPT GPU scopes. Rendering stays upstream.
-// Mirrors GpuProfiler.cpp's per-queue timestamp/resolve/fence design, without Tracy.
+// Optional timing of existing adapter command-list scopes, through NVRHI only.
+// A duration is elapsed GPU seconds from NVRHI, never an absolute timestamp.
 #pragma once
-#include <nvrhi/d3d12.h>
+#include <nvrhi/nvrhi.h>
 #include "rtxpt_async_output.h"
 #include "rtxpt_diagnostics.h"
-#include "rtxpt_fence.h"
-#include <string>
-#include <vector>
 #include <array>
-#include <chrono>
+#include <atomic>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -16,257 +15,209 @@
 #include <mutex>
 
 namespace RtrGpuProfile {
-constexpr uint32_t SlotCount=8, ZoneCount=512, NameCount=256;
-struct Token { int queue=-1; uint32_t slot=0, zone=0; };
-struct Event { uint32_t name=0; int parent=-1; bool ended=false; uint64_t mode=0,resource=0,generation=0,reason=0; };
-struct Slot {
-    std::array<Event,ZoneCount> events{};
-    uint32_t count=0;
-    uint64_t frame=0, fence=0, sequence=0, revision=0;
-    bool pending=false;
+// One shared bounded ring, not a per-queue timestamp heap. Leave capacity for
+// other NVRHI users (the locked D3D12 DeviceDesc defaults to 256 timer queries).
+constexpr uint32_t QueryCount=128,NameCount=128,NameBytes=96;
+enum class Phase : uint8_t { Free, Recording, Pending };
+struct Token { int queue=-1;uint32_t slot=QueryCount,zone=0;uint64_t session=0,serial=0; };
+struct Event {
+    nvrhi::TimerQueryHandle query;
+    nvrhi::ICommandList* command=nullptr;
+    Phase phase=Phase::Free;
+    uint32_t name=0;int queue=-1,parent=-1;
+    uint64_t serial=0,frame=0,sequence=0,revision=0,mode=0,resource=0,generation=0,reason=0;
+    bool ended=false,incompleteReported=false;
 };
-struct Queue {
-    nvrhi::IDevice* device=nullptr;
-    nvrhi::CommandQueue type=nvrhi::CommandQueue::Graphics;
-    ID3D12CommandQueue* native=nullptr;
-    nvrhi::RefCountPtr<ID3D12QueryHeap> heap;
-    nvrhi::RefCountPtr<ID3D12Resource> readback;
-    nvrhi::RefCountPtr<ID3D12Fence> fence;
-    nvrhi::CommandListHandle resolve;
-    std::array<Slot,SlotCount> slots{};
-    uint64_t frequency=0, signaled=0;
-    int active=-1;
+struct Counters {
+    bool initialized=false,requested=false,enabled=false;
+    uint32_t capacity=0,stride=16,warmup=0;
+    uint64_t frames=0,completed=0,dropped=0,incomplete=0,pending=0,unclosed=0,invalidEnds=0,queryCreateFailures=0,outputDropped=0;
 };
 struct State {
-    std::array<Queue,2> queues;
-    std::array<std::array<char,160>,NameCount> names{};
-    uint32_t namesUsed=0, stride=16, warmup=240;
-    uint64_t frame=0, dropped=0;
+    nvrhi::IDevice* device=nullptr;
+    std::array<Event,QueryCount> events{};
+    std::array<std::array<char,NameBytes>,NameCount> names{};
+    uint32_t namesUsed=0,next=0;
+    uint64_t session=0,nextSerial=1,lastExportDropped=0,lastExportIncomplete=0;
+    bool prepared=false;
+    std::atomic<bool> enabled{false};
+    Counters counters;
     std::unique_ptr<RtrAsyncOutput> output;
-    // Numeric records are retained once; text exists only at the export boundary.
-    std::array<std::array<uint64_t,15>,4096> completed{};
-    uint64_t completedCount=0, overwritten=0;
-    uint64_t generation=0;
-    bool enabled=true,draining=false;
     std::mutex mutex;
 };
+// Lifecycle belongs to the renderer owner; Shutdown follows command-recording
+// worker termination and precedes releasing the NVRHI device.
 inline std::unique_ptr<State> state;
-inline uint64_t nextGeneration=1;
-inline void FormatRecord(char* line,size_t size,const std::array<uint64_t,15>& r){
-    std::snprintf(line,size,"%llu,%s,%u,%d,%s,%.9f,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
-        static_cast<unsigned long long>(r[1]),r[2]==0?"graphics":"compute",unsigned(r[3]),int(int64_t(r[4])),
-        state->names[r[5]].data(),double(r[7]-r[6])*1000.0/double(r[8]),
-        static_cast<unsigned long long>(r[6]),static_cast<unsigned long long>(r[7]),static_cast<unsigned long long>(r[8]),
-        static_cast<unsigned long long>(r[9]),static_cast<unsigned long long>(r[10]),static_cast<unsigned long long>(r[11]),
-        static_cast<unsigned long long>(r[12]),static_cast<unsigned long long>(r[13]),static_cast<unsigned long long>(r[14]));
-}
-inline uint32_t EnvNumber(const char* name,uint32_t fallback) {
-    if(const char* value=std::getenv(name)) {
-        char* end=nullptr; const auto n=std::strtoul(value,&end,10);
-        if(end!=value && *end=='\0' && n>0 && n<1000000) return uint32_t(n);
+inline uint64_t nextSession=1;
+inline uint32_t EnvNumber(const char* name,uint32_t fallback,bool zero=false){
+    if(const char* value=std::getenv(name)){
+        char* end=nullptr;const auto n=std::strtoul(value,&end,10);
+        if(end!=value&&*end=='\0'&&(zero||n>0)&&n<1000000)return uint32_t(n);
     }
     return fallback;
 }
-inline void Collect(Queue& q,int queueIndex) {
-    if(std::none_of(q.slots.begin(),q.slots.end(),[](const auto& slot){return slot.pending;}))return;
-    const uint64_t completed=RtrCompletedFence(q.fence.Get());
-    for(auto& s:q.slots) {
-        if(!s.pending || s.fence>completed) continue;
-        const uint32_t slotIndex=uint32_t(&s-q.slots.data());
-        const size_t offset=size_t(slotIndex)*ZoneCount*2;
-        const D3D12_RANGE range{offset*sizeof(uint64_t),(offset+s.count*2)*sizeof(uint64_t)};
-        void* mapped=nullptr;
-        if(FAILED(q.readback->Map(0,&range,&mapped))) {state->dropped+=s.count;s.pending=false;continue;}
-        const auto* ticks=static_cast<const uint64_t*>(mapped)+offset;
-        for(uint32_t i=0;i<s.count;++i) {
-            if(!s.events[i].ended || ticks[i*2+1]<ticks[i*2]) {++state->dropped; continue;}
-            const auto& e=s.events[i];
-            auto& record=state->completed[state->completedCount%state->completed.size()];
-            record={state->completedCount+1,s.frame,uint64_t(queueIndex),i,uint64_t(int64_t(e.parent)),e.name,
-                ticks[i*2],ticks[i*2+1],q.frequency,s.sequence,s.revision,e.mode,e.resource,e.generation,e.reason};
-            ++state->completedCount;if(state->completedCount>state->completed.size())++state->overwritten;
-            if(state->output){std::array<char,512> line{};FormatRecord(line.data(),line.size(),record);state->output->Write(line.data());}
-        }
-        const D3D12_RANGE written{0,0}; q.readback->Unmap(0,&written);
-        s.pending=false;
+inline uint64_t Pending(const State& s){
+    uint64_t count=0;for(const auto& event:s.events)count+=event.phase!=Phase::Free;return count;
+}
+inline void WriteRecord(State& s,const Event& e,const char* status,double milliseconds=0,bool duration=false){
+    if(!s.output)return;
+    std::array<char,512> line{};std::array<char,48> elapsed{};
+    if(duration)std::snprintf(elapsed.data(),elapsed.size(),"%.9f",milliseconds);
+    const int size=std::snprintf(line.data(),line.size(),
+        "%llu,%s,%llu,%d,%s,%s,%llu,%llu,%llu,%llu,%llu,%llu,%s\n",
+        static_cast<unsigned long long>(e.frame),e.queue==0?"graphics":"compute",
+        static_cast<unsigned long long>(e.serial),e.parent,s.names[e.name].data(),elapsed.data(),
+        static_cast<unsigned long long>(e.sequence),static_cast<unsigned long long>(e.revision),
+        static_cast<unsigned long long>(e.mode),static_cast<unsigned long long>(e.resource),
+        static_cast<unsigned long long>(e.generation),static_cast<unsigned long long>(e.reason),status);
+    if(size<0||size>=int(line.size())){++s.counters.dropped;return;}
+    s.output->Write(line.data());
+}
+inline void WriteStatus(State& s,const char* status){
+    if(!s.output)return;
+    // Status rows share the event CSV schema. Counter evidence is a comment,
+    // not a fabricated duration or a completed GPU sample.
+    std::array<char,512> line{};
+    std::snprintf(line.data(),line.size(),
+        "# status=%s,frames=%llu,capacity=%u,completed=%llu,dropped=%llu,incomplete=%llu,pending=%llu,unclosed=%llu,invalidEnds=%llu,queryCreateFailures=%llu,outputDropped=%llu,enabled=%u,stride=%u,warmup=%u\n",
+        status,static_cast<unsigned long long>(s.counters.frames),s.counters.capacity,
+        static_cast<unsigned long long>(s.counters.completed),static_cast<unsigned long long>(s.counters.dropped),
+        static_cast<unsigned long long>(s.counters.incomplete),static_cast<unsigned long long>(Pending(s)),
+        static_cast<unsigned long long>(s.counters.unclosed),static_cast<unsigned long long>(s.counters.invalidEnds),
+        static_cast<unsigned long long>(s.counters.queryCreateFailures),static_cast<unsigned long long>(s.output->dropped),
+        unsigned(s.enabled.load(std::memory_order_relaxed)),s.counters.stride,s.counters.warmup);
+    s.output->Write(line.data());
+}
+inline void Collect(State& s){
+    for(auto& event:s.events){
+        if(event.phase!=Phase::Pending)continue;
+        // pollTimerQuery never waits. The locked NVRHI D3D12 implementation
+        // clears its completed fence here; only then is getTimerQueryTime safe.
+        if(!s.device->pollTimerQuery(event.query))continue;
+        if(event.ended){
+            const double seconds=s.device->getTimerQueryTime(event.query);
+            if(std::isfinite(seconds)&&seconds>=0){++s.counters.completed;WriteRecord(s,event,"complete",seconds*1000,true);}
+            else {if(!event.incompleteReported)++s.counters.incomplete;WriteRecord(s,event,"invalid_duration");}
+        }else WriteRecord(s,event,"unclosed");
+        s.device->resetTimerQuery(event.query);
+        event.phase=Phase::Free;event.command=nullptr;
     }
 }
-inline bool InitQueue(Queue& q,nvrhi::IDevice* device,nvrhi::CommandQueue type) {
-    auto* nativeDevice=static_cast<ID3D12Device*>(device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device));
-    q.native=device->getNativeQueue(nvrhi::ObjectTypes::D3D12_CommandQueue,type);
-    if(!nativeDevice || !q.native || FAILED(q.native->GetTimestampFrequency(&q.frequency))) return false;
-    q.device=device; q.type=type;
-    D3D12_QUERY_HEAP_DESC h{}; h.Type=D3D12_QUERY_HEAP_TYPE_TIMESTAMP; h.Count=SlotCount*ZoneCount*2;
-    if(FAILED(nativeDevice->CreateQueryHeap(&h,IID_PPV_ARGS(&q.heap)))) return false;
-    D3D12_HEAP_PROPERTIES hp{}; hp.Type=D3D12_HEAP_TYPE_READBACK;
-    D3D12_RESOURCE_DESC r{}; r.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
-    r.Width=uint64_t(h.Count)*sizeof(uint64_t); r.Height=1; r.DepthOrArraySize=1; r.MipLevels=1;
-    r.SampleDesc.Count=1; r.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    if(FAILED(nativeDevice->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&r,
-        D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&q.readback)))) return false;
-    if(FAILED(nativeDevice->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&q.fence)))) return false;
-    nvrhi::CommandListParameters p; p.queueType=type; q.resolve=device->createCommandList(p);
-    return q.resolve!=nullptr;
-}
-inline void Init(nvrhi::IDevice* device,bool explicitEnable=false) {
-    if(state){
-        state->enabled=explicitEnable||state->output!=nullptr;
-        // DEEP is an immediate diagnostic request, including when an export
-        // path created the profiler earlier with its automatic warmup.
-        if(explicitEnable){state->warmup=0;state->stride=EnvNumber("RTR_RTXPT_GPU_PROFILE_STRIDE",1);}
-        return;
-    }
+inline void Init(nvrhi::IDevice* device,bool explicitEnable=false){
+    if(state||!device)return;
     const char* path=std::getenv("RTR_RTXPT_GPU_PROFILE");
-    if(((!path || !*path)&&!explicitEnable) || device->getGraphicsAPI()!=nvrhi::GraphicsAPI::D3D12) return;
-    state=std::make_unique<State>();
-    state->generation=nextGeneration++;
-    if(path&&*path)state->output=std::make_unique<RtrAsyncOutput>(path);
-    state->stride=EnvNumber("RTR_RTXPT_GPU_PROFILE_STRIDE",explicitEnable?1:16);
-    state->warmup=explicitEnable?0:EnvNumber("RTR_RTXPT_GPU_PROFILE_WARMUP",240);
-    if(state->output)state->output->Write("frame,queue,event,parent,name,inclusive_ms,begin_tick,end_tick,frequency,sequence,revision,mode,resource,generation,reason\n");
-    if(!InitQueue(state->queues[0],device,nvrhi::CommandQueue::Graphics)
-        || !InitQueue(state->queues[1],device,nvrhi::CommandQueue::Compute)) {
-        state.reset();
+    const char* control=std::getenv("RTR_RTXPT_GPU_TIMING");
+    const bool requested=control?std::strcmp(control,"1")==0:explicitEnable||(path&&*path);
+    auto next=std::make_unique<State>();next->device=device;next->session=nextSession++;
+    next->counters.initialized=true;next->counters.requested=requested;
+    next->counters.stride=EnvNumber("RTR_RTXPT_GPU_PROFILE_STRIDE",explicitEnable?1:16);
+    next->counters.warmup=EnvNumber("RTR_RTXPT_GPU_PROFILE_WARMUP",0,true);
+    // File creation is an explicit cold lifecycle operation, never Begin/End or
+    // FrameBoundary. A path is required even when timing is explicitly enabled.
+    if(requested&&path&&*path){
+        next->output=std::make_unique<RtrAsyncOutput>(path);
+        next->output->Write("frame,queue,event,parent,name,duration_ms,sequence,revision,mode,resource,generation,reason,status\n");
+        next->output->Write("# time_semantics=NVRHI_elapsed_seconds_times_1000; absolute_timestamps_unavailable; only_status_complete_has_a_duration\n");
     }
-}
-inline Token Begin(nvrhi::ICommandList* list,const char* name,int parent,uint64_t resource=0,uint64_t generation=0,uint64_t reason=0) {
-    if(!state || !state->enabled || state->frame<state->warmup || (state->frame-state->warmup)%state->stride) return {};
-    const auto type=list->getDesc().queueType;
-    const int qi=type==nvrhi::CommandQueue::Graphics?0:type==nvrhi::CommandQueue::Compute?1:-1;
-    if(qi<0) return {};
-    std::lock_guard lock(state->mutex);
-    auto& q=state->queues[qi];
-    if(q.active<0) {
-        for(uint32_t i=0;i<SlotCount;++i) if(!q.slots[i].pending) {
-            q.active=int(i); q.slots[i].count=0; q.slots[i].frame=state->frame;q.slots[i].sequence=RtrDiagnostics::frame.load();q.slots[i].revision=RtrDiagnostics::revision.load(); break;
-        }
-    }
-    if(q.active<0 || q.slots[q.active].count==ZoneCount) {++state->dropped; return {};}
-    auto* nativeList=static_cast<ID3D12GraphicsCommandList*>(list->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
-    if(!nativeList) {++state->dropped; return {};}
-    uint32_t ni=0;
-    while(ni<state->namesUsed && std::strcmp(state->names[ni].data(),name)!=0) ++ni;
-    if(ni==state->namesUsed) {
-        if(ni==NameCount || std::strlen(name)>=state->names[ni].size()) {++state->dropped; return {};}
-        strcpy_s(state->names[ni].data(),state->names[ni].size(),name); ++state->namesUsed;
-    }
-    auto& s=q.slots[q.active]; const uint32_t i=s.count++;
-    s.events[i]={ni,parent,false,RtrDiagnostics::level.load(),resource,generation,reason};
-    nativeList->EndQuery(q.heap,D3D12_QUERY_TYPE_TIMESTAMP,(uint32_t(q.active)*ZoneCount+i)*2);
-    return {qi,uint32_t(q.active),i};
-}
-inline void End(nvrhi::ICommandList* list,Token token) {
-    if(!state || token.queue<0) return;
-    auto& q=state->queues[token.queue];
-    auto* nativeList=static_cast<ID3D12GraphicsCommandList*>(list->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
-    if(!nativeList) {++state->dropped; return;}
-    nativeList->EndQuery(q.heap,D3D12_QUERY_TYPE_TIMESTAMP,(token.slot*ZoneCount+token.zone)*2+1);
-    q.slots[token.slot].events[token.zone].ended=true;
-}
-inline void AfterPresent() {
-    if(!state||(!state->enabled&&!state->draining)) return;
-    for(int i=0;i<2;++i) {
-        auto& q=state->queues[i]; Collect(q,i);
-        if(q.active<0) continue;
-        auto& s=q.slots[q.active];
-        const uint32_t start=uint32_t(q.active)*ZoneCount*2;
-        q.resolve->open();
-        auto* nativeList=static_cast<ID3D12GraphicsCommandList*>(q.resolve->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList));
-        nativeList->ResolveQueryData(q.heap,D3D12_QUERY_TYPE_TIMESTAMP,start,s.count*2,q.readback,uint64_t(start)*sizeof(uint64_t));
-        q.resolve->close(); q.device->executeCommandList(q.resolve,q.type);
-        s.fence=++q.signaled;
-        const auto result=q.native->Signal(q.fence,s.fence);
-        if(SUCCEEDED(result)) s.pending=true;
-        else{++state->dropped;RtrLatchDeviceFailure(result);RtrRequireHealthy();}
-        q.active=-1;
-    }
-    if(state->enabled)++state->frame;
-    if(!state->enabled){
-        state->draining=false;
-        for(const auto& q:state->queues)for(const auto& slot:q.slots)state->draining|=slot.pending;
-    }
+    state=std::move(next);
 }
 inline void Configure(nvrhi::IDevice* device,unsigned level,bool allowed){
-    const char* path=std::getenv("RTR_RTXPT_GPU_PROFILE");
-    const bool enabled=allowed&&level!=0&&(level==2||(path&&*path));
-    if(enabled)Init(device,level==2);
-    if(state){
-        state->enabled=enabled;state->draining=false;
-        if(!enabled)for(const auto& q:state->queues){
-            state->draining|=q.active>=0;
-            for(const auto& slot:q.slots)state->draining|=slot.pending;
+    if(!state||state->device!=device)return;
+    std::lock_guard lock(state->mutex);auto& s=*state;
+    const bool enabled=allowed&&level!=0&&s.counters.requested;
+    // Creating queries is a diagnostic configuration transition, not frame
+    // recording. OFF never creates queries; completed objects are reused.
+    if(enabled&&!s.prepared){
+        s.prepared=true;
+        for(auto& event:s.events){
+            event.query=device->createTimerQuery();
+            if(!event.query){++s.counters.queryCreateFailures;break;}
+            ++s.counters.capacity;
         }
     }
+    s.counters.enabled=enabled;s.enabled.store(enabled,std::memory_order_relaxed);
 }
-inline std::vector<std::string> Snapshot(){
-    if(!state)return {"0,0,0,0,0"};
-    std::lock_guard lock(state->mutex);
-    // An explicit snapshot also publishes the final submitted frame. There may
-    // be no next present to collect its already-completed timestamps.
-    if(state->enabled||state->draining){
-        for(int i=0;i<2;++i)Collect(state->queues[i],i);
-        if(!state->enabled){
-            state->draining=false;
-            for(const auto& q:state->queues){
-                state->draining|=q.active>=0;
-                for(const auto& slot:q.slots)state->draining|=slot.pending;
-            }
+inline Token Begin(nvrhi::ICommandList* list,const char* name,int parent,uint64_t resource=0,uint64_t generation=0,uint64_t reason=0){
+    if(!state||!list||!state->enabled.load(std::memory_order_relaxed)||RtrDiagnostics::level.load(std::memory_order_relaxed)==0)return {};
+    std::lock_guard lock(state->mutex);auto& s=*state;
+    if(!s.enabled.load(std::memory_order_relaxed)||s.counters.frames<s.counters.warmup||(s.counters.frames-s.counters.warmup)%s.counters.stride)return {};
+    const auto type=list->getDesc().queueType;
+    const int queue=type==nvrhi::CommandQueue::Graphics?0:type==nvrhi::CommandQueue::Compute?1:-1;
+    if(queue<0||!name){++s.counters.dropped;return {};}
+    size_t length=0;while(length<NameBytes&&name[length]){
+        if(name[length]==','||name[length]=='"'||name[length]=='\r'||name[length]=='\n'){++s.counters.dropped;return {};}
+        ++length;
+    }
+    if(length==NameBytes){++s.counters.dropped;return {};}
+    uint32_t nameIndex=0;while(nameIndex<s.namesUsed&&std::strcmp(s.names[nameIndex].data(),name)!=0)++nameIndex;
+    if(nameIndex==s.namesUsed){
+        if(nameIndex==NameCount){++s.counters.dropped;return {};}
+        std::memcpy(s.names[nameIndex].data(),name,length+1);++s.namesUsed;
+    }
+    for(uint32_t probe=0;probe<QueryCount;++probe){
+        const uint32_t index=(s.next+probe)%QueryCount;auto& event=s.events[index];
+        if(!event.query||event.phase!=Phase::Free)continue;
+        event.command=list;event.phase=Phase::Recording;event.name=nameIndex;event.queue=queue;event.parent=parent;
+        event.serial=s.nextSerial++;event.frame=s.counters.frames;
+        event.sequence=RtrDiagnostics::frame.load(std::memory_order_relaxed);event.revision=RtrDiagnostics::revision.load(std::memory_order_relaxed);
+        event.mode=RtrDiagnostics::level.load(std::memory_order_relaxed);event.resource=resource;event.generation=generation;event.reason=reason;
+        event.ended=false;event.incompleteReported=false;s.next=(index+1)%QueryCount;
+        list->beginTimerQuery(event.query);return {queue,index,0,s.session,event.serial};
+    }
+    ++s.counters.dropped;return {};
+}
+inline void End(nvrhi::ICommandList* list,Token token){
+    if(!state||token.queue<0)return;
+    std::lock_guard lock(state->mutex);auto& s=*state;
+    if(token.session!=s.session||token.slot>=QueryCount){++s.counters.invalidEnds;return;}
+    auto& event=s.events[token.slot];
+    // NVRHI explicitly requires begin/end on the SAME command list. An outer
+    // scope spanning separate command lists cannot be represented as one timer.
+    if(event.serial!=token.serial||event.phase!=Phase::Recording||event.ended||event.command!=list){++s.counters.invalidEnds;return;}
+    list->endTimerQuery(event.query);event.ended=true;event.command=nullptr;
+}
+// Call after all timed command lists for this owner frame have been submitted,
+// including shared-output copies. It neither submits work nor waits for a query.
+inline void FrameBoundary(){
+    if(!state)return;
+    std::lock_guard lock(state->mutex);auto& s=*state;
+    const auto previousPending=Pending(s);
+    for(auto& event:s.events)if(event.phase==Phase::Recording){
+        event.phase=Phase::Pending;event.command=nullptr;
+        if(!event.ended){event.incompleteReported=true;++s.counters.incomplete;++s.counters.unclosed;}
+    }
+    Collect(s);
+    if(previousPending||Pending(s)||s.lastExportDropped!=s.counters.dropped||s.lastExportIncomplete!=s.counters.incomplete){
+        WriteStatus(s,"frame_boundary");s.lastExportDropped=s.counters.dropped;s.lastExportIncomplete=s.counters.incomplete;
+    }
+    ++s.counters.frames;
+}
+inline void AfterPresent(){FrameBoundary();}
+// Numeric availability/loss counters only: no snapshot allocation, hidden poll,
+// elapsed-as-tick packing, or extension into upstream algorithm internals.
+inline Counters GetCounters(){
+    if(!state)return {};
+    std::lock_guard lock(state->mutex);auto counters=state->counters;
+    counters.pending=Pending(*state);counters.enabled=state->enabled.load(std::memory_order_relaxed);
+    if(state->output)counters.outputDropped=state->output->dropped;return counters;
+}
+inline void Shutdown(){
+    if(!state)return;
+    {
+        std::lock_guard lock(state->mutex);auto& s=*state;s.enabled.store(false,std::memory_order_relaxed);s.counters.enabled=false;
+        // One nonblocking final poll. A caller may separately finish its normal
+        // device lifecycle; this diagnostic path never adds waitForIdle/fences.
+        for(auto& event:s.events)if(event.phase==Phase::Recording){event.phase=Phase::Pending;event.command=nullptr;
+            if(!event.ended&&!event.incompleteReported){event.incompleteReported=true;++s.counters.incomplete;++s.counters.unclosed;}}
+        Collect(s);
+        for(auto& event:s.events)if(event.phase!=Phase::Free){
+            if(!event.incompleteReported){event.incompleteReported=true;++s.counters.incomplete;}
+            WriteRecord(s,event,"shutdown_pending");
         }
+        WriteStatus(s,"shutdown");
     }
-    std::vector<std::string> result;
-    uint64_t pending=0;for(auto& q:state->queues)for(auto& slot:q.slots)pending+=slot.pending?slot.count:0;
-    result.push_back(std::to_string(state->dropped)+","+std::to_string(state->overwritten)+","+std::to_string(pending)+","+std::to_string(state->stride)+","+std::to_string(state->enabled));
-    const uint64_t count=std::min<uint64_t>(state->completedCount,state->completed.size());
-    result.reserve(size_t(count)+1);
-    for(uint64_t i=state->completedCount-count;i<state->completedCount;++i){
-        std::array<char,512> line{};FormatRecord(line.data(),line.size(),state->completed[i%state->completed.size()]);result.emplace_back(line.data());
-    }
-    return result;
-}
-struct PackedSnapshot {std::vector<uint64_t> words;std::vector<std::string> names;};
-inline PackedSnapshot SnapshotPacked(uint64_t nextOrdinal){
-    constexpr size_t Header=11,Width=15;PackedSnapshot result;
-    if(!state){result.words={1,Width,0,0,0,0,0,0,1,1,0};return result;}
-    // This endpoint is owner-thread-only, like diagnosticGpuSnapshot. Copy
-    // fixed numeric records under the profiler lock; allocate/encode afterwards.
-    uint64_t cut=0,first=0,pending=0,dropped=0,overwritten=0,generation=0,stride=0,enabled=0;
-    uint32_t namesUsed=0;std::array<std::array<char,160>,NameCount> names{};
-    {std::lock_guard lock(state->mutex);
-        if(state->enabled||state->draining){for(int i=0;i<2;++i)Collect(state->queues[i],i);
-            if(!state->enabled){state->draining=false;for(const auto& q:state->queues){state->draining|=q.active>=0;for(const auto& slot:q.slots)state->draining|=slot.pending;}}}
-        cut=state->completedCount;first=cut-std::min<uint64_t>(cut,state->completed.size())+1;
-        if(nextOrdinal)first=std::max(first,std::min(nextOrdinal,cut+1));
-        for(const auto& q:state->queues)for(const auto& slot:q.slots)pending+=slot.pending?slot.count:0;
-        dropped=state->dropped;overwritten=state->overwritten;generation=state->generation;stride=state->stride;enabled=state->enabled;
-        namesUsed=state->namesUsed;std::copy_n(state->names.begin(),namesUsed,names.begin());
-    }
-    result.words.resize(Header+size_t(cut+1-first)*Width);
-    const std::array<uint64_t,Header> header={1,Width,dropped,overwritten,pending,stride,enabled,generation,first,cut+1,namesUsed};
-    std::copy(header.begin(),header.end(),result.words.begin());
-    {std::lock_guard lock(state->mutex);
-        for(uint64_t ordinal=first;ordinal<=cut;++ordinal){const auto& row=state->completed[(ordinal-1)%state->completed.size()];
-            std::copy(row.begin(),row.end(),result.words.begin()+Header+size_t(ordinal-first)*Width);}
-    }
-    result.names.reserve(namesUsed);for(uint32_t i=0;i<namesUsed;++i)result.names.emplace_back(names[i].data());return result;
-}
-inline void Shutdown() {
-    if(!state) return;
-    // Only shutdown may wait. Sampling never waits for a GPU query.
-    for(int i=0;i<2;++i) {
-        auto& q=state->queues[i];
-        if(q.device&&RtrDeviceRemoved(static_cast<ID3D12Device*>(q.device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device))))continue;
-        if(q.signaled && RtrCompletedFence(q.fence.Get())<q.signaled) {
-            HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
-            if(event) {
-                if(SUCCEEDED(q.fence->SetEventOnCompletion(q.signaled,event))) WaitForSingleObject(event,5000);
-                CloseHandle(event);
-            }
-        }
-        Collect(q,i);
-    }
-    if(state->output&&(state->enabled||state->draining)){char line[256];std::snprintf(line,sizeof(line),"# frames=%llu,stride=%u,warmup=%u,dropped=%llu,outputDropped=%llu\n",
-        static_cast<unsigned long long>(state->frame),state->stride,state->warmup,
-        static_cast<unsigned long long>(state->dropped),static_cast<unsigned long long>(state->output->dropped));state->output->Write(line);}
+    // RtrAsyncOutput drains its bounded CPU queue only at cold shutdown. NVRHI
+    // owns the GPU lifetime of timer references retained by submitted lists.
     state.reset();
 }
 }

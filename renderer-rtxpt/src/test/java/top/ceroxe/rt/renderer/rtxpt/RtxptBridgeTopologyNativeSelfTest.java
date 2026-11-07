@@ -107,7 +107,7 @@ public final class RtxptBridgeTopologyNativeSelfTest {
                 require(allocations==expectedAllocations,"Native capacity was not reused at sequence="+sequence+": "+allocations);
                 require(full==0,"Topology change within native table capacity repeated full RefreshBuffers at sequence="+sequence);
                 require(reuses==(reused?1:0),"Atomic native container reuse did not match its exact contract at sequence="+sequence);
-                if(!active.isEmpty())require(prepared==(reused||(sequence>=25&&sequence<=27)?1:2),"Prepared graph publication count changed at sequence="+sequence+": "+prepared);
+                if(!active.isEmpty())require(prepared==1,"Lean topology must publish the final graph exactly once at sequence="+sequence+": "+prepared);
                 require(materials==0,"Independent topology entered the unused beauty baker at sequence="+sequence);
                 for(long id:new long[]{1,3})if(before.containsKey(id)&&active.contains(id))
                     require(before.get(id)[0]==RtxptNative.meshResourceState(handle,"i"+(id*11))[0],"Topology change rebuilt a surviving unrelated BLAS");
@@ -141,7 +141,8 @@ public final class RtxptBridgeTopologyNativeSelfTest {
                 System.out.println("BRIDGE_TOPOLOGY sequence="+sequence+" case="+name+" active="+active.size()+" groups="+geometryCount+" tlas="+allocations+" PASS");
             }
         } finally {Files.write(output.resolve("topology-cases.csv"),rows,StandardCharsets.UTF_8);}
-        System.out.println("BRIDGE_TOPOLOGY PASS frames=29 freshPixels=true liveOnly=true previousPose=true capacityReuse=true groupResize=true materialLifetime=true containerReuse=true newPoseFallback=true batchUpload=true independentBatchEdits=true vacatedBlasReuse=true incompatibleBlasFallback=true");
+        RtxptDeferredFrameNativeSelfTest.main(new String[]{output.resolve("deferred-frame").toString()});
+        System.out.println("BRIDGE_TOPOLOGY PASS frames=29 freshPixels=true liveOnly=true previousPose=true capacityReuse=true groupResize=true materialLifetime=true containerReuse=true newPoseFallback=true batchUpload=true independentBatchEdits=true vacatedBlasReuse=true incompatibleBlasFallback=true singleGraphPublication=true");
     }
 
     private static void render(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,CameraState camera,Set<Long> active,long sequence) {

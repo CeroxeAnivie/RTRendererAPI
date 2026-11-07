@@ -67,6 +67,9 @@ final class RtxptNative {
     // Owner-thread contract inspection; never performs a GPU readback.
     static native double[] lightingMetadataState(long handle,String instanceName,String geometryName);
     static native long[] resourceWorkState(long handle);
+    // Independent gauges: current owned input bytes, lifetime peak bytes, live
+    // owned packets. Shared backing packets count once, not once per mesh.
+    static native long[] meshInputRetentionState(long handle);
     // Resource create/reopen, structure create/reopen, pose packets/nodes, empty packets,
     // lean native-lighting frames, full native-lighting frame fallbacks, empty-scene frames.
     static native long[] commandWorkState(long handle);

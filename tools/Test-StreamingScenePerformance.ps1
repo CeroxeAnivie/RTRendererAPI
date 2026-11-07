@@ -15,6 +15,12 @@ param(
     [ValidateRange(1,3600)][int]$StationaryFrames=90,
     [ValidateRange(16,4096)][int]$TextureSize=1024,
     [bool]$DeformGeometry=$true,
+    [ValidateSet('physical-sum','finite-channel-max')][string]$SourceModel='physical-sum',
+    [ValidateRange(-1,262144)][int]$StaticSources=-1,
+    [ValidateRange(0,65535)][int]$FlowPerFrame=0,
+    [ValidateRange(2,256)][int]$MaterialCount=2,
+    [switch]$ExportRaw,
+    [switch]$RequireTarget,
     [ValidateRange(1,86400)][int]$TimeoutSeconds=900,
     [switch]$RequireIdle,
     [switch]$CheckPaths
@@ -23,6 +29,13 @@ $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $utf8=[Text.UTF8Encoding]::new($false)
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if($SourceModel -eq 'physical-sum' -and $StaticSources -ne -1){throw 'StaticSources requires finite-channel-max'}
+$effectiveStaticSources=if($SourceModel -eq 'finite-channel-max'){if($StaticSources -ge 0){$StaticSources}else{[Math]::Max(0,$Sources-150)}}else{0}
+if($effectiveStaticSources -gt $Sources -or $FlowPerFrame -ge $Meshes){throw 'StaticSources must not exceed Sources and FlowPerFrame must be smaller than Meshes'}
+$dynamicSources=$Sources-$effectiveStaticSources
+$workloadKey="$SourceModel/static=$effectiveStaticSources/dynamic=$dynamicSources/flow=$FlowPerFrame/materials=$MaterialCount/raw=$([int][bool]$ExportRaw)/deform=$DeformGeometry/texture=$TextureSize"
+$workloadFields=[ordered]@{workloadKey=$workloadKey;sourceModel=$SourceModel;staticSources=$effectiveStaticSources;dynamicSources=$dynamicSources;flowPerFrame=$FlowPerFrame;materialCount=$MaterialCount;exportRaw=[bool]$ExportRaw;requireTarget=[bool]$RequireTarget}
+function Add-WorkloadFields([Collections.IDictionary]$Value){foreach($name in $workloadFields.Keys){$Value[$name]=$workloadFields[$name]};[pscustomobject]$Value}
 function Full([string]$Path){[IO.Path]::GetFullPath($Path,$repo)}
 function Save-Json([string]$Path,$Value){[IO.File]::WriteAllText($Path,($Value|ConvertTo-Json -Depth 32)+[Environment]::NewLine,$utf8)}
 function Hash([string]$Path){(Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()}
@@ -33,7 +46,7 @@ $runtimes=[ordered]@{}
 if($BaselineRuntimeDirectory){$runtimes.baseline=Full $BaselineRuntimeDirectory}
 $runtimes.current=Full $RuntimeDirectory
 if($CheckPaths){
-    [pscustomobject]@{Runtimes=$runtimes;Classpath=$classpathPath;Output=$output;Host=$hostRunner;Profiles=$Profiles;Diagnostics=$Diagnostics;Meshes=$Meshes;Sources=$Sources;Ticks=$Ticks;FramesPerTick=$FramesPerTick;MovementFrames=$Ticks*$FramesPerTick;StationaryFrames=$StationaryFrames;JobLimitGiB=10;Runs=$runtimes.Count*$Profiles.Count*$Diagnostics.Count}
+    Add-WorkloadFields ([ordered]@{Runtimes=$runtimes;Classpath=$classpathPath;Output=$output;Host=$hostRunner;Profiles=$Profiles;Diagnostics=$Diagnostics;Meshes=$Meshes;Sources=$Sources;Ticks=$Ticks;FramesPerTick=$FramesPerTick;MovementFrames=$Ticks*$FramesPerTick;StationaryFrames=$StationaryFrames;JobLimitGiB=10;Runs=$runtimes.Count*$Profiles.Count*$Diagnostics.Count})
     return
 }
 if(!(Test-Path -LiteralPath $classpathPath -PathType Leaf)){throw 'Compile the fixture and export its fixed runtime classpath before running this tool'}
@@ -61,6 +74,7 @@ foreach($identity in $runtimes.Keys){
 Save-Json (Join-Path $output 'environment.json') ([ordered]@{
     schema='streaming-scene-performance-v1';timestampUtc=[DateTime]::UtcNow.ToString('o');testClasses=$classIdentities;runtime=$runtimeIdentities
     profiles=$Profiles;diagnostics=$Diagnostics;meshes=$Meshes;admissionBatches=$AdmissionBatches;sources=$Sources;ticks=$Ticks;sceneTickHz=20;framesPerTick=$FramesPerTick
+    workloadKey=$workloadKey;sourceModel=$SourceModel;staticSources=$effectiveStaticSources;dynamicSources=$dynamicSources;flowPerFrame=$FlowPerFrame;materialCount=$MaterialCount;exportRaw=[bool]$ExportRaw;requireTarget=[bool]$RequireTarget
     movementFrames=$Ticks*$FramesPerTick;warmupFrames=$WarmupFrames;stationaryFrames=$StationaryFrames;textureSize=$TextureSize
     outputExtent=@(2560,1600);lightingExtent=@(1280,800);jobMemoryLimitGiB=10;javaMaximumHeapMiB=512;serialRuns=$true
     backgroundWindow=$true;runtimeCompilationProhibited=$true;baselineAndCurrentUseIdenticalClassBytes=$true
@@ -92,16 +106,19 @@ try {
     foreach($profile in $Profiles){foreach($level in $Diagnostics){foreach($identity in $runtimes.Keys){
         foreach($file in $classIdentities){if((Hash $file.path) -ne $file.sha256){throw 'Fixture class bytes changed between runs'}}
         foreach($file in $runtimeIdentities[$identity]){if((Hash (Join-Path $runtimes[$identity] $file.name)) -ne $file.sha256){throw 'Native runtime bytes changed between runs'}}
-        $tag="$identity-$profile-$level";$case=Join-Path $output $tag
+        $tag="$identity-$profile-$level-$SourceModel-s$effectiveStaticSources-d$dynamicSources-flow$FlowPerFrame-mat$MaterialCount-raw$([int][bool]$ExportRaw)";$case=Join-Path $output $tag
         [IO.Directory]::CreateDirectory($case)|Out-Null
         $gpu=Read-GpuBaseline
-        Save-Json (Join-Path $case 'environment.json') ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;initialGpu=$gpu;runtime=$runtimeIdentities[$identity];classes=$classIdentities;timestampUtc=[DateTime]::UtcNow.ToString('o')})
+        Save-Json (Join-Path $case 'environment.json') (Add-WorkloadFields ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;initialGpu=$gpu;runtime=$runtimeIdentities[$identity];classes=$classIdentities;timestampUtc=[DateTime]::UtcNow.ToString('o')}))
         if($RequireIdle -and !$gpu.absoluteComparisonAllowed){throw "Initial GPU is busy or unknown; $tag was not started"}
         Write-Host "Streaming scene: $tag meshes=$Meshes sources=$Sources logicalTicks=$Ticks renderFrames=$($Ticks*$FramesPerTick)"
         $arguments=@('--meshes',[string]$Meshes,'--admission-batches',[string]$AdmissionBatches,'--sources',[string]$Sources,'--ticks',[string]$Ticks,'--frames-per-tick',[string]$FramesPerTick,
             '--frames',[string]($Ticks*$FramesPerTick),'--warmup-frames',[string]$WarmupFrames,'--stationary-frames',[string]$StationaryFrames,
             '--motion-profile',$profile,'--texture-updates','true','--texture-size',[string]$TextureSize,
-            '--deform-geometry',$DeformGeometry.ToString().ToLowerInvariant(),'--diagnostics',$level,'--output',$case)
+            '--deform-geometry',$DeformGeometry.ToString().ToLowerInvariant(),'--diagnostics',$level,'--source-model',$SourceModel,
+            '--flow-per-frame',[string]$FlowPerFrame,'--material-count',[string]$MaterialCount,
+            '--export-raw',([bool]$ExportRaw).ToString().ToLowerInvariant(),'--require-target',([bool]$RequireTarget).ToString().ToLowerInvariant(),'--output',$case)
+        if($SourceModel -eq 'finite-channel-max'){$arguments+=@('--static-sources',[string]$effectiveStaticSources)}
         Save-Json (Join-Path $case 'host-arguments.json') ([ordered]@{hostRunner=$hostRunner;mainClass='top.ceroxe.rt.renderer.rtxpt.RtxptStreamingWorkload';applicationArguments=$arguments;runtimeDirectory=$runtimes[$identity];classpathFile=$classpathPath;timeoutSeconds=$TimeoutSeconds})
         # Keep paths and application arguments as data. This constant launcher
         # invokes the existing bounded host; native processes cannot escape its Job.
@@ -129,7 +146,11 @@ exit $LASTEXITCODE
         $resultPath=Join-Path $case 'result.json'
         $result=if(Test-Path -LiteralPath $resultPath){Get-Content -LiteralPath $resultPath -Raw|ConvertFrom-Json}else{$null}
         $guard=[bool](Select-String -LiteralPath @($stdout,$stderr) -SimpleMatch 'runtime compiler processes prohibited' -Quiet|Where-Object{$_}|Select-Object -First 1)
-        $run=[ordered]@{identity=$identity;profile=$profile;diagnostics=$level;exitCode=$exitCode;wallSeconds=$watch.Elapsed.TotalSeconds;absoluteComparisonAllowed=$gpu.absoluteComparisonAllowed;compilerGuardObserved=$guard;success=($exitCode -eq 0 -and $null -ne $result -and $result.success -and $guard);result=$result}
+        $contractMatches=$null -ne $result -and $result.source_model -eq $SourceModel -and $result.configuration.static_sources -eq $effectiveStaticSources -and $result.configuration.flow_meshes_per_frame -eq $FlowPerFrame -and $result.configuration.authored_material_count -eq $MaterialCount -and $result.configuration.export_raw -eq [bool]$ExportRaw -and $result.configuration.require_target -eq [bool]$RequireTarget
+        $executionSuccess=$exitCode -eq 0 -and $null -ne $result -and $result.success -and $guard -and $contractMatches
+        $targetRatesObserved=$null -ne $result -and $result.meets_target_pipeline_rate -eq $true -and $result.meets_target_simulation_rate -eq $true
+        $targetCertified=$executionSuccess -and $targetRatesObserved -and $gpu.absoluteComparisonAllowed
+        $run=Add-WorkloadFields ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;exitCode=$exitCode;wallSeconds=$watch.Elapsed.TotalSeconds;absoluteComparisonAllowed=$gpu.absoluteComparisonAllowed;compilerGuardObserved=$guard;requestedContractMatches=$contractMatches;executionSuccess=$executionSuccess;targetRatesObserved=$targetRatesObserved;targetCertified=$targetCertified;targetQualification=if($gpu.absoluteComparisonAllowed){'known-idle-initial-GPU'}else{'observation-only-initial-GPU-busy-or-unknown'};success=($executionSuccess -and (!$RequireTarget -or $targetCertified));result=$result})
         $runs.Add($run)
         Save-Json (Join-Path $output 'runs.json') @($runs.ToArray())
         if(!$run.success){throw "Streaming scene failed: $tag; inspect its run.log and result.json"}
@@ -140,7 +161,7 @@ exit $LASTEXITCODE
                 $componentSum=$phase.preparation_outside_timing.mean_ms+$phase.apply_to_fresh_wall.mean_ms+$phase.diagnostic_poll_outside_timing.mean_ms
                 if($componentSum -gt 0){$componentRate=1000/$componentSum}
             }
-            if($null -ne $phase.pipeline_frames_per_second){$performance.Add([pscustomobject]@{identity=$identity;profile=$profile;diagnostics=$level;phase=$phaseName;pipelineFramesPerSecond=$phase.pipeline_frames_per_second;simulationFramesPerSecond=$phase.simulation_frames_per_second;componentSumDerivedPartialFramesPerSecond=$componentRate;frames=$phase.verified_fresh_frames;absoluteComparisonAllowed=$gpu.absoluteComparisonAllowed})}
+            if($null -ne $phase.pipeline_frames_per_second){$performance.Add((Add-WorkloadFields ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;phase=$phaseName;pipelineFramesPerSecond=$phase.pipeline_frames_per_second;simulationFramesPerSecond=$phase.simulation_frames_per_second;componentSumDerivedPartialFramesPerSecond=$componentRate;frames=$phase.verified_fresh_frames;absoluteComparisonAllowed=$gpu.absoluteComparisonAllowed;targetCertified=($phaseName -eq 'movement' -and $targetCertified)})))}
             $metrics=[ordered]@{}
             foreach($metric in @('preparation_outside_timing','apply_wall','attributes_wall','submit_wall','apply_to_fresh_wall','diagnostic_poll_outside_timing','simulation_frame_wall')){$metrics[$metric]=$phase.$metric}
             foreach($stage in $phase.boundary_wall.PSObject.Properties){$metrics['boundary.'+$stage.Name]=$stage.Value}
@@ -149,11 +170,11 @@ exit $LASTEXITCODE
             }
             foreach($metric in $metrics.Keys){foreach($statistic in @('mean_ms','p95_ms','p99_ms','max_ms')){
                 $value=$metrics[$metric].$statistic
-                if($null -ne $value){$latencies.Add([pscustomobject]@{identity=$identity;profile=$profile;diagnostics=$level;phase=$phaseName;metric=$metric;statistic=$statistic;valueMilliseconds=$value;samples=$metrics[$metric].samples;absoluteComparisonAllowed=$gpu.absoluteComparisonAllowed})}
+                if($null -ne $value){$latencies.Add((Add-WorkloadFields ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;phase=$phaseName;metric=$metric;statistic=$statistic;valueMilliseconds=$value;samples=$metrics[$metric].samples;absoluteComparisonAllowed=$gpu.absoluteComparisonAllowed})))}
             }}
             if($phase.resource_work.available){
-                foreach($counter in $phase.resource_work.counters.PSObject.Properties){$resourceWork.Add([pscustomobject]@{identity=$identity;profile=$profile;diagnostics=$level;phase=$phaseName;available=($counter.Value.available -ne $false);counter=$counter.Name;begin=$counter.Value.begin;end=$counter.Value.end;delta=$counter.Value.delta;reason=$counter.Value.reason})}
-            } else {$resourceWork.Add([pscustomobject]@{identity=$identity;profile=$profile;diagnostics=$level;phase=$phaseName;available=$false;counter=$null;begin=$null;end=$null;delta=$null;reason=$phase.resource_work.reason})}
+                foreach($counter in $phase.resource_work.counters.PSObject.Properties){$resourceWork.Add((Add-WorkloadFields ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;phase=$phaseName;available=($counter.Value.available -ne $false);counter=$counter.Name;begin=$counter.Value.begin;end=$counter.Value.end;delta=$counter.Value.delta;reason=$counter.Value.reason})))}
+            } else {$resourceWork.Add((Add-WorkloadFields ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;phase=$phaseName;available=$false;counter=$null;begin=$null;end=$null;delta=$null;reason=$phase.resource_work.reason})))}
         }
         $performance.ToArray()|Export-Csv -LiteralPath (Join-Path $output 'throughput.csv') -NoTypeInformation -Encoding utf8
         $latencies.ToArray()|Export-Csv -LiteralPath (Join-Path $output 'latency.csv') -NoTypeInformation -Encoding utf8
@@ -164,21 +185,23 @@ exit $LASTEXITCODE
 }
 $comparisons=[Collections.Generic.List[object]]::new()
 function Add-Comparison($Old,$New,[string]$Metric,[string]$Statistic,[double]$OldValue,[double]$NewValue){
+    if($Old.workloadKey -ne $New.workloadKey){throw 'Different source or flow/material workloads cannot be compared'}
     $eligible=$Old.absoluteComparisonAllowed -and $New.absoluteComparisonAllowed
-    $comparisons.Add([pscustomobject]@{profile=$New.profile;diagnostics=$New.diagnostics;phase=$New.phase;metric=$Metric;statistic=$Statistic;baseline=$OldValue;current=$NewValue;absoluteDifference=if($eligible){$NewValue-$OldValue}else{$null};percentDifference=if($eligible -and $OldValue -ne 0){($NewValue-$OldValue)/$OldValue*100}else{$null};comparison=if($eligible){'single-sequential-pair'}else{'observations-only-initial-GPU-busy-or-unknown'}})
+    $comparisons.Add((Add-WorkloadFields ([ordered]@{profile=$New.profile;diagnostics=$New.diagnostics;phase=$New.phase;metric=$Metric;statistic=$Statistic;baseline=$OldValue;current=$NewValue;absoluteDifference=if($eligible){$NewValue-$OldValue}else{$null};percentDifference=if($eligible -and $OldValue -ne 0){($NewValue-$OldValue)/$OldValue*100}else{$null};comparison=if($eligible){'single-sequential-pair'}else{'observations-only-initial-GPU-busy-or-unknown'}})))
 }
 foreach($current in @($performance.ToArray()|Where-Object identity -eq 'current')){
-    $baseline=$performance.ToArray()|Where-Object{$_.identity -eq 'baseline' -and $_.profile -eq $current.profile -and $_.diagnostics -eq $current.diagnostics -and $_.phase -eq $current.phase}|Select-Object -First 1
+    $baseline=$performance.ToArray()|Where-Object{$_.identity -eq 'baseline' -and $_.workloadKey -eq $current.workloadKey -and $_.profile -eq $current.profile -and $_.diagnostics -eq $current.diagnostics -and $_.phase -eq $current.phase}|Select-Object -First 1
     if($baseline){Add-Comparison $baseline $current 'pipeline_frames_per_second' 'rate' $baseline.pipelineFramesPerSecond $current.pipelineFramesPerSecond}
     if($baseline -and $null -ne $baseline.simulationFramesPerSecond -and $null -ne $current.simulationFramesPerSecond){Add-Comparison $baseline $current 'complete_simulation_frames_per_second' 'rate' $baseline.simulationFramesPerSecond $current.simulationFramesPerSecond}
 }
 foreach($current in @($latencies.ToArray()|Where-Object identity -eq 'current')){
-    $baseline=$latencies.ToArray()|Where-Object{$_.identity -eq 'baseline' -and $_.profile -eq $current.profile -and $_.diagnostics -eq $current.diagnostics -and $_.phase -eq $current.phase -and $_.metric -eq $current.metric -and $_.statistic -eq $current.statistic}|Select-Object -First 1
+    $baseline=$latencies.ToArray()|Where-Object{$_.identity -eq 'baseline' -and $_.workloadKey -eq $current.workloadKey -and $_.profile -eq $current.profile -and $_.diagnostics -eq $current.diagnostics -and $_.phase -eq $current.phase -and $_.metric -eq $current.metric -and $_.statistic -eq $current.statistic}|Select-Object -First 1
     if($baseline){Add-Comparison $baseline $current $current.metric $current.statistic $baseline.valueMilliseconds $current.valueMilliseconds}
 }
 $comparisons.ToArray()|Export-Csv -LiteralPath (Join-Path $output 'comparison.csv') -NoTypeInformation -Encoding utf8
 $lines=[Collections.Generic.List[string]]::new()
 $lines.Add('# Generic streaming scene measurements');$lines.Add('')
+$lines.Add("Source model: $SourceModel; static/dynamic sources: $effectiveStaticSources/$dynamicSources; flow meshes/frame: $FlowPerFrame; materials: $MaterialCount; raw export: $([bool]$ExportRaw). Models and declared flow/material contracts are never crossed when matching comparisons.");$lines.Add('')
 $lines.Add('Pipeline throughput is API apply-to-fresh-output wall throughput. Complete simulation throughput additionally includes preparation, diagnostics, phase counter queries and all loop work. Neither is application FPS or GPU busy time. Cold initialization and warmup remain separate.');$lines.Add('')
 $lines.Add('| Runtime | Profile | Diagnostics | Phase | Pipeline frames/s | Complete simulation frames/s | Fresh frames | Initial GPU permits comparison |')
 $lines.Add('| --- | --- | --- | --- | ---: | ---: | ---: | --- |')
@@ -188,6 +211,7 @@ foreach($row in @($performance.ToArray()|Where-Object{$_.phase -in @('stationary
 }
 $lines.Add('');$lines.Add('latency.csv reports mean/P95/P99/max separately for every measured phase and public boundary stage. comparison.csv contains baseline/current values, absolute and percentage differences; busy or unknown initial GPU suppresses gain claims. OFF has no boundary-stage samples, not zero-cost stages.');$lines.Add('')
 $lines.Add('runs.json retains each full result, logical motion speed, path length, tick and frame counts, mesh entry/removal, pose changes, light deltas, and texture generation counts. Class bytes are fixed across runtimes. A sequential pair is not repeated ABBA evidence.')
+$lines.Add('The 180 Hz target requires both pipeline and complete simulation throughput. targetCertified also requires a successful fresh-output run and a known idle initial GPU; busy or unknown GPU runs can only observe rates, never certify the target.')
 $lines.Add('Native boundary groups retain per-event distributions. Native frame groups sum same-stage events by native sequence/revision before computing frame distributions, including measured zero-work frames. Inclusive and self timings stay separate; stages are never added together. componentSumDerivedPartialFramesPerSecond is a legacy-compatible derived sum of preparation/fresh/poll means, excludes other bookkeeping and cannot replace measured complete simulation throughput or supply a frame P95.')
 [IO.File]::WriteAllLines((Join-Path $output 'summary.md'),$lines,$utf8)
 Write-Host "Streaming scene measurements complete: $output"

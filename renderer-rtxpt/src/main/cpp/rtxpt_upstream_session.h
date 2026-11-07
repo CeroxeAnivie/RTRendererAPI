@@ -182,6 +182,7 @@ private:
             // the next render. There is no extra frame-rate timer in the adapter.
             if (requiresStreamline) retainedModules.emplace();
             application.DeviceManager().SetVsyncEnabled(false);
+            RtrGpuProfile::Init(application.DeviceManager().GetDevice());
             bool active = false;
             bool actionsApplied = false;
             std::vector<Action> actions;
@@ -236,6 +237,7 @@ private:
                     glfwPollEvents();
                 }
                 manager.RenderNextFrameWhileUnfocused();
+                RtrGpuProfile::Configure(manager.GetDevice(),RtrDiagnostics::level.load(std::memory_order_relaxed),true);
                 // SceneLoaded sets the sample's async flag, which its next
                 // Render clears. Inputs must not wait on that render: a first
                 // managed resource packet is what makes a non-empty frame.
@@ -251,8 +253,9 @@ private:
                 }
             }, [&](auto&, auto) {
                 if (!active || !actionsApplied || !application.Renderer().IsSceneLoaded() ||
-                    application.Renderer().HasAsyncLoadingInProgress()) return;
+                    application.Renderer().HasAsyncLoadingInProgress()) {RtrGpuProfile::FrameBoundary();return;}
                 if (m_afterRender) m_afterRender(application);
+                RtrGpuProfile::FrameBoundary();
                 std::lock_guard lock(m_mutex);
                 ++m_statistics.requests;
                 m_statistics.renderedNanoseconds += Nanoseconds(renderBegin);
@@ -270,9 +273,11 @@ private:
             try {
                 application.RunMainLoop();
             } catch (...) {
+                RtrGpuProfile::Shutdown();
                 application.End();
                 throw;
             }
+            RtrGpuProfile::Shutdown();
             application.End();
         } catch (...) {
             std::lock_guard lock(m_mutex);

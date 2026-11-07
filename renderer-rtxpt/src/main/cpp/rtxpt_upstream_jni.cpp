@@ -270,6 +270,15 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourceWorkState(JNIEnv* env,jcla
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_meshInputRetentionState(JNIEnv* env,jclass,jlong handle) {
+    try {
+        std::array<uint64_t,3> state{};
+        Get(handle)->session->Invoke([&](auto& app){state=app.Renderer().MeshInputRetentionState();});
+        return LongArray(env,std::vector<jlong>(state.begin(),state.end()));
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_commandWorkState(JNIEnv* env,jclass,jlong handle) {
     try {
         std::array<uint64_t,10> state{};
@@ -316,8 +325,8 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesMemory(JNIEnv* env, jclas
         auto* bytes = static_cast<const uint8_t*>(env->GetDirectBufferAddress(packet));
         if (!bytes || size <= 0 || size > 512ll * 1024 * 1024)
             throw std::invalid_argument("Resource transport must be a bounded direct ByteBuffer");
-        std::vector<uint8_t> owned(bytes, bytes + size);
-        Get(handle)->session->Enqueue([owned = std::move(owned)](auto& app) { app.Renderer().ApplyResources(owned); });
+        auto owned=std::make_shared<const std::vector<uint8_t>>(bytes,bytes+size);
+        Get(handle)->session->Enqueue([owned](auto& app) { app.Renderer().ApplyResources(owned); });
     } catch (const std::exception& error) { Throw(env, error); }
 }
 

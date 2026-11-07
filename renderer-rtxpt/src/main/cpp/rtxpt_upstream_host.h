@@ -181,6 +181,9 @@ public:
         m_exposure=compensation;m_exposureConfigured=true;ApplyExposure();
     }
     void SceneUnloading() override {
+        m_pendingDirectPreparation.clear();m_pendingDirectGraphRefresh=false;
+        if(m_managedScene&&m_scene)static_cast<ManagedScene&>(*m_scene).ResetRowChanges();
+        m_unmanagedRowChanges.Clear();m_unmanagedRowsDirty=true;
         if(m_resourceCommands||m_structureCommands||!m_resourceRetirement.empty()){
             GetDevice()->waitForIdle();m_resourceRetirement.clear();
             m_resourceCommands=nullptr;m_structureCommands=nullptr;
@@ -197,6 +200,7 @@ public:
         return {textures[0],textures[1],textures[2],textures[3],textures[4],textures[5],textures[6],
             references[0],references[1]};
     }
+    std::array<uint64_t,3> MeshInputRetentionState()const{return m_resources.MeshInputRetentionWork();}
     // Separate from the established nine texture/reference counters so existing
     // diagnostic consumers and fixed workload classes retain their wire contract.
     std::array<uint64_t,10> CommandWorkState()const{
@@ -275,9 +279,16 @@ public:
         for(auto value:sky)if(!std::isfinite(value)||value<0)throw std::invalid_argument("Invalid sky color");
         const bool adapterLighting=lighting.active||(m_qualityConfigured&&m_quality.beautyTransport==1);
         const bool structural=analytic.Apply(ids,records,removals,sun,*m_scene,adapterLighting);
-        auto commands=GetDevice()->createCommandList();commands->open();
-        if(!lighting.active&&!sky.empty()) ConfigureSky(sky,commands);
-        m_scene->Refresh(commands,GetFrameIndex());SyncManagedSceneRows();commands->close();GetDevice()->executeCommandList(commands);
+        if(lighting.active&&!m_ommBaker){
+            // Analytic leaves participate in the same final native graph walk as
+            // resource leaves; a lighting action must not consume poses early.
+            m_pendingDirectGraphRefresh|=m_scene->GetSceneGraph()->HasPendingStructureChanges();
+        }else{
+            FlushPendingDirectPreparation();m_resources.ApplyPendingTransforms();
+            auto commands=GetDevice()->createCommandList();commands->open();
+            if(!sky.empty()) ConfigureSky(sky,commands);
+            m_scene->Refresh(commands,GetFrameIndex());SyncManagedSceneRows();commands->close();GetDevice()->executeCommandList(commands);
+        }
         m_lights=m_scene->GetSceneGraph()->GetLights();
         if(structural&&m_lightsBaker)m_lightsBaker->SceneReloaded();
         ++lighting.analyticGeneration;
@@ -317,16 +328,52 @@ public:
         if(m_managedScene&&m_scene&&IsSceneLoaded()&&!HasAsyncLoadingInProgress())
             static_cast<ManagedScene&>(*m_scene).SyncNativeRowsAfterCompleteRefresh();
     }
+    RtrSceneRowChanges m_unmanagedRowChanges;
+    bool m_unmanagedRowsDirty=true;
+    const RtrSceneRowChanges& LightingRowChanges(){
+        if(m_managedScene)return static_cast<ManagedScene&>(*m_scene).RowChanges();
+        // Native file scenes have no adapter reconciliation producer. Only this
+        // explicit complete-renderer route discovers a full metadata snapshot.
+        // A managed scene must never use it to conceal a missing journal.
+        const auto graph=m_scene->GetSceneGraph();
+        if(!lighting.metadataInitialized||lighting.metadataDirty||m_unmanagedRowsDirty
+            ||lighting.previousInstanceCount!=graph->GetMeshInstances().size()
+            ||lighting.previousGeometryCount!=graph->GetGeometryCount()){
+            auto& rows=m_unmanagedRowChanges;rows.Clear();
+            RtrDiagnostics::Scope discovery(RtrDiagnostics::ResourceIndex,
+                graph->GetMeshes().size()+graph->GetMeshInstances().size());
+            discovery.event[11]|=RtrDiagnostics::CacheMiss;
+            discovery.event[20]=RtrDiagnostics::Topology;
+            for(const auto& mesh:graph->GetMeshes())rows.meshes.push_back(mesh);
+            for(const auto& instance:graph->GetMeshInstances())rows.instances.push_back(instance);
+            ++rows.revision;rows.snapshot=true;rows.prepared=true;m_unmanagedRowsDirty=false;
+        }
+        return m_unmanagedRowChanges;
+    }
+    void AcknowledgeLightingRows(){
+        if(m_managedScene)static_cast<ManagedScene&>(*m_scene).AcknowledgeRowChanges();
+        else m_unmanagedRowChanges.Clear();
+    }
     void RecordWindowOutput(nvrhi::ITexture* texture) { m_windowOutput=texture; }
     nvrhi::TextureHandle WindowOutput() const { return m_windowOutput; }
     void BackBufferResizing() override {
+        FlushPendingDirectPreparation();
         m_windowOutput=nullptr;
         AdvancedPathTracer::BackBufferResizing();
     }
     void Render(nvrhi::IFramebuffer* framebuffer) override {
-        // Original Render refreshes the graph and uploads current/previous poses.
-        // Keep publication-side lifecycle refreshes from consuming these poses.
+        // Finalize this Frame's resource packets after Animate and before any
+        // renderer reads. The single native graph refresh sees the final pose.
         PollResourceRetirement();
+        if(!m_managedScene&&m_scene&&lighting.active){
+            using Dirty=donut::engine::SceneGraphNode::DirtyFlags;
+            const auto root=m_scene->GetSceneGraph()->GetRootNode();
+            const auto metadataDirty=Dirty::Leaf|Dirty::SubgraphStructure|Dirty::SubgraphContentUpdate;
+            if(root&&(root->GetDirtyFlags()&metadataDirty)!=0)m_unmanagedRowsDirty=true;
+        }
+        const bool finalDirectPreparation=m_managedScene&&m_scene&&IsSceneLoaded()
+            &&!m_scene->GetSceneGraph()->GetMeshInstances().empty()&&CanRenderNativeLightingLean(framebuffer);
+        FlushPendingDirectPreparation(finalDirectPreparation);
         if(m_managedScene&&m_scene&&IsSceneLoaded())m_resources.ApplyPendingTransforms();
         if (!m_managedScene || !IsSceneLoaded() || !m_scene) {
             m_directTlasDirty=true;
@@ -368,6 +415,8 @@ public:
     void ClearResources() {
         if (!m_managedScene || !m_scene) throw std::logic_error("No managed scene");
         GetDevice()->waitForIdle();m_resourceRetirement.clear();
+        m_pendingDirectPreparation.clear();m_pendingDirectGraphRefresh=false;
+        static_cast<ManagedScene&>(*m_scene).ResetRowChanges();
         m_resources.Reset();
         analytic.Reset(m_scene.get());
         m_lights.clear();
@@ -442,11 +491,14 @@ public:
             if (lighting.geometry) commands->clearTextureFloat(lighting.geometry, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.identity) commands->clearTextureUInt(lighting.identity, nvrhi::AllSubresources, 0);
             lighting.EncodeOutputs(GetDevice(), commands);
+            if(m_scene)AcknowledgeLightingRows();
             ++lighting.executedFrames;
         } else {
-            lighting.Dispatch(GetDevice(), commands, m_scene, m_topLevelAS, sparse,
+            const auto& rows=LightingRowChanges();
+            lighting.Dispatch(GetDevice(), commands, m_scene, rows, m_topLevelAS, sparse,
                 m_CommonPasses->m_LinearWrapSampler, analytic.buffer, uint32_t(analytic.records.size()),
                 analytic.tree.root==rtr::RetainedLightTree::None?0:analytic.tree.root,analytic.treeBase);
+            AcknowledgeLightingRows();
         }
         // Compact adapter signals are separate resources. Initialized direct
         // frames use RenderNativeLightingLean and do not execute the sample's
@@ -481,7 +533,7 @@ public:
         return true;
     }
 
-    void ApplyResources(const std::vector<uint8_t>& packet) {
+    void ApplyResources(const std::shared_ptr<const std::vector<uint8_t>>& packet) {
         if (!m_managedScene || !m_scene || !IsSceneLoaded())
             throw std::logic_error("In-memory resources require the loaded managed scene");
         RtrDiagnostics::Scope resourceScope(RtrDiagnostics::ResourcePlan);
@@ -489,18 +541,21 @@ public:
         m_resources.SetTextureResources(GetDevice(),m_DescriptorTable);
         nvrhi::CommandListHandle commands;
         bool retainRemoved=false;
-        auto changed = m_resources.Apply(packet.data(), packet.size(),
+        auto changed = m_resources.Apply(packet->data(), packet->size(),
             *m_scene, [&]()->nvrhi::ICommandList*{commands=OpenResourceCommands();return commands;},
             GetFrameIndex(),[&](bool geometryOnly){
                 retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
-                if(!retainRemoved){RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();}
-            });
+                if(!retainRemoved){
+                    FlushPendingDirectPreparation();
+                    RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();
+                }
+            },CanRenderNativeLightingLean(nullptr),packet);
         if(changed.topology||changed.transforms||changed.materialDomainsChanged||changed.requiresCoverageRebuild
             ||!changed.deformedMeshes.empty()||!changed.reshapedMeshes.empty())m_directTlasDirty=true;
         if(lighting.active)m_resources.ConfigureMaterials(m_importedMaterials,false,true);
         // A real domain edit below requires the original complete AS rebuild.
         // Do not build unrelated stable meshes once here and again in that pass.
-        if(!changed.materialDomainsChanged&&(!changed.deformedMeshes.empty()||!changed.reshapedMeshes.empty()))
+        if(!changed.pendingTopologyRefresh&&!changed.materialDomainsChanged&&(!changed.deformedMeshes.empty()||!changed.reshapedMeshes.empty()))
             RefreshDeformedDirectStructures(changed,commands);
         if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty()
             ||!changed.retiredStructures.empty()||!changed.retiredTextures.empty())){
@@ -555,7 +610,7 @@ public:
             // scene-wide rebuild discards every pooled handle; its public
             // compactor can instead build just the newly published meshes.
             // Keep policy edits on the original complete rebuild path.
-            if(changed.topology&&!changed.materialDomainsChanged&&!changed.requiresCoverageRebuild) {
+            if(changed.topology&&!changed.pendingTopologyRefresh&&!changed.materialDomainsChanged&&!changed.requiresCoverageRebuild) {
                 if(!RefreshRetainedDirectStructures(changed)){
                     GetDevice()->waitForIdle();m_resourceRetirement.clear();
                 }
@@ -566,6 +621,7 @@ public:
         if (changed.topology || changed.transforms || changed.attributes) ++lighting.geometryGeneration;
         if(changed.topology||changed.materials||changed.textures||changed.transforms||changed.attributes)
             m_ui.ResetAccumulation = true;
+        if(changed.pendingTopologyRefresh)m_pendingDirectPreparation.push_back(std::move(changed));
     }
 
     std::unique_ptr<SampleUI> CreateUI(donut::app::DeviceManager* manager,
@@ -666,7 +722,9 @@ private:
             ||m_directTlasPolicy!=tlasPolicy;
         {RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasBuild,buildTlas?1:0);
             tlasScope.event[11]|=buildTlas?RtrDiagnostics::CacheMiss:RtrDiagnostics::CacheHit;
-            if(buildTlas)UpdateTLAS(m_commandList);}
+            const auto tlasTiming=buildTlas?RtrGpuProfile::Begin(m_commandList,"NativeTlas",-1):RtrGpuProfile::Token{};
+            if(buildTlas)UpdateTLAS(m_commandList);
+            RtrGpuProfile::End(m_commandList,tlasTiming);}
         // Dispatch binds the live Scene buffers and its descriptor table itself;
         // Sample's global beauty bindings and accumulation/debug setup are unused.
         SampleRenderCode(framebuffer,m_commandList,SampleConstants{},false);
@@ -698,6 +756,63 @@ private:
         std::vector<std::shared_ptr<donut::engine::LoadedTexture>> textures;
     };
     std::vector<RetiredResources> m_resourceRetirement;
+    // These records never cross a completed Frame. They keep authored resources
+    // alive while all packets are collected; only the final live graph is packed.
+    std::vector<Resources::Changes> m_pendingDirectPreparation;
+    bool m_pendingDirectGraphRefresh=false;
+    void FlushPendingDirectPreparation(bool finalFramePreparation=false){
+        if(m_pendingDirectPreparation.empty()&&!m_pendingDirectGraphRefresh)return;
+        if(!m_managedScene||!m_scene||!IsSceneLoaded())
+            throw std::logic_error("Pending native preparation requires its managed scene");
+        RtrDiagnostics::Scope preparation(RtrDiagnostics::ResourcePlan);
+        bool structuralResources=false;
+        // Complete-renderer/resize/lifecycle boundaries retain the established
+        // late pose staging. Only the final lean frame consumes poses here.
+        if(finalFramePreparation)m_resources.ApplyPendingTransforms();
+        Resources::Changes merged;merged.topology=true;
+        std::vector<std::shared_ptr<donut::engine::MeshInfo>> uploads;
+        std::unordered_set<donut::engine::MeshInfo*> uploaded,built,deformed,reshaped;
+        const auto appendLive=[&](auto& target,auto& seen,const auto& source){
+            for(const auto& mesh:source)if(m_resources.IsLiveMesh(mesh)&&seen.insert(mesh.get()).second)target.push_back(mesh);
+        };
+        for(const auto& changes:m_pendingDirectPreparation){
+            structuralResources|=changes.topology||!changes.buildMeshes.empty();
+            appendLive(uploads,uploaded,changes.pendingUploadMeshes);
+            appendLive(merged.buildMeshes,built,changes.buildMeshes);
+            appendLive(merged.deformedMeshes,deformed,changes.deformedMeshes);
+            appendLive(merged.reshapedMeshes,reshaped,changes.reshapedMeshes);
+            merged.retiredMeshes.insert(merged.retiredMeshes.end(),changes.retiredMeshes.begin(),changes.retiredMeshes.end());
+        }
+        // Several packets can edit the same live identity before its first
+        // upload. Build its final inputs once: new meshes use the ordinary build
+        // path, while a reshape subsumes an earlier deformation of an old mesh.
+        const auto newBuild=[&](const auto& mesh){
+            if(mesh->accelStruct)return false;
+            if(built.insert(mesh.get()).second)merged.buildMeshes.push_back(mesh);
+            return true;
+        };
+        std::erase_if(merged.deformedMeshes,[&](const auto& mesh){return newBuild(mesh)||reshaped.contains(mesh.get());});
+        std::erase_if(merged.reshapedMeshes,[&](const auto& mesh){return newBuild(mesh);});
+        auto commands=OpenResourceCommands();
+        const auto prepareTiming=RtrGpuProfile::Begin(commands,"NativeScenePreparation",-1);
+        if(structuralResources||m_pendingDirectGraphRefresh||m_scene->GetSceneGraph()->HasPendingStructureChanges())
+            static_cast<ManagedScene&>(*m_scene).RefreshTopology(commands,GetFrameIndex(),uploads,finalFramePreparation);
+        else if(!uploads.empty()){
+            RtrDiagnostics::Scope attributes(RtrDiagnostics::AttributePreparation,uploads.size());
+            static_cast<ManagedScene&>(*m_scene).RefreshAttributes(commands,uploads);
+        }
+        if(lighting.active&&!m_ommBaker&&(!merged.deformedMeshes.empty()||!merged.reshapedMeshes.empty()))
+            RefreshDeformedDirectStructures(merged,commands);
+        RtrGpuProfile::End(commands,prepareTiming);
+        commands->close();
+        const auto submitted=GetDevice()->executeCommandList(commands);
+        GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,submitted);
+        if(structuralResources&&!RefreshRetainedDirectStructures(merged)){
+            m_ui.AccelerationStructRebuildRequested=true;
+            GetDevice()->waitForIdle();m_resourceRetirement.clear();
+        }
+        m_pendingDirectPreparation.clear();m_pendingDirectGraphRefresh=false;
+    }
     void PollResourceRetirement(){
         for(auto i=m_resourceRetirement.begin();i!=m_resourceRetirement.end();)
             if(GetDevice()->pollEventQuery(i->graphics)&&GetDevice()->pollEventQuery(i->compute))i=m_resourceRetirement.erase(i);
@@ -812,6 +927,14 @@ private:
         }
 #endif
         auto commands=m_structureCommands;commands->open();
+        const auto structureTiming=RtrGpuProfile::Begin(commands,"NativeStructures",-1);
+        struct PlannedBuild {
+            std::shared_ptr<donut::engine::MeshInfo> mesh;
+            nvrhi::rt::AccelStructDesc description;
+            nvrhi::rt::AccelStructHandle structure;
+            bool reused=false;
+        };
+        std::vector<PlannedBuild> builds;builds.reserve(changed.buildMeshes.size());
         for(const auto& mesh:changed.buildMeshes){
             if(mesh->isSkinPrototype||mesh->accelStruct)continue;
             auto description=bvh::GetMeshBlasDesc(
@@ -820,7 +943,6 @@ private:
             // batch. Streaming uses the sample's ordinary NVRHI build path,
             // avoiding those CPU readbacks. Existing BLASes are not rebuilt.
             description.buildFlags=description.buildFlags&~nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
-            RtrDiagnostics::Scope blasScope(RtrDiagnostics::BlasBuild,1);
             nvrhi::rt::AccelStructHandle structure;
             uint64_t key=0;
             if(!vacant.empty()&&DirectBuildShape(description,key)) {
@@ -830,18 +952,36 @@ private:
                         structure=candidate->second;vacant.erase(candidate);break;
                     }
             }
+            const bool reused=bool(structure);
             if(!structure) {RtrDiagnostics::Scope allocateScope(RtrDiagnostics::BlasAllocate,1);
                 structure=GetDevice()->createAccelStruct(description);}
-            else {
+            if(!structure)throw std::runtime_error("Native streaming BLAS allocation failed");
+            builds.push_back({mesh,std::move(description),std::move(structure),reused});
+        }
+        // Independent builds share one preparation phase and one final read
+        // dependency. A per-mesh Write -> BuildBlas transition is committed by
+        // the next native Build and unnecessarily serializes the whole batch.
+        // Automatic barriers and native scratch reuse barriers remain enabled.
+        for(const auto& build:builds){
+            for(const auto& geometry:build.description.bottomLevelGeometries){
+                const auto& triangles=geometry.geometryData.triangles;
+                commands->setBufferState(triangles.indexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
+                commands->setBufferState(triangles.vertexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
+            }
+            commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructWrite);
+        }
+        commands->commitBarriers();
+        for(auto& build:builds){
+            RtrDiagnostics::Scope blasScope(RtrDiagnostics::BlasBuild,1);
+            if(build.reused){
                 blasScope.event[11]|=RtrDiagnostics::CacheHit;
                 blasScope.event[20]|=RtrDiagnostics::PoolHit;
             }
-            if(!structure)throw std::runtime_error("Native streaming BLAS allocation failed");
-            commands->setAccelStructState(structure,nvrhi::ResourceStates::AccelStructWrite);
-            nvrhi::utils::BuildBottomLevelAccelStruct(commands,structure,description);
-            commands->setAccelStructState(structure,nvrhi::ResourceStates::AccelStructBuildBlas);
-            mesh->accelStruct=std::move(structure);
+            nvrhi::utils::BuildBottomLevelAccelStruct(commands,build.structure,build.description);
+            build.mesh->accelStruct=build.structure;
         }
+        for(const auto& build:builds)
+            commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructBuildBlas);
         commands->commitBarriers();
         InvalidateBindingSet();m_bindingCache->Clear();
         size_t subInstances=0;
@@ -859,6 +999,7 @@ private:
             m_subInstanceData.assign(subInstances,SubInstanceData::Default());
         }
         m_tlasInstanceDataDirty=true;
+        RtrGpuProfile::End(commands,structureTiming);
         commands->close();
         const auto submitted=GetDevice()->executeCommandList(commands);
         // UpdateTLAS runs in the original async compute prefix. Its ordinary

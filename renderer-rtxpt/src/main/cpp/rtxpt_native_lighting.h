@@ -113,6 +113,7 @@ public:
         // unordered_map rehash preserves references to its nodes. Retirement
         // removes the corresponding layout before it can be visited again.
         GeometryIndex* mapping=nullptr;
+        uint64_t collected=0;
     };
     struct MeshMetadata {
         std::weak_ptr<donut::engine::MeshInfo> owner;
@@ -214,6 +215,8 @@ public:
     std::vector<InstanceAttributes> instanceUploadScratch;
     std::vector<GeometryAttributes> geometryUploadScratch;
     std::vector<VertexAttributes> vertexUploadScratch;
+    struct VertexUploadRun {const std::string* name;GeometryAttributes attributes;};
+    std::vector<VertexUploadRun> vertexUploadRuns;
     std::vector<uint32_t> instanceUploadIndices,geometryUploadIndices;
     std::vector<uint64_t> instanceUploadMarks;
     uint64_t instanceUploadEpoch=0;
@@ -249,16 +252,44 @@ public:
     }
     // Cumulative operational counts, independent of optional diagnostic recording.
     std::array<uint64_t,5> attributeWork{}; // layout builds, corners packed, instance writes, attribute bytes, local geometry writes
-    const std::vector<VertexAttributes>& PackVertices(const std::string& name,size_t count){
+    void AppendVertices(const std::string& name,size_t count){
         // NVRHI writeBuffer consumes its CPU source during the call. The owner
         // can reuse this staging view after each call without a second pool or
         // retaining a separate vector for every geometry publication.
-        vertexUploadScratch.assign(count,VertexAttributes{});auto& result=vertexUploadScratch;
         auto baseline=meshBaselines.find(name);auto colors=meshColors.find(name);
         if(baseline!=meshBaselines.end()&&baseline->second.size()!=count)throw std::invalid_argument("Baseline update changes geometry layout");
         if(colors!=meshColors.end()&&colors->second.size()!=count)throw std::invalid_argument("Vertex color update changes geometry layout");
-        for(size_t i=0;i<count;i++){if(baseline!=meshBaselines.end())result[i].baseline=baseline->second[i];if(colors!=meshColors.end())result[i].color=colors->second[i];}
-        attributeWork[1]+=count;return result;
+        const size_t begin=vertexUploadScratch.size();vertexUploadScratch.resize(begin+count);
+        auto* target=vertexUploadScratch.data()+begin;
+        if(baseline!=meshBaselines.end())for(size_t i=0;i<count;++i)target[i].baseline=baseline->second[i];
+        if(colors!=meshColors.end())for(size_t i=0;i<count;++i)target[i].color=colors->second[i];
+        attributeWork[1]+=count;
+    }
+    void UploadVertexRuns(nvrhi::ICommandList* command,const std::unordered_set<std::string>& names){
+        vertexUploadRuns.clear();
+        for(const auto& name:names)if(auto found=geometrySlots.find(name);found!=geometrySlots.end())
+            vertexUploadRuns.push_back({&found->first,found->second});
+        std::sort(vertexUploadRuns.begin(),vertexUploadRuns.end(),[](const auto& a,const auto& b){return a.attributes.offset<b.attributes.offset;});
+        // Coalesce authored adjacent slices only. NVRHI still owns staging,
+        // fences and GPU resources; no second upload allocator is introduced.
+        constexpr size_t batchCorners=1024*1024/sizeof(VertexAttributes);
+        for(size_t begin=0;begin<vertexUploadRuns.size();){
+            const size_t offset=vertexUploadRuns[begin].attributes.offset;size_t end=begin;
+            vertexUploadScratch.clear();
+            do{
+                const auto& run=vertexUploadRuns[end];
+                AppendVertices(*run.name,size_t(run.attributes.triangles)*3);++attributeWork[4];++end;
+            }while(end<vertexUploadRuns.size()
+                &&vertexUploadRuns[end].attributes.offset==offset+vertexUploadScratch.size()
+                &&vertexUploadScratch.size()+size_t(vertexUploadRuns[end].attributes.triangles)*3<=batchCorners);
+            const size_t bytes=vertexUploadScratch.size()*sizeof(VertexAttributes);
+            if(bytes){
+                RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,vertexUploadScratch.size(),bytes,1,0,0,0,RtrDiagnostics::Attributes,bytes);
+                command->writeBuffer(baselineCoordinates,vertexUploadScratch.data(),bytes,offset*sizeof(VertexAttributes));
+                attributeWork[3]+=bytes;
+            }
+            begin=end;
+        }
     }
     std::vector<uint8_t> applicationData;
     std::vector<RtrNativeApplicationRange> applicationDirtyRanges;
@@ -541,18 +572,20 @@ public:
         }
     }
     bool CollectGeometryMetadata(const std::shared_ptr<donut::engine::MeshInfo>& mesh,uint32_t group,GeometryMetadata& entry){
+        if(entry.collected==metadataScan)return false;
+        entry.collected=metadataScan;
         const auto& geometry=mesh->geometries[group];const auto& name=entry.name;
         RefreshMetadataPolicy(entry,geometry->material,mesh,group);++metadataWork[2];
         if(!entry.mapping)if(auto found=geometryIndices.find(name);found!=geometryIndices.end())entry.mapping=&found->second;
         const auto* mapping=entry.mapping;const auto* previous=mapping?mapping->attributes:nullptr;
-        const float opacity=MetadataOpacity(geometry->material);TrackMaskedScalar(name,opacity);
+        const float opacity=MetadataOpacity(geometry->material);
+        if(!previous||previous->maskedOpacity!=opacity)TrackMaskedScalar(name,opacity);
         const bool changed=!mapping||mapping->index!=uint32_t(geometry->globalGeometryIndex)
             ||!previous||previous->triangles*3!=geometry->numIndices
             ||previous->texturePolicies!=entry.texturePolicies||previous->maskedOpacity!=opacity;
         if(changed)metadataGeometryChanges.push_back({mesh,group,&entry});return changed;
     }
-    void CollectMaterialMetadataDelta(){
-        sceneDelta.Clear();metadataGeometryChanges.clear();
+    void AppendMaterialMetadataDelta(){
         for(const auto& [name,flags]:materialMetadataChanges){
             auto found=materialGeometryUsers.find(name);if(found==materialGeometryUsers.end())continue;
             auto& users=found->second.users;
@@ -575,28 +608,29 @@ public:
             if(users.empty())materialGeometryUsers.erase(found);
         }
     }
-    // Upstream owns dense indices and may renumber them after topology edits.
-    // Keep the old incremental upload policy on an API-owned journal instead
-    // of adding HostDelta or any other member to the original SceneGraph.
-    void CollectSceneDelta(const std::shared_ptr<donut::engine::Scene>& scene) {
+    void CollectMaterialMetadataDelta(){
+        sceneDelta.Clear();metadataGeometryChanges.clear();++metadataScan;
+        AppendMaterialMetadataDelta();
+    }
+    // The native table publication already resolved owner/index changes.
+    // Consume that exact journal; never rediscover them by scanning the graph.
+    void CollectNativeRowDelta(const RtrSceneRowChanges& rows) {
         sceneDelta.Clear();metadataGeometryChanges.clear();
         ++metadataScan;
-        const auto graph=scene->GetSceneGraph();
-        for(const auto& instance:graph->GetMeshInstances()) {
+        for(const auto& instance:rows.instances) {
             const auto& name=instance->GetNode()->GetName();
             const auto slot=instance->GetInstanceIndex();
             const auto previous=instanceSlots.find(name);
             if(previous==instanceSlots.end()||previous->second!=uint32_t(slot))
-                sceneDelta.instances.push_back(instance);
+                sceneDelta.instances.push_back({instance,previous==instanceSlots.end()?nullptr:&previous->second});
         }
-        for(const auto& mesh:graph->GetMeshes()) {
+        for(const auto& mesh:rows.meshes) {
             auto& cached=MetadataLayout(mesh);
             for(size_t group=0;group<mesh->geometries.size();++group) {
                 CollectGeometryMetadata(mesh,uint32_t(group),cached.groups[group]);
             }
         }
-        for(auto entry=metadataLayouts.begin();entry!=metadataLayouts.end();)
-            if(entry->second.scan!=metadataScan){ForgetMetadataLayout(entry->second);entry=metadataLayouts.erase(entry);}else ++entry;
+        AppendMaterialMetadataDelta();
     }
     void UploadChangedAttributes(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene){
         const auto graph=scene->GetSceneGraph();auto& changes=sceneDelta;
@@ -606,35 +640,43 @@ public:
         instanceUploadScratch.resize(graph->GetMeshInstances().size());instanceUploadIndices.clear();
         instanceUploadMarks.resize(instanceUploadScratch.size());
         if(++instanceUploadEpoch==0){std::fill(instanceUploadMarks.begin(),instanceUploadMarks.end(),0);++instanceUploadEpoch;}
-        auto stageInstance=[&](const std::string& name,uint32_t slot){
+        auto stageInstance=[&](const std::string& name,uint32_t slot,bool updateRole=true){
             if(slot>=instanceUploadScratch.size())throw std::runtime_error("Invalid changed instance index");
             if(instanceUploadMarks[slot]==instanceUploadEpoch)return;
             instanceUploadMarks[slot]=instanceUploadEpoch;
             auto attribute=instanceAttributes.find(name);InstanceAttributes value=attribute==instanceAttributes.end()?InstanceAttributes{}:attribute->second;
-            instanceUploadScratch[slot]=value;instanceUploadIndices.push_back(slot);TrackInstanceRole(name,value);
+            instanceUploadScratch[slot]=value;instanceUploadIndices.push_back(slot);
+            if(updateRole)TrackInstanceRole(name,value);
             ++attributeWork[2];attributeWork[3]+=sizeof(value);
         };
         geometryUploadScratch.resize(graph->GetGeometryCount());geometryUploadIndices.clear();
-        for(const auto& instance:changes.instances){
+        for(const auto& change:changes.instances){
+            const auto& instance=change.instance;
             const auto& name=instance->GetNode()->GetName();const auto slot=instance->GetInstanceIndex();
             if(slot<0||size_t(slot)>=graph->GetMeshInstances().size())throw std::runtime_error("Invalid changed instance index");
-            instanceSlots.insert_or_assign(name,uint32_t(slot));stageInstance(name,uint32_t(slot));++attributeTableVisits;
+            const bool newIdentity=!change.previousSlot;
+            if(change.previousSlot)*change.previousSlot=uint32_t(slot);
+            else instanceSlots.emplace(name,uint32_t(slot));
+            // A dense-index move does not alter the identity's authored role.
+            stageInstance(name,uint32_t(slot),newIdentity||dirtyInstances.contains(name));++attributeTableVisits;
         }
         std::unordered_set<std::string> upload=dirtyBaselines;upload.insert(dirtyColors.begin(),dirtyColors.end());
         for(const auto& [mesh,group,cached]:metadataGeometryChanges){
             auto& geometry=mesh->geometries[group];auto& metadata=*cached;const auto& key=metadata.name;
             const auto index=uint32_t(geometry->globalGeometryIndex);++attributeTableVisits;
             if(index>=graph->GetGeometryCount())throw std::runtime_error("Invalid changed geometry index");
-            auto found=geometrySlots.find(key);
-            if(found==geometrySlots.end()||found->second.triangles*3!=geometry->numIndices){
-                if(found!=geometrySlots.end())FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);
-                found=geometrySlots.insert_or_assign(key,GeometryAttributes{AllocateAttributeRange(geometry->numIndices),geometry->numIndices/3}).first;upload.insert(key);
+            // Collection already resolved this stable map node. Dense native
+            // index movement changes its index, not its attribute allocation.
+            auto* mapping=metadata.mapping;auto* attributes=mapping?mapping->attributes:nullptr;
+            if(!attributes||attributes->triangles*3!=geometry->numIndices){
+                if(attributes)FreeAttributeRangeAt(attributes->offset,attributes->triangles*3);
+                attributes=&geometrySlots.insert_or_assign(key,GeometryAttributes{AllocateAttributeRange(geometry->numIndices),geometry->numIndices/3}).first->second;upload.insert(key);
             }
-            auto [mapping,inserted]=geometryIndices.insert_or_assign(key,GeometryIndex{index,geometryIndexEpoch,&found->second});
-            metadata.mapping=&mapping->second;
-            found->second.texturePolicies=metadata.texturePolicies;
-            found->second.maskedOpacity=MetadataOpacity(geometry->material);
-            geometryUploadScratch[index]=found->second;geometryUploadIndices.push_back(index);attributeWork[3]+=sizeof(GeometryAttributes);
+            if(!mapping)mapping=&geometryIndices.try_emplace(key,GeometryIndex{}).first->second;
+            *mapping=GeometryIndex{index,geometryIndexEpoch,attributes};metadata.mapping=mapping;
+            attributes->texturePolicies=metadata.texturePolicies;
+            attributes->maskedOpacity=MetadataOpacity(geometry->material);
+            geometryUploadScratch[index]=*attributes;geometryUploadIndices.push_back(index);attributeWork[3]+=sizeof(GeometryAttributes);
         }
         for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found==instanceSlots.end())continue;
             stageInstance(name,found->second);
@@ -643,20 +685,18 @@ public:
         UploadAttributeRuns(command,instances,instanceUploadScratch,instanceUploadIndices);
         specialRoleCount=specialInstances.size();
         EnsureAttributeBuffer(device,command,baselineCoordinates,attributeRanges.end*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
-        for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
-            const auto& values=PackVertices(name,size_t(found->second.triangles)*3);
-            if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
-            attributeWork[3]+=values.size()*sizeof(VertexAttributes);++attributeWork[4];
-        }
+        UploadVertexRuns(command,upload);
         UploadPublications(device,command);previousSceneInstances=scene->GetInstanceBuffer();previousSceneGeometry=scene->GetGeometryBuffer();
         previousInstanceCount=graph->GetMeshInstances().size();previousGeometryCount=graph->GetGeometryCount();
         metadataDirty=false;materialMetadataChanges.clear();metadataGeometryChanges.clear();changes.Clear();dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();++metadataUploads;
     }
-    void UploadAttributes(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene){
+    void UploadAttributes(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene,const RtrSceneRowChanges& rows){
         const auto graph=scene->GetSceneGraph();
         const size_t instanceCount=graph->GetMeshInstances().size(),geometryCount=graph->GetGeometryCount();
         if(previousInstanceCount!=instanceCount||previousGeometryCount!=geometryCount)metadataDirty=true;
-        if(metadataDirty&&metadataInitialized){CollectSceneDelta(scene);UploadChangedAttributes(device,command,scene);return;}
+        if(rows.prepared)metadataDirty=true;
+        if(metadataDirty&&!rows.prepared)throw std::runtime_error("Native receiver metadata changed without a prepared scene-row journal");
+        if(metadataDirty&&metadataInitialized&&!rows.snapshot){CollectNativeRowDelta(rows);UploadChangedAttributes(device,command,scene);return;}
         if(!metadataDirty&&!materialMetadataChanges.empty()){
             CollectMaterialMetadataDelta();UploadChangedAttributes(device,command,scene);return;
         }
@@ -665,10 +705,7 @@ public:
             for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found!=instanceSlots.end()){
                 const auto& value=instanceAttributes.at(name);command->writeBuffer(instances,&value,sizeof(value),found->second*sizeof(value));TrackInstanceRole(name,value);++attributeWork[2];attributeWork[3]+=sizeof(value);}}
             auto changedGeometry=dirtyBaselines;changedGeometry.insert(dirtyColors.begin(),dirtyColors.end());
-            for(const auto& name:changedGeometry){auto found=geometrySlots.find(name);if(found!=geometrySlots.end()){
-                const auto& values=PackVertices(name,size_t(found->second.triangles)*3);
-                command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
-                attributeWork[3]+=values.size()*sizeof(VertexAttributes);++attributeWork[4];}}
+            UploadVertexRuns(command,changedGeometry);
             UploadPublications(device,command);dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();if(changed)++metadataUploads;return;
         }
         RtrDiagnostics::Scope indexScope(RtrDiagnostics::ResourceIndex);
@@ -676,7 +713,7 @@ public:
         EnsureAttributeBuffer(device,command,instances,std::max<size_t>(1,instanceCount)*sizeof(InstanceAttributes),sizeof(InstanceAttributes),"Native receiver roles");
         instanceUploadScratch.resize(instanceCount);instanceUploadIndices.clear();
         instanceNamesScratch.assign(instanceCount,nullptr);
-        for(const auto& instance:graph->GetMeshInstances()){
+        for(const auto& instance:rows.instances){
             const auto& name=instance->GetNode()->GetName();auto index=instance->GetInstanceIndex();
             if(index>=instanceNamesScratch.size()||instanceNamesScratch[index])throw std::runtime_error("Invalid dense instance index");
             instanceNamesScratch[index]=&name;
@@ -701,7 +738,7 @@ public:
         // the complete table, but it need not allocate a temporary hash set for it.
         if(++geometryIndexEpoch==0){for(auto& [name,index]:geometryIndices)index.epoch=0;++geometryIndexEpoch;}
         geometryEntriesScratch.resize(geometryCount);size_t entryCount=0;maskedScalarCandidates=false;
-        for(const auto& mesh:graph->GetMeshes())for(size_t j=0;j<mesh->geometries.size();j++){
+        for(const auto& mesh:rows.meshes)for(size_t j=0;j<mesh->geometries.size();j++){
             if(entryCount>=geometryEntriesScratch.size())throw std::runtime_error("Invalid dense geometry count");
             const auto& g=mesh->geometries[j];auto& entry=geometryEntriesScratch[entryCount++];
             auto& metadata=MetadataLayout(mesh).groups[j];entry.name=metadata.name;
@@ -744,11 +781,7 @@ public:
         }
         UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
         EnsureAttributeBuffer(device,command,baselineCoordinates,attributeRanges.end*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
-        for(const auto& name:upload){auto found=geometrySlots.find(name);if(found==geometrySlots.end())continue;
-            const auto& values=PackVertices(name,size_t(found->second.triangles)*3);
-            if(!values.empty())command->writeBuffer(baselineCoordinates,values.data(),values.size()*sizeof(VertexAttributes),size_t(found->second.offset)*sizeof(VertexAttributes));
-            attributeWork[3]+=values.size()*sizeof(VertexAttributes);++attributeWork[4];
-        }
+        UploadVertexRuns(command,upload);
         ++attributeWork[0];
         UploadPublications(device,command);
         previousSceneInstances=scene->GetInstanceBuffer();previousSceneGeometry=scene->GetGeometryBuffer();previousInstanceCount=instanceCount;previousGeometryCount=geometryCount;
@@ -776,9 +809,9 @@ public:
     __declspec(noinline)
 #endif
     void Dispatch(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene,
-            nvrhi::rt::IAccelStruct* tlas,RtrSparseLighting& sources,nvrhi::ISampler* sampler,nvrhi::IBuffer* analytic,uint32_t lightCount,uint32_t lightRoot,uint32_t treeBase){
+            const RtrSceneRowChanges& rows,nvrhi::rt::IAccelStruct* tlas,RtrSparseLighting& sources,nvrhi::ISampler* sampler,nvrhi::IBuffer* analytic,uint32_t lightCount,uint32_t lightRoot,uint32_t treeBase){
         const auto uploadScope=RtrGpuProfile::Begin(command,"NativeLightingUpload",-1);
-        UploadAttributes(device,command,scene);sources.Upload(command);
+        UploadAttributes(device,command,scene,rows);sources.Upload(command);
         if(sourceHistoryClear){for(auto& texture:sourceHistory)command->clearTextureUInt(texture,nvrhi::AllSubresources,0);sourceHistoryClear=false;}
         const bool seeded=sourceHistoryActive&&!workStatisticsEnabled&&!(diagnosticDecomposition&&RtrDiagnostics::level.load()==2);
         auto* words=reinterpret_cast<uint32_t*>(constants.words.data());words[72]=uint32_t(applicationData.size());words[73]=uint32_t(publication);words[74]=uint32_t(publication>>32);

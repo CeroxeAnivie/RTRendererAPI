@@ -31,6 +31,35 @@ public final class RtxptHighFramerateResourcesSelfTest {
         var transparent=next.patched(new TexturePatch(1,0,3,5,1,1,4,ByteBuffer.wrap(new byte[]{1,2,3,0})));
         require(!RtxptDelta.alphaEquivalent(next,transparent),"Coverage delta detects current patch alpha");
         resident.clear();var full=packet(old,scene,resident,pool);require(full.getInt(52)==0&&full.getInt(56)==pixels.length,"Missing resident parent falls back to a complete generation");
-        System.out.println("HIGH_FRAMERATE_RESOURCES_CPU PASS residentPayload=0 sharedDeduplicated=true patchParent=true packetReuse=true");
+        inheritance(old,base,pixels,pool);
+        System.out.println("HIGH_FRAMERATE_RESOURCES_CPU PASS residentPayload=0 sharedDeduplicated=true patchParent=true packetReuse=true imageInheritance=true samplerMetadata=true layoutFallback=true exactPixels=true");
     }finally{PACKETS.close();}}
+    private static void inheritance(RtxptScene old,TextureAsset base,byte[] pixels,RtxptMemoryResources.PacketPool pool){
+        var resident=new HashMap<Long,TextureAsset>();resident.put(1L,base);
+        var same=TextureAsset.color(1,16,16,pixels.clone());var scene=new RtxptScene(old);
+        scene.retain(SceneTransaction.builder(2).upsert(same).build());
+        var inherited=packet(old,scene,resident,pool);int compactBytes=inherited.remaining();
+        require(inherited.getInt(4)==1&&inherited.getInt(52)==2&&inherited.getLong(56)==base.generation(),"Identical complete pixels inherit the exact resident generation");
+        require(inherited.getLong(44)==same.generation(),"Inheritance advances the authored generation");
+        int completeBytes=packet(old,scene,Map.of(),pool).remaining();
+        require(completeBytes-compactBytes==pixels.length-4,"Inheritance omits exactly the complete pixel payload, retaining its base generation");
+        var sampler=TextureAsset.builder(1,16,16).addressModes(TextureAsset.AddressMode.CLAMP_TO_EDGE,TextureAsset.AddressMode.REPEAT)
+                .filter(TextureAsset.Filter.NEAREST).pixelsRgba8(pixels).build();
+        scene=new RtxptScene(old);scene.retain(SceneTransaction.builder(2).upsert(sampler).build());
+        var metadata=packet(old,scene,resident,pool);
+        require(metadata.getInt(52)==2&&metadata.getLong(56)==base.generation()&&metadata.getInt(32)==1&&metadata.getInt(40)==0,"Sampler changes retain metadata while inheriting identical image pixels");
+        var edited=same.patched(new TexturePatch(1,0,0,0,1,1,4,ByteBuffer.wrap(new byte[]{1,2,3,-1})));
+        scene=new RtxptScene(old);scene.retain(SceneTransaction.builder(2).upsert(same).build());
+        scene.retain(SceneTransaction.builder(3).upsert(edited).build());resident.put(1L,same);
+        var patch=packet(old,scene,resident,pool);
+        require(patch.getInt(52)==1&&patch.getLong(56)==same.generation(),"A later rectangle targets the inherited complete generation");
+        resident.put(1L,base);
+        require(packet(old,scene,resident,pool).getInt(52)==0,"A stale rectangle base cannot inherit the wrong resident image");
+        var changed=pixels.clone();changed[changed.length-1]=0;
+        var variants=List.of(TextureAsset.color(1,16,16,changed),
+                TextureAsset.builder(1,16,16).colorSpace(TextureAsset.ColorSpace.LINEAR).pixelsRgba8(pixels).build(),
+                TextureAsset.color(1,8,32,pixels));
+        for(var texture:variants){scene=new RtxptScene(old);scene.retain(SceneTransaction.builder(2).upsert(texture).build());
+            require(packet(old,scene,resident,pool).getInt(52)==0,"Pixel, color-space or image-layout changes require a complete image");}
+    }
 }

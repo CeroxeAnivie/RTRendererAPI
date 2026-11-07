@@ -1,8 +1,8 @@
 {
   "schema": "bridge-publication-v1",
-  "publishedAtUtc": "2026-11-07T15:25:08.555504+00:00",
+  "publishedAtUtc": "2026-11-07T17:13:49.112720+00:00",
   "version": "8.0.0",
-  "sourceCommit": "028c95705f3d6709bc60f7ca589f1ff84e7fc2e5",
+  "sourceCommit": "3be377ffffe4e8b9965991f772cb9a691324ed89",
   "githubBranch": "main",
   "githubConfirmedBeforeMavenLocal": true,
   "mavenLocalCompleted": true,
@@ -32,12 +32,12 @@
     },
     "renderer-rtxpt": {
       "renderer-rtxpt-8.0.0.jar": {
-        "sha256": "42aee5e2a55b71e1ad59e81c78ea6a009a1bdb62a7008cd8f210ac8422175188",
-        "bytes": 3959112706
+        "sha256": "6572d935ca2bbb268b1ab7e74063255b64f5f5c000af293500fc18497c095792",
+        "bytes": 3959215611
       },
       "renderer-rtxpt-8.0.0-sources.jar": {
-        "sha256": "f36d9a9a5b8f8eda1cbd8e661650dac1c468bc3c4db1160c7c10b1b06282061e",
-        "bytes": 47360
+        "sha256": "2eba47950ff9079b7f5a03b6c11bb87a6766fb583e6e6dcd3cd339352ed6a6f5",
+        "bytes": 47975
       },
       "renderer-rtxpt-8.0.0-javadoc.jar": {
         "sha256": "b5e42cad25ce5ea972e721d1ef389777974ec4ab95cd0ca036341f93d56e4661",
@@ -48,23 +48,25 @@
         "bytes": 1788
       },
       "renderer-rtxpt-8.0.0.module": {
-        "sha256": "5c9a8d210b54935cb6658864f29600adcd941534ae4badd69191ed6aee4ff530",
+        "sha256": "dab0b95a4916eabb149992e884e2950076529616a62b18224391d7224d580aba",
         "bytes": 3895
       }
     }
   },
-  "nativeDllSha256": "092cd812dba7e358278c701228630627f8b611ccd04cf46b2c5af9366c87d4d4",
-  "nativeRuntimeZipSha256": "fd2d09dde3f02c13a0e7b466afe5e4fe54bbc6b18ac5010395826fd61a91b6f4",
-  "nativeSha256": "092cd812dba7e358278c701228630627f8b611ccd04cf46b2c5af9366c87d4d4",
-  "runtimeSha256": "fd2d09dde3f02c13a0e7b466afe5e4fe54bbc6b18ac5010395826fd61a91b6f4",
+  "nativeDllSha256": "bfc5fff4a8b75a2e43ad44666a174d0c85283dc4fe8a227100eab6dd54df9139",
+  "nativeRuntimeZipSha256": "50fea16d0bea29520a94ad5bdaadeb62260971450dcf167a618d74b37e61e16b",
+  "nativeSha256": "bfc5fff4a8b75a2e43ad44666a174d0c85283dc4fe8a227100eab6dd54df9139",
+  "runtimeSha256": "50fea16d0bea29520a94ad5bdaadeb62260971450dcf167a618d74b37e61e16b",
   "checks": [
     "ten-published-artifacts-match-build",
     "verifyMajorReleaseContract-passed",
     "verifyPublishedMavenTopology-passed",
-    "packaged-native-dll-equals-final-streaming-tested-dll",
-    "46-frame-bridge-contract-passed",
-    "11-frame-mixed-deformation-contract-passed",
-    "20-frame-material-mutation-contract-passed"
+    "packaged-native-dll-equals-whole-frame-flow-tested-dll",
+    "prior-four-unaffected-contract-groups-retained-with-earlier-dll-identity",
+    "29-frame-topology-and-49-frame-migration-contract-current-dll-passed",
+    "466-fresh-frame-flow-passed",
+    "settled-and-camera-instance-row-reads-zero",
+    "exact-vacated-blas-reuse-and-incompatible-capacity-fallback-passed"
   ],
   "consumerRuntimeStarted": false,
   "consumerRuntimeRunTag": null,
