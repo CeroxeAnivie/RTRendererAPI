@@ -220,6 +220,19 @@ public:
 
     void ConfigureLighting(const std::vector<float>& parameters) {
         lighting.Configure(parameters);
+        // This consumer pass performs its own per-hit opacity evaluation. The
+        // sample's optional OMM bake is redundant here, and DXR 1.2 cannot build
+        // its mixed OMM/non-OMM geometry linkage (NVRHI dereferences a null OMM).
+        // Use the sample's ordinary BLAS/alpha path without changing upstream.
+        // UIData.Enable alone only changes TLAS selection: CreateAccelStructs
+        // queues OMM work again on every structural rebuild regardless of it.
+        // A null optional baker is an ordinary supported sample path (also used
+        // on devices without OMM); all BLAS/TLAS ownership stays with Sample.
+        if(m_ommBaker) {
+            m_ommBaker->SceneUnloading();
+            m_ommBaker->UIData().Enable=false;
+            m_ommBaker.reset();
+        }
         // All direct requests are freshly evaluated on the original frame.
         lighting.retainSignalsAllowed = false;
         m_resources.SetExternalTextureSampling(true);
