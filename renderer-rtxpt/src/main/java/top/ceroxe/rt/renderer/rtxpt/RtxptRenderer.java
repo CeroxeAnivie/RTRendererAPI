@@ -113,10 +113,16 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             throw new IllegalStateException("Publish the host response before HOST_RESPONSE_RATIO_V1");
         if(handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingCanPublish(handle))throw new IllegalStateException("Lighting output ring is full");
         recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.VALIDATION,begin,0,0,false);
-        boolean reset=fullReset,first=handle==0,extentChanged=width!=frame.width()||height!=frame.height();
+        // Independent lighting owns its requested grid and exact projection.
+        // The sample's unused presentation targets need that grid, not another
+        // full-size copy of the consumer's color/depth surface. Beauty keeps the
+        // ordinary frame extent; never alter frame identity or camera matrices.
+        int nativeWidth=nativeLightingPlan==null?frame.width():nativeLightingPlan.width();
+        int nativeHeight=nativeLightingPlan==null?frame.height():nativeLightingPlan.height();
+        boolean reset=fullReset,first=handle==0,extentChanged=width!=nativeWidth||height!=nativeHeight;
         try{
             if(first){
-                handle=RtxptNative.create(RtxptNative.runtime().toString(),nativeScene==null?null:nativeScene.toString(),frame.width(),frame.height(),externalPresentation,options.arguments());
+                handle=RtxptNative.create(RtxptNative.runtime().toString(),nativeScene==null?null:nativeScene.toString(),nativeWidth,nativeHeight,externalPresentation,options.arguments());
                 RtxptNative.presentation(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.generatedFrames());
                 options.applyQuality(handle);
                 RtxptNative.denoiser(handle,options.relaxDenoiser());
@@ -124,11 +130,11 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
                 if(windowTitle!=null)RtxptNative.title(handle,windowTitle);
                 if(!overlayText.isEmpty())RtxptNative.overlayText(handle,overlayText);
                 if(!overlayChoices.isEmpty())RtxptNative.overlayChoices(handle,overlayChoices.toArray(String[]::new),overlaySelected);
-                width=frame.width();height=frame.height();
+                width=nativeWidth;height=nativeHeight;
             }
             else if(reset&&nativeScene==null)RtxptNative.loadScene(handle,null);
             RtxptNative.frameContext(handle,frame.sequence(),revision);
-            if(extentChanged&&!first){RtxptNative.resize(handle,frame.width(),frame.height());width=frame.width();height=frame.height();}
+            if(extentChanged&&!first){RtxptNative.resize(handle,nativeWidth,nativeHeight);width=nativeWidth;height=nativeHeight;}
             // Select the external direct pass before importing materials with explicit sampler policies.
             if(nativeLightingPlan!=null)RtxptNative.nativeLighting(handle,RtxptNativeLightingParameters.pack(nativeLightingPlan,frame));
             var before=reset?new RtxptScene():residentScene;

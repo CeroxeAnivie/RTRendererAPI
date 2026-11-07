@@ -7,7 +7,11 @@ import top.ceroxe.rt.renderer.api.*;
 /** Mixed opaque/cutout geometry shares one mesh, as permitted by the public contract. */
 public final class RtxptMixedCoverageNativeSelfTest {
     public static void main(String[] args) {
-        var plan = new NativeLightingPlan(64, 64, Set.of(NativeLightingPlan.Signal.DIRECT_GAIN),
+        int hostWidth=args.length>0?Integer.parseInt(args[0]):64;
+        int hostHeight=args.length>1?Integer.parseInt(args[1]):64;
+        int gridWidth=args.length>2?Integer.parseInt(args[2]):64;
+        int gridHeight=args.length>3?Integer.parseInt(args[3]):64;
+        var plan = new NativeLightingPlan(gridWidth, gridHeight, Set.of(NativeLightingPlan.Signal.DIRECT_GAIN),
                 0, 6, 0, NativeLightingStyle.defaults());
         try (var renderer = RtxptRenderers.openNativeLighting(RtxptRenderers.nativeLightingConfiguration(), plan)) {
             var access = renderer.extension(RtxptAccess.class).orElseThrow();
@@ -26,20 +30,21 @@ public final class RtxptMixedCoverageNativeSelfTest {
             for (long sequence = 1; sequence <= 6; sequence++) {
                 long revision = sequence >= 3 ? 2 : 1;
                 if (sequence == 3) renderer.apply(SceneTransaction.builder(2).upsert(mesh(.1f)).build());
-                renderer.submit(RenderFrameRequest.builder(sequence, 64, 64, camera)
+                renderer.submit(RenderFrameRequest.builder(sequence, hostWidth, hostHeight, camera)
                         .minimumSceneRevision(revision).build());
                 access.awaitIdle();
                 try (var lease = lighting.acquireLightingFrame().orElseThrow()) {
                     var frame = lease.frame();
                     if (frame.sequence() != sequence || frame.sceneRevision() != revision
-                            || frame.planes().size() != 1 || frame.width() != 64 || frame.height() != 64)
+                            || frame.planes().size() != 1 || frame.width() != gridWidth || frame.height() != gridHeight)
                         throw new AssertionError("Mixed-coverage frame identity was not preserved");
                 }
             }
             if (lighting.nativeLightingExecution().fullBeautyFrames() != 0)
                 throw new AssertionError("Direct consumer unexpectedly executed full beauty");
         }
-        System.out.println("MIXED_COVERAGE_NATIVE PASS frames=6 opaqueAndCutout=true topologyUpdate=true");
+        System.out.println("MIXED_COVERAGE_NATIVE PASS frames=6 opaqueAndCutout=true topologyUpdate=true host="
+                +hostWidth+"x"+hostHeight+" grid="+gridWidth+"x"+gridHeight);
     }
 
     private static MeshAsset mesh(float z) {
