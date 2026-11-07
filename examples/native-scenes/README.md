@@ -4,6 +4,8 @@
 
 ## 场景与操作
 
+准备好 :renderer-rtxpt:rtxptReleaseValidationClasspath 后，使用 tools/Invoke-NativeSceneDemo.ps1 -Scene balls 启动一场；用户关闭后才另行 -Scene mixed。脚本默认显示普通窗口，保留所有演示默认值，不自动串场；后台验证显式加 -Hidden。加 -CheckPaths 只核对可启动输入，不创建进程或窗口。
+
 - 第一轮使用 --scene balls。窗口按 1／2／3 切换玻璃、不透明、金属球，运动状态保留；控制台可输入材质名或 quit。
 - 用户关闭第一轮窗口、确认进程退出后，再由启动方单独启动 --scene mixed。程序不会自动启动第二个场景或进程。
 - 光学预设为 mixed、glass、nested、absorption、rough、ior；窗口按 1–6 或控制台输入预设名切换，Esc／quit 退出。

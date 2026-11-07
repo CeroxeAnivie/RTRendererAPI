@@ -29,7 +29,7 @@
 
 bin 中的原版依赖及资源与 Assets 同源；自有 bridge、宿主和 AdapterShaders 独立放置。AdapterShaders 不是向上游 ShaderDynamic/Source 注入的文件。
 
-官方 source 导出仍只读。用户允许构建工作副本保留唯一内部补丁：SampleCommon::ProgressBarStart 在 HelpersIsNonInteractive() 为真时返回 -1，不创建进度窗口；interactive 保持原版，渲染算法、shader、默认质量和编译清单不因此改变。此项必须按唯一预期差异审计，不能将最终构建写成“零 patch”。目前尚未完成该控窗补丁的 GPU 验证。
+官方 source 导出仍只读。用户允许构建工作副本保留唯一内部补丁：SampleCommon::ProgressBarStart 在 HelpersIsNonInteractive() 为真时返回 -1，不创建进度窗口；interactive 保持原版，渲染算法、shader、默认质量和编译清单不因此改变。此项按唯一预期差异审计，不能将最终构建写成“零 patch”。该构建已完成隐藏原生场景运行，具体身份见解析光路恢复报告。
 
 JAR 中的 runtime ZIP 与 SHA-256 位于 META-INF/native/windows-x86_64。RtxptRuntime.binDirectory() 校验并返回 bin，RtxptRuntime.jvmHostExecutable() 返回宿主 EXE；两者不创建设备。打包提取保留摘要校验、进程间锁、安全路径检查和原子 staging；热缓存只复用完整内容。显式 top.ceroxe.rt.rtxpt.runtime 指向 bin，不完整就失败，不回退到旧 build/rtxpt-sdk。
 
@@ -59,7 +59,7 @@ native nonInteractive 属于原生 process argv／原生配置，不是 NativeSc
 
 官方源码位于 build/upstream-rtxpt/source，来源清单位于 build/upstream-rtxpt/source-manifest.json。tools/Assert-RtxptUpstream.ps1 对官方导出同时拒绝原文件变化及清单外新增文件。外桥构建入口是 tools/Build-RtxptBridge.ps1，自有 shader 构建入口是 tools/Build-AdapterShaders.ps1。官方导出继续只读；只有构建工作副本的 ProgressBarStart 非交互 guard 获准例外，须明确记录来源基线与这一处差异，不放宽其它源码／shader 的校验。
 
-所有构建与客户端使用有界进程树入口，合计内存上限 10 GiB；Gradle --no-daemon，重任务串行。来源／唯一补丁差异、CPU、原生出图、正式包及完整负载分别核验。历史生产 29 帧与 beauty 24 帧 proof 不为后续变更转签。最新两模块 Java 全量编译及 API 边界检查已完成，记录 12.918s／构建采集峰值 1.220GB；新增控窗补丁尚未 GPU 验证。本轮人工进程已退出但用户未验收通过，完整负载、消费方性能及正式包仍未通过。
+所有构建与客户端使用有界进程树入口，合计内存上限 10 GiB；Gradle --no-daemon，重任务串行。来源／唯一补丁差异、CPU、原生出图、正式包及完整负载分别核验。历史生产 29 帧与 beauty 24 帧 proof 不为后续变更转签。最新两模块 Java 主源码和测试源码编译、演示默认值检查、独立公开消费者阴影开关三帧隐藏运行已通过；玻璃稳态完成提交 231.965 FPS、三材质切换 720 帧通过采集，具体边界见解析光路恢复报告。用户尚未人眼签收，介质未启动；最终分发和 Maven Local 身份以主分支收拢记录为准。
 
 人工[原生场景示例](../examples/native-scenes/README.md)以 top.ceroxe.rt.renderer.rtxpt.examples.NativeSceneDemo 为 Java main。先 balls，待用户关闭且进程退出后再单独 mixed；Java 场景参数的每个 flag 和 value 各占一个 RTR_JVM_ARG_n，不把整条参数串塞进一个字段。--denoising 只接受 scene、off、relax、rr；光学比较的 --native 必须带 true/false，balls 不接受 --native true，--native true 与 --denoising rr 也不能组合。不自动启动第二个窗口，也不以 FG 请求代替原生激活／实际呈现测量。
 
