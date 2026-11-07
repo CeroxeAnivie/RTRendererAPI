@@ -13,7 +13,7 @@ final class RtxptNative {
         if(loaded)return;
         var root=runtime();var dll=bridge();
         if(!Files.isRegularFile(dll))throw new IllegalStateException("Build the external bridge with tools/Build-RtxptBridge.ps1");
-        for(String dependency:new String[]{"sl.interposer.dll","NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
+        for(String dependency:new String[]{"NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
         System.load(dll.toString());
         try{if(bridgeAbiVersion()!=8)throw new IllegalStateException("External RTXPT bridge ABI mismatch: "+dll);}
         catch(UnsatisfiedLinkError legacy){throw new IllegalStateException("The DLL is not the external RTXPT 8 bridge: "+dll,legacy);}
@@ -23,6 +23,7 @@ final class RtxptNative {
     /** Test-only: fresh process, before creating any renderer; observes the public upstream progress API. */
     static native long[] progressWindowProof();
     static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,String[] options);
+    static native long createSession(String runtime,String scene,int width,int height,boolean externalPresentation,boolean requiresStreamline,String[] options);
     static native void diagnosticLevel(long handle,int level);
     static native long[] boundaryDiagnostics(long handle,long generation,long nextOrdinal);
     static native void frameContext(long handle,long sequence,long revision);

@@ -1,9 +1,17 @@
-# External adapter plus the single authorized noninteractive progress-window fix.
+# External adapter plus the two independently audited UI/network exceptions.
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../tools/RtxptProgressPatch.cmake")
 rtr_apply_authorized_progress_patch()
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../tools/RtxptOfflinePatch.cmake")
+rtr_apply_authorized_offline_preferences_patch()
 find_package(JNI REQUIRED COMPONENTS JVM)
 add_library(rtrenderer_rtxpt SHARED "${CMAKE_CURRENT_LIST_DIR}/rtxpt_upstream_jni.cpp")
 target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore d3d12 dxgi)
+if(MSVC)
+    # Donut explicitly loads the signed SL DLL only when its session needs it.
+    # Standard delay imports keep unused independent-lighting sessions offline.
+    target_link_options(rtrenderer_rtxpt PRIVATE "/DELAYLOAD:sl.interposer.dll")
+    target_link_libraries(rtrenderer_rtxpt PRIVATE delayimp)
+endif()
 target_include_directories(rtrenderer_rtxpt PRIVATE ${JNI_INCLUDE_DIRS})
 target_compile_definitions(rtrenderer_rtxpt PRIVATE
     RTR_RTXPT_ADVANCED_SOURCE="${CMAKE_SOURCE_DIR}/Rtxpt/AdvancedSample.cpp")

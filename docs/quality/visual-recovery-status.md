@@ -114,3 +114,6 @@ b) build/reports/visual-recovery/20261107-131914-balls-power-quality/；3 材质
 代码对照确认：旧、新 packed base color 都是 /255，玻璃 roughness .025、IOR 2.618/F0 .2 和吸收输入相同。旧 SCENE_ANALYTIC 以 RtrSceneDirect.hlsli 提供自有有限距离衰减、确定性少灯遍历和透射阴影；RtrSceneLightingInputs.hlsli 提供自有光学分支。新原生 beauty 没有调用这些定制；相同输入数值不等于相同渲染路径。这是已证实的结构差异，不把它直接说成每项视觉退步的唯一实测原因。当前不以提高 RR 质量或浮点逐值匹配替代修复。
 
 新规则禁止直接恢复旧 RTXPT 内部补丁；不禁止独立桥接修复。只有编译进度窗这一处内部补丁已获准。尚未证明每项旧定制均有原生等价公开入口，也不宣称已完整迁移。以人眼观感、正确性和完整负载性能决定交付，正常原生精度差异不单独阻断。
+
+
+Current exception update (2026-11-07): the later network-only authorization is separate from this historical visual result. There are now two allowed exceptions spanning three hash-locked source variants (one progress, two Donut network files); rendering/shader algorithms remain original. Current scope and runtime limits: native-network-policy.md.

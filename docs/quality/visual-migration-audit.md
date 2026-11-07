@@ -208,3 +208,6 @@ ProgressBar包装本身也没有扩展点：SampleCommon.h:129–143只有Start/
 HelpersIsNonInteractive()为真时返回-1沿用ProgressBar已有的inactive语义；ProgressBar::Set/Stop已能处理m_slot=-1。补丁只跳过进度线程与UI创建，不跳过shader/PSO工作、不改interactive或错误退出；现在已有定向专项PASS，完整交互/渲染行为及FPS仍不能从该项推导。唯一差异manifest在build/upstream-rtxpt/native/rtrenderer-patches/progress-noninteractive/manifest.json。
 
 此前两模块 Java 全量编译与 API 边界记录为12.918s／采集峰值1.220GB；是构建记录，不是客户端内存。后续progress/direct masked/emission专项原始摘要为build/reports/upstream-material-progress/20261107-130139/summary.json；各项按自己的受测范围记录，不互相转签。本次文档整理不重跑、不联网。finite fade、coverage、host-primary等视觉缺口保留；full-float/raw逐值一致不是本轮人眼目标的硬门槛，正常原版量化不冒称视觉已验收。
+
+
+Current exception update (2026-11-07): the later network-only authorization is separate from this historical visual result. There are now two allowed exceptions spanning three hash-locked source variants (one progress, two Donut network files); rendering/shader algorithms remain original. Current scope and runtime limits: native-network-policy.md.

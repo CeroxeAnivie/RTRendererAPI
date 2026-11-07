@@ -1,0 +1,47 @@
+{
+  "format": "rtr-authorized-network-variant-v1",
+  "source": "External/Donut/src/app/streamline/StreamlineIntegration.cpp",
+  "officialSha256": "60b6756523e5e16a4d08e5b9842a99050048af1340008fbdf338c92377299929",
+  "operations": [
+    {
+      "anchor": "namespace donut::app \n{\n\n",
+      "insertion": "// Embedding network policy: set on the serialized application owner thread.\nstatic thread_local bool g_rtrStreamlineSessionEnabled = true;\nbool RtrSetStreamlineSessionEnabled(bool enabled)\n{\n    const bool previous = g_rtrStreamlineSessionEnabled;\n    g_rtrStreamlineSessionEnabled = enabled;\n    return previous;\n}\n\nbool RtrStreamlineSessionEnabled()\n{\n    return g_rtrStreamlineSessionEnabled;\n}\n\n"
+    },
+    {
+      "anchor": "bool StreamlineIntegration::InitializePreDevice(nvrhi::GraphicsAPI api, int appId, const bool checkSig, const bool enableLog)\n{\n",
+      "insertion": "    if (!g_rtrStreamlineSessionEnabled)\n    {\n        if (m_slInitialized)\n            return false;\n        m_dlssAvailable = m_nisAvailable = m_deepdvcAvailable = false;\n        m_dlssgAvailable = m_dlssrrAvailable = m_reflexAvailable = m_pclAvailable = false;\n        m_currentFrame = nullptr;\n        m_device = nullptr;\n        log::info(\"Streamline is not required by this session; initialization is skipped.\");\n        return true;\n    }\n\n"
+    },
+    {
+      "anchor": "    pref.flags |= sl::PreferenceFlags::eUseManualHooking;\n",
+      "insertion": "    pref.flags &= ~(sl::PreferenceFlags::eAllowOTA | sl::PreferenceFlags::eLoadDownloadedPlugins);\n"
+    },
+    {
+      "anchor": "bool StreamlineIntegration::SetD3DDevice(IUnknown* nativeDevice)\n{\n",
+      "insertion": "    if (!m_slInitialized)\n        return true;\n\n"
+    },
+    {
+      "anchor": "bool StreamlineIntegration::InitializeDeviceDX(nvrhi::IDevice *device, AdapterInfo::LUID *pAdapterIdDx11)\n{\n",
+      "insertion": "    if (!m_slInitialized)\n        return true;\n\n"
+    },
+    {
+      "anchor": "uint32_t StreamlineIntegration::FindBestAdapterDX()\n{\n",
+      "insertion": "    if (!m_slInitialized)\n        return 0;\n\n"
+    },
+    {
+      "anchor": "void StreamlineIntegration::Shutdown()\n{\n",
+      "insertion": "    if (!m_slInitialized)\n        return;\n\n"
+    },
+    {
+      "anchor": "void StreamlineIntegration::SimStart(DeviceManager& manager)\n{\n",
+      "insertion": "    if (!m_slInitialized)\n        return;\n\n"
+    },
+    {
+      "anchor": "bool StreamlineIntegration::UpgradeInterface(IUnknown*& interfacePointer)\n{\n",
+      "insertion": "    if (!Get().m_slInitialized)\n        return false;\n\n"
+    },
+    {
+      "anchor": "void StreamlineIntegration::ReflexTriggerFlash(int frameNumber)\n{\n",
+      "insertion": "    if (!m_slInitialized)\n        return;\n\n"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 .SYNOPSIS
 Build the external API adapter against the verified, unmodified RTXPT release.
 .DESCRIPTION
-8.0 permits only the audited noninteractive progress-window guard.
+8.0 permits the audited noninteractive progress guard and network-only preferences.
 No upstream rendering/shader patches, source overlays, or shader injection.
 Legacy overlay build arguments are intentionally unsupported.
 #>

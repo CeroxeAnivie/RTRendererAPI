@@ -188,8 +188,8 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_progressWindowProof(JNIEnv* env,jc
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(JNIEnv* env, jclass, jstring runtime,
-    jstring scene, jint width, jint height, jboolean externalPresentation, jobjectArray options) {
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_createSession(JNIEnv* env, jclass, jstring runtime,
+    jstring scene, jint width, jint height, jboolean externalPresentation, jboolean requiresStreamline, jobjectArray options) {
     try {
         if (width < 1 || height < 1 || width > 16384 || height > 16384)
             throw std::invalid_argument("Invalid render extent");
@@ -204,7 +204,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(JNIEnv* env, jclass, jstrin
         if (!scenePath.empty()) arguments.push_back("--scene=" + scenePath);
         RtrDiagnostics::Reset();
         auto renderer = std::make_shared<Renderer>();
-        renderer->session = std::make_unique<rtr::upstream::Session>(std::move(arguments), scenePath.empty());
+        renderer->session = std::make_unique<rtr::upstream::Session>(std::move(arguments), scenePath.empty(), requiresStreamline == JNI_TRUE);
         if (externalPresentation) renderer->session->Invoke([](auto& app) {
             glfwHideWindow(app.DeviceManager().GetWindow());
         });
@@ -213,6 +213,13 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(JNIEnv* env, jclass, jstrin
         renderers.emplace(handle, std::move(renderer));
         return handle;
     } catch (const std::exception& error) { Throw(env, error); return 0; }
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(JNIEnv* env, jclass type, jstring runtime,
+    jstring scene, jint width, jint height, jboolean externalPresentation, jobjectArray options) {
+    return Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_createSession(env,type,runtime,scene,width,height,
+        externalPresentation,JNI_TRUE,options);
 }
 
 extern "C" JNIEXPORT void JNICALL

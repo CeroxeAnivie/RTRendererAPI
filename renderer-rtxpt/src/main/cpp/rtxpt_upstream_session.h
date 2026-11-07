@@ -1,6 +1,7 @@
 #pragma once
 #include "rtxpt_upstream_host.h"
 #include "rtxpt_shutdown.h"
+#include "rtxpt_network_policy.h"
 #include <optional>
 #include <chrono>
 #include <condition_variable>
@@ -32,9 +33,9 @@ public:
         bool vsyncEnabled = false;
     };
 
-    explicit Session(std::vector<std::string> options, bool managedScene = false) {
+    explicit Session(std::vector<std::string> options, bool managedScene = false, bool requiresStreamline = true) {
         if (options.empty()) options.emplace_back("rtrenderer-upstream");
-        m_thread = std::thread([this, options = std::move(options), managedScene] { Run(options, managedScene); });
+        m_thread = std::thread([this, options = std::move(options), managedScene, requiresStreamline] { Run(options, managedScene, requiresStreamline); });
         std::unique_lock lock(m_mutex);
         m_condition.wait(lock, [this] { return m_initialized || m_stopped; });
         if (m_failure) {
@@ -131,7 +132,7 @@ private:
         if (m_stop || m_stopped) std::rethrow_exception(m_closedFailure);
     }
 
-    void Run(const std::vector<std::string>& options, bool managedScene) noexcept {
+    void Run(const std::vector<std::string>& options, bool managedScene, bool requiresStreamline) noexcept {
         try {
             // The original sample owns process-global UI and logging state. It
             // does not offer isolated concurrent application instances.
@@ -151,6 +152,7 @@ private:
             for (const auto& option : options) argv.push_back(option.c_str());
             // The guard outlives Application, whose original destructor calls
             // DeviceManager::Shutdown and drains Streamline destruction callbacks.
+            StreamlineSessionPolicy streamlinePolicy(requiresStreamline);
             std::optional<ShutdownModuleReference> retainedModules;
             Application application(options, managedScene);
             // The pinned sample reads the CRT arguments instead of Init's parameters.
@@ -178,7 +180,7 @@ private:
                     + std::to_string(static_cast<int>(status)));
             // Official DeviceManager applies this requested public setting before
             // the next render. There is no extra frame-rate timer in the adapter.
-            retainedModules.emplace();
+            if (requiresStreamline) retainedModules.emplace();
             application.DeviceManager().SetVsyncEnabled(false);
             bool active = false;
             bool actionsApplied = false;

@@ -204,6 +204,11 @@ public:
     }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
+        // Sample sets ShaderReloadRequested for its initial PT hit tables.
+        // An independent-lighting scene has no such tables; its own shaders
+        // are loaded fresh by Prepare. Later explicit reload requests retain
+        // the normal complete-render fallback.
+        m_nativeSceneBootstrapPending=true;
         if(m_presentationConfigured)ApplyPresentation();
         if(m_exposureConfigured)ApplyExposure();
         if(m_qualityConfigured)ApplyQuality();
@@ -216,7 +221,15 @@ public:
         // BUILD/FILL/reference variants or its unconditional SHaRC buffers.
         // Shared post-processing variants remain owned by the original Sample.
         if(lighting.active)Sample::CreateRTPipelines();
-        else AdvancedPathTracer::CreateRTPipelines();
+        else {AdvancedPathTracer::CreateRTPipelines();m_advancedPipelineOwner=true;}
+    }
+    void DestroyRTPipelines() override {
+        // A direct-only session can unload without ever creating a PT baker.
+        // Pair the same original owner used by CreateRTPipelines when it exists.
+        if(!m_ptPipelineBaker)return;
+        if(m_advancedPipelineOwner)AdvancedPathTracer::DestroyRTPipelines();
+        else Sample::DestroyRTPipelines();
+        m_advancedPipelineOwner=false;
     }
     void CreateCustomRenderPasses() override {
         if(!lighting.active)AdvancedPathTracer::CreateCustomRenderPasses();
@@ -312,6 +325,7 @@ public:
         if (!m_managedScene || !IsSceneLoaded() || !m_scene) {
             if(lighting.active)++m_nativeFrameWork[1];
             AdvancedPathTracer::Render(framebuffer);
+            m_nativeSceneBootstrapPending=false;
             return;
         }
         if(!m_scene->GetSceneGraph()->GetMeshInstances().empty()) {
@@ -321,6 +335,7 @@ public:
             }
             if(lighting.active)++m_nativeFrameWork[1];
             AdvancedPathTracer::Render(framebuffer);
+            m_nativeSceneBootstrapPending=false;
             return;
         }
         // The sample's CreateTlas allocates a zero-byte SubInstance buffer for
@@ -562,19 +577,16 @@ private:
     // Executed direct frames: lightweight / complete native fallback / empty.
     // These counters advance at the actual dispatch/Render choice, not at request time.
     std::array<uint64_t,3> m_nativeFrameWork{};
+    bool m_nativeSceneBootstrapPending=false;
+    bool m_advancedPipelineOwner=false;
     bool CanRenderNativeLightingLean(nvrhi::IFramebuffer* framebuffer)const{
-        if(!lighting.active||!m_renderTargets||!m_materialsBaker||!m_graphicsCommandList||!m_topLevelAS
-            ||!m_view||!m_viewPrevious||!m_shaderDebug||!m_ptPipelineBaker)return false;
-        const auto& size=framebuffer->getFramebufferInfo();
-        if(m_displaySize.x!=size.width||m_displaySize.y!=size.height
-            ||m_renderSize.x!=size.width||m_renderSize.y!=size.height)return false;
+        if(!lighting.active||!m_materialsBaker||!m_graphicsCommandList)return false;
         // The independent direct pass owns its camera, motion and reconstruction.
         // GPU frustum culling, beauty AA/FG, picking and capture need Sample's
         // private view/postprocess lifecycle and must stay on its complete path.
         if(m_ui.RealtimeAA!=0||m_ui.AS.GPUTLASCull||m_ommBaker||m_lastFrameAsyncPrefix
             ||m_dlssgInputsFence||m_ui.ActualDLSSFGMode()!=SI::DLSSGMode::eOff
-            ||m_ui.ActualUseRTXDIPasses()||m_ui.AccelerationStructRebuildRequested
-            ||m_ui.ShaderReloadRequested||m_ui.NRDModeChanged
+            ||m_ui.ActualUseRTXDIPasses()||(m_ui.ShaderReloadRequested&&!m_nativeSceneBootstrapPending)
             ||m_ui.DebugView!=DebugViewType::Disabled||m_pick||m_ui.ContinuousDebugFeedback
             ||m_ui.ShowDebugLines||m_ui.PostProcessTestPassHDR||m_ui.PostProcessEdgeDetection
             ||m_ui.ExperimentalPhotoModeScreenshot||m_captureScriptManager->IsDoingWork()
@@ -584,12 +596,25 @@ private:
     void RenderNativeLightingLean(nvrhi::IFramebuffer* framebuffer){
         // Compose only exposed original lifecycle methods: no copied scene/AS,
         // camera, material, shader or post-processing implementation lives here.
-        // The first frame and every real renderer reinitialization use Render.
+        // Direct signals own their output resources. Requiring Sample's beauty
+        // targets here forced its first full Render to retain denoising/GBuffer,
+        // environment baking, light sampling and shader-debug allocations that
+        // this pass never reads. Bootstrap AS through the original entry point
+        // instead; real beauty/postprocess requests still use the complete path.
         m_progressLoading.Stop();m_asyncLoadingInProgress=false;
+        if(m_nativeSceneBootstrapPending){m_ui.ShaderReloadRequested=false;m_nativeSceneBootstrapPending=false;}
+        const auto& size=framebuffer->getFramebufferInfo();
+        m_displaySize=m_renderSize=uint2(size.width,size.height);
+        m_displayAspectRatio=float(size.width)/float(size.height);
+        if(!m_view){m_view=std::make_shared<PlanarView>();m_viewPrevious=std::make_shared<PlanarView>();}
+        m_viewPrevious->SetViewport(nvrhi::Viewport(float(size.width),float(size.height)));
         PreRender();
         RAII_SCOPE(;,PostRender(););
-        StreamlinePreRender();
         m_commandList=m_graphicsCommandList;
+        if(!m_topLevelAS)m_ui.AccelerationStructRebuildRequested=true;
+        // Original material/coverage rules and BLAS/TLAS construction remain
+        // authoritative, including genuine rebuilds after policy changes.
+        RecreateAccelStructs(m_commandList);
         m_commandList->open();
         GpuProfiler::BeginFrameZone(m_commandList);
         m_scene->Refresh(m_commandList,GetFrameIndex());
@@ -599,15 +624,8 @@ private:
         UpdateSkinnedBLASs(m_commandList,GetFrameIndex());
         TransitionMeshBuffersToReadOnly(m_commandList);
         UpdateTLAS(m_commandList);
-        bool needNewBindings=false;
-        UpdateBindlessValidationData(m_commandList,needNewBindings);
-        if(needNewBindings||!m_bindingSet){
-            // The original binding factory snapshots live descriptor tables.
-            // Keep its original submission boundary before rebuilding bindings.
-            m_commandList->close();GetDevice()->executeCommandList(m_commandList);
-            RecreateBindingSet();m_commandList->open();
-        }
-        PreUpdatePathTracing(false,m_commandList);
+        // Dispatch binds the live Scene buffers and its descriptor table itself;
+        // Sample's global beauty bindings and accumulation/debug setup are unused.
         SampleRenderCode(framebuffer,m_commandList,SampleConstants{},false);
         const auto& attachments=framebuffer->getDesc().colorAttachments;
         if(!attachments.empty())m_commandList->clearTextureFloat(attachments[0].texture,
@@ -615,7 +633,7 @@ private:
         GpuProfiler::End(m_commandList);
         m_commandList->close();
         m_lastGraphicsSubmit=GetDevice()->executeCommandList(m_commandList);
-        m_lastFrameAsyncPrefix=false;m_bindingSet=m_bindingSetMain;
+        m_lastFrameAsyncPrefix=false;
         GetDeviceManager()->SetVsyncEnabled(m_ui.ActualEnableVsync());
         PostUpdatePathTracing();
         ++m_nativeFrameWork[0];

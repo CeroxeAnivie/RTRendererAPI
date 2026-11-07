@@ -1,4 +1,5 @@
-# Sole user-authorized upstream exception. The verified export stays read-only.
+# Progress-window exception; the separate network exception is audited independently.
+# The verified official export stays read-only.
 function(rtr_apply_authorized_progress_patch)
     set(original "${CMAKE_SOURCE_DIR}/Rtxpt/SampleCommon/SampleCommon.cpp")
     set(expected "fe2d1d29021ca6506707a3ea8749ffa37c6d33491fc321e045a16a84bc3742e0")

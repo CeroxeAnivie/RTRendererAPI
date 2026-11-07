@@ -24,6 +24,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private List<RtxptScene.Item> previous=List.of();
     private long handle,revision,submitted=-1,completed=-1;
     private boolean closed,scenePublished,fullReset=true,windowClosed;
+    private boolean sessionRequiresStreamline;
     private int width,height;
     private Path nativeScene;
     private CameraState camera;
@@ -124,7 +125,8 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         boolean reset=fullReset,first=handle==0,extentChanged=width!=nativeWidth||height!=nativeHeight;
         try{
             if(first){
-                handle=RtxptNative.create(RtxptNative.runtime().toString(),nativeScene==null?null:nativeScene.toString(),nativeWidth,nativeHeight,externalPresentation,options.arguments());
+                sessionRequiresStreamline=nativeLightingPlan==null||lightingReconstruction==NativeLightingReconstruction.DLSS_RR;
+                handle=RtxptNative.createSession(RtxptNative.runtime().toString(),nativeScene==null?null:nativeScene.toString(),nativeWidth,nativeHeight,externalPresentation,sessionRequiresStreamline,options.arguments());
                 RtxptNative.diagnosticLevel(handle,recorder.level().ordinal());
                 RtxptNative.presentation(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.generatedFrames());
                 options.applyQuality(handle);
@@ -305,7 +307,12 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
 
     @Override public Execution nativeLightingExecution(){ready();var n=handle==0?new long[8]:RtxptNative.nativeLightingTelemetry(handle);return new Execution(n[0]!=0,(int)n[1],(int)n[2],(int)n[3],n[4],n[5],n[6],n[7]);}
     @Override public Optional<LightingFrameLease> acquireLightingFrame(){ready();nativeLightingPlan();if(handle==0)return Optional.empty();var packet=RtxptNative.nativeLightingFrame(handle);return packet.length==0?Optional.empty():Optional.of(new RtxptLightingFrameLease(handle,packet));}
-    @Override public void lightingReconstruction(NativeLightingReconstruction value){ready();lightingReconstruction=Objects.requireNonNull(value);}
+    @Override public void lightingReconstruction(NativeLightingReconstruction value){
+        ready();Objects.requireNonNull(value);
+        if(handle!=0&&!sessionRequiresStreamline&&value==NativeLightingReconstruction.DLSS_RR)
+            throw new IllegalStateException("Select DLSS_RR before the first submit, or reopen the renderer to enable Streamline");
+        lightingReconstruction=value;
+    }
     @Override public void resetLightingReconstruction(){ready();nativeLightingPlan();if(handle!=0)RtxptNative.nativeLightingReconstruction(handle,lightingReconstruction==NativeLightingReconstruction.DLSS_RR,true);}
     @Override public void lightingReconstructionScale(int divisor){ready();if(divisor!=1&&divisor!=2&&divisor!=4)throw new IllegalArgumentException("Reconstruction divisor must be 1, 2 or 4");lightingReconstructionDivisor=divisor;}
     @Override public ReconstructionState lightingReconstruction(){ready();var n=handle==0?new long[7]:RtxptNative.nativeLightingReconstructionState(handle);return new ReconstructionState(NativeLightingReconstruction.values()[Math.toIntExact(n[0])],NativeLightingReconstruction.values()[Math.toIntExact(n[1])],Math.toIntExact(n[2]),Math.toIntExact(n[3]),n[4],n[5],n[6]!=0);}

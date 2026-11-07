@@ -169,7 +169,7 @@ public:
     nvrhi::IBuffer* previousSceneInstances=nullptr;
     nvrhi::IBuffer* previousSceneGeometry=nullptr;
     size_t previousInstanceCount=0,previousGeometryCount=0;
-    struct Retired {std::vector<nvrhi::BufferHandle> buffers;std::vector<nvrhi::TextureHandle> textures;std::vector<nvrhi::ComputePipelineHandle> pipelines;nvrhi::EventQueryHandle done,computeDone;uint64_t bytes=0;};
+    struct Retired {std::vector<nvrhi::BufferHandle> buffers;std::vector<nvrhi::TextureHandle> textures;std::vector<nvrhi::ComputePipelineHandle> pipelines;std::vector<nvrhi::BindingSetHandle> bindings;nvrhi::EventQueryHandle done,computeDone;uint64_t bytes=0;};
     std::vector<Retired> retired;
     RtrNativeLightingPass(){retired.reserve(64);}
     std::shared_ptr<RtrResourceReclaimer> reclaimer=std::make_shared<RtrResourceReclaimer>();
@@ -209,12 +209,33 @@ public:
     void Retire(nvrhi::IDevice* device,std::vector<nvrhi::BufferHandle> buffers,std::vector<nvrhi::TextureHandle> textures={}){
         PollRetired(device);if(retired.size()>=64)throw std::runtime_error("Lighting retirement capacity exhausted");
         Retired old;old.buffers=std::move(buffers);old.textures=std::move(textures);
+        // NVRHI binding sets own their resources. An inactive variant (for
+        // example DEEP after it is disabled) must not pin a replaced buffer.
+        // Preserve unrelated caches and let NVRHI retain submitted bindings
+        // until GPU completion; release our cache references on the reclaimer.
+        auto retireBindings=[&](RtrCachedBindings& cache){
+            if(!cache.value)return;const auto* desc=cache.value->getDesc();if(!desc)return;
+            for(const auto& item:desc->bindings){
+                bool matches=false;
+                for(const auto& buffer:old.buffers)if(buffer&&item.resourceHandle==buffer.operator->()){matches=true;break;}
+                if(!matches)for(const auto& texture:old.textures)if(texture&&item.resourceHandle==texture.operator->()){matches=true;break;}
+                if(matches){old.bindings.push_back(std::move(cache.value));return;}
+            }
+        };
+        retireBindings(dispatchBindings);retireBindings(encodeBindings);
+        for(auto& cache:sourceHistoryBindings)retireBindings(cache);
+        for(auto& cache:phaseBindings)retireBindings(cache);
+        retireBindings(reconstruction.resolveBindings);retireBindings(reconstruction.reduceBindings);retireBindings(reconstruction.upsampleBindings);
         for(auto& b:old.buffers)if(b)old.bytes+=b->getDesc().byteSize;
         old.done=device->createEventQuery();old.computeDone=device->createEventQuery();
         if(!old.done||!old.computeDone)throw std::runtime_error("Lighting completion query allocation failed");
         device->setEventQuery(old.done,nvrhi::CommandQueue::Graphics);device->setEventQuery(old.computeDone,nvrhi::CommandQueue::Compute);retired.push_back(std::move(old));
     }
     void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* bindlessLayout,const RtrSparseLighting* sources=nullptr){
+        // Retirement must advance on stable and empty frames too. Polling only
+        // from Retire keeps the final replaced buffers alive indefinitely once
+        // growth stops; the same two-queue completion checks remain mandatory.
+        PollRetired(device);
         if(!pipeline){
             RtrDiagnostics::Scope initialize(RtrDiagnostics::LightingInitialize);
             nvrhi::BindingLayoutDesc desc;desc.visibility=nvrhi::ShaderType::Compute;

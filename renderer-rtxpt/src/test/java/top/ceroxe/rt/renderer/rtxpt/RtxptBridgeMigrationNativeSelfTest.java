@@ -45,6 +45,10 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             access.awaitIdle();
             long handle=handleField.getLong(renderer);
             try(var initial=lighting.acquireLightingFrame().orElseThrow()) {checkFrame(initial.frame(),1);}
+            long[] initialWork=RtxptNative.commandWorkState(handle);
+            require(initialWork.length==10&&initialWork[7]>0&&initialWork[8]==0,
+                    "Independent lighting bootstrap entered complete beauty initialization");
+            System.out.println("BRIDGE_MIGRATION bootstrap PASS lean="+initialWork[7]+" complete="+initialWork[8]);
             var monitor=access.nativeDiagnosticMonitor();var independent=access.nativeDiagnosticMonitor();
             var javaMonitor=access.diagnosticMonitor();var javaIndependent=access.diagnosticMonitor();
             boolean thirdPresent=true,sawRealTexture=false,sawAttributes=false,sawTopology=false;

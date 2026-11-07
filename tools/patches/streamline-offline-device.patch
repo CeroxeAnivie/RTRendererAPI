@@ -1,0 +1,56 @@
+--- a/External/Donut/src/app/dx12/DeviceManager_DX12.cpp
++++ b/External/Donut/src/app/dx12/DeviceManager_DX12.cpp
+@@ -67,6 +67,53 @@
+ using namespace donut::app;
+ 
+ #define HR_RETURN(hr) if(FAILED(hr)) return false;
++#if DONUT_WITH_STREAMLINE
++namespace donut::app { bool RtrStreamlineSessionEnabled(); }
++
++// Only an SL-free session bypasses the interposer's native-device exports.
++// Local SL features retain exactly the original calls when the policy is on.
++static FARPROC RtrNativeSystemEntryPoint(bool dxgi, const char* name)
++{
++    static HMODULE dxgiModule = LoadLibraryExW(L"dxgi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
++    static HMODULE d3d12Module = LoadLibraryExW(L"d3d12.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
++    HMODULE module = dxgi ? dxgiModule : d3d12Module;
++    return module ? GetProcAddress(module, name) : nullptr;
++}
++static HRESULT RtrNetworkCreateDXGIFactory2(UINT flags, REFIID iid, void** factory)
++{
++    if (donut::app::RtrStreamlineSessionEnabled())
++        return CreateDXGIFactory2(flags, iid, factory);
++    auto function = reinterpret_cast<decltype(&CreateDXGIFactory2)>(RtrNativeSystemEntryPoint(true, "CreateDXGIFactory2"));
++    return function ? function(flags, iid, factory) : HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
++}
++static HRESULT RtrNetworkDXGIGetDebugInterface1(UINT flags, REFIID iid, void** debug)
++{
++    if (donut::app::RtrStreamlineSessionEnabled())
++        return DXGIGetDebugInterface1(flags, iid, debug);
++    auto function = reinterpret_cast<decltype(&DXGIGetDebugInterface1)>(RtrNativeSystemEntryPoint(true, "DXGIGetDebugInterface1"));
++    return function ? function(flags, iid, debug) : HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
++}
++static HRESULT RtrNetworkD3D12GetDebugInterface(REFIID iid, void** debug)
++{
++    if (donut::app::RtrStreamlineSessionEnabled())
++        return D3D12GetDebugInterface(iid, debug);
++    auto function = reinterpret_cast<decltype(&D3D12GetDebugInterface)>(RtrNativeSystemEntryPoint(false, "D3D12GetDebugInterface"));
++    return function ? function(iid, debug) : HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
++}
++static HRESULT RtrNetworkD3D12CreateDevice(IUnknown* adapter, D3D_FEATURE_LEVEL level, REFIID iid, void** device)
++{
++    if (donut::app::RtrStreamlineSessionEnabled())
++        return D3D12CreateDevice(adapter, level, iid, device);
++    auto function = reinterpret_cast<decltype(&D3D12CreateDevice)>(RtrNativeSystemEntryPoint(false, "D3D12CreateDevice"));
++    return function ? function(adapter, level, iid, device) : HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
++}
++// TU-local redirection changes only device creation/debug entry selection.
++#define CreateDXGIFactory2 RtrNetworkCreateDXGIFactory2
++#define DXGIGetDebugInterface1 RtrNetworkDXGIGetDebugInterface1
++#define D3D12GetDebugInterface RtrNetworkD3D12GetDebugInterface
++#define D3D12CreateDevice RtrNetworkD3D12CreateDevice
++#endif
++
+ 
+ 
+ 

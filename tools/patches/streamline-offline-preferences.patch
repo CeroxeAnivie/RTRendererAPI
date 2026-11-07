@@ -1,0 +1,120 @@
+--- a/External/Donut/src/app/streamline/StreamlineIntegration.cpp
++++ b/External/Donut/src/app/streamline/StreamlineIntegration.cpp
+@@ -80,6 +80,20 @@
+ 
+ namespace donut::app 
+ {
++
++// Embedding network policy: set on the serialized application owner thread.
++static thread_local bool g_rtrStreamlineSessionEnabled = true;
++bool RtrSetStreamlineSessionEnabled(bool enabled)
++{
++    const bool previous = g_rtrStreamlineSessionEnabled;
++    g_rtrStreamlineSessionEnabled = enabled;
++    return previous;
++}
++
++bool RtrStreamlineSessionEnabled()
++{
++    return g_rtrStreamlineSessionEnabled;
++}
+ 
+ // Format conversion functions
+ static sl::float2 make_sl_float2(const dm::float2& donutF) 
+@@ -219,6 +233,18 @@
+ 
+ bool StreamlineIntegration::InitializePreDevice(nvrhi::GraphicsAPI api, int appId, const bool checkSig, const bool enableLog)
+ {
++    if (!g_rtrStreamlineSessionEnabled)
++    {
++        if (m_slInitialized)
++            return false;
++        m_dlssAvailable = m_nisAvailable = m_deepdvcAvailable = false;
++        m_dlssgAvailable = m_dlssrrAvailable = m_reflexAvailable = m_pclAvailable = false;
++        m_currentFrame = nullptr;
++        m_device = nullptr;
++        log::info("Streamline is not required by this session; initialization is skipped.");
++        return true;
++    }
++
+     if (m_slInitialized)
+     {
+         log::info("StreamlineIntegration is already initialised.");
+@@ -287,6 +313,7 @@
+     }
+ 
+     pref.flags |= sl::PreferenceFlags::eUseManualHooking;
++    pref.flags &= ~(sl::PreferenceFlags::eAllowOTA | sl::PreferenceFlags::eLoadDownloadedPlugins);
+ 
+     auto pathDll = GetSlInterposerDllLocation();
+ 
+@@ -315,6 +342,9 @@
+ #if DONUT_WITH_DX11 || DONUT_WITH_DX12
+ bool StreamlineIntegration::SetD3DDevice(IUnknown* nativeDevice)
+ {
++    if (!m_slInitialized)
++        return true;
++
+     bool result = successCheck(slSetD3DDevice(nativeDevice), "slSetD3DDevice");
+     if (!result)
+     {
+@@ -327,6 +357,9 @@
+ #if DONUT_WITH_DX11 || DONUT_WITH_DX12
+ bool StreamlineIntegration::InitializeDeviceDX(nvrhi::IDevice *device, AdapterInfo::LUID *pAdapterIdDx11)
+ {
++    if (!m_slInitialized)
++        return true;
++
+     m_device = device;
+ 
+ #if DONUT_WITH_DX11
+@@ -345,6 +378,9 @@
+ #if DONUT_WITH_DX11 || DONUT_WITH_DX12
+ bool StreamlineIntegration::UpgradeInterface(IUnknown*& interfacePointer)
+ {
++    if (!Get().m_slInitialized)
++        return false;
++
+     IUnknown* nativeInterface = interfacePointer;
+     sl::Result slRes = slUpgradeInterface((void**)&interfacePointer);
+     if (slRes != sl::Result::eOk)
+@@ -419,6 +455,9 @@
+ #if DONUT_WITH_DX11 || DONUT_WITH_DX12
+ uint32_t StreamlineIntegration::FindBestAdapterDX()
+ {
++    if (!m_slInitialized)
++        return 0;
++
+     uint32_t foundAdapter = 0;
+     int maxSLSupportedFeatures = -1;
+ 
+@@ -598,6 +637,9 @@
+ 
+ void StreamlineIntegration::Shutdown()
+ {
++    if (!m_slInitialized)
++        return;
++
+     // Un-set all tags
+     sl::ResourceTag inputs[] = 
+     {
+@@ -1616,6 +1658,9 @@
+ 
+ void StreamlineIntegration::SimStart(DeviceManager& manager)
+ {
++    if (!m_slInitialized)
++        return;
++
+     successCheck(slGetNewFrameToken(m_currentFrame, nullptr), "SL_GetFrameToken");
+ 
+     if (IsReflexAvailable())
+@@ -1671,6 +1716,9 @@
+ 
+ void StreamlineIntegration::ReflexTriggerFlash(int frameNumber)
+ {
++    if (!m_slInitialized)
++        return;
++
+     successCheck(slPCLSetMarker(sl::PCLMarker::eTriggerFlash, *m_currentFrame), "Reflex_Flash");
+ }
+ 

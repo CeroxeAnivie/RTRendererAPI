@@ -55,8 +55,10 @@ val runtimeRoot = rootProject.layout.buildDirectory.dir("upstream-rtxpt/runtime/
 val buildBridge = tasks.register<Exec>("buildRtxptBridge") {
     group = "build"
     workingDir(rootProject.projectDir)
-    inputs.files(rootProject.fileTree("renderer-rtxpt/src/main/cpp") { include("**/*.cpp", "**/*.h", "**/*.manifest", "CMakeLists.txt") }, rootProject.file("tools/Build-RtxptBridge.ps1"), rootProject.file("tools/Build-RtxptUpstream.ps1"), rootProject.file("tools/RtxptBridgeProject.cmake"), rootProject.file("tools/RtxptProgressPatch.cmake"), rootProject.file("tools/patches/progress-noninteractive.patch"))
+    inputs.files(rootProject.fileTree("renderer-rtxpt/src/main/cpp") { include("**/*.cpp", "**/*.h", "**/*.manifest", "CMakeLists.txt") }, rootProject.file("tools/Build-RtxptBridge.ps1"), rootProject.file("tools/Build-RtxptUpstream.ps1"), rootProject.file("tools/RtxptBridgeProject.cmake"), rootProject.file("tools/RtxptProgressPatch.cmake"), rootProject.file("tools/patches/progress-noninteractive.patch"), rootProject.file("tools/RtxptOfflinePatch.cmake"), rootProject.file("tools/patches/streamline-offline-preferences.patch"), rootProject.file("tools/Assert-RtxptAuthorizedPatches.ps1"))
     outputs.files(runtimeRoot.map { it.file("bin/rtrenderer_rtxpt.dll") }, runtimeRoot.map { it.file("bin/rtrenderer_jvm_host.exe") })
+    inputs.file(rootProject.file("tools/patches/streamline-offline-preferences.json"))
+    inputs.files(rootProject.file("tools/patches/streamline-offline-device.patch"), rootProject.file("tools/patches/streamline-offline-device.json"))
     val arguments = mutableListOf("pwsh", "-NoProfile", "-File", "tools/Build-RtxptBridge.ps1")
     providers.gradleProperty("cmakeExecutable").orNull?.let { arguments += listOf("-CMakeExecutable", it) }
     commandLine(arguments)
