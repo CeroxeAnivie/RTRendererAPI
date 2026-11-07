@@ -262,6 +262,15 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourceWorkState(JNIEnv* env,jcla
     }catch(const std::exception& error){Throw(env,error);return nullptr;}
 }
 
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_commandWorkState(JNIEnv* env,jclass,jlong handle) {
+    try {
+        std::array<uint64_t,10> state{};
+        Get(handle)->session->Invoke([&](auto& app){state=app.Renderer().CommandWorkState();});
+        return LongArray(env,std::vector<jlong>(state.begin(),state.end()));
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+
 extern "C" JNIEXPORT jdoubleArray JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingMetadataState(
         JNIEnv* env,jclass,jlong handle,jstring instanceName,jstring geometryName) {

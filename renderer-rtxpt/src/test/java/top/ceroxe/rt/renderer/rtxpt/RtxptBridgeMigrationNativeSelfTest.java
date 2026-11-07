@@ -183,10 +183,129 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                     System.out.println("BRIDGE_MIGRATION sequence="+sequence+" case="+name+" PASS");
                 }
             } finally {if(retained!=null)retained.close();}
+            checkPoseFastPath(renderer,access,lighting,camera,handle,rows);
+            checkMaterialRegistry(renderer,access,lighting,camera,handle,output,rows);
             require(sawRealTexture&&sawAttributes&&sawTopology,"Required mixed resource paths were not observed");
             require(lighting.nativeLightingExecution().fullBeautyFrames()==0,"Direct-only contract executed full beauty");
         } finally {Files.write(output.resolve("cases.csv"),rows,StandardCharsets.UTF_8);}
-        System.out.println("BRIDGE_MIGRATION PASS frames="+FRAMES+" noOpGenerations=true rectangleParents=true samplerMetadata=true samplerPixels=true mixedAttributes=true mixedTopology=true denseReindex=true maskedScalarPixels=true independentMonitors=true diagnosticOff=true retainedLease=true");
+        System.out.println("BRIDGE_MIGRATION PASS frames="+FRAMES+" noOpGenerations=true rectangleParents=true samplerMetadata=true samplerPixels=true mixedAttributes=true mixedTopology=true denseReindex=true maskedScalarPixels=true independentMonitors=true diagnosticOff=true retainedLease=true poseFastPathFrames=3 materialRegistryFrames=3");
+    }
+
+    private static void checkPoseFastPath(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,
+            CameraState camera,long handle,List<String> rows) {
+        double[] previous=RtxptNative.instanceTransformState(handle,"i11");
+        for(int sequence=FRAMES+1;sequence<=FRAMES+3;sequence++) {
+            long[] workBefore=RtxptNative.commandWorkState(handle);
+            long[] resourceBefore=RtxptNative.resourceWorkState(handle);
+            require(workBefore.length==10,"Unexpected command work counters");
+            var transaction=SceneTransaction.builder(sequence);
+            boolean empty=sequence==FRAMES+3;
+            float x=sequence==FRAMES+1?1.25f:-2.5f;
+            if(empty) {
+                // Empty native transport is legal even though Java normally elides it.
+                var packet=ByteBuffer.allocateDirect(32).order(ByteOrder.LITTLE_ENDIAN);
+                packet.putInt(0x52445257);for(int index=0;index<7;index++)packet.putInt(0);
+                RtxptNative.resourcesMemory(handle,sequence,packet.flip());
+            }else transaction.upsert(SceneInstance.builder(11,1)
+                    .transform(new AffineTransform(new float[]{1,0,0,x,0,1,0,0,0,0,1,0})).build());
+            long begin=System.nanoTime();renderer.apply(transaction.build());publish(lighting,sequence);
+            renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,camera).minimumSceneRevision(sequence).build());
+            access.awaitIdle();
+            try(var lease=lighting.acquireLightingFrame().orElseThrow()){checkFrame(lease.frame(),sequence);}
+            long[] workAfter=RtxptNative.commandWorkState(handle);
+            require(workAfter.length==10,"Command work packet width changed");
+            require(workAfter[7]-workBefore[7]==1&&workAfter[8]==workBefore[8]&&workAfter[9]==workBefore[9],
+                    "Resident pose/empty packet did not execute exactly one lean native-lighting frame");
+            for(int index=0;index<4;index++)require(workAfter[index]==workBefore[index],
+                    "Pose/empty packet opened a native resource/structure command list at sequence="+sequence+" counter="+index);
+            require(workAfter[4]-workBefore[4]==(empty?0:1)&&workAfter[5]-workBefore[5]==(empty?0:1)
+                    &&workAfter[6]-workBefore[6]==(empty?1:0),"Pose/empty fast-path evidence was missing at sequence="+sequence);
+            require(Arrays.equals(resourceBefore,RtxptNative.resourceWorkState(handle)),"Pose/empty packet did unrelated texture/reference work");
+            double[] current=RtxptNative.instanceTransformState(handle,"i11");
+            float[] expected={1,0,0,x,0,1,0,0,0,0,1,0};
+            for(int index=0;index<12;index++) {
+                require(Math.abs(current[index]-expected[index])<1e-5,"Pose fast path lost the authored transform");
+                require(Math.abs(current[12+index]-previous[index])<1e-5,"Pose fast path consumed previous transform early");
+            }
+            previous=current;
+            String name=empty?"empty-packet-without-command-list":"resident-pose-without-command-list";
+            rows.add(sequence+","+name+","+(System.nanoTime()-begin)/1_000_000.0+",0,0,0,0");
+            System.out.println("BRIDGE_MIGRATION sequence="+sequence+" case="+name+" PASS");
+        }
+    }
+
+    private static void checkMaterialRegistry(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,
+            CameraState camera,long handle,Path output,List<String> rows) throws Exception {
+        final long id=99,instance=99;
+        Path before=output.resolve("material-registry-before.pfm");
+        RtxptNative.nativeLightingCapture(handle,before.toString(),2);
+        float[] original=centerNormal(before);
+        access.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
+        var monitor=access.nativeDiagnosticMonitor();monitor.poll();
+        for(int sequence=FRAMES+4;sequence<=FRAMES+6;sequence++) {
+            boolean remove=sequence==FRAMES+5;
+            var tx=SceneTransaction.builder(sequence);
+            if(remove)tx.removeInstance(instance).removeMesh(id).removeMaterial(id).removeTexture(id);
+            else {
+                int alpha=sequence==FRAMES+4?0:255;
+                var texture=TextureAsset.builder(id,1,1).colorSpace(TextureAsset.ColorSpace.SRGB)
+                        .addressModes(TextureAsset.AddressMode.REPEAT,TextureAsset.AddressMode.REPEAT)
+                        .filter(TextureAsset.Filter.NEAREST).pixelsRgba8(new byte[]{-1,-1,-1,(byte)alpha}).build();
+                var material=MaterialAsset.builder(id).blendMode(MaterialAsset.BlendMode.MASKED)
+                        .baseColorRgba8(0xc0ffffff).baseColorTextureId(id).doubleSided(true).build();
+                var mesh=MeshAsset.builder(id,new float[]{-1,-1,.8f,1,-1,.8f,1,1,.8f,-1,1,.8f},
+                        new int[]{0,1,2,0,2,3},new long[]{id,id})
+                        .normals(new float[]{0,.6f,.8f,0,.6f,.8f,0,.6f,.8f,0,.6f,.8f})
+                        .textureCoordinates(new float[]{0,0,1,0,1,1,0,1}).build();
+                tx.upsert(texture).upsert(material).upsert(mesh).upsert(SceneInstance.builder(instance,id).build());
+            }
+            long begin=System.nanoTime();renderer.apply(tx.build());
+            lighting.publishLightingAttributes(new NativeLightingPublication(sequence,
+                    remove?List.of(CENTER):List.of(CENTER,NativeLightingPublication.Instance.receiver(instance)),
+                    List.of(),null,null));
+            renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,camera).minimumSceneRevision(sequence).build());
+            access.awaitIdle();
+            try(var lease=lighting.acquireLightingFrame().orElseThrow()){checkFrame(lease.frame(),sequence);}
+            double elapsed=(System.nanoTime()-begin)/1_000_000.0;
+            var snapshot=monitor.poll();require(snapshot.lostEvents()==0,"Material registry diagnostics lost events");
+            long materials=count(snapshot,"Materials"),blas=count(snapshot,"BlasBuild"),attributes=count(snapshot,"AttributePreparation");
+            require(remove?materials==0:materials>0,
+                    "Material registry did not distinguish removal from a real new registration at sequence="+sequence);
+            if(remove) {
+                boolean retired=false;
+                try{RtxptNative.meshResourceState(handle,"i99");}catch(IllegalStateException expected){retired=true;}
+                require(retired,"Removed unique instance still owns a native mesh identity");
+            }else {
+                double[] metadata=RtxptNative.lightingMetadataState(handle,"i99",meshName(99)+":0");
+                require(metadata.length==17&&metadata[3]==2&&metadata[4]==4
+                        &&Math.abs(metadata[8]-192/255.0)<1e-6&&metadata[9]==23&&metadata[10]==1,
+                        "New/re-added unique material lost triangle, sampler, opacity or receiver semantics");
+            }
+            String name=remove?"remove-unique-material-without-reimport"
+                    :sequence==FRAMES+4?"register-transparent-unique-material":"reregister-opaque-unique-material";
+            Path image=output.resolve(name+".pfm");RtxptNative.nativeLightingCapture(handle,image.toString(),2);
+            float[] actual=centerNormal(image);
+            if(sequence==FRAMES+6) {
+                require(Math.abs(actual[0])<.025&&Math.abs(actual[1]-.6)<.025&&Math.abs(actual[2]-.8)<.025,
+                        "Re-added opaque texture/material did not produce its new receiver pixels");
+            }else for(int component=0;component<3;component++)require(Math.abs(actual[component]-original[component])<.005,
+                    "Transparent/removed unique material changed the surviving receiver pixels");
+            rows.add(sequence+","+name+","+elapsed+","+materials+","+blas+","+attributes+","+snapshot.events().size());
+            System.out.println("BRIDGE_MIGRATION sequence="+sequence+" case="+name+" PASS");
+        }
+    }
+
+    private static float[] centerNormal(Path file) throws Exception {
+        byte[] bytes=Files.readAllBytes(file);int start=0;
+        for(int line=0;line<3;line++){while(start<bytes.length&&bytes[start++]!='\n'){}}
+        require(new String(bytes,0,start,StandardCharsets.US_ASCII).equals("PF\n64 64\n-1.0\n")
+                &&bytes.length-start==SIZE*SIZE*12,"Invalid registry geometry PFM");
+        var values=ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);float[] result=new float[3];
+        for(int y=30;y<=33;y++)for(int x=30;x<=33;x++)for(int component=0;component<3;component++) {
+            float value=values.getFloat(start+((SIZE-1-y)*SIZE+x)*12+component*4);
+            require(Float.isFinite(value),"Nonfinite material-registry receiver output");result[component]+=value/16;
+        }
+        return result;
     }
 
     private static void publish(NativeLightingControl lighting,long generation) {

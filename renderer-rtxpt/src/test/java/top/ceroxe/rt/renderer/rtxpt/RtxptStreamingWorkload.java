@@ -16,11 +16,11 @@ public final class RtxptStreamingWorkload {
     private static final LongBuffer NO_REMOVALS=LongBuffer.allocate(0).asReadOnlyBuffer();
 
     private record Config(int meshes,int sources,int ticks,int framesPerTick,int frames,int warmup,Path output,
-            boolean textureUpdates,int textureSize,RtxptDiagnostics.Level diagnostics,String motionProfile,int stationaryFrames) {
+            boolean textureUpdates,int textureSize,RtxptDiagnostics.Level diagnostics,String motionProfile,int stationaryFrames,int admissionBatches) {
         static Config parse(String[] args) {
             var values=new HashMap<String,String>();
             var allowed=Set.of("meshes","sources","ticks","frames-per-tick","frames","warmup-frames","output",
-                    "texture-updates","texture-size","diagnostics","motion-profile","stationary-frames");
+                    "texture-updates","texture-size","diagnostics","motion-profile","stationary-frames","admission-batches");
             for(int i=0;i<args.length;i+=2) {
                 if(!args[i].startsWith("--")||i+1==args.length||!allowed.contains(args[i].substring(2)))
                     throw new IllegalArgumentException("Expected --option value: "+args[i]);
@@ -40,18 +40,20 @@ public final class RtxptStreamingWorkload {
             if(!Set.of("legacy","medium","fast").contains(motion))throw new IllegalArgumentException("motion-profile must be legacy, medium or fast");
             int stationary=Integer.parseInt(values.getOrDefault("stationary-frames","0"));
             if(stationary<0)throw new IllegalArgumentException("stationary-frames must not be negative");
+            int admissionBatches=positive(values,"admission-batches",1);
+            if(admissionBatches>meshes-1)throw new IllegalArgumentException("admission-batches must not exceed the terrain mesh count");
             if(meshes<2||sources>262144||warmup<0||frames>Math.multiplyExact(ticks,perTick))
                 throw new IllegalArgumentException("Invalid workload extent or source capacity");
             return new Config(meshes,sources,ticks,perTick,frames,warmup,
                     Path.of(values.getOrDefault("output","build/reports/streaming-workload")).toAbsolutePath(),
-                    textureUpdates,textureSize,diagnostics,motion,stationary);
+                    textureUpdates,textureSize,diagnostics,motion,stationary,admissionBatches);
         }
         private static int positive(Map<String,String> values,String name,int fallback) {
             int value=Integer.parseInt(values.getOrDefault(name,Integer.toString(fallback)));
             if(value<1)throw new IllegalArgumentException(name+" must be positive");return value;
         }
         boolean fullSpecification() {return meshes==3662&&sources==45000&&ticks==300&&framesPerTick==9&&frames==2700
-                &&motionProfile.equals("legacy")&&stationaryFrames==0&&!textureUpdates&&diagnostics==RtxptDiagnostics.Level.DEEP;}
+                &&motionProfile.equals("legacy")&&stationaryFrames==0&&admissionBatches==1&&!textureUpdates&&diagnostics==RtxptDiagnostics.Level.DEEP;}
         double logicalSpeed() {return switch(motionProfile){case "medium"->16;case "fast"->48;default->DISTANCE*20/ticks;};}
         double distance() {return motionProfile.equals("legacy")?DISTANCE:logicalSpeed()*ticks/20;}
     }
@@ -120,6 +122,16 @@ public final class RtxptStreamingWorkload {
         World(Config config){this.config=config;tileCount=config.meshes()-1;columns=(int)Math.ceil(Math.sqrt(tileCount));rows=(tileCount+columns-1)/columns;}
         private Cell cell(int index,Cell origin){return new Cell(origin.x()+index%columns-columns/2,origin.z()+index/columns-rows/2);}
         Step prepare(boolean initial,int movementFrame,boolean updateSources) {
+            return prepare(initial,movementFrame,updateSources,tileCount,0,config.sources(),false);
+        }
+        Step prepareAdmission(int batch) {
+            require(batch>=0&&batch<config.admissionBatches(),"Admission batch index is outside the configured range");
+            int admitted=(int)((long)tileCount*(batch+1)/config.admissionBatches());
+            int sourceBegin=(int)((long)config.sources()*batch/config.admissionBatches());
+            int sourceEnd=(int)((long)config.sources()*(batch+1)/config.admissionBatches());
+            return prepare(batch==0,-1,false,admitted,sourceBegin,sourceEnd,true);
+        }
+        private Step prepare(boolean initial,int movementFrame,boolean updateSources,int admittedTiles,int sourceBegin,int sourceEnd,boolean admission) {
             long begin=System.nanoTime();long identity=++sequence;
             double progress=movementFrame<0?0:(movementFrame+1.0)/(config.ticks()*config.framesPerTick());
             double angle=TURN*progress,radius=config.distance()/TURN;
@@ -161,9 +173,9 @@ public final class RtxptStreamingWorkload {
                 tx.upsert(texture);
             }
             var newCenter=new Cell((int)Math.floor(position.x()/TILE),(int)Math.floor(position.z()/TILE));
-            if(!newCenter.equals(center)) {
+            if(!newCenter.equals(center)||tiles.size()<admittedTiles) {
                 if(center!=null&&movementFrame>=0){tileCenterChanges++;xTileBoundaries+=Math.abs((long)newCenter.x()-center.x());zTileBoundaries+=Math.abs((long)newCenter.z()-center.z());}
-                var desired=new LinkedHashSet<Cell>();for(int i=0;i<tileCount;i++)desired.add(cell(i,newCenter));
+                var desired=new LinkedHashSet<Cell>();for(int i=0;i<admittedTiles;i++)desired.add(cell(i,newCenter));
                 var iterator=tiles.entrySet().iterator();while(iterator.hasNext()){
                     var entry=iterator.next();if(!desired.contains(entry.getKey())){
                         tx.removeInstance(entry.getValue().id()).removeMesh(entry.getValue().id());iterator.remove();removed++;
@@ -177,7 +189,7 @@ public final class RtxptStreamingWorkload {
                 }
                 center=newCenter;
             }
-            if(initial||updateSources||!config.motionProfile().equals("legacy"))for(int i=0;i<ENTITY_COUNT;i++){
+            if(initial||!admission&&(updateSources||!config.motionProfile().equals("legacy")))for(int i=0;i<ENTITY_COUNT;i++){
                 long id=ENTITY_FIRST+i;
                 double phase=config.motionProfile().equals("legacy")
                         ?(movementFrame<0?0:movementFrame/(double)config.framesPerTick())*.11+i
@@ -187,7 +199,7 @@ public final class RtxptStreamingWorkload {
                 if(initial)attributes.add(NativeLightingPublication.Instance.receiver(id));
             }
             var sources=new ArrayList<SparseLightSource>();
-            if(initial)for(int i=0;i<config.sources();i++)sources.add(source(i,0,newCenter));
+            if(initial||admission)for(int i=sourceBegin;i<sourceEnd;i++)sources.add(source(i,0,newCenter));
             else if(updateSources){
                 int count=Math.min(150,config.sources());int tick=movementFrame/config.framesPerTick();
                 for(int i=0;i<count;i++)sources.add(source((int)(((long)tick*150+i)%config.sources()),tick+1,newCenter));
@@ -249,8 +261,9 @@ public final class RtxptStreamingWorkload {
         final EnumMap<RtxptDiagnostics.Stage,Long> boundaryFailures=new EnumMap<>(RtxptDiagnostics.Stage.class);
         final Map<String,Samples> nativeInclusive=new TreeMap<>(),nativeSelf=new TreeMap<>(),nativeCpu=new TreeMap<>(),nativeSelfCpu=new TreeMap<>();
         long nativeLostEvents,nativeFailedEvents,nativeIncompleteObservations,nativeCpuUnavailable,nativePolls;
-        boolean nativeDiagnosticsDisabled;long[] resourceWorkBegin,resourceWorkEnd;String resourceWorkUnavailable;
+        boolean nativeDiagnosticsDisabled;long[] resourceWorkBegin,resourceWorkEnd,commandWorkBegin,commandWorkEnd;String resourceWorkUnavailable,commandWorkUnavailable;
         static final String[] WORK_NAMES={"full_upload_count","full_upload_bytes","rectangle_upload_count","rectangle_upload_bytes","gpu_copy_bytes","identical_generation_count","sampler_only_count","resident_mesh_validation_visits","resident_mesh_validation_skipped"};
+        static final String[] COMMAND_NAMES={"resource_command_lists_created","resource_command_lists_reused","structure_command_lists_created","structure_command_lists_reused","pose_only_transactions","pose_node_updates","empty_transactions","lean_native_lighting_frames","full_native_lighting_frame_fallbacks","empty_scene_native_lighting_frames"};
         private static Map<String,Object> nativeSummary(Map<String,Samples> source){
             var result=new LinkedHashMap<String,Object>();source.forEach((stage,samples)->result.put(stage,samples.summary()));return result;
         }
@@ -275,13 +288,19 @@ public final class RtxptStreamingWorkload {
             destination.computeIfAbsent(stage,key->new HashMap<>()).merge(frame,nanos,Math::addExact);
         }
         Map<String,Object> resourceSummary(){
-            if(resourceWorkBegin==null||resourceWorkEnd==null)return map("available",false,"reason",resourceWorkUnavailable==null?"phase-end-not-reached":resourceWorkUnavailable);
-            require(resourceWorkBegin.length==resourceWorkEnd.length,"Native resource work packet width changed within a phase");
+            return workSummary(resourceWorkBegin,resourceWorkEnd,WORK_NAMES,resourceWorkUnavailable);
+        }
+        Map<String,Object> commandSummary(){
+            return workSummary(commandWorkBegin,commandWorkEnd,COMMAND_NAMES,commandWorkUnavailable);
+        }
+        private static Map<String,Object> workSummary(long[] begin,long[] end,String[] names,String unavailable){
+            if(begin==null||end==null)return map("available",false,"reason",unavailable==null?"phase-end-not-reached":unavailable);
+            require(begin.length==end.length,"Native work packet width changed within a phase");
             var values=new LinkedHashMap<String,Object>();
-            for(int index=0;index<WORK_NAMES.length;index++){
-                if(index>=resourceWorkBegin.length){values.put(WORK_NAMES[index],map("available",false,"reason","counter-not-exposed-by-this-runtime"));continue;}
-                require(resourceWorkEnd[index]>=resourceWorkBegin[index],"Resource work counter moved backwards");
-                values.put(WORK_NAMES[index],map("available",true,"begin",resourceWorkBegin[index],"end",resourceWorkEnd[index],"delta",resourceWorkEnd[index]-resourceWorkBegin[index]));
+            for(int index=0;index<names.length;index++){
+                if(index>=begin.length){values.put(names[index],map("available",false,"reason","counter-not-exposed-by-this-runtime"));continue;}
+                require(end[index]>=begin[index],"Native work counter moved backwards");
+                values.put(names[index],map("available",true,"begin",begin[index],"end",end[index],"delta",end[index]-begin[index]));
             }
             return map("available",true,"counters",values,"measurement","native command work counters outside frame timing");
         }
@@ -325,7 +344,7 @@ public final class RtxptStreamingWorkload {
                             "frame_scope_boundary","JNI Frame wall includes owner-thread resource work and rendering waits; self wall excludes only attributed child scopes, is neither exclusive CPU nor GPU busy time, and must not be added to ResourcePlan",
                             "frame_aggregation","event sums grouped by native sequence/revision; stages and threads can overlap; per-event distributions remain separate",
                             "scope","adapter scopes and RTXPT call boundary only; upstream internals not expanded"),
-                    "resource_work",resourceSummary(),
+                    "resource_work",resourceSummary(),"command_work",commandSummary(),
                     "lost_event_stage_attribution","unavailable_for_overwritten_events",
                     "mesh_upserts",meshUpserts,"mesh_removals",meshRemovals,"instance_upserts",instanceUpserts,
                     "instance_removals",instanceRemovals,"source_upserts",sourceUpserts,"scene_ticks",sceneTicks,"entity_pose_upserts",entityPoseUpserts);
@@ -335,8 +354,26 @@ public final class RtxptStreamingWorkload {
         final Config config;final World world;final Map<String,Phase> phases=new LinkedHashMap<>();
         long cursor=-1,accepted,verified;Double openMillis;Long residentMeshes,residentInstances;
         boolean captured,completed,initialSceneApplied;int captureWidth,captureHeight;String failure;
-        RtxptDiagnostics.NativeMonitor nativeMonitor;Phase activePhase;String resourceCounterUnsupported;
+        RtxptDiagnostics.NativeMonitor nativeMonitor;Phase activePhase;String resourceCounterUnsupported,commandCounterUnsupported;
         Run(Config config){this.config=config;world=new World(config);}
+        void executeAdmission(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,SparseLightingControl sparse) throws Throwable {
+            if(config.admissionBatches()==1){executePhase(renderer,access,lighting,sparse,"initial",1,true,false);return;}
+            var phase=phases.computeIfAbsent("bootstrap",key->new Phase());long begin=System.nanoTime();
+            try {
+                for(int batch=0;batch<config.admissionBatches();batch++){
+                    long frameBegin=System.nanoTime();
+                    try {
+                        execute(renderer,access,lighting,sparse,"bootstrap",world.prepareAdmission(batch));
+                        long expectedTiles=(long)world.tileCount*(batch+1)/config.admissionBatches();
+                        require(residentMeshes!=null&&residentMeshes==expectedTiles+1,"An admission batch lost resident meshes");
+                        require(residentInstances!=null&&residentInstances==expectedTiles+ENTITY_COUNT,"An admission batch lost resident instances");
+                        if(batch+1==config.admissionBatches())finishPhase(renderer);
+                    } finally {phase.simulationFrame.add(System.nanoTime()-frameBegin);}
+                }
+                require(phase.meshUpserts==config.meshes()&&phase.meshRemovals==0&&phase.sourceUpserts==config.sources(),"Bootstrap did not admit the complete authored workload exactly once");
+                require(phase.verifiedFrames==config.admissionBatches(),"A bootstrap batch has no verified fresh output");
+            } finally {phase.simulationPhaseNanos+=System.nanoTime()-begin;}
+        }
         void executePhase(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,SparseLightingControl sparse,
                 String name,int count,boolean initial,boolean moving) throws Throwable {
             if(count==0)return;
@@ -360,10 +397,21 @@ public final class RtxptStreamingWorkload {
                 require(values.length==7||values.length==9,"Invalid native resource work counter packet");return values;
             } catch(UnsatisfiedLinkError unavailable){resourceCounterUnsupported="native-runtime-method-unavailable";return null;}
         }
+        long[] commandWork(Renderer renderer) throws ReflectiveOperationException {
+            if(commandCounterUnsupported!=null)return null;
+            var field=RtxptRenderer.class.getDeclaredField("handle");field.setAccessible(true);long handle=field.getLong(renderer);
+            if(handle==0)return null;
+            try {
+                long[] values=RtxptNative.commandWorkState(handle);
+                require(values.length==7||values.length==Phase.COMMAND_NAMES.length,"Invalid native command work counter packet");return values;
+            } catch(UnsatisfiedLinkError unavailable){commandCounterUnsupported="native-runtime-method-unavailable";return null;}
+        }
         void finishPhase(Renderer renderer) throws ReflectiveOperationException {
             if(activePhase==null)return;
             activePhase.resourceWorkEnd=resourceWork(renderer);
             if(resourceCounterUnsupported!=null)activePhase.resourceWorkUnavailable=resourceCounterUnsupported;
+            activePhase.commandWorkEnd=commandWork(renderer);
+            if(commandCounterUnsupported!=null)activePhase.commandWorkUnavailable=commandCounterUnsupported;
             activePhase=null;
         }
         void execute(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,SparseLightingControl sparse,
@@ -374,6 +422,8 @@ public final class RtxptStreamingWorkload {
                 phase.nativeDiagnosticsDisabled=config.diagnostics()==RtxptDiagnostics.Level.OFF;
                 phase.resourceWorkBegin=resourceWork(renderer);
                 if(phase.resourceWorkBegin==null)phase.resourceWorkUnavailable=resourceCounterUnsupported==null?"renderer-not-initialized-at-phase-start":resourceCounterUnsupported;
+                phase.commandWorkBegin=commandWork(renderer);
+                if(phase.commandWorkBegin==null)phase.commandWorkUnavailable=commandCounterUnsupported==null?"renderer-not-initialized-at-phase-start":commandCounterUnsupported;
             }
             Throwable problem=null;
             try {
@@ -428,6 +478,7 @@ public final class RtxptStreamingWorkload {
             return map("schema",1,"success",completed&&failure==null,"failure",failure,"formal_default_specification",config.fullSpecification(),
                     "configuration",map("resident_meshes",config.meshes(),"sparse_sources",config.sources(),"virtual_ticks",config.ticks(),
                             "render_frames_per_tick",config.framesPerTick(),"movement_frames",config.frames(),"warmup_frames",config.warmup(),"stationary_frames",config.stationaryFrames(),
+                            "admission_batches",config.admissionBatches(),"admission_mode",config.admissionBatches()==1?"single-transaction":"progressive-fresh-output-per-batch",
                             "output_width",OUTPUT_W,"output_height",OUTPUT_H,"lighting_width",GRID_W,"lighting_height",GRID_H,"gi_samples",0,"reconstruction","NONE",
                             "texture_updates",config.textureUpdates(),"texture_size",config.textureSize(),"diagnostics",config.diagnostics().name(),
                             "motion_profile",config.motionProfile(),"scene_tick_hz",20,"logical_speed_units_per_second",config.logicalSpeed(),
@@ -472,7 +523,7 @@ public final class RtxptStreamingWorkload {
             var lighting=renderer.extension(NativeLightingControl.class).orElseThrow();
             var sparse=renderer.extension(SparseLightingControl.class).orElseThrow();
             access.diagnosticLevel(config.diagnostics());lighting.lightingReconstruction(NativeLightingReconstruction.NONE);
-            run.executePhase(renderer,access,lighting,sparse,"initial",1,true,false);
+            run.executeAdmission(renderer,access,lighting,sparse);
             run.executePhase(renderer,access,lighting,sparse,"warmup",config.warmup(),false,false);
             run.executePhase(renderer,access,lighting,sparse,"stationary",config.stationaryFrames(),false,false);
             run.executePhase(renderer,access,lighting,sparse,"movement",config.frames(),false,true);

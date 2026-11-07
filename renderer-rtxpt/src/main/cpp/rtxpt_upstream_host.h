@@ -10,6 +10,7 @@
 #include "OpacityMicroMap/OmmBaker.h"
 #include "SampleCommon/AccelerationStructureUtil.h"
 #include "SampleCommon/BlasCompactor.h"
+#include "SampleCommon/CaptureScriptManager.h"
 #include "rtxpt_upstream_resources.h"
 #include "rtxpt_gpu_profile.h"
 #include "rtxpt_sparse_lighting.h"
@@ -179,8 +180,12 @@ public:
         m_exposure=compensation;m_exposureConfigured=true;ApplyExposure();
     }
     void SceneUnloading() override {
-        if(!m_resourceRetirement.empty()){GetDevice()->waitForIdle();m_resourceRetirement.clear();}
+        if(m_resourceCommands||m_structureCommands||!m_resourceRetirement.empty()){
+            GetDevice()->waitForIdle();m_resourceRetirement.clear();
+            m_resourceCommands=nullptr;m_structureCommands=nullptr;
+        }
         AdvancedPathTracer::SceneUnloading();
+        m_importedMaterials.clear();
     }
     std::array<double,2> MeshResourceState(const std::string& name)const{return m_resources.MeshResourceState(name);}
     std::array<uint64_t,9> ResourceWorkState()const{
@@ -189,11 +194,37 @@ public:
         return {textures[0],textures[1],textures[2],textures[3],textures[4],textures[5],textures[6],
             references[0],references[1]};
     }
+    // Separate from the established nine texture/reference counters so existing
+    // diagnostic consumers and fixed workload classes retain their wire contract.
+    std::array<uint64_t,10> CommandWorkState()const{
+        const auto& poses=m_resources.PoseWork();
+        return {m_commandWork[0],m_commandWork[1],m_commandWork[2],m_commandWork[3],
+            poses[0],poses[1],poses[2],m_nativeFrameWork[0],m_nativeFrameWork[1],m_nativeFrameWork[2]};
+    }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
         if(m_presentationConfigured)ApplyPresentation();
         if(m_exposureConfigured)ApplyExposure();
         if(m_qualityConfigured)ApplyQuality();
+    }
+
+    void CreateRTPipelines() override {
+        // Native lighting publishes its own signals from SampleRenderCode and
+        // never invokes AdvancedPathTracer::PathTrace or Denoise. Use the
+        // documented Sample extension hooks without creating Advanced's unused
+        // BUILD/FILL/reference variants or its unconditional SHaRC buffers.
+        // Shared post-processing variants remain owned by the original Sample.
+        if(lighting.active)Sample::CreateRTPipelines();
+        else AdvancedPathTracer::CreateRTPipelines();
+    }
+    void CreateCustomRenderPasses() override {
+        if(!lighting.active)AdvancedPathTracer::CreateCustomRenderPasses();
+    }
+    void UpdateCustomResources() override {
+        if(!lighting.active)AdvancedPathTracer::UpdateCustomResources();
+    }
+    void UpdateCustomConstants(SampleConstants& constants,nvrhi::ICommandList* commands) override {
+        if(!lighting.active)AdvancedPathTracer::UpdateCustomConstants(constants,commands);
     }
 
     void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
@@ -277,8 +308,17 @@ public:
         // Keep publication-side lifecycle refreshes from consuming these poses.
         PollResourceRetirement();
         if(m_managedScene&&m_scene&&IsSceneLoaded())m_resources.ApplyPendingTransforms();
-        if (!m_managedScene || !IsSceneLoaded() || !m_scene ||
-            !m_scene->GetSceneGraph()->GetMeshInstances().empty()) {
+        if (!m_managedScene || !IsSceneLoaded() || !m_scene) {
+            if(lighting.active)++m_nativeFrameWork[1];
+            AdvancedPathTracer::Render(framebuffer);
+            return;
+        }
+        if(!m_scene->GetSceneGraph()->GetMeshInstances().empty()) {
+            if(CanRenderNativeLightingLean(framebuffer)) {
+                RenderNativeLightingLean(framebuffer);
+                return;
+            }
+            if(lighting.active)++m_nativeFrameWork[1];
             AdvancedPathTracer::Render(framebuffer);
             return;
         }
@@ -289,7 +329,10 @@ public:
         m_progressLoading.Stop();
         m_asyncLoadingInProgress=false; // no geometry, OMM or PT work is pending
         auto commands=GetDevice()->createCommandList();commands->open();
-        if (lighting.active) SampleRenderCode(framebuffer,commands,SampleConstants{},false);
+        if (lighting.active) {
+            SampleRenderCode(framebuffer,commands,SampleConstants{},false);
+            ++m_nativeFrameWork[0];++m_nativeFrameWork[2];
+        }
         const auto& attachments=framebuffer->getDesc().colorAttachments;
         if (!attachments.empty()) commands->clearTextureFloat(attachments[0].texture,
             nvrhi::AllSubresources,nvrhi::Color(0));
@@ -304,8 +347,7 @@ public:
         m_lights.clear();
         m_scene->GetSceneGraph()->SetRootNode(
             std::make_shared<donut::engine::SceneGraphNode>());
-        auto commands = GetDevice()->createCommandList();
-        commands->open();
+        auto commands=OpenResourceCommands();
         m_scene->Refresh(commands, GetFrameIndex());
         commands->close();
         GetDevice()->executeCommandList(commands);
@@ -378,9 +420,10 @@ public:
                 m_CommonPasses->m_LinearWrapSampler, analytic.buffer, uint32_t(analytic.records.size()),
                 analytic.tree.root==rtr::RetainedLightTree::None?0:analytic.tree.root,analytic.treeBase);
         }
-        // The original frame still owns its normal post-processing and present
-        // tail. Compact adapter signals are separate resources and never pass
-        // through tone mapping, denoisers, or the original beauty output.
+        // Compact adapter signals are separate resources. Initialized direct
+        // frames use RenderNativeLightingLean and do not execute the sample's
+        // beauty AA / tone-map / blit tail. Initialization and special native
+        // requests keep the original complete Render lifecycle.
     }
 
     bool LoadScene(std::shared_ptr<donut::vfs::IFileSystem> fs,
@@ -416,11 +459,11 @@ public:
         RtrDiagnostics::Scope resourceScope(RtrDiagnostics::ResourcePlan);
         PollResourceRetirement();
         m_resources.SetTextureResources(GetDevice(),m_DescriptorTable);
-        auto commands = GetDevice()->createCommandList();
-        commands->open();
+        nvrhi::CommandListHandle commands;
         bool retainRemoved=false;
         const auto changed = m_resources.Apply(packet.data(), packet.size(),
-            *m_scene, commands, GetFrameIndex(),[&](bool geometryOnly){
+            *m_scene, [&]()->nvrhi::ICommandList*{commands=OpenResourceCommands();return commands;},
+            GetFrameIndex(),[&](bool geometryOnly){
                 retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
                 if(!retainRemoved){RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();}
             });
@@ -435,7 +478,7 @@ public:
         }
         for(const auto& name:changed.retiredInstances)lighting.RetireInstance(name);
         for(const auto& name:changed.retiredGeometries)lighting.RetireGeometry(name);
-        commands->close();
+        if(commands)commands->close();
         if(changed.topology||changed.materials||changed.textures||changed.attributes){
             const auto submitted=GetDevice()->executeCommandList(commands);
             // These uploads are outside Sample::Render's own lastGraphicsSubmit.
@@ -448,11 +491,13 @@ public:
             // A texture publication is not a material-definition publication:
             // existing PTTexture slots have their own public rebinding contract.
             const auto& currentMaterials=m_scene->GetSceneGraph()->GetMaterials();
-            bool materialSetChanged=currentMaterials.size()!=m_importedMaterials.size();
-            if(!materialSetChanged)
-                for(const auto& material:currentMaterials)
-                    if(!m_importedMaterials.contains(material.get())){materialSetChanged=true;break;}
-            if(changed.materials||materialSetChanged) ReimportMaterials();
+            // Removing users/materials cannot invalidate the surviving baker rows
+            // or shader permutations. Only an unregistered object needs a new
+            // native bake; graph materialID compaction does not change PT indices.
+            bool hasUnregisteredMaterial=false;
+            for(const auto& material:currentMaterials)
+                if(!m_importedMaterials.contains(material)){hasUnregisteredMaterial=true;break;}
+            if(changed.materials||hasUnregisteredMaterial) ReimportMaterials();
             else if(changed.topology) {
                 InvalidateBindingSet();
                 m_ui.AccelerationStructRebuildRequested=true;
@@ -503,9 +548,84 @@ public:
 private:
     ID3D12InfoQueue1* m_validationQueue=nullptr;
     DWORD m_validationCookie=0;
+    // NVRHI command lists own their upload and DXR scratch allocators. Reopening
+    // a retained list uses its native fence-aware internal pool, just as Sample
+    // reuses its own frame lists; a fresh wrapper per publication rebuilds those
+    // allocators and discards their reusable chunks on every transaction.
+    nvrhi::CommandListHandle m_resourceCommands,m_structureCommands;
+    // Lifetime counts of successful creation and reopening of retained native lists.
+    std::array<uint64_t,4> m_commandWork{};
+    // Executed direct frames: lightweight / complete native fallback / empty.
+    // These counters advance at the actual dispatch/Render choice, not at request time.
+    std::array<uint64_t,3> m_nativeFrameWork{};
+    bool CanRenderNativeLightingLean(nvrhi::IFramebuffer* framebuffer)const{
+        if(!lighting.active||!m_renderTargets||!m_materialsBaker||!m_graphicsCommandList||!m_topLevelAS
+            ||!m_view||!m_viewPrevious||!m_shaderDebug||!m_ptPipelineBaker)return false;
+        const auto& size=framebuffer->getFramebufferInfo();
+        if(m_displaySize.x!=size.width||m_displaySize.y!=size.height
+            ||m_renderSize.x!=size.width||m_renderSize.y!=size.height)return false;
+        // The independent direct pass owns its camera, motion and reconstruction.
+        // GPU frustum culling, beauty AA/FG, picking and capture need Sample's
+        // private view/postprocess lifecycle and must stay on its complete path.
+        if(m_ui.RealtimeAA!=0||m_ui.AS.GPUTLASCull||m_ommBaker||m_lastFrameAsyncPrefix
+            ||m_dlssgInputsFence||m_ui.ActualDLSSFGMode()!=SI::DLSSGMode::eOff
+            ||m_ui.ActualUseRTXDIPasses()||m_ui.AccelerationStructRebuildRequested
+            ||m_ui.ShaderReloadRequested||m_ui.NRDModeChanged
+            ||m_ui.DebugView!=DebugViewType::Disabled||m_pick||m_ui.ContinuousDebugFeedback
+            ||m_ui.ShowDebugLines||m_ui.PostProcessTestPassHDR||m_ui.PostProcessEdgeDetection
+            ||m_ui.ExperimentalPhotoModeScreenshot||m_captureScriptManager->IsDoingWork()
+            ||m_materialsBaker->HasDeferredTexturesLoad())return false;
+        return true;
+    }
+    void RenderNativeLightingLean(nvrhi::IFramebuffer* framebuffer){
+        // Compose only exposed original lifecycle methods: no copied scene/AS,
+        // camera, material, shader or post-processing implementation lives here.
+        // The first frame and every real renderer reinitialization use Render.
+        m_progressLoading.Stop();m_asyncLoadingInProgress=false;
+        PreRender();
+        RAII_SCOPE(;,PostRender(););
+        StreamlinePreRender();
+        m_commandList=m_graphicsCommandList;
+        m_commandList->open();
+        GpuProfiler::BeginFrameZone(m_commandList);
+        m_scene->Refresh(m_commandList,GetFrameIndex());
+        m_sceneRenderCache.Open(m_scene,&m_frameWorkerPool);
+        m_materialsBaker->Update(m_commandList,m_scene,m_subInstanceData,m_sceneRenderCache);
+        UploadSubInstanceData(m_commandList);
+        UpdateSkinnedBLASs(m_commandList,GetFrameIndex());
+        TransitionMeshBuffersToReadOnly(m_commandList);
+        UpdateTLAS(m_commandList);
+        bool needNewBindings=false;
+        UpdateBindlessValidationData(m_commandList,needNewBindings);
+        if(needNewBindings||!m_bindingSet){
+            // The original binding factory snapshots live descriptor tables.
+            // Keep its original submission boundary before rebuilding bindings.
+            m_commandList->close();GetDevice()->executeCommandList(m_commandList);
+            RecreateBindingSet();m_commandList->open();
+        }
+        PreUpdatePathTracing(false,m_commandList);
+        SampleRenderCode(framebuffer,m_commandList,SampleConstants{},false);
+        const auto& attachments=framebuffer->getDesc().colorAttachments;
+        if(!attachments.empty())m_commandList->clearTextureFloat(attachments[0].texture,
+            nvrhi::AllSubresources,nvrhi::Color(0));
+        GpuProfiler::End(m_commandList);
+        m_commandList->close();
+        m_lastGraphicsSubmit=GetDevice()->executeCommandList(m_commandList);
+        m_lastFrameAsyncPrefix=false;m_bindingSet=m_bindingSetMain;
+        GetDeviceManager()->SetVsyncEnabled(m_ui.ActualEnableVsync());
+        PostUpdatePathTracing();
+        ++m_nativeFrameWork[0];
+    }
+    nvrhi::CommandListHandle OpenResourceCommands(){
+        if(!m_resourceCommands){
+            m_resourceCommands=GetDevice()->createCommandList();
+            if(!m_resourceCommands)throw std::runtime_error("Native resource command-list allocation failed");
+            ++m_commandWork[0];
+        }else ++m_commandWork[1];
+        m_resourceCommands->open();return m_resourceCommands;
+    }
     struct RetiredResources {
         nvrhi::EventQueryHandle graphics,compute;
-        nvrhi::CommandListHandle commands;
         std::vector<std::shared_ptr<donut::engine::MeshInfo>> meshes;
         std::vector<std::shared_ptr<donut::engine::BufferGroup>> buffers;
         std::vector<std::shared_ptr<donut::engine::LoadedTexture>> textures;
@@ -521,7 +641,12 @@ private:
         if(!lighting.active||m_ommBaker||!m_blasPool||m_scene->GetSceneGraph()->GetMeshInstances().empty())return false;
         for(const auto& mesh:m_scene->GetSceneGraph()->GetMeshes())
             if(!mesh->isSkinPrototype&&bvh::IsSkinnedMesh(*mesh))return false;
-        auto commands=GetDevice()->createCommandList();commands->open();
+        if(!m_structureCommands){
+            m_structureCommands=GetDevice()->createCommandList();
+            if(!m_structureCommands)throw std::runtime_error("Native structure command-list allocation failed");
+            ++m_commandWork[2];
+        }else ++m_commandWork[3];
+        auto commands=m_structureCommands;commands->open();
         for(const auto& mesh:m_scene->GetSceneGraph()->GetMeshes()){
             if(mesh->isSkinPrototype||mesh->accelStruct)continue;
             auto description=bvh::GetMeshBlasDesc(
@@ -545,15 +670,9 @@ private:
         // frame fence predates this external build; add the missing GPU edge.
         GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,
             nvrhi::CommandQueue::Graphics,submitted);
-        // NVRHI's DXR scratch allocator belongs to the command list, unlike
-        // ordinary submitted resource references. Keep that owner until the
-        // actual build completes instead of releasing its scratch in flight.
-        RetiredResources pending;pending.commands=commands;
-        pending.graphics=GetDevice()->createEventQuery();
-        pending.compute=GetDevice()->createEventQuery();
-        GetDevice()->setEventQuery(pending.graphics,nvrhi::CommandQueue::Graphics);
-        GetDevice()->setEventQuery(pending.compute,nvrhi::CommandQueue::Compute);
-        m_resourceRetirement.push_back(std::move(pending));
+        // The retained command list owns its scratch for the full renderer
+        // lifetime. Its native submission versions, not a bridge retirement
+        // record per batch, govern reuse while previous builds are in flight.
         m_ui.AccelerationStructRebuildRequested=false;
         return true;
     }
@@ -673,7 +792,7 @@ private:
         m_resources.ConfigureMaterials(true);
         m_importedMaterials.clear();
         for(const auto& material:m_scene->GetSceneGraph()->GetMaterials())
-            m_importedMaterials.insert(material.get());
+            m_importedMaterials.insert(material);
         InvalidateBindingSet();
         m_ui.AccelerationStructRebuildRequested = true;
     }
@@ -687,7 +806,10 @@ private:
     bool m_qualityConfigured=false;
     Quality m_quality{};
     Resources m_resources;
-    std::unordered_set<const donut::engine::Material*> m_importedMaterials;
+    // The original PTMaterial keeps a raw DonutCounterpart pointer. Keep the
+    // last bake's bounded set alive when graph-only removals skip a new bake;
+    // release the set only after the baker clears it on reload/unload.
+    std::unordered_set<std::shared_ptr<donut::engine::Material>> m_importedMaterials;
     std::shared_ptr<donut::engine::ShaderFactory> m_adapterShaders;
     std::shared_ptr<donut::engine::LoadedTexture> m_skyTexture;
     std::vector<float> m_skyInput;

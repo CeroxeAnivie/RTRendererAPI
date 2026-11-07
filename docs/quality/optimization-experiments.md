@@ -1,5 +1,15 @@
 # 性能候选记录
 
+## 2026-11-07 当前候选：原生命令列表生命周期与直接光资源收口
+
+候选 `retained-command-lifetimes` 仅修改外部 `rtxpt_upstream_host.h`。资源导入和结构提交各保留一个 NVRHI `ICommandList`，反复 open/close/execute，由其原生 fence-aware 内部列表、上传块和 DXR scratch 管理复用；移除桥接每次结构提交保活一个全新命令列表的退休记录，场景卸载时等待 GPU idle 后释放这两个所有者。依据锁定 NVRHI `d3d12-commandlist.cpp` 构造函数，UploadManager 和 DxrScratchManager 均属于 ICommandList，而非全局设备。没有增加自管池、改 chunk 默认值、提前释放在用资源或添加重复 GC。
+
+原生有限信号模式已由 Java 契约明确禁用宿主重建、standalone denoiser、ReSTIR 和 SHaRC；其 SampleRenderCode 本来就不调用 AdvancedPathTracer::PathTrace/Denoise。因此经原版 Sample 的 CreateRTPipelines/CreateCustomRenderPasses/UpdateCustomResources/UpdateCustomConstants 虚函数钩子省略未使用的 Advanced 变体、denoising guides、adaptive sampling 和无条件分配的 SHaRC 三个固定缓冲（32+64+64 MiB）。Sample 共享后处理变体、原版场景/AS/材料生命周期、桥接属性/metadata、有限信号可选重建与当前帧完整性不变；beauty 模式仍调用全部原版 Advanced 钩子。
+
+本候选不是历史失败的 selective-topology-preparation、frontier、跨队列重叠或 shader 分拆。263 次 SceneFullRefresh、57 次材料全注册是此前真实热点，但本候选不假装已删除它们：原版 Sample 的 AS 重建位于本帧 Scene::Refresh 之前，结构预上传仍必要；原版 MaterialsBaker 的单项注册和 GPU 索引管理未公开，不访问其 private 状态绕过。API 及消费方整体低帧率和近预算退出仍须修后实测，不能以160 MiB逻辑缓冲减少或命令对象减少代签 FPS/驻留恢复。
+
+状态：已落盘并通过 diff 格式检查；构建、40帧合同、相同固定类流式对照和退出复验由主线程串行执行，结果尚未取得。官方 RTXPT/Donut/NVRHI 原文件未修改。网络审查只确认锁定 Donut 默认 sl::Preferences 保留 eAllowOTA；DeviceCreationParameters 未公开禁 OTA 配置，不伪造环境参数或插入初始化 hook，亦未声称已禁网。
+
 ## 2026-11-07 当前 8.0.0 桥接候选：重复资源工作收口
 
 候选 `bridge-reference-and-texture-work-deduplication` 只调整自有桥接代码：纹理依赖变化不再连带遍历全部 resident mesh 的 tangent 校验，仅在 normal 首次启用时验证；纯纹理事务不再额外调用 `SceneFullRefresh`，由原版 `Sample.cpp` 本帧 `Refresh` 消费；Decode 对 exact no-op full/rectangle 跳过整图复制和重复 `memcmp`。Java `RtxptDelta` 的完整图像 exact `ByteBuffer.equals` 短路重复 alpha 扫描。新增 `ReferenceWork` 两项与七项 texture-work 合为九项实际工作 counter，记录真实命中而非按资源总数推算。
@@ -226,3 +236,18 @@ rc.6受影响正确性已通过：CPU锁/并发覆盖、Java v6、实际DLL moni
 ## 7.3.2：原地资源与局部事务
 
 2026-11-07，本批用 mutable AS 原地 refit、精确属性分流和双队列 GPU ticket 排序消除兼容 mesh 的 clone；补丁改为有界 shadow/dirty words，跨线程观测只读不可变快照，空场景改用显式私有状态。25k 局部事务、16 项定向检查和四份最终像素哈希通过。3300 mesh／45000 source 的单配对 owner mean 13.456881→7.520794ms（−44.11%），P95 34.4202→11.6608ms（−66.12%）；FRAME mean +8.12%、P95 +27.45% 与 regions mean +1.65% 如实保留。多数 mesh 离屏，CPU 包含计时且非 ABBA，不代表 MC FPS。初次 bootstrap native crash、遗漏 managedLighting 和旧扩展 ABI 失败保留，均有定向修正。见 [本批报告](retained-update-locality.md)；不重跑旧矩阵。
+
+
+### Resident-pose resource fast path (candidate)
+
+After complete resource-packet decoding and reference validation, a packet with no textures, materials, meshes, removals or coverage changes and only existing instances referencing their resident mesh stages its exact poses for the original frame refresh. Empty packets are also accepted without GPU resource work. Resource command-list acquisition is lazy, so these paths do not create, reopen, close or submit an upload list. Original SetPose, scene refresh, TLAS update and current-frame rendering remain unchanged.
+
+The established nine-field resourceWorkState is unchanged. A separate internal commandWorkState initially exposed seven lifetime counters: resource-list creation/reopen, structure-list creation/reopen, pure-pose packets/nodes and empty packets. These integer increments work with diagnostics OFF and perform no GPU readback, wait, logging or per-frame counter allocation. Explicit inspection is an owner-thread call; exclude inspection from performance timing. The 43-frame migration contract passed, including two pose frames and one direct empty packet with unchanged command/resource work and exact current/previous transforms. A 256-batch progressive-load comparison accepted 466/466 fresh frames on each runtime, but did not reduce the 255 monitored bootstrap SceneFullRefresh calls. Busy external GPU usage prevents timing/FPS benefit claims. This did not establish real-host crash stability.
+
+### Native-lighting submission candidate
+
+The next candidate preserves the exact nine resource-work counters and appends three internal command-work counters (ten total): lean native-lighting frames, full native-lighting frame fallbacks, and empty-scene frames. These distinguish actual execution from a merely present optimization. Stable pose contract frames must execute the lean path exactly once without a full-frame fallback.
+
+Three protected Scene buffer factories use the exact original final descriptors and 1024-row capacity rounding while omitting ExtendedScene's throwaway base allocation. Original RefreshBuffers, CPU arrays, graph indexing and GPU uploads remain authoritative. Material-set removal alone retains the last original bake; a bounded shared-pointer set preserves its raw reverse references until the next real import or unload. New definitions still use original full registration. No private material-baker access or fabricated material files are used.
+
+Native-lighting only connects to the original scene/material/AS operations without the unrelated beauty post-processing tail. Initialization and unsupported configurations retain the original full-frame lifecycle. Beauty consumers keep their existing path. The 46-frame contract passes, including actual lean execution, opacity/sampler pixels, material removal/re-registration, current-frame attributes, normals, identity and live leases. Four prior PFM outputs are byte-identical. A same-class 256-batch progressive pair passes 466/466 fresh outputs on both runtimes; candidate executes 465 lean frames and one initialization fallback, with zero lost/failed native events. Native build and the 4,426-file upstream audit pass. Busy GPU prevents FPS/timing gain claims; original full-refresh work is unchanged. Actual-host validation remains pending. See [full result and limitations](native-lighting-submission.md).

@@ -7,6 +7,7 @@ param(
     [ValidateSet('medium','fast')][string[]]$Profiles=@('medium','fast'),
     [ValidateSet('OFF','DEEP')][string[]]$Diagnostics=@('OFF','DEEP'),
     [ValidateRange(2,65536)][int]$Meshes=3662,
+    [ValidateRange(1,65536)][int]$AdmissionBatches=1,
     [ValidateRange(1,262144)][int]$Sources=45000,
     [ValidateRange(1,3600)][int]$Ticks=60,
     [ValidateRange(1,32)][int]$FramesPerTick=9,
@@ -58,7 +59,7 @@ foreach($identity in $runtimes.Keys){
 }
 Save-Json (Join-Path $output 'environment.json') ([ordered]@{
     schema='streaming-scene-performance-v1';timestampUtc=[DateTime]::UtcNow.ToString('o');testClasses=$classIdentities;runtime=$runtimeIdentities
-    profiles=$Profiles;diagnostics=$Diagnostics;meshes=$Meshes;sources=$Sources;ticks=$Ticks;sceneTickHz=20;framesPerTick=$FramesPerTick
+    profiles=$Profiles;diagnostics=$Diagnostics;meshes=$Meshes;admissionBatches=$AdmissionBatches;sources=$Sources;ticks=$Ticks;sceneTickHz=20;framesPerTick=$FramesPerTick
     movementFrames=$Ticks*$FramesPerTick;warmupFrames=$WarmupFrames;stationaryFrames=$StationaryFrames;textureSize=$TextureSize
     outputExtent=@(2560,1600);lightingExtent=@(1280,800);jobMemoryLimitGiB=10;javaMaximumHeapMiB=512;serialRuns=$true
     backgroundWindow=$true;runtimeCompilationProhibited=$true;baselineAndCurrentUseIdenticalClassBytes=$true
@@ -96,7 +97,7 @@ try {
         Save-Json (Join-Path $case 'environment.json') ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;initialGpu=$gpu;runtime=$runtimeIdentities[$identity];classes=$classIdentities;timestampUtc=[DateTime]::UtcNow.ToString('o')})
         if($RequireIdle -and !$gpu.absoluteComparisonAllowed){throw "Initial GPU is busy or unknown; $tag was not started"}
         Write-Host "Streaming scene: $tag meshes=$Meshes sources=$Sources logicalTicks=$Ticks renderFrames=$($Ticks*$FramesPerTick)"
-        $arguments=@('--meshes',[string]$Meshes,'--sources',[string]$Sources,'--ticks',[string]$Ticks,'--frames-per-tick',[string]$FramesPerTick,
+        $arguments=@('--meshes',[string]$Meshes,'--admission-batches',[string]$AdmissionBatches,'--sources',[string]$Sources,'--ticks',[string]$Ticks,'--frames-per-tick',[string]$FramesPerTick,
             '--frames',[string]($Ticks*$FramesPerTick),'--warmup-frames',[string]$WarmupFrames,'--stationary-frames',[string]$StationaryFrames,
             '--motion-profile',$profile,'--texture-updates','true','--texture-size',[string]$TextureSize,'--diagnostics',$level,'--output',$case)
         Save-Json (Join-Path $case 'host-arguments.json') ([ordered]@{hostRunner=$hostRunner;mainClass='top.ceroxe.rt.renderer.rtxpt.RtxptStreamingWorkload';applicationArguments=$arguments;runtimeDirectory=$runtimes[$identity];classpathFile=$classpathPath;timeoutSeconds=$TimeoutSeconds})

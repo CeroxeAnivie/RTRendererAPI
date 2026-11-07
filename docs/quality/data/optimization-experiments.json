@@ -1,4 +1,53 @@
 {
+  "retainedCommandLifetimes": {
+    "id": "retained-command-lifetimes",
+    "date": "2026-11-07",
+    "version": "8.0.0",
+    "status": "lean-frame-and-expanded-contracts-passed-real-host-pending",
+    "upstreamSourceChanged": false,
+    "defaultAllocatorParametersChanged": false,
+    "qualityReduced": false,
+    "changes": [
+      "Reuse two original NVRHI command-list owners for resource uploads and structure batches",
+      "Remove per-batch command-list retirement records; native versions retain and reuse upload/scratch chunks",
+      "Wait for idle before releasing retained owners during scene unload",
+      "Skip unused Advanced-only pipeline/resource hooks for finite native lighting; preserve Sample shared postprocess and all beauty hooks"
+    ],
+    "unchanged": [
+      "SceneFullRefresh remains required before original AS refresh ordering",
+      "Original MaterialsBaker remains sole owner of material registration/GPU indices",
+      "Current-frame attributes, geometry metadata, output and optional signal reconstruction remain active"
+    ],
+    "completedBeforeLeanFrame": {
+      "nativeBuild": "passed-unmodified-upstream-audit",
+      "migrationContractFrames": 43,
+      "migrationContractPassed": true,
+      "progressiveBatches": 256,
+      "baselineFreshFrames": 466,
+      "candidateFreshFrames": 466,
+      "baselineBootstrapSceneFullRefresh": 255,
+      "candidateBootstrapSceneFullRefresh": 255,
+      "baselineBootstrapBufferUploadEvents": 716,
+      "candidateBootstrapBufferUploadEvents": 828,
+      "nativeEventLoss": 0,
+      "absolutePerformanceComparisonAllowed": false,
+      "evidence": "build/reports/scene-update-fix/progressive-work-comparison/runs.json",
+      "conclusion": "Command owners and pose fast path are active; main structural full-refresh work is unchanged. Upload scope event regression is retained, without attributing its cause."
+    },
+    "completedLeanFrame": {
+      "evidence": "native-lighting-submission.json",
+      "contractFrames": 46,
+      "contractPassed": true,
+      "unchangedPriorPfmOutputs": 4,
+      "progressiveFreshFrames": 466,
+      "leanFrames": 465,
+      "fullInitializationFallbacks": 1,
+      "lostOrFailedNativeEvents": 0,
+      "absolutePerformanceComparisonAllowed": false
+    },
+    "pending": ["actual previously failing workload"],
+    "noUnmeasuredPerformanceClaim": true
+  },
   "bridgeReferenceAndTextureWorkDeduplication": {
     "id": "bridge-reference-and-texture-work-deduplication",
     "date": "2026-11-07",

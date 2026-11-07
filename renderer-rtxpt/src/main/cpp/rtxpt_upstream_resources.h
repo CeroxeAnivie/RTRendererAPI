@@ -24,6 +24,8 @@
 #include <donut/engine/DescriptorTableManager.h>
 #include "SampleCommon/ExtendedScene.h"
 #include "Materials/MaterialsBaker.h"
+#include <nvrhi/common/misc.h>
+#include <donut/shaders/bindless.h>
 #include "rtxpt_memory_resources.h"
 #include "rtxpt_diagnostics.h"
 
@@ -47,6 +49,34 @@ public:
         SceneBufferUpload::Run(*this,commands);
         for(const auto& mesh:meshes)UpdateGeometry(mesh);
         WriteGeometryBuffer(commands);
+    }
+private:
+    // Original RefreshBuffers owns CPU capacities, dense indices and uploads.
+    // Its factories run only after the corresponding public graph count has
+    // grown past capacity (Scene.cpp:617-635). Match its 1024-row rounding and
+    // ExtendedScene's final descriptors without allocating a throwaway base
+    // buffer just to obtain that descriptor (ExtendedScene.cpp:353-371).
+    nvrhi::BufferHandle CreateTableBuffer(size_t count,uint32_t stride,
+        const char* name,bool instances=false){
+        nvrhi::BufferDesc desc;
+        desc.byteSize=nvrhi::align<size_t>(count,1024)*stride;
+        desc.debugName=name;
+        desc.structStride=instances&&m_Device->getGraphicsAPI()==nvrhi::GraphicsAPI::D3D11?0:stride;
+        desc.canHaveRawViews=true;
+        desc.canHaveUAVs=true;
+        desc.isVertexBuffer=instances;
+        desc.initialState=nvrhi::ResourceStates::NonPixelShaderResource;
+        desc.keepInitialState=true;
+        return m_Device->createBuffer(desc);
+    }
+    nvrhi::BufferHandle CreateMaterialBuffer() override {
+        return CreateTableBuffer(m_SceneGraph->GetMaterials().size(),sizeof(MaterialConstants),"BindlessMaterials");
+    }
+    nvrhi::BufferHandle CreateGeometryBuffer() override {
+        return CreateTableBuffer(m_SceneGraph->GetGeometryCount(),sizeof(GeometryData),"BindlessGeometry");
+    }
+    nvrhi::BufferHandle CreateInstanceBuffer() override {
+        return CreateTableBuffer(m_SceneGraph->GetMeshInstances().size(),sizeof(InstanceData),"Instances",true);
     }
 };
 
@@ -84,6 +114,8 @@ public:
     // Old-mesh tangent revalidation visits, and redundant dependency iterations
     // skipped because the normal-mapping requirement was already satisfied.
     const std::array<uint64_t,2>& ReferenceWork() const {return m_referenceWork;}
+    // Lifetime work counts: existing-node pose packets, their nodes, empty packets.
+    const std::array<uint64_t,3>& PoseWork() const {return m_poseWork;}
     std::array<double,24> InstanceTransformState(const std::string& name) const {
         auto node=m_nodes.find(name);
         if(node==m_nodes.end())throw std::invalid_argument("Unknown adapter instance: "+name);
@@ -221,10 +253,10 @@ public:
     }
 
     Changes Apply(const void* bytes, size_t size, donut::engine::Scene& scene,
-        nvrhi::ICommandList* commands, uint32_t frameIndex,
+        const std::function<nvrhi::ICommandList*()>& acquireCommands, uint32_t frameIndex,
         const std::function<void(bool)>& beforeStructural = {}) {
-        if (!bytes || !size || !commands)
-            throw std::invalid_argument("A resource packet and open command list are required");
+        if (!bytes || !size || !acquireCommands)
+            throw std::invalid_argument("A resource packet and command-list provider are required");
         auto graph = scene.GetSceneGraph();
         if (!graph || !graph->GetRootNode())
             throw std::logic_error("Create the original empty scene graph before applying resources");
@@ -235,6 +267,27 @@ public:
         RtrDiagnostics::Scope applyScope(RtrDiagnostics::Resources,0,0,1,0,0,0,0,size);
         Packet packet;{RtrDiagnostics::Scope decodeScope(RtrDiagnostics::Import);packet=Decode(bytes,size);}
         ValidateReferences(packet);
+        // A resident pose publication has no GPU resource work. Keep its complete
+        // packet/reference validation, then stage the exact authored transforms
+        // for the original frame refresh, without opening an upload command list.
+        const bool posesOnly=packet.textures.empty()&&packet.materials.empty()&&packet.meshes.empty()
+            &&packet.removeNodes.empty()&&packet.coverage.empty()&&packet.removeTextures.empty()
+            &&std::all_of(packet.nodes.begin(),packet.nodes.end(),[&](const auto& input){
+                const auto old=m_nodes.find(input.name);
+                return old!=m_nodes.end()&&old->second.mesh==input.mesh;
+            });
+        if(posesOnly){
+            for(auto& input:packet.nodes){
+                auto name=input.name;
+                m_pendingTransforms.insert_or_assign(std::move(name),std::move(input));
+            }
+            m_graph=graph;
+            if(packet.nodes.empty())++m_poseWork[2];
+            else {++m_poseWork[0];m_poseWork[1]+=packet.nodes.size();}
+            Changes changes;changes.transforms=!packet.nodes.empty();return changes;
+        }
+        auto* commands=acquireCommands();
+        if(!commands)throw std::runtime_error("Resource command-list acquisition failed");
         // Exact input equality avoids turning an unchanged material into a
         // scene reload. No epsilon or hash collision can suppress a real edit.
         for(auto i=packet.materials.begin();i!=packet.materials.end();)
@@ -915,6 +968,7 @@ private:
     bool m_externalTextureSampling = false;
     std::array<uint64_t,7> m_textureWork{};
     std::array<uint64_t,2> m_referenceWork{};
+    std::array<uint64_t,3> m_poseWork{};
     nvrhi::IDevice* m_textureDevice=nullptr;
     std::shared_ptr<donut::engine::DescriptorTableManager> m_textureDescriptors;
     std::weak_ptr<donut::engine::SceneGraph> m_graph;

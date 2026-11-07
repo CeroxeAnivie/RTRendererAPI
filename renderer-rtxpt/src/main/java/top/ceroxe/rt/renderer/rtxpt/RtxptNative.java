@@ -62,6 +62,9 @@ final class RtxptNative {
     // Owner-thread contract inspection; never performs a GPU readback.
     static native double[] lightingMetadataState(long handle,String instanceName,String geometryName);
     static native long[] resourceWorkState(long handle);
+    // Resource create/reopen, structure create/reopen, pose packets/nodes, empty packets,
+    // lean native-lighting frames, full native-lighting frame fallbacks, empty-scene frames.
+    static native long[] commandWorkState(long handle);
     static native void nativeLightingCapture(long handle,String path,int signal);
     static native boolean nativeLightingCanPublish(long handle);
     static native boolean nativeLightingConsumersRetired(long handle);

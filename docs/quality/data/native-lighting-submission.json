@@ -1,0 +1,335 @@
+{
+  "schema": 1,
+  "version": "8.0.0",
+  "date": "2026-11-07",
+  "status": "targeted-and-progressive-contracts-passed-real-host-pending",
+  "upstreamFilesUnmodified": true,
+  "upstreamVerifiedFiles": 4426,
+  "runtimeCompilationProhibited": true,
+  "nativeDllSha256": "6f3097978b21187f6dc1561f0f7532e20881d748abc680f69b7a626caf24a402",
+  "evidence": "build/reports/scene-update-fix/lean-progressive-comparison/runs.json",
+  "workload": {
+    "meshes": 3662,
+    "sources": 45000,
+    "admissionBatches": 256,
+    "movementFrames": 180,
+    "stationaryFrames": 30,
+    "acceptedFrames": 466,
+    "freshFrames": 466
+  },
+  "contract": {
+    "frames": 46,
+    "passed": true,
+    "unchangedPriorPfm": 4,
+    "poseLeanAssertionsPassed": true,
+    "materialRemovalNoReimportPassed": true,
+    "materialReadditionPixelsPassed": true
+  },
+  "candidateLifetimeCounts": {
+    "resourceListsCreated": 1,
+    "resourceListsReused": 435,
+    "structureListsCreated": 1,
+    "structureListsReused": 257,
+    "leanFrames": 465,
+    "fullFrameFallbacks": 1
+  },
+  "absolutePerformanceComparisonAllowed": false,
+  "fpsBenefitClaimed": false,
+  "phases": [
+    {
+      "phase": "bootstrap",
+      "baselineFresh": 256,
+      "candidateFresh": 256,
+      "lost": 0,
+      "failed": 0,
+      "scopeEventCounts": {
+        "Frame": {
+          "baseline": 255,
+          "candidate": 255,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "SceneFullRefresh": {
+          "baseline": 255,
+          "candidate": 255,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "Materials": {
+          "baseline": 0,
+          "candidate": 0,
+          "difference": 0,
+          "changePercent": null
+        },
+        "Acceleration": {
+          "baseline": 255,
+          "candidate": 255,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "TlasAllocate": {
+          "baseline": 255,
+          "candidate": 255,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "BlasBuild": {
+          "baseline": 3647,
+          "candidate": 3647,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "BufferUpload": {
+          "baseline": 688,
+          "candidate": 744,
+          "difference": 56,
+          "changePercent": 8.13953488372093
+        }
+      },
+      "commandWork": {
+        "available": false,
+        "reason": "renderer-not-initialized-at-phase-start"
+      }
+    },
+    {
+      "phase": "stationary",
+      "baselineFresh": 30,
+      "candidateFresh": 30,
+      "lost": 0,
+      "failed": 0,
+      "scopeEventCounts": {
+        "Frame": {
+          "baseline": 30,
+          "candidate": 30,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "SceneFullRefresh": {
+          "baseline": 0,
+          "candidate": 0,
+          "difference": 0,
+          "changePercent": null
+        },
+        "Materials": {
+          "baseline": 0,
+          "candidate": 0,
+          "difference": 0,
+          "changePercent": null
+        },
+        "Acceleration": {
+          "baseline": 0,
+          "candidate": 0,
+          "difference": 0,
+          "changePercent": null
+        },
+        "TlasAllocate": {
+          "baseline": 0,
+          "candidate": 0,
+          "difference": 0,
+          "changePercent": null
+        },
+        "BlasBuild": {
+          "baseline": 0,
+          "candidate": 0,
+          "difference": 0,
+          "changePercent": null
+        },
+        "BufferUpload": {
+          "baseline": 0,
+          "candidate": 0,
+          "difference": 0,
+          "changePercent": null
+        }
+      },
+      "commandWork": {
+        "available": true,
+        "counters": {
+          "resource_command_lists_created": {
+            "available": true,
+            "begin": 1,
+            "end": 1,
+            "delta": 0
+          },
+          "resource_command_lists_reused": {
+            "available": true,
+            "begin": 255,
+            "end": 255,
+            "delta": 0
+          },
+          "structure_command_lists_created": {
+            "available": true,
+            "begin": 1,
+            "end": 1,
+            "delta": 0
+          },
+          "structure_command_lists_reused": {
+            "available": true,
+            "begin": 254,
+            "end": 254,
+            "delta": 0
+          },
+          "pose_only_transactions": {
+            "available": true,
+            "begin": 0,
+            "end": 30,
+            "delta": 30
+          },
+          "pose_node_updates": {
+            "available": true,
+            "begin": 0,
+            "end": 240,
+            "delta": 240
+          },
+          "empty_transactions": {
+            "available": true,
+            "begin": 0,
+            "end": 0,
+            "delta": 0
+          },
+          "lean_native_lighting_frames": {
+            "available": true,
+            "begin": 255,
+            "end": 285,
+            "delta": 30
+          },
+          "full_native_lighting_frame_fallbacks": {
+            "available": true,
+            "begin": 1,
+            "end": 1,
+            "delta": 0
+          },
+          "empty_scene_native_lighting_frames": {
+            "available": true,
+            "begin": 0,
+            "end": 0,
+            "delta": 0
+          }
+        },
+        "measurement": "native command work counters outside frame timing"
+      }
+    },
+    {
+      "phase": "movement",
+      "baselineFresh": 180,
+      "candidateFresh": 180,
+      "lost": 0,
+      "failed": 0,
+      "scopeEventCounts": {
+        "Frame": {
+          "baseline": 180,
+          "candidate": 180,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "SceneFullRefresh": {
+          "baseline": 3,
+          "candidate": 3,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "Materials": {
+          "baseline": 0,
+          "candidate": 0,
+          "difference": 0,
+          "changePercent": null
+        },
+        "Acceleration": {
+          "baseline": 3,
+          "candidate": 3,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "TlasAllocate": {
+          "baseline": 3,
+          "candidate": 3,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "BlasBuild": {
+          "baseline": 183,
+          "candidate": 183,
+          "difference": 0,
+          "changePercent": 0.0
+        },
+        "BufferUpload": {
+          "baseline": 18,
+          "candidate": 16,
+          "difference": -2,
+          "changePercent": -11.11111111111111
+        }
+      },
+      "commandWork": {
+        "available": true,
+        "counters": {
+          "resource_command_lists_created": {
+            "available": true,
+            "begin": 1,
+            "end": 1,
+            "delta": 0
+          },
+          "resource_command_lists_reused": {
+            "available": true,
+            "begin": 255,
+            "end": 435,
+            "delta": 180
+          },
+          "structure_command_lists_created": {
+            "available": true,
+            "begin": 1,
+            "end": 1,
+            "delta": 0
+          },
+          "structure_command_lists_reused": {
+            "available": true,
+            "begin": 254,
+            "end": 257,
+            "delta": 3
+          },
+          "pose_only_transactions": {
+            "available": true,
+            "begin": 30,
+            "end": 30,
+            "delta": 0
+          },
+          "pose_node_updates": {
+            "available": true,
+            "begin": 240,
+            "end": 240,
+            "delta": 0
+          },
+          "empty_transactions": {
+            "available": true,
+            "begin": 0,
+            "end": 0,
+            "delta": 0
+          },
+          "lean_native_lighting_frames": {
+            "available": true,
+            "begin": 285,
+            "end": 465,
+            "delta": 180
+          },
+          "full_native_lighting_frame_fallbacks": {
+            "available": true,
+            "begin": 1,
+            "end": 1,
+            "delta": 0
+          },
+          "empty_scene_native_lighting_frames": {
+            "available": true,
+            "begin": 0,
+            "end": 0,
+            "delta": 0
+          }
+        },
+        "measurement": "native command work counters outside frame timing"
+      }
+    }
+  ],
+  "remaining": [
+    "Topology still invokes original full scene indexing/packing/upload",
+    "New materials still require original full registration; no public incremental registration hook",
+    "Observed BufferUpload scope-event changes are not upload bytes or driver-allocation counts",
+    "Actual previously failing host workload has not yet been rerun"
+  ]
+}
