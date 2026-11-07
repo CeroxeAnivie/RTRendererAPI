@@ -1,15 +1,8 @@
-import java.time.Duration
-import java.time.temporal.ChronoUnit
-
 pluginManagement {
     repositories {
         gradlePluginPortal()
         mavenCentral()
     }
-}
-
-plugins {
-    id("com.gradleup.nmcp.settings") version "1.6.2"
 }
 
 dependencyResolutionManagement {
@@ -34,22 +27,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "RTRendererAPI"
 
-nmcpSettings {
-    centralPortal {
-        username.set(providers.gradleProperty("centralUsername"))
-        password.set(providers.gradleProperty("centralPassword"))
-        publishingType.set("AUTOMATIC")
-        publicationName.set("RTRendererAPI-${providers.gradleProperty("project_version").get()}")
-        validationTimeout.set(Duration.of(30, ChronoUnit.MINUTES))
-    }
-}
-
-/*
- * Keep the public host contract isolated from the Vulkan implementation. This
- * makes accidental implementation leakage a compile-time/build-time failure.
- */
+// The public contracts and the external upstream bridge are the complete runtime.
 include("renderer-api")
-include("renderer-core")
-include("renderer-nvidia")
 include("renderer-rtxpt")
-include("demos:hex-ball")

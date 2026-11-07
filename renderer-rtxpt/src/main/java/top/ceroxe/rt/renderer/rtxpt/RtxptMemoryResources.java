@@ -84,7 +84,7 @@ final class RtxptMemoryResources {
     }
     private static void write(Writer w,Map<Long,TextureAsset> textures,Collection<RtxptScene.Variant> materials,
             List<Geometry> meshes,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,RtxptScene scene,List<Long> removedTextures,Map<Long,TextureAsset> resident){
-        w.i(0x52445254);w.i(textures.size());
+        w.i(0x52445257);w.i(textures.size());
         for(var t:textures.values()){w.l(t.id());w.i(t.width());w.i(t.height());w.i(t.mipLevelCount());w.i(t.colorSpace().ordinal());
             w.i(t.addressU().ordinal());w.i(t.addressV().ordinal());w.i(t.filter().ordinal());w.l(t.generation());
             var base=resident.get(t.id());var patch=t.sourcePatch().filter(p->base!=null&&base.generation()==t.parentGeneration()).orElse(null);
@@ -92,7 +92,11 @@ final class RtxptMemoryResources {
             if(patch==null)w.bytes(t.rgba8());else{w.l(t.parentGeneration());w.i(patch.mipLevel());w.i(patch.x());w.i(patch.y());w.i(patch.width());w.i(patch.height());w.i(patch.rowPitch());w.bytes(patch.rgba8());}}
         w.i(materials.size());for(var v:materials){var m=scene.materials.get(v.material());w.s(v.name());w.i(m.baseColorRgba8());
             w.f(v.visibility());w.f(m.roughness());w.f(m.metallic());w.f(m.transmission());w.f(m.alphaCutoff());w.i(m.blendMode().ordinal());w.i(m.doubleSided()?1:0);
-            w.i(m.emissiveColorRgba8());w.f(m.emissiveStrength());w.f(v.boundary()==null?m.indexOfRefraction():v.boundary().medium().indexOfRefraction());
+            var emission=m.emissiveRadiance();w.f(emission.red());w.f(emission.green());w.f(emission.blue());
+            w.f(v.boundary()==null?m.indexOfRefraction():v.boundary().medium().indexOfRefraction());
+            w.i(m.pathDecomposition()==MaterialAsset.PathDecomposition.EXCLUDED?1:0);
+            w.i(switch(m.pathDecomposition()){case EXCLUDED,AUTOMATIC->-1;case TRANSMISSION->0;case REFLECTION->1;});
+            w.i(switch(m.motionVectorBlocking()){case OFF->0;case AUTO_LOW->1;case AUTO_HIGH->2;case FULL->3;});
             w.l(m.baseColorTextureId());w.l(m.normalTextureId());w.l(m.metallicRoughnessTextureId());w.l(m.emissiveTextureId());
             w.i(v.boundary()==null?0:1);if(v.boundary()!=null){var b=v.boundary();w.f(b.medium().absorption().red());w.f(b.medium().absorption().green());w.f(b.medium().absorption().blue());w.i(b.priority());}}
         w.i(meshes.size());for(var g:meshes){w.s(RtxptScene.meshName(g.item));w.floats(g.data.positions());w.floats(g.data.normals());w.floats(g.data.tangents());w.floats(g.data.uvs());

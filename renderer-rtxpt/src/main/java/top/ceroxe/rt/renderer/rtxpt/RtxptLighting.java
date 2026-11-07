@@ -14,7 +14,13 @@ final class RtxptLighting {
     static RtxptLighting of(EnvironmentState environment,Collection<SceneLight> lights) {return new RtxptLighting(environment,lights);}
     static RtxptLighting sorted(EnvironmentState environment,List<SceneLight> lights){return new RtxptLighting(environment,lights);}
     long[] ids() {var ids=new long[lights.size()+1];ids[0]=-1;for(int i=0;i<lights.size();i++)ids[i+1]=lights.get(i).id();return ids;}
-    float[] sky() {var e=environment;return new float[]{e.skyRed(),e.skyGreen(),e.skyBlue(),e.ambientIntensity()};}
+    float[] sky() {
+        var e=environment;var map=e.environmentMap();
+        if(map==null)return new float[]{e.skyRed(),e.skyGreen(),e.skyBlue(),e.ambientIntensity()};
+        var values=new float[Math.addExact(6,Math.multiplyExact(Math.multiplyExact(map.width(),map.height()),3))];
+        values[0]=e.skyRed();values[1]=e.skyGreen();values[2]=e.skyBlue();values[3]=e.ambientIntensity();
+        values[4]=map.width();values[5]=map.height();map.copyLinearRgbTo(values,6);return values;
+    }
     float[] sun(){var e=environment;return new float[]{0,0,0,0,e.sunDirectionX(),e.sunDirectionY(),e.sunDirectionZ(),0,e.sunRed(),e.sunGreen(),e.sunBlue(),e.sunIntensity(),0,0,1,0};}
     float[] records() {
         var e=environment;var values=new float[Math.multiplyExact(lights.size()+1,16)];

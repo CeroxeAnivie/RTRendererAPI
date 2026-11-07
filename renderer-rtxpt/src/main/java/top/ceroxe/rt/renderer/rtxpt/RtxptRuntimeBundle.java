@@ -40,7 +40,7 @@ final class RtxptRuntimeBundle {
             var target = base.resolve("1.9.0-" + digest.substring(0,20));
             try (var channel = FileChannel.open(base.resolve(digest + ".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                     var lock = channel.lock()) {
-                if (complete(target, digest)) return target;
+                if (complete(target, digest)) return target.resolve("bin");
                 var staging = Files.createTempDirectory(base, ".stage-");
                 try {
                     var archive = staging.resolve("runtime.zip");
@@ -67,15 +67,13 @@ final class RtxptRuntimeBundle {
                         }
                     }
                     Files.delete(archive);
-                    Files.createDirectories(staging.resolve("Assets/EnvironmentMaps"));
-                    Files.createDirectories(staging.resolve("Assets/Materials"));
                     verify(staging);
                     Files.writeString(staging.resolve(".complete"), digest, US_ASCII);
                     deleteTree(target);
                     try { Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE); }
                     catch (AtomicMoveNotSupportedException e) { Files.move(staging, target); }
                 } finally { deleteTree(staging); }
-                return target;
+                return target.resolve("bin");
             }
         } catch (IOException | NoSuchAlgorithmException e) {
             throw new IllegalStateException("Cannot install the packaged RTXPT runtime", e);
@@ -83,31 +81,26 @@ final class RtxptRuntimeBundle {
     }
 
     private static void verify(Path root) throws IOException {
-        for (var file : new String[]{"rtrenderer_rtxpt.dll", "sl.interposer.dll", "NRD.dll", "omm-lib.dll",
-                "D3D12/D3D12Core.dll", "ShaderDynamic/Tools/d3d12/x64/dxc.exe", "ThirdPartyLicenses/RTXPT.txt",
-                "ShaderDynamic/Bin/dxil/bundle.json"})
-            if (!Files.isRegularFile(root.resolve(file))) throw new IOException("Missing RTXPT runtime file: " + file);
-        for (var dir : new String[]{"ShaderPrecompiled", "ShaderDynamic/Source", "Assets/EnvironmentMaps", "Assets/Materials"})
-            if (!Files.isDirectory(root.resolve(dir))) throw new IOException("Missing RTXPT runtime directory: " + dir);
-        var binRoot=root.resolve("ShaderDynamic/Bin/dxil");
-        var manifest=Files.readString(binRoot.resolve("bundle.json"));
-        var binaries=java.util.regex.Pattern.compile("\"path\"\\s*:\\s*\"([^\"\\\\]+\\.bin)\"[^{}]*?\"sha256\"\\s*:\\s*\"([0-9a-f]{64})\"").matcher(manifest);
-        int checked=0;
-        while(binaries.find()){
-            var file=binRoot.resolve(binaries.group(1)).normalize();
-            if(!file.startsWith(binRoot)||!Files.isRegularFile(file))throw new IOException("Missing packaged shader: "+binaries.group(1));
-            if(!binaries.group(2).equals(sha256(file)))throw new IOException("Corrupt packaged shader: "+binaries.group(1));
-            checked++;
-        }
-        if(checked==0)throw new IOException("Empty or incompatible RTXPT shader inventory");
+        verifyBin(root.resolve("bin"));
+        if (!Files.isDirectory(root.resolve("Assets"))) throw new IOException("Missing official RTXPT Assets directory");
     }
 
-    private static String sha256(Path file) throws IOException {
-        try {
-            var hash=MessageDigest.getInstance("SHA-256");
-            try(var stream=Files.newInputStream(file)){byte[] buffer=new byte[65536];for(int n;(n=stream.read(buffer))>=0;)hash.update(buffer,0,n);}
-            return HexFormat.of().formatHex(hash.digest());
-        }catch(NoSuchAlgorithmException e){throw new IOException(e);}
+    static void verifyBin(Path bin) throws IOException {
+        for (var file : new String[]{"rtrenderer_rtxpt.dll", "rtrenderer_jvm_host.exe",
+                "sl.interposer.dll", "NRD.dll", "omm-lib.dll", "D3D12/D3D12Core.dll",
+                "ShaderDynamic/Tools/d3d12/x64/dxc.exe",
+                "ShaderDynamic/Source/Rtxpt/PathTracer/PathTracer.hlsli"})
+            if (!Files.isRegularFile(bin.resolve(file))) throw new IOException("Missing RTXPT runtime file: " + file);
+        for (var dir : new String[]{"ShaderPrecompiled/Rtxpt", "ShaderDynamic/Source/External"})
+            if (!Files.isDirectory(bin.resolve(dir))) throw new IOException("Missing RTXPT shader directory: " + dir);
+        for (var shader : new String[]{"RtrNativeLighting", "RtrNativeLightingReconstruct",
+                "RtrNativeDynamicLighting", "RtrNativeDynamicLightingReconstruct",
+                "RtrNativeLightingDeep", "RtrNativeLightingEncode", "RtrNativeLightingResolve",
+                "RtrNativeGiReduce", "RtrNativeGiUpsample"}) {
+            var file = bin.resolve("AdapterShaders/app/ProcessingPasses/" + shader + ".bin");
+            if (!Files.isRegularFile(file) || Files.size(file) == 0)
+                throw new IOException("Missing compiled adapter shader: " + shader);
+        }
     }
 
     private static boolean complete(Path root, String digest) {

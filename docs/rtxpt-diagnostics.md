@@ -1,45 +1,45 @@
-# Native diagnostic recorder
+# RTXPT 外部调用边界诊断
 
-Current format is 5. `diagnosticMonitor()` may be acquired before the first submit, after selecting the diagnostic level; it preserves that session token across creation. Register it once on the owner thread, then query it from an independent observer. Snapshot allocation occurs outside the recording mutex and performs no driver calls or owner/lifecycle-lock acquisition.
+8.0.0 的诊断接口正在随生产路径迁移。本文描述当前新契约，尚未代表正式包和完整负载验收通过。
 
-Resource events add stable-ID FNV64, immutable publication revision, reason mask, byte count, attempt, diagnostic level and event ordinal. Reasons: inflow=1, deformation=2, topology=4, build flags=8, pose=16, coverage=32, material=64, removal=128, texture=256, pool hit=512, capacity growth=1024, refit refresh=2048, index migration=4096. A transaction budget precedes GPU resource allocation/upload; actual BLAS CPU calls and sampled GPU builds carry the same identity. Native internals beneath a driver call remain unknown without an external stack.
+## 记录什么
 
-GPU CSV serializes resource identity as unsigned decimal. Java preserves all bits in its `long` field, including values above `Long.MAX_VALUE`; use `Long.toUnsignedString(identity)` to reproduce the native text. Resource generation and change reason keep their existing numeric meaning.
+RtxptDiagnosticAccess 只提供 diagnosticLevel(Level) 与 diagnosticSnapshot(afterOrdinal)。观测范围是 API 自己执行的验证、转换、资源发布、灯光、属性以及原生帧调用边界。
 
-CPU snapshots expose first/next retained ordinal; each registered monitor separately tracks registration and missed records. Protocol monitors do the same. Registration does not claim to have observed earlier overwritten records. Active scopes are incomplete, not completed latency samples. Windows thread IDs can be correlated with ETW or a symbolized native stack; use the matching published PDB.
+| Stage | 计时边界 |
+| --- | --- |
+| VALIDATION | API 输入及帧契约检查 |
+| TRANSLATION | 必要的数据转换与增量 packet 准备 |
+| RESOURCES | 调用上游资源接入的外部边界 |
+| LIGHTING | 外部灯光输入提交 |
+| ATTRIBUTES | 独立扩展属性提交 |
+| RTXPT_FRAME | JNI 帧请求的墙钟耗时，包含原生等待 |
 
-SUMMARY never enables ray atomics. Explicit work-statistics requests become effective only in DEEP. OFF suppresses new normal protocol events, CPU/GPU recording and work-statistics queries; first-fault evidence and functional fences remain. In-flight GPU scope records retain the mode that issued them. Independent OFF benchmark timestamps are a test-only opt-in with their own bounded dropped/overwritten accounting.
+这些是实际代码边界，不能把 RTXPT_FRAME 改名成 GPU 忙时，也不能将包含阶段与其子调用简单相加。GPU 专用时间仅在真实支持的查询有完成样本时报告；无数据不是 0ms。
 
-Historical recorder contract and evidence follow; references to acquisition after initialization and older formats describe the earlier implementation.
+**RTXPT 内部未展开。**只有上游现有、实际可调用的诊断接口才能延伸到内部。当前原版 GpuProfiler 没有可供此桥读取数值的 observer；声明、内部 Tracy scope 或 private 状态不作为公开数值接口。禁止为补表格修改上游、注入探针或制造内部阶段。
 
-# 7.1.0 diagnostic recorder
+## 级别与有界存储
 
-The CPU recorder covers `SUBMIT` independently of native `FRAME`. This keeps light and resource preparation visible when it occurs before frame recording, including submissions that fail without entering `FRAME`.
+Level 为 OFF、SUMMARY、DEEP。OFF 不继续计时或构造诊断事件；消费方应同步关闭自己的事件、CSV、JFR 与诊断 GPU 查询，允许已经采集的样本有界收尾。
 
-Call `RtxptDiagnosticAccess.diagnosticMonitor()` once on the renderer owner thread after native initialization. Its returned `RtxptDiagnostics.Monitor` can be queried from a watchdog thread while the owner is busy. The monitor reads the fixed native recorder only: it does not enter the renderer, touch GPU objects, acquire the renderer lifecycle lock, or wait for the owner. It expires when another native session replaces its generation. Level changes do not invalidate it. CPU monitor snapshots are thread safe; other renderer and GPU diagnostic methods retain their owner-thread contract.
+适配层使用固定 1024 槽 primitive ring。热路径不做同步文件写出或为每个事件分配对象；只有 owner 线程显式取 snapshot 时才构造返回记录。消费方负责将这些记录送入已有的有界异步 writer，不在后台线程并发调用 owner-only 接口。
 
-Snapshots contain up to 8,192 rolling events, 2,048 events from the latest slow or failed submission, 512 active scopes, and 1,024 independent submit samples. Overflow counters describe every window. Active scopes expose their stage, frame/revision, elapsed wall time, initial work counts, unique scope/parent identity, thread, and input/output generations where supplied. Their self time is intentionally zero until completion. `batch` links caller, workers, and waits; it is not a unique scope ID. `parentScopeId` identifies same-thread nesting, so concurrent worker wall time is never subtracted from an owner scope's self time.
+## 事件与游标
 
-`submissions()` and `submissionsByKind()` provide P50/P95/P99/max and counts above 50ms/100ms/1s. Submit samples have their own bounded window so many deep worker events cannot evict all complete submit evidence. Categories use a defined precedence: first submit, resize, resource/light update, actual task wait, steady work. `stage(...)` gives completed stage distributions in the event window. First-session flags, failed/cancelled submissions, and submissions that never entered native `FRAME` are separate fields. These are CPU wall-clock measurements, not CPU execution time or GPU busy time.
+Event 字段为 ordinal、sequence、sceneRevision、stage、beginNanos、durationNanos、items、bytes、failed。Snapshot 包含 level、nextOrdinal、lostEvents、events、upstreamInternalsExpanded；最后一项在当前实现为 false。
 
-Switching to `OFF` finishes active CPU evidence once at the switch boundary and marks it truncated. Truncated samples remain inspectable but are excluded from completed-duration percentiles. Closing during a failed submit can mark the retained truncated event failed when the Java `finally` block arrives. Old scope destructors cannot repopulate a recorder after reset. After the switch, CPU scope construction and submit entry collect no clocks, allocate no memory, and record no events; explicit snapshots can still read retained evidence. GPU profiling stops new queries immediately, retires only previously recorded queries asynchronously, then stops polling fences and writing profile rows. Normal rendering does not wait for those samples.
+初始 afterOrdinal 为 -1，含义是“最后已消费事件”。处理完成后，以 snapshot.nextOrdinal() - 1 作为下一次游标；不要重复读取整个历史环，也不要把覆盖丢失当作没有事件。lostEvents 明确记录消费者落后造成的覆盖。
 
-The native snapshot wire ABI is version 4 (18 words per event). Java also decodes versions 2 and 3. Version 4 adds actual thread CPU inclusive/self durations, separate from wall time; unavailable CPU clocks decode as -1. Version 3 added unique scope and parent IDs, generations, live scopes, and independent submit samples. All formats validate lengths and bounds.
+    long cursor = -1;
+    var snapshot = access.diagnosticSnapshot(cursor);
+    for (var event : snapshot.events()) {
+        // 投递到消费方已有的有界异步输出。
+    }
+    cursor = snapshot.nextOrdinal() - 1;
 
-Run the standalone test from the repository root in the configured MSVC/Java 25 environment:
+旧 protocol／arena／index／admission、GpuMonitor 及私有 native 状态结构不再保留为兼容壳。历史 7.x CSV、分析器及实测继续保留原 schema 和制品身份；新输出应显式标记 schema 3、wall_boundary 和内部未展开，不能混列后计算收益。
 
-```powershell
-./tools/Test-RtxptDiagnostics.ps1
-```
+## 性能报告
 
-This compiles a standalone C++ recorder test and a Java decoder test, and passes a real native binary snapshot to Java. Every process uses `Invoke-BoundedBuild.ps1` with the 10 GiB process-tree cap. It does not create a renderer, GPU workload, or window.
-
-The 2026-11-03 local run passed OFF zero-clock/zero-allocation recording, same-thread self time, concurrent worker identities, watchdog live-stage visibility, failed pre-frame retention, cancellation, OFF truncation, reset generations, bounded overflow, version compatibility, malformed inputs, and all five work categories. The local CPU recorder microbenchmark measured about 5ns per synthetic submit with OFF and 0.36 microseconds with SUMMARY/DEEP. Each synthetic submit records a submit/frame/light nesting; this is recorder overhead only, not a rendered-frame or FPS comparison. It does not establish GPU profiling overhead, final packaged-renderer integration, or completion of the full T18 acceptance matrix.
-
-The hidden JVM/JNI test `:renderer-rtxpt:rtxptDiagnosticMonitorNativeSelfTest` also passed on 2026-11-03: a watchdog read 30 snapshots and observed 26 active submits and 26 nested native stages; a rejected future revision was retained before FRAME and the renderer recovered. OFF continued six new accepted/completed frames, kept operational/output status, froze CPU evidence and drained GPU queries to zero. SUMMARY resumed on the same monitor; close retained final evidence; a sequential replacement session rejected the old monitor. This test used the development native runtime, not the final release JAR. Its 86.1s elapsed time includes two native session startups and shader preparation and is not a frame-performance measurement.
-
-Event-poll interval measurement now checks the level before reading a clock and excludes the OFF gap when resumed. Optional process-memory recording has its own epoch and serializes queries/writes with configuration; an old memory scope cannot query or append records after OFF or after a later resume. The recorder self-test checks 100,000 OFF event polls with zero clocks. `rtxpt_memory_diagnostics_selftest` checks both environment opt-in states, 100,000 OFF calls with zero memory queries/clocks/writes, and rejection of stale scope epochs.
-
-Add `-IncludeMemory` to the standalone script to compile/run those optional memory checks. It uses the configured Windows SDK and the pinned DirectX-Headers under `build/rtxpt-sdk/build-host/_deps`; `-DirectXHeaders` selects another matching include directory.
-
-Integration must still associate real input/output generations with the frame context. New light-transport, input-import, reconstruction, and output-lease passes must emit their actual scopes and counters. The recorder cannot infer those stages from the outer `FRAME` event. A failed Java validation before the first native session exists also needs Java-side evidence; a native monitor cannot observe a session that has not been created.
+按相同入口、规模、配置与采样级别比较，分别给阶段平均、P95、P99、最大值与卡顿频率；冷启动、编译和稳态分开。失败／未完成样本及丢失事件明确列出。GPU 忙或缺基线时，FPS 只作观测，不能据绝对帧率判定收益。诊断本身的成本也须单列，不能用微型 proof 代替完整资源到 fresh 输出的负载。

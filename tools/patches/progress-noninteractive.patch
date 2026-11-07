@@ -1,0 +1,11 @@
+--- a/Rtxpt/SampleCommon/SampleCommon.cpp
++++ b/Rtxpt/SampleCommon/SampleCommon.cpp
+@@ -354,5 +354,8 @@
+ int ProgressBarStart(const char * windowText)
+ {
++    if (HelpersIsNonInteractive())
++        return -1;
++
+     // progress bar currently interfering with fullscreen so disable
+     if (IsWindowFullscreen())
+         return -1;

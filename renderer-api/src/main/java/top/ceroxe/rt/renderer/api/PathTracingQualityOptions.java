@@ -2,86 +2,59 @@ package top.ceroxe.rt.renderer.api;
 
 import java.util.Objects;
 
-/** Explicit quality/cost budgets for managed path tracing. Changes require a renderer rebuild.
- * These are workload choices, not a claim that every backend supports every choice.
- */
-public record PathTracingQualityOptions(LightSampling lighting,RadianceCache cache,
+/** Native path-tracing quality controls supported by the public backend settings. */
+public record PathTracingQualityOptions(LightSampling lighting,
         int denoisingLayers,int denoisingLayerMaxDepth,int nestedDielectricsQuality,
-        SubSampling subSampling,float textureLodBias,boolean halfPrecision,PostProcessing postProcessing) {
+        SubSampling subSampling,float textureLodBias,boolean halfPrecision,PostProcessing postProcessing,
+        BeautyTransport beautyTransport) {
     public PathTracingQualityOptions {
-        Objects.requireNonNull(lighting);Objects.requireNonNull(cache);Objects.requireNonNull(subSampling);Objects.requireNonNull(postProcessing);
+        Objects.requireNonNull(lighting);Objects.requireNonNull(subSampling);Objects.requireNonNull(postProcessing);Objects.requireNonNull(beautyTransport);
         range(denoisingLayers,1,3,"denoisingLayers");range(denoisingLayerMaxDepth,1,15,"denoisingLayerMaxDepth");
         range(nestedDielectricsQuality,0,2,"nestedDielectricsQuality");finite(textureLodBias,-8,8,"textureLodBias");
     }
-    public PathTracingQualityOptions(LightSampling lighting,RadianceCache cache,int denoisingLayers,
-            int denoisingLayerMaxDepth,int nestedDielectricsQuality,SubSampling subSampling,float textureLodBias,boolean halfPrecision) {
-        this(lighting,cache,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,PostProcessing.defaults());
+    public PathTracingQualityOptions(LightSampling lighting,int denoisingLayers,int denoisingLayerMaxDepth,
+            int nestedDielectricsQuality,SubSampling subSampling,float textureLodBias,boolean halfPrecision,PostProcessing postProcessing){
+        this(lighting,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,postProcessing,BeautyTransport.NATIVE);
     }
-    /** Moderate-GPU starting point; applications can raise any budget explicitly. */
+    /** NATIVE retains the complete upstream integrator. ANALYTIC_DIRECT is an
+     * explicit API extension: finite-range analytic lights, RGB transmission
+     * visibility, four exactly split interfaces and stable native BSDF continuation.
+     * It does not evaluate diffuse indirect illumination or stochastic denoising. */
+    public enum BeautyTransport { NATIVE, ANALYTIC_DIRECT }
+    public PathTracingQualityOptions withBeautyTransport(BeautyTransport value){return new PathTracingQualityOptions(lighting,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,postProcessing,value);}
     public static PathTracingQualityOptions defaults(){return new PathTracingQualityOptions(
-        LightSampling.defaults(),RadianceCache.defaults(),3,9,1,SubSampling.FULL,-1,false);}
-    public PathTracingQualityOptions withLighting(LightSampling value){return new PathTracingQualityOptions(value,cache,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,postProcessing);}
-    public PathTracingQualityOptions withCache(RadianceCache value){return new PathTracingQualityOptions(lighting,value,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,postProcessing);}
-    public PathTracingQualityOptions withDenoisingLayers(int count,int depth){return new PathTracingQualityOptions(lighting,cache,count,depth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,postProcessing);}
-    public PathTracingQualityOptions withNestedDielectricsQuality(int value){return new PathTracingQualityOptions(lighting,cache,denoisingLayers,denoisingLayerMaxDepth,value,subSampling,textureLodBias,halfPrecision,postProcessing);}
-    public PathTracingQualityOptions withSubSampling(SubSampling value){return new PathTracingQualityOptions(lighting,cache,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,value,textureLodBias,halfPrecision,postProcessing);}
-    public PathTracingQualityOptions withTextureLodBias(float value){return new PathTracingQualityOptions(lighting,cache,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,value,halfPrecision,postProcessing);}
-    public PathTracingQualityOptions withHalfPrecision(boolean value){return new PathTracingQualityOptions(lighting,cache,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,value,postProcessing);}
-    public PathTracingQualityOptions withPostProcessing(PostProcessing value){return new PathTracingQualityOptions(lighting,cache,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,value);}
+        LightSampling.defaults(),3,9,1,SubSampling.FULL,-1,false,PostProcessing.defaults());}
+    public PathTracingQualityOptions withLighting(LightSampling value){return new PathTracingQualityOptions(value,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,postProcessing,beautyTransport);}
+    public PathTracingQualityOptions withDenoisingLayers(int count,int depth){return new PathTracingQualityOptions(lighting,count,depth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,postProcessing,beautyTransport);}
+    public PathTracingQualityOptions withNestedDielectricsQuality(int value){return new PathTracingQualityOptions(lighting,denoisingLayers,denoisingLayerMaxDepth,value,subSampling,textureLodBias,halfPrecision,postProcessing,beautyTransport);}
+    public PathTracingQualityOptions withSubSampling(SubSampling value){return new PathTracingQualityOptions(lighting,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,value,textureLodBias,halfPrecision,postProcessing,beautyTransport);}
+    public PathTracingQualityOptions withTextureLodBias(float value){return new PathTracingQualityOptions(lighting,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,value,halfPrecision,postProcessing,beautyTransport);}
+    public PathTracingQualityOptions withHalfPrecision(boolean value){return new PathTracingQualityOptions(lighting,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,value,postProcessing,beautyTransport);}
+    public PathTracingQualityOptions withPostProcessing(PostProcessing value){return new PathTracingQualityOptions(lighting,denoisingLayers,denoisingLayerMaxDepth,nestedDielectricsQuality,subSampling,textureLodBias,halfPrecision,value,beautyTransport);}
 
-    /** Native post-processing passes; disabled bloom executes no bloom render pass. */
-    public record PostProcessing(boolean bloom,float bloomRadius,float bloomIntensity,boolean toneMapping) {
-        public PostProcessing {finite(bloomRadius,0,128,"bloomRadius");finite(bloomIntensity,0,100,"bloomIntensity");}
-        public static PostProcessing defaults(){return new PostProcessing(true,8,.004f,true);}
-        public PostProcessing withBloom(boolean enabled){return new PostProcessing(enabled,bloomRadius,bloomIntensity,toneMapping);}
+    /** Native post-processing passes and manual exposure compensation in stops. */
+    public record PostProcessing(boolean bloom,float bloomRadius,float bloomIntensity,boolean toneMapping,float exposureOffset) {
+        public PostProcessing {finite(bloomRadius,0,128,"bloomRadius");finite(bloomIntensity,0,100,"bloomIntensity");finite(exposureOffset,-12,12,"exposureOffset");}
+        public PostProcessing(boolean bloom,float bloomRadius,float bloomIntensity,boolean toneMapping){this(bloom,bloomRadius,bloomIntensity,toneMapping,0);}
+        public static PostProcessing defaults(){return new PostProcessing(true,8,.004f,true,0);}
+        public PostProcessing withBloom(boolean enabled){return new PostProcessing(enabled,bloomRadius,bloomIntensity,toneMapping,exposureOffset);}
+        public PostProcessing withExposureOffset(float value){return new PostProcessing(bloom,bloomRadius,bloomIntensity,toneMapping,value);}
     }
-
-    /** Backend lighting keeps its own transport; scene analytic inputs use the adapter's stable light inputs. */
-    public enum LightingInput { BACKEND_DEFAULT, SCENE_ANALYTIC }
-    /** AUTO lets the backend select its sampler; the other values are explicit requests. */
+    /** AUTO preserves the upstream sampler; explicit modes select native NEE implementations. */
     public enum LightSampler { AUTO, UNIFORM, POWER, ADAPTIVE }
-    /** Fraction of the internal render grid sampled each frame, before reconstruction. */
+    /** Fraction of the internal render grid sampled before reconstruction. */
     public enum SubSampling { FULL, THREE_QUARTERS, HALF, QUARTER }
-
-    /** Direct-light estimator workload. Candidate samples are cheaper than visibility-tested samples. */
-    public record LightSampling(LightingInput input,LightSampler sampler,int samples,int candidates,
-            float localCandidateRatio,int adaptiveQuality,int exactPointLightLimit,boolean directionalStrata) {
+    /** Native direct-light estimator workload. */
+    public record LightSampling(LightSampler sampler,int samples,int candidates,float localCandidateRatio,int adaptiveQuality) {
         public LightSampling {
-            Objects.requireNonNull(input);Objects.requireNonNull(sampler);
-            range(samples,1,63,"light samples");range(candidates,1,63,"light candidates");
+            Objects.requireNonNull(sampler);range(samples,1,63,"light samples");range(candidates,1,63,"light candidates");
             finite(localCandidateRatio,0,1,"localCandidateRatio");range(adaptiveQuality,0,2,"adaptiveQuality");
-            range(exactPointLightLimit,0,4096,"exactPointLightLimit");
-            if(input==LightingInput.SCENE_ANALYTIC&&directionalStrata)
-                throw new IllegalArgumentException("Scene analytic inputs do not use baked-environment directional strata");
         }
-        public static LightSampling defaults(){return new LightSampling(LightingInput.BACKEND_DEFAULT,LightSampler.AUTO,1,5,.65f,0,4,false);}
-        public LightSampling withInput(LightingInput value){return new LightSampling(value,sampler,samples,candidates,localCandidateRatio,adaptiveQuality,exactPointLightLimit,directionalStrata);}
-        public LightSampling withSampler(LightSampler value){return new LightSampling(input,value,samples,candidates,localCandidateRatio,adaptiveQuality,exactPointLightLimit,directionalStrata);}
-        public LightSampling withSamples(int full,int candidate){return new LightSampling(input,sampler,full,candidate,localCandidateRatio,adaptiveQuality,exactPointLightLimit,directionalStrata);}
-        public LightSampling withLocalCandidateRatio(float value){return new LightSampling(input,sampler,samples,candidates,value,adaptiveQuality,exactPointLightLimit,directionalStrata);}
-        public LightSampling withAdaptiveQuality(int value){return new LightSampling(input,sampler,samples,candidates,localCandidateRatio,value,exactPointLightLimit,directionalStrata);}
-        public LightSampling withExactPointLightLimit(int value){return new LightSampling(input,sampler,samples,candidates,localCandidateRatio,adaptiveQuality,value,directionalStrata);}
-        public LightSampling withDirectionalStrata(boolean value){return new LightSampling(input,sampler,samples,candidates,localCandidateRatio,adaptiveQuality,exactPointLightLimit,value);}
-    }
-    /** Spatial radiance cache capacity and training cost; only used when radianceCache is requested. */
-    public record RadianceCache(int entries,int trainingDownscale,int maxBounces,int diffuseBounces,
-            int directLightSamples,float terminationThreshold,float textureLodBias,float sceneScale,
-            int accumulationFrames,int staleFrames,float minRoughness) {
-        public RadianceCache {
-            range(entries,65536,16777216,"cache entries");
-            if(Integer.bitCount(entries)!=1)throw new IllegalArgumentException("cache entries must be a power of two");
-            range(trainingDownscale,2,5,"cache trainingDownscale");range(maxBounces,1,64,"cache maxBounces");
-            range(diffuseBounces,0,maxBounces,"cache diffuseBounces");range(directLightSamples,0,63,"cache directLightSamples");
-            finite(terminationThreshold,.01f,10,"cache terminationThreshold");finite(textureLodBias,-8,8,"cache textureLodBias");
-            finite(sceneScale,.0001f,1e6f,"cache sceneScale");range(accumulationFrames,1,255,"cache accumulationFrames");
-            // SHaRC clamps values below its eight-frame minimum; reject no-op requests.
-            range(staleFrames,8,128,"cache staleFrames");finite(minRoughness,0,1,"cache minRoughness");
-        }
-        public static RadianceCache defaults(){return new RadianceCache(2*1024*1024,5,8,4,1,3.5f,1,35,10,64,.4f);}
-        public RadianceCache withCapacity(int value){return new RadianceCache(value,trainingDownscale,maxBounces,diffuseBounces,directLightSamples,terminationThreshold,textureLodBias,sceneScale,accumulationFrames,staleFrames,minRoughness);}
-        public RadianceCache withTrainingDownscale(int value){return new RadianceCache(entries,value,maxBounces,diffuseBounces,directLightSamples,terminationThreshold,textureLodBias,sceneScale,accumulationFrames,staleFrames,minRoughness);}
-        public RadianceCache withPathBudget(int depth,int diffuse,int lights){return new RadianceCache(entries,trainingDownscale,depth,diffuse,lights,terminationThreshold,textureLodBias,sceneScale,accumulationFrames,staleFrames,minRoughness);}
-        public RadianceCache withTerminationThreshold(float value){return new RadianceCache(entries,trainingDownscale,maxBounces,diffuseBounces,directLightSamples,value,textureLodBias,sceneScale,accumulationFrames,staleFrames,minRoughness);}
+        public static LightSampling defaults(){return new LightSampling(LightSampler.AUTO,1,5,.65f,0);}
+        public LightSampling withSampler(LightSampler value){return new LightSampling(value,samples,candidates,localCandidateRatio,adaptiveQuality);}
+        public LightSampling withSamples(int full,int candidate){return new LightSampling(sampler,full,candidate,localCandidateRatio,adaptiveQuality);}
+        public LightSampling withLocalCandidateRatio(float value){return new LightSampling(sampler,samples,candidates,value,adaptiveQuality);}
+        public LightSampling withAdaptiveQuality(int value){return new LightSampling(sampler,samples,candidates,localCandidateRatio,value);}
     }
     private static void range(int value,int min,int max,String name){if(value<min||value>max)throw new IllegalArgumentException(name+" must be in ["+min+","+max+"]");}
     private static void finite(float value,float min,float max,String name){if(!Float.isFinite(value)||value<min||value>max)throw new IllegalArgumentException(name+" must be finite and in ["+min+","+max+"]");}

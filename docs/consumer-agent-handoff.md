@@ -1,60 +1,52 @@
-# 消费方接入与复验交接
+# 消费方接入与复验
 
-本文件是消费方 agent 的固定入口，文件名不随发布版本变化。发布版本见 `gradle.properties`，历史文档见 `release-index.json`，公共 ABI 历史见 `renderer-api/abi/release-index.json`。不要从文件名推断版本或把本机代理写入项目。
+本文件是固定接入入口，文件名不随版本变化。当前目标 **8.0.0** 尚未发布，也尚未提交本次 GitHub 交付。生产 29 帧与原版 beauty 24 帧 proof 已通过；新控制定向验证、完整负载和人工验收仍未完成，不当作整体性能恢复。
 
-本页保留 **7.1.6** 的历史交付记录；当前7.1.7范围见[本版说明](release-7.1.7.md)。7.1.6按P01～P09完成功能修复、全量源码及四模块Maven Local交付，入口为[历史说明](release-resource-architecture.md)与[实施记录](quality/7.1.6-implementation.md)。4 ms及完整CPU预算未全部达标，ce9最终矩阵36/36、mixed补充1格及独立JVM生命周期5次已完成；旧e2f的26格不转签。见[完整矩阵](quality/resource-architecture-matrix.md)。D3D验证层不可用的限制保留。旧Maven制品身份见 `quality/data/resource-architecture-716-release.json`。历史N01～N09及7.1.5结果保持原身份，不能用通用夹具代签MC 180FPS。
+## 接入边界
 
-本批诊断格式为 5，兼容解码 2／3／4；现有构造器保留。首次提交前即可在 owner 线程取得 `diagnosticMonitor()`，随后交给独立观察线程；它可见设备／场景／光照初始化以及尚未返回的资源子调用。事件记录 stable native ID 的 FNV64、资源发布 revision、原因位、字节、attempt、OS 线程 ID、所属诊断模式和 ordinal。CPU 与 protocol monitor 各自报告注册位置与注册后的漏读，`overwritten` 不是观察者漏读。
+1. 只依赖 renderer-rtxpt，由其正向带入同版本 renderer-api。旧 core/nvidia、Vulkan 渲染路线、双后端路由与组合器均已移除。
+2. 通过 RtxptRuntime.jvmHostExecutable() 取得校验／提取后的宿主；按[运行时契约](runtime-distribution.md)用 RTR_JVM_* 传 Java 配置，真实 process argv 留上游。
+3. API 外部桥提交必要输入和变更，官方 RTXPT／Donut／NVRHI 管理原资源、上传、AS 与渲染循环。有等价实现必须直接调用，不能再造管理器。
+4. 通用、已实现的 NativeLighting／Sparse／共享同步保留为外桥能力，不改上游本体。宿主专属亮度曲线、画风与最终合成归消费方；现有宿主策略迁出尚未完成。没有真实执行路径的契约整套收缩，不保留模拟成功、固定 REJECTED／Unsupported 或假零值。
+5. 严格校验输出 sequence/revision/attribute generation/clock；共享资源按 GPU completion 与 lease 归还，不用旧帧复用冒充优化。
 
-SUMMARY 保留 CPU 子调用和有界状态，不执行逐射线原子。`lightingWorkStatisticsEnabled(true)` 只保留请求意图，**DEEP 才 effective**；OFF 停止新诊断，已有样本有界收尾。原生信号协议、不可变 request 重试、所有 graphics／compute reader 和真实 consumer GPU completion 契约不变。池满时及时 defer，不能释放还在使用的资源。`resourcePressure()` 的引用字节可能重叠，不是物理 VRAM。
+## 当前公开面
 
-正式比较显式禁用 signal reuse，固定相机／内容／GI2、距离6、强度0.35 和真实 RR。独立 benchmark 计时只由验收进程显式启用，OFF 不打开产品统计。API 通用夹具不能代签 MC 180 FPS，也不将未复现的 GL 长调用归因于驱动。
+Renderer 只保留生命周期、SceneTransaction.apply／帧 submit 与真实扩展；本轮退役 188 个孤立类型，包括旧 Vulkan、CPU 帧、通用 GPU command／resource、假健康和固定无数据指标。不要按旧接口补回兼容拒绝壳。
 
-本批追加修复实例删除／替换的所有权：旧实例、网格、BLAS 和 bindless descriptor 保留到 graphics／compute 都完成；仍被其他实例共享的网格不能进入复用池。持续流入的首次失败和重启后失败均保留，修复后另立 DLL 身份验收。设备失败后的清理不再从析构函数抛出完成查询异常；这不表示已证明所有驱动异常的底层原因。
+RendererConfig 仅包含 frameReconstruction、frameGeneration、lowLatency、denoising、rayTracingOptimizations、pathTracing 六类原生 feature，加 geometryBytes／textureBytes／totalAssetBytes 资产准入预算。预算不是 VRAM 驻留统计。没有 GPU 枚举、CPU 回读、自定义 shader 等假开关。
 
-GPU CSV 中资源身份是无符号 64 位，Java `long` 保存原始位；转回文本使用 `Long.toUnsignedString`。修复了 DEEP 遇到高位为 1 的 FNV64 时的解析异常。原有 11 列 GPU 记录仍兼容，15 列格式携带 mode／resource／generation／reason。
+质量控制以当前 PathTracingQualityOptions 的原版公开设置为准，已实际 JNI 接线，但新控制效果待定向验证。exactOpticalInterfaces、SCENE_ANALYTIC、pointLimit、directionalStrata 和自定义 SHaRC 容量／训练参数已删除；SHaRC 启停保留。原生曝光与 presentationState 的请求／激活状态分开读取，FG 激活状态不等于实际呈现帧数。
 
-四模块最终发布身份见[发布记录](quality/data/resource-latency-release.json)，全部正式窗口在[量化证据](quality/data/resource-latency.json)。[历史矩阵](quality/data/resource-latency-historical.json)的旧渲染计时边界不得与新完整请求区间混算收益。普通运行使用 OFF；CPU 资源阶段用 SUMMARY；逐射线工作量与细 GPU scope 用 DEEP。`resourcePressure()` 由 renderer owner 线程读取，跨线程观察使用单独取得的 monitor。CPU 完整请求包含 apply、所有 admission/trySubmit 和 defer 暂停；不能把同步尝试的低耗时当作完整请求预算已过。
+## 既有修复的迁移映射
 
-最终制品记录含 runtime ZIP 自身哈希，只保存在 Git 仓库；ZIP 内不再嵌入这份记录，避免循环自校验。ZIP 内提供量化数据和 SDK 文件清单。
+以下描述当前源码去向，不等于所有修复已完成运行验证。合理语义应保留，但已有上游等价实现的旧做法直接退役，不逐行搬运；还在外桥的代码也不能因此称为原版 RTXPT 算法。
 
-此前 2026-11-04 的光源遍历优化使用本地坐标 7.1.1，按用户要求删除旧 Maven Local 包后重新发布。消费方重新解析同版本依赖时使用 `--refresh-dependencies`，并核对发布记录中的 JAR/runtime hash，不能仅凭版本号认定已更新。新 native DLL SHA-256 为 `b8b4bca550f2dce38fc169e3edb4f8249e5a3a5f78695556396acd7337f2fd57`；内置 raw shader 为 `6a28236824a82f958539fbcaf1cfc586ca2a7225fd4dec301d80d836328b6c57`。扩展使用新包内 SDK 重编译。432 张信号／guide 逐位一致，36 次真实 RR 通过；性能数据见 [最新报告](quality/native-lighting-performance.md)。该次交付已发布 GitHub 和 Maven Local。
+| 既有职责／修复 | 当前去向与源码依据 | 尚须证明什么 |
+| --- | --- | --- |
+| 场景资源、纹理上传、GPU 资源与 BLAS／TLAS 生命周期 | **改由上游。**rtxpt_upstream_resources.h 把 packet 转为 ExtendedSceneTypeFactory／SceneGraph 对象，纹理走原 TextureCache.LoadTextureFromMemory，注册／分配／上传走 Scene.Refresh；原生渲染循环继续完成 AS 与回收。旧自管 GPU arena／上传 worker／BLAS 周转策略不沿用为新运行路线 | 资源增删、纹理父代补丁、关闭重开与完整负载的正确性、长尾和峰值，不能从“调用了原生”推定性能恢复 |
+| 稳定身份、增量发布、材质关联与 TRS 数据适配 | **外桥保留最小语义。**Resources.Apply 保留宿主 ID 映射、实际变更及关联反查；材质通过原 dirty 契约更新，TRS 转为原 SceneGraph 约定，不能无损表达的变换明确拒绝 | 高频替换／删除、失败重试及本帧身份；不能以丢更新减少工作量 |
+| 通用直接光、中心／半径遮挡、透明／顶点色与必要辅助属性 | **外桥保留真实扩展。**RtrNativeLighting.hlsl 与 rtxpt_native_lighting.h 执行自有 pass，不修改原版光照或材质私有 flags。宿主专属曲线、画风及最终合成归消费方，现有宿主策略迁出尚未完成 | 通用 pass 的实际图像、阴影与透明、法线／采样及输出语义仍须验证；shader 编译不代签视觉，不能写全部迁移完成 |
+| 独立 pass 的稀疏源、区域、属性增量与有限输出 | **当前仍在外桥。**rtxpt_upstream_lights.h 明确区分原版 LightsBaker 输入和自有 RetainedLightTree；rtxpt_sparse_lighting.h、rtxpt_native_lighting.h 只服务独立扩展。保留位置不证明已是最薄实现，发现上游等价入口仍须替换 | 完整数量级下的 apply→fresh 输出、CPU／GPU 热点和内存；不能宣称旧热点已全部消失 |
+| 纹理过滤与采样元数据 | **原生 sampler＋外桥元数据。**Resources.TextureSamplingPolicies 只给独立 pass 提供策略；RtrNativeLighting.hlsl 使用硬件 sampler，原版 beauty sampler 与 MaterialConstants flags 保持原样 | 最近／线性、寻址、alpha cutout、纹理更新与包内 shader 的实际一致性 |
+| D3D12 共享信号、ready／completion fence、本帧 lease 和错误传播 | **外桥保留互操作契约。**rtxpt_signal_frames.h 与 rtxpt_upstream_jni.cpp 发布／释放本帧，rtxpt_upstream_session.h 在原 owner 线程串行请求，不用缓存旧帧完成新请求 | 双 API 所有权、sequence／revision／attribute generation／clock、关闭重开和异常释放 |
+| 边界计时、增量诊断与 OFF | **外桥替换旧诊断。**RtxptDiagnostics.java 使用 1024 槽 primitive ring 和游标；旧私有 native 状态／诊断导出退役。无官方数值 observer 的上游内部明确未展开 | OFF、覆盖计数、异步输出及真实开销；自有 pass 的观测不等于上游内部诊断 |
+| 上游 shader／默认行为补丁、构建 overlay 与 CRT 参数拦截 | **退役。**官方文件不改、不注入；CMake 仅声明外部目标，AdapterShaders.cfg 独立编译，rtxpt_jvm_host.cpp 走标准 JNI Invocation API | 原文件完整性、真实宿主生命周期、正式包身份及最终运行；不能只凭源码边界写全部有效 |
 
-## 7.1.4 历史候选与复验口径
+宿主自己的场景捕获、UI／天空、底图／合成与宿主诊断仍由宿主负责，不因本轮迁移全部搬到 API。旧自研 Vulkan、组合器、双后端路由及依赖其私有 ABI 的测试已退役；保留／替换后的测试必须对应新路径，旧通过记录不转签。
 
-最终保留 falloff-branch：串行 fused 双信号、真实 GI RR、bitstack 近先遍历、全动态源专用 shader、提前写 guides 和 falloff 常用指数分支。已撤回性能较差的 packed-order 和双队列实验。普通入口不需要新增开关，专家诊断保留现有明确配置。
+## 诊断迁移
 
-977 mesh、750,336 三角形、22,000 BOX 源、63 纹理的正式 30 秒场景：290.63 FPS，更新帧完整 GPU P50/P95 为 5.010016/5.606112 ms，复用帧 P50/P95 为 3.234208/3.451584 ms；超过 7 ms 为 16/8,722 帧（0.1834%），全部位于更新帧。更新帧未达到 4 ms，按用户决定停止继续优化。
+新接口只采集[外部边界事件](rtxpt-diagnostics.md)。afterOrdinal 初始 -1，消费后用 nextOrdinal - 1；固定容量覆盖由 lostEvents 报告。消费方只在 owner 线程取 snapshot，复用自己的有界异步 writer。
 
-该历史批次 F01–F10 的完整 719/977/4096 增长矩阵和完整 OFF/DEEP 对照未全部执行，不代表消费方 MC 180 FPS 或 GL 长调用已经闭环。已通过测试不重跑，不运行 FG/MFG。旧性能证据保留原制品 hash，最终恢复构建与归档核对不记成新的 GPU 跑分。
+RTXPT_FRAME 是墙钟边界，包含等待，不是纯 GPU busy。内部没有官方数值接口时为未展开；旧 protocol/arena/index/admission/GpuMonitor 及旧 schema 不作兼容壳。运行时 OFF 应覆盖消费方 CPU/GPU 计时、事件、CSV、JFR 和快照。
 
-升级时四个 renderer 模块统一使用 gradle.properties 中的版本，从 Maven Local 重新解析依赖；离线扩展使用当前包内 SDK 重编译。检查 runtime ZIP、DLL 和 shader 的真实身份；后文的 7.1.1 hash 仅属于历史交付。资源 generation、ready/completion fence 和纹理 patch 父 generation 契约继续生效，禁止用宿主特例绕过。
+## 交付与验证
 
-## 已修复的接入问题
+当前上游 20 个仓库／4426 个原文件完整性保持，生产 29 帧与原版 beauty 24 帧 proof 已通过。这些短帧检查不代表新控制、完整负载与人工验收全通过。早期宿主／CPU／shader／POM／符号检查及首次 native 访问冲突记录保留其受测身份，不能把后续通过追写成早期运行成功，也不能转签当前最终制品。
 
-| 审核项 | 修改与使用方式 |
-| --- | --- |
-| H01 顶点染色 | 原生 primary／bounce 命中读取 RGBA8，barycentric 插值，执行 material × texture × vertex 一次；alpha 参与可见性，纯颜色变化不重建 BLAS。宿主表面已有 albedo 时仍由宿主乘一次。 |
-| H02 OFF | 统一诊断 OFF 压住独立逐射线统计开关；requested 意图保留，effective 为 false，在途读回有界排空后停止新 copy/query/poll。业务 fence 和正常出图继续。 |
-| H03 双信号 RR | 使用 `openReconstructedNativeLighting`，默认对合法漫反射 GI 调用真实 RR。直接增益独立，宿主底图保持原尺寸。详细信号／guides／尺寸和归属见 [重建契约](native-lighting-reconstruction.md)。 |
-| H04 局部成本 | 准备阶段通过 persistent diff 和反向依赖选择实际 variants，稳定帧复用结构／实例快照；局部属性无导出目录，姿态只提交变化实例。原生材质／纹理更新复用常驻索引，alpha 只选择依赖 BLAS。拓扑变化正确失效并重建映射。 |
-| H05 诊断 | recorder v4 区分墙钟与实际线程 CPU；DEEP 可显式拆为 receiver、direct、GI 三个真实 GPU dispatch，改变调度和存储，只用于诊断。direct 和 GI 各自仍包括内部源遍历及 shadow，不能把它们当独立 shadow 时间。 |
-| H06 旧后端对照 | 已提供并实际运行加载旧发布 core JAR 的通用 fixture adapter，与 native 对照两个信号；原始记录、图像误差、环境限制见 [对照报告](quality/lighting-backend-comparison.md)。 |
+新原生控制定向验证待跑，完整 3662 mesh／约 45k source 动态模拟尚无有效结果。8.0.0 GitHub 交付与 Maven Local 尚未完成；MC 仍用正式 7.3.3，没有本版 MC FPS。人工[原生场景](../examples/native-scenes/README.md)按 balls→用户关闭进程→mixed 顺序，不自动连开、不使用 computer use；窗口目标 1600×1000、VSync 关闭、无软件上限、请求 2×FG。光学能力只称折射／透射／吸收／嵌套，不称体散射。
 
-普通入口按功能给兼容配置；专家配置不偷偷覆盖不兼容选项。原生 raw 和重建入口并存。完整 beauty、宿主 split transport 与 host augmentation 的 requested／actual 状态各自保留，不把一条路线的 RR 结果记到另一条上。
+最终仍需本次生产路径的资源增删、材质／采样／变换、视觉属性、输出租约、关闭重开、诊断 OFF、完整通用流式负载及消费方同条件实测。基准从 apply 到 fresh 输出，冷启动与稳态分开，mean/P95/P99/长尾与失败照报；通用模拟不代签宿主帧率目标。
 
-## 宿主仍需执行的步骤
-
-1. 按通用 MeshAsset／MaterialAsset／SceneInstance 发布正确数据，透明语义与 receiver／shadow／bounce roles 明确。顶点色按 raw numeric RGBA8 输入，不预烘焙 AO／光照。
-2. 使用 `LightingFrameLease` 一次取得同 generation／sequence／revision 的各 plane。导入成功后 `markImported()`，GPU 等待 readyValue，读完后在同一 GPU 队列排入 completionValue，再 `completionSignalEnqueued()`。完成销毁导入对象后再关闭 renderer。
-3. 解码紧凑增益／GI 后再插值；组合一次 `hostBase * gain + GI`。重建 GI 已含 receiver albedo，不能再次乘底图或重复叠加 raw GI。宿主透明层、手部和 UI 继续按原分辨率处理。
-4. 对真正的相机切换／外部世界跳变使用 temporal reset。持续正常运动保留相邻帧历史；不要把每帧源移动误当强制相机切换。
-5. 性能报告区分 CPU 事务、核心 GPU 光照、共享复制、宿主 GL 消费、重建与全帧。高外部 GPU 占用的数据不能宣布为纯净速度倍率；固定 fixture 不能替代最终世界验收。
-
-shader 数据布局的身份已经变化。离线扩展必须用随包 SDK 重编译，旧 ABI 扩展会在激活前拒绝，不能复用旧 hash 或覆盖 manifest 规避检查。
-
-## 证据使用规则
-
-保留已经通过且未受改动影响的测试结果。本批新补验不跑 FG/MFG；原始失败、修复后补验与最终制品验收分列，不能合并成“一次全量全绿”。带真实等待或未展开的 GPU 区间如实标明，不把 ray count 当作毫秒，也不把 inclusive wall time 当线程 CPU。
-
-当前开发证据包含 256 mesh 属性局部更新、材质／纹理／顶点 alpha、实际 GL 引导边缘、依赖删除拒绝、group specialization 与完整组逐位一致、真实 GI RR guides 和 DEEP GPU／CPU v4。最后打包与窗口验收的完成状态以最终发布验收记录为准。
+完成验证后，先全量源码／正式工具／文档上传 GitHub，再发布两模块 Maven Local，核对实际 JAR／runtime／DLL／shader 身份，消费者随后接入。生成二进制不上传源码仓库，本次不发布 Central。历史证据保留原身份，不重写数值、不以同版本字符串代替内容核对。

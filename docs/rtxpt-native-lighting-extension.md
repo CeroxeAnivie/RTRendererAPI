@@ -1,5 +1,7 @@
 # Native lighting extension ABI 1
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 The ordinary entry point is `RtxptRenderers.openNativeLighting(plan)`. Explicit policy, style/data publication and offline DXIL replacement are separate expert controls; derive `RtxptRenderers.nativeLightingConfiguration().copyBuilder()` when a full policy is needed. The offline extension described here executes only in the independent native mode, not host-lit augmentation. See [ordinary and expert use](ordinary-and-expert.md).
 
 The independent native-lighting plan permits one offline receiver implementation:

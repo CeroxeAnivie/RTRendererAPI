@@ -1,5 +1,7 @@
 # Vulkan 专家互操作
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 普通应用优先使用托管 CPU 帧或官方 presenter；只有明确需要跨设备／跨 API 自定义消费时才使用本页专家协议。所有入口见[普通用法与专家控制](ordinary-and-expert.md)。
 
 隔离 Maven consumer 中的 [`PublishedVulkanInteropConsumer`](../gradle/published-consumer-smoke/src/main/java/consumer/PublishedVulkanInteropConsumer.java)

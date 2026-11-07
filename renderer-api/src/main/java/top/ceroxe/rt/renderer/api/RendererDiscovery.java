@@ -5,7 +5,7 @@ import top.ceroxe.rt.renderer.spi.RendererBackendProvider;
 import java.util.*;
 
 /**
- * Deterministic provider discovery without a compile-time dependency on renderer-core.
+ * Deterministic discovery of installed renderer providers.
  */
 final class RendererDiscovery {
     private RendererDiscovery() {
@@ -48,48 +48,6 @@ final class RendererDiscovery {
         );
     }
 
-    /**
-     * Enumerates immutable capability snapshots for every currently available hardware RT GPU.
-     * The returned devices are safe to retain, but opening a stale or removed device fails closed.
-     *
-     * @return immutable device list in deterministic provider order
-     */
-    public static List<RendererGpuDevice> availableGpuDevices() {
-        List<RendererGpuDevice> devices = new ArrayList<>();
-        Set<String> identities = new HashSet<>();
-        for (Candidate candidate : discover(Thread.currentThread().getContextClassLoader())) {
-            List<RendererGpuDevice> reported;
-            try {
-                reported = List.copyOf(Objects.requireNonNull(
-                        candidate.provider().availableGpuDevices(), "provider GPU device list"
-                ));
-            } catch (RuntimeException failure) {
-                throw new RendererInitializationException(
-                        "GPU device enumeration failed: " + candidate.descriptor().id(),
-                        candidate.descriptor().id(), failure
-                );
-            }
-            for (RendererGpuDevice device : reported) {
-                RendererGpuDevice checked = Objects.requireNonNull(device, "provider GPU device");
-                if (!candidate.descriptor().id().equals(checked.backendId())) {
-                    throw new RendererInitializationException(
-                            "provider returned a GPU owned by another backend: " + checked.backendId(),
-                            candidate.descriptor().id(), null
-                    );
-                }
-                String identity = checked.backendId() + '\0' + checked.stableId();
-                if (!identities.add(identity)) {
-                    throw new RendererInitializationException(
-                            "duplicate GPU identity: " + checked.backendId() + "/" + checked.stableId(),
-                            candidate.descriptor().id(), null
-                    );
-                }
-                devices.add(checked);
-            }
-        }
-        return List.copyOf(devices);
-    }
-
     static Renderer openProviders(
             String requiredProviderId,
             RendererConfig configuration,
@@ -105,19 +63,9 @@ final class RendererDiscovery {
             RendererConfig configuration,
             List<Candidate> candidates
     ) {
-        RendererGpuDevice selectedGpu = configuration.gpuDevice().orElse(null);
-        if (selectedGpu != null && requiredProviderId != null
-                && !requiredProviderId.equals(selectedGpu.backendId())) {
-            throw new IllegalArgumentException(
-                    "requiredProviderId does not own the selected GPU: " + selectedGpu.backendId()
-            );
-        }
         List<RendererUnavailableException.BackendAttempt> attempts = new ArrayList<>();
         for (Candidate candidate : candidates) {
             if (requiredProviderId != null && !requiredProviderId.equals(candidate.descriptor().id())) {
-                continue;
-            }
-            if (selectedGpu != null && !selectedGpu.backendId().equals(candidate.descriptor().id())) {
                 continue;
             }
             RendererBackendProvider.ProbeResult probe;

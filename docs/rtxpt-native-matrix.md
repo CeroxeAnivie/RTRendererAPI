@@ -1,5 +1,7 @@
 # 原生光照数值验收矩阵
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 状态：CPU 参考与五组真实 GPU 数值矩阵通过。`710-directed-matrix.log` 记录 GI、roles、pose、projection、time 的实际 PASS；最终发布仍以同版 packaged 全量结果为准。
 
 入口是 `RtxptNativeLightingMatrixNativeSelfTest`，每个用例都提交新 sequence，读取这次实际 GPU 信号，并核对输出包的 revision/clock。数值读回仅用于验收，不进入正常交付帧。PFM 底部起始行显式转为公共投影使用的左上原点。

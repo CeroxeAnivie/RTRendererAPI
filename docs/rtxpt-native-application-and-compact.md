@@ -1,5 +1,7 @@
 # 应用字节补丁与紧凑光照输出
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 ## 应用数据局部更新
 
 `NativeLightingApplicationPatch(generation, offset, data)` 在构造时复制 `ByteBuffer.remaining()`，不改变原游标；返回只读、独立游标的视图。generation 必须正数，offset／长度为 4 字节对齐，长度非零，范围不超过 16 MiB。控制器再核对已接受 publication 的真实容量和当前离线扩展最低容量。

@@ -1,5 +1,7 @@
 # 原生双信号的 GI 重建
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 原生模式现在有两个明确入口：`openNativeLighting(plan)` 保留确定性 raw 输出；`openReconstructedNativeLighting(plan)` 默认启用真实 NVIDIA DLSS RR。两者共用驻留场景和 TLAS。重建入口在第一次光照 dispatch 前检查设备支持，失败会报错，不静默换成 NONE。
 
 ```java

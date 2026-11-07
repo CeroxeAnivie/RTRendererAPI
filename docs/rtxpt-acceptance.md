@@ -1,5 +1,7 @@
 # 实现与累计验收矩阵
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 正确性按[通用 API 标准](quality/correctness-criteria.md)判断：身份、规则与生命周期必须准确，浮点误差按信号单位、精度和下游影响验证。逐位一致是部分内部等价检查，不是用户要求所有浮点输出统一满足的产品标准。
 
 本表保留三份原需求的编号映射。7.1.5 性能优化已停止，N01～N09 最终修复、当前二进制的完整验收与未达预算见[最终验收](quality/resource-latency.md)；[原批次记录](release-resource-latency.md)说明实现，[历史量化证据](quality/resource-latency-historical.md)保留原身份。以下既有渲染结果按原二进制保留，不冒签本轮未运行的功能。此前 7.1.1 新增 H01–H07、最终制品与逐项影响分析见 [修复验收记录](quality/lighting-repair-validation.md)。历史全量、失败补验、本批新覆盖和最终包复验分开累计；遵守不重跑已通过且未受影响项目、不运行 FG/MFG 的约束。`verifyApiClosure` 仍是从零执行完整验收的入口，本次不启动它，也不把累计结果称为一次全量全绿。

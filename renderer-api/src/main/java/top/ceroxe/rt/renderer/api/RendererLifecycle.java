@@ -3,11 +3,9 @@ package top.ceroxe.rt.renderer.api;
 import java.time.Duration;
 import java.util.concurrent.CompletionStage;
 
-/** Lifecycle, health and diagnostics boundary for one renderer instance. */
+/** Lifecycle and diagnostics boundary for one renderer instance. */
 public interface RendererLifecycle extends AutoCloseable {
     Renderer.Status status();
-
-    RendererHealth health();
 
     RendererDiagnostics diagnostics();
 

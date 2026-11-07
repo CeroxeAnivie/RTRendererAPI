@@ -1,409 +1,54 @@
 # RTRendererAPI
 
-**由 Java 驱动的硬件光线追踪渲染库**
+面向 Java 的通用渲染契约与 NVIDIA RTXPT 外部适配层。Java 25，Windows x86_64，D3D12/DXR。
 
-当前候选 **7.3.5**：上传复用交回 NVRHI，BLAS 内存交回其内建 RTXMU，删除重复管理并补图发布前的预算准入与失败恢复。真实规模流式对照与发布核验进行中。见[本版根因与验收](docs/quality/native-managed-resources.md)。
+当前正在迁移 **8.0.0**，允许破坏性 API 调整。**尚未提交本次 8.0.0 GitHub 交付或发布 Maven Local**。历史候选的生产 29 帧、beauty 24 帧 proof 通过；本轮人工运行已退出但未获用户验收通过。最新两模块 Java 全量编译与 API 边界检查已完成，新增非交互进度控窗补丁尚未做 GPU 验证；完整负载与整体性能恢复仍未通过，不能用旧 proof 代签。
 
-本批仅执行受影响的定向检查，未重复历史完整矩阵。历史结果保留原制品身份，MC快飞 FPS 回升与完整 GPU P95≤4ms 均未宣称达成。
+## 原生优先的两模块结构
 
-可编程场景 / Vulkan 通用图形、计算与硬件 RT / RTXPT 托管光学与 GPU 直显
-
-![Java](https://img.shields.io/badge/Java-25%2B-orange?style=flat-square&logo=openjdk&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-lightgrey?style=flat-square&logo=windows&logoColor=white)
-![GPU](https://img.shields.io/badge/GPU-NVIDIA%20RTX-76B900?style=flat-square&logo=nvidia&logoColor=white)
-![Vulkan](https://img.shields.io/badge/Vulkan-1.2%2B-AC162C?style=flat-square&logo=vulkan&logoColor=white)
-![Build](https://img.shields.io/badge/Build-Gradle-02303A?style=flat-square&logo=gradle&logoColor=white)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
-
----
-
-> **简介**
->
-> RTRendererAPI 为 Java 桌面应用与引擎进程提供厂商中立、宿主无关的通用渲染语义契约。公共
-> `renderer-api` 不包含游戏、引擎或 NVIDIA 专用场景字段。保留的 Vulkan 后端提供 retained scene、
-> 显式资源与命令、可编程 shader、异步 CPU 帧和 GPU presenter；可选 `renderer-rtxpt` 将完整 3D 场景
-> 交给 NVIDIA RTXPT，处理吸收、玻璃、嵌套介电材质及其原生高级能力。
-> 两者可通过 GPU 组合入口协作：RTXPT 完整 3D → Vulkan 独立工作／叠层 → RTXPT 最终呈现。
-> 每个后端只执行自己支持的语义，具体选择见[后端路由](docs/backend-routing.md)和[组合指南](docs/d3d12-vulkan-composition.md)。
-> 运行依赖和对应 native runtime 随 Maven 依赖解析，无需手工部署 DLL。
->
-> **推荐场景**：Java 桌面渲染器、离屏光追、实时 RTX 预览、已有 Vulkan 管线的 GPU 帧集成。
-
-> **7.1.0**：新增独立低分辨率光照、宿主底图增补和主表面传输；提供双向 GPU 交接、真实 BSDF 分层、紧凑光源、增量应用数据和离线 GPU 扩展。
-> 同算法精确剪枝实测将目标光照阶段 P50 从 34.79 ms 降到 12.59 ms，直接光与 GI 输出逐位一致。支持范围、测试与使用入口见
-> [版本说明](docs/release-independent-native-and-host-lighting.md)、[验收账本](docs/rtxpt-acceptance.md)和[普通／专家用法](docs/ordinary-and-expert.md)。
-> 历史 CUDA／LuxCore 报告记录原实现，不作为当前 RTXPT 验收结论。
-
----
-
-### ✨ 核心亮点
-
-- 🚀 **硬件光线追踪**：基于 Vulkan RT 的三角形与 procedural/AABB BLAS、TLAS、GPUScene 与预编译 SPIR-V 管线。
-- 💧 **托管透明介质**：可选 `renderer-rtxpt` 使用 NVIDIA RTXPT 处理均匀吸收、嵌套介电材质、粗糙折射与全反射；旧散射和密度参数已删除，详见[原生与宿主光照合同](docs/release-independent-native-and-host-lighting.md)。
-- 🧩 **可编程场景**：四个 RT 场景阶段支持 GLSL 或预编译 SPIR-V，raygen 支持独立 SDR/HDR 变体；复用 `ResourceData` 提交应用缓冲区。
-- ☕ **现代 Java API**：以 Java 25 为基线，提供不可变模型、Builder、类型化异常和确定性生命周期。
-- 🖼️ **两类托管输出**：作用域映射 `FrameView` 与显式 `FrameSnapshot` 保留原始 HDR/整数格式；官方 GPU presenter 无需 CPU 回读。
-- 🔗 **专家级 Vulkan 互操作**：支持 Win32 external memory lease，并可选 linear HDR RGBA16F。
-- 🧠 **普通与专家用法**：普通代码用预设、场景和帧接口；专家按需控制质量、程序、命令及 GPU 交接。光照／主表面快捷工厂自动准备兼容策略，完整配置入口保留显式控制，见[用法选择](docs/ordinary-and-expert.md)。
-- 🧩 **明确 workload discriminator**：`RenderWorkload` 区分 retained RT、generic raster command 和有序 RT/raster 组合，不根据缺失字段猜测意图。
-- 🧠 **显式 RTX 能力协商**：可独立请求 DLSS SR、DLAA、NIS、NRD、FG/MFG、Reflex/PCL、SER 与 RTXMU。
-- 🔎 **分层能力事实**：物理硬件、格式/handle 互操作、session 协商和真实执行状态互不混淆。
-- 🔁 **事务式功能变更**：专家 controller 先给出精确同步或 rebuild 边界，只有 `APPLIED` 才表示提交成功。
-- 🛡️ **可验证的降级策略**：能力拒绝、运行失败、等待证据和实际 fallback 使用不同状态表达。
-- 📊 **结构化诊断**：性能、资源义务与帧生成证据均通过不可变快照发布，不依赖日志文本解析。
-- 📦 **方便接入**：业务应用只需导入坐标，无需手工部署 DLL。
-
-### 🧩 支持范围
-
-| 项目 | 当前要求 |
+| 模块 | 职责 |
 | --- | --- |
-| 操作系统 | 兼容目标为 Windows 10 x64 或更高版本 |
-| Java | Java 25 或更高版本 |
-| GPU | 兼容目标为 NVIDIA GeForce RTX 20 系或更新架构，并通过运行时能力探测 |
-| 图形 API | Vulkan 1.2 或更高版本，并通过运行时 hardware RT capability probe |
-| 简单输出 | 异步原生格式 `FrameView`，可显式复制为 `FrameSnapshot` |
-| GPU 显示 | Vulkan swapchain presenter，或 RTXPT 原生 D3D12/DXGI 呈现；正常出帧不回读 CPU 图像 |
-| 专家输出 | Win32 Vulkan external-memory lease；可选 linear HDR RGBA16F |
-
-> 可选 RTXPT 后端使用 D3D12，普通路径使用 Vulkan。AMD、Intel、Linux、macOS、移动平台、Metal 与软件渲染器不属于当前验收范围。
-> 兼容目标不是跨硬件验收结论；本轮真实 GPU 测试范围见版本说明与验收记录。
-
----
-
-## 🚀 快速开始
-
-### 📦 添加依赖
-
-**Maven**
-
-```xml
-<dependency>
-    <groupId>top.ceroxe.rt</groupId>
-    <artifactId>renderer-api</artifactId>
-    <version>7.3.5</version>
-</dependency>
-```
-
-**Gradle Kotlin DSL**
+| renderer-api | 宿主无关的场景、帧身份、资源与生命周期契约；不反向依赖具体 provider |
+| renderer-rtxpt | 消费官方 RTXPT 的外部适配层；正向依赖 renderer-api |
 
-```kotlin
-dependencies {
-    implementation("top.ceroxe.rt:renderer-api:7.3.5")
-}
-```
-
-上面是普通 Vulkan 路径。需要 RTXPT 全场景、透明介质或 GPU 组合入口时，再添加可选模块：
+8.0.0 已删除本项目自己的 renderer-core、renderer-nvidia、旧 Vulkan 渲染路线与旧演示，不再构建或打包。通用互操作数据契约不等于仍有一个自研 Vulkan 后端。
 
-```kotlin
-implementation("top.ceroxe.rt:renderer-rtxpt:7.3.5")
-```
+适配层只保留必要的输入转换、资源身份映射、图形 API 间的同步契约、输出租约和错误传播。上游已有等价实现时直接调用，删除重复实现；资源、上传、加速结构和原生渲染循环交给 RTXPT／Donut／NVRHI。必要的独立视觉扩展留在适配层，不能称为 RTXPT 原生算法。
 
-Maven 同样添加 `top.ceroxe.rt:renderer-rtxpt:7.3.5`。只用公共场景接口时可作为运行依赖；使用
-`RtxptAccess`／`RtxptComposedRenderer` 时需要编译依赖。只部署 RTXPT 的依赖排除方法见[后端路由](docs/backend-routing.md#只部署-rtxpt)。
+Renderer 核心只保留生命周期、SceneTransaction 的 apply／submit 与真实扩展查询。本轮退役 188 个孤立类型：旧 Vulkan、CPU 帧读取、通用 command／resource 提交、假健康与固定假指标等不再作为公开兼容壳。RendererConfig 收敛到六类已接线原生 feature，加 geometryBytes／textureBytes／totalAssetBytes 的真实资产字节准入预算；没有 GPU 枚举、CPU 回读或自定义 shader 的假开关。预算不是显存驻留或任务管理器内存统计。
 
-既有介质、资源增量、连续照明与透明背景能力继续保留。本地构建和 Maven Local 发布命令：
-`publishAllToLocalStagingRepository` 可生成 `build/repository`，供独立消费方验证使用。
-同仓库 Demo 直接依赖项目模块，不要求先发布当前版本。
+质量控制只保留原版公开设置支持并已接入 JNI 的字段；exactOpticalInterfaces、SCENE_ANALYTIC、pointLimit、directionalStrata 及自定义 SHaRC 容量／训练配置已删除，原生 SHaRC 启停保留。新控制的实际效果仍待定向验证。通用 NativeLighting／Sparse 与共享同步是真实独立外桥，不因本轮收缩整族删除；宿主专属亮度曲线、画风与最终合成属于消费方，现有宿主策略迁出尚未完成。
 
-### ☕ 渲染第一帧
+## 上游基线与唯一补丁例外
 
-下面的最小示例只使用托管 CPU 帧，调用方不需要了解 Vulkan：
+当前锁定 NVIDIA RTXPT **v1.9.0**，commit **303b408ab81790a5051abd7573830b7a4112eb8e**。
 
-需要直接显示 GPU 帧、RTXPT 完整场景或 独立光照／主表面接入时，先看[普通入口与专家控制](docs/ordinary-and-expert.md)。GPU lease 集成不属于最小 CPU 帧流程。
+- 官方源码位于 build/upstream-rtxpt/source，来源清单校验覆盖原文件内容及额外文件，禁止修改或注入自有源文件。
+- 官方资源保留 bin/ 与相邻 Assets/ 布局；适配器 DLL、JVM 宿主及 AdapterShaders/ 位于外部运行时目录。
+- 不使用旧 build/rtxpt-sdk overlay，不 patch 原 shader、默认算法、编译清单或 CRT 参数。
+- 用户只授权一项内部补丁：构建工作副本的 SampleCommon::ProgressBarStart 在 HelpersIsNonInteractive() 为真时直接返回 -1；交互模式保持原样，不涉及渲染算法。官方 source 导出继续只读，构建副本这一处差异须单独审计。当前仅为授权实施范围，不能提前记为 GPU／控窗验收通过。
+- 接入依据是锁定版本的实际公开入口与示例；单纯存在某个声明不代表有可执行的扩展入口。
 
-```java
-import java.time.Duration;
+详见[运行时与启动](docs/runtime-distribution.md)、[外部 shader 与 SDK 边界](docs/rtxpt-release-sdk.md)。
 
-import top.ceroxe.rt.renderer.api.CameraState;
-import top.ceroxe.rt.renderer.api.FrameSnapshot;
-import top.ceroxe.rt.renderer.api.Renderer;
-import top.ceroxe.rt.renderer.api.RenderFrameRequest;
-import top.ceroxe.rt.renderer.api.SceneTransaction;
+## 依赖与启动
 
-public final class Main {
-    public static void main(String[] args) throws Exception {
-        try (Renderer renderer = Renderer.open()) {
-            long sceneRevision = renderer.apply(SceneTransaction.empty(0L))
-                    .acceptedSceneRevision();
+正式发布完成后，消费者只需依赖 provider，它会带入纯契约模块：
 
-            CameraState camera = CameraState.lookAt(
-                    0.0, 1.0, 5.0,
-                    0.0, 1.0, 0.0
-            ).aspectRatio(16.0 / 9.0).build();
-
-            renderer.submit(RenderFrameRequest.builder(0L, 1280, 720, camera)
-                    .minimumSceneRevision(sceneRevision)
-                    .build());
-
-            FrameSnapshot frame = renderer.awaitFrame(Duration.ofSeconds(5))
-                    .orElseThrow(() -> new IllegalStateException("frame timed out"));
-            System.out.println(frame.width() + "x" + frame.height());
-        }
-    }
-}
-```
-
-`Renderer` 必须确定性关闭。场景 revision 与帧 sequence 必须严格递增；等待 API 始终有界，超时返回
-`Optional.empty()`。完整资产、材质、实例与灯光流程见 [Java 开发指南](docs/Java.md)；四阶段 shader、应用缓冲区与原生格式帧的使用见 [可编程场景指南](docs/Programmable-Scenes.md)。
-
-### 🖥️ 直接显示 GPU 帧
-
-桌面应用可关闭 CPU readback，并使用 renderer 绑定的官方 presenter。内置路径复用同一 Vulkan device 与受控 queue；
-只有真正的外部 consumer 才进入 Win32 external-memory 协议。
-
-```java
-try (Renderer renderer = Renderer.open(RendererConfig.presentation());
-     VulkanFramePresenter presenter = VulkanFramePresenter.open(
-             renderer,
-             VulkanFramePresenterConfig.builder()
-                     .presentMode(VulkanFramePresenterConfig.PresentMode.UNCAPPED)
-                     .maximumFramesQueuedAhead(2)
-                     .build())) {
-    presenter.pollEvents();
-    presenter.presentLatestFrame().ifPresent(result -> {
-        if (result.outcome() != VulkanFramePresenter.Outcome.PRESENTED) {
-            throw new IllegalStateException("frame was not presented: " + result.outcome());
-        }
-    });
-}
-```
-
-`presentLatestFrame()` 是普通应用的主推入口。`maximumFramesQueuedAhead` 控制尚未被 presenter 消费的生产者领先量，
-不是 FPS 限制器。已有 Vulkan device/queue 的调用方再阅读 [Vulkan 专家互操作](docs/Vulkan-Interop.md)。
-
-### RTXPT 托管场景
-
-> **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。
-> **RTXPT＋Vulkan 混合模式不推荐作为默认方案**：它增加整帧复制、跨 API 同步和显存成本，仅供确实需要 Vulkan 独立命令／颜色叠层的专家使用。当前以功能正确、稳定出帧为维护目标，不做混合模式性能优化。
-
-使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`，提交完整场景和首帧后，
-通过 `RtxptAccess.renderFrame()` 驱动原生窗口。必须使用 Vulkan 独立命令或颜色叠层时，才考虑专家组合入口
-`RtxptComposedRenderer.open()`，其额外成本及限制见[组合指南](docs/d3d12-vulkan-composition.md)。可直接照着运行的场景与生命周期示例见 [Java 教程](docs/Java.md#rtxpt-透明介质与原生窗口)。
-
-RTXPT 当前输出 GPU 原生 SDR 画面，不提供普通 `pollFrame()`／`awaitFrame()` CPU 帧，也不接收任意
-Vulkan shader 或通用命令。组合提供独立 GPU 工作和颜色叠层，不能让两套渲染器拆分同一场景的反射／折射。
-
----
-
-## ⚙️ RTX 能力与运行状态
-
-`Renderer.open()` 是 CPU-readable 简单模式：它保留 balanced temporal path，
-并以 `PREFERRED` 策略协商重建、SER 与 acceleration-structure memory optimization；NRD 通过配置显式启用。能力不可用时按各自明确
-fallback 保留基础渲染。`RendererConfig.presentation()` 在同一策略上关闭 CPU readback，并在受支持时
-请求普通 FG 2x 与低延迟 pacing。MFG 永不自动开启。安装 vendor runtime 或匹配 GPU 名称本身不能产生 `ACTIVE`。
-
-`RendererConfig.pathTracedPresentation()` 用于 RTXPT，默认关闭 FG；三个交互 Demo 在此之上明确请求
-2× FG。库默认值与 Demo 默认值分别说明，不能用开关状态代替实际生成帧证据。
-
-三个推荐工厂均支持 `RendererPerformanceTier.LOW / MEDIUM / HIGH`，无参统一中档：1 SPP、RTXPT 12／2 深度、4 个精确界面预算、Performance 重建、2 在途帧与 4／1 原生 worker／compiler。GPU、CPU、缓存和原始资产限额均可经公共 API 调整；更弱设备从 LOW 开始，显式配置保留。具体范围、实际回读和六档预编译 shader 见[性能档位与资源预算](docs/performance-budgets.md)。
-
-专家模式仍使用同一个 `RendererConfig.builder()`。Option value 是能力协商的唯一输入：
-
-- `disabled()`：明确禁用该能力。
-- `PREFERRED`：能力不可用时按显式 fallback 降级，否则保留基础路径并报告 `NOT_SUPPORTED`。
-- `REQUIRED`：无法满足且未配置 fallback 时，在请求边界失败。
+    implementation("top.ceroxe.rt:renderer-rtxpt:8.0.0")
 
-应用通过 `RenderingFeatureCapabilities` 读取功能域和具体技术状态：
+此坐标当前仍是未发布目标，不代表 Maven Local 已存在。8.0.0 不保留 7.x 的双后端路由、组合器或私有诊断 ABI。
 
-```java
-RenderingFeatureCapabilities capabilities = renderer
-        .extension(RenderingFeatureCapabilities.class)
-        .orElseThrow();
+原版 RTXPT 按进程 EXE 的位置查找 DXC、shader 与资源。运行时提供 rtrenderer_jvm_host.exe，使用标准 JNI Invocation API 启动应用，不修改上游路径解析。可先调用 RtxptRuntime.jvmHostExecutable() 获取校验／提取后的宿主路径；该调用不创建设备。JVM 路径、classpath、main 和 Java 参数通过明确的进程环境字段传入；真实命令行保留给原版 RTXPT。完整契约见[启动说明](docs/runtime-distribution.md#jvm-宿主启动契约)。
 
-for (var technology : RenderingFeatureCapabilities.Technology.values()) {
-    var entry = capabilities.technology(technology);
-    System.out.println(technology + ": " + entry.status() + " (" + entry.reason() + ")");
-}
-```
+## 诊断与验证
 
-| 状态 | 含义 |
-| --- | --- |
-| `AVAILABLE` | 能力已协商，尚无首帧执行证据 |
-| `ACTIVE` | 已获得真实 dispatch、evaluate 或 present 证据 |
-| `NOT_SUPPORTED` | 硬件、驱动、SDK 或当前渲染路径不支持 |
-| `BLOCKED` | 初始化或运行期执行失败 |
-| `FALLBACK_PENDING` | 已选择替代实现，尚无其执行证据 |
-| `FALLBACK` | 替代实现已经实际接管 |
+诊断只记录适配层实际调用边界；RTXPT 官方没有可读取数值的内部 observer 时，明确写“未展开”。RTXPT_FRAME 是包含原生等待的墙钟耗时，不能当成 GPU 忙时，也不能与嵌套耗时相加。[诊断契约](docs/rtxpt-diagnostics.md)说明采集级别、固定容量及游标。
 
-帧生成倍率与实际产出必须读取类型化证据，不得从 `reason()` 或日志反向解析：
+截至 2026-11-07，官方 source 导出的 20 个仓库／4426 个原文件保持原样；构建工作副本允许前述唯一非交互进度补丁，不能再把最终构建概括为“零 patch”。历史生产 29 帧及 beauty 24 帧 proof、此前 CPU／宿主／shader／提取／POM／符号记录均保留各自受测身份。最新两模块 Java 编译及 API 边界检查记录为 12.918s／采集峰值 1.220GB（构建口径，不是客户端内存）；不证明新增控窗逻辑的 GPU 行为或画面效果。完整动态负载、用户人工验收和消费方性能尚未通过。[视觉迁移总账](docs/quality/visual-migration-audit.md)保留 finite fade、coverage、host-primary、full-float 等未恢复缺口；[修复迁移映射](docs/consumer-agent-handoff.md#既有修复的迁移映射)区分保留、原生接管、退役和待验证。
 
-```java
-FrameGenerationEvidence generation = renderer.diagnostics().frameGenerationEvidence();
-if (generation.reported()) {
-    System.out.printf(
-            "requested=%dx configured=%dx proxy=%d generated=%d misses=%d%n",
-            generation.requestedPresentationMultiplier(),
-            generation.configuredPresentationMultiplier(),
-            generation.proxyPresentCalls(),
-            generation.generatedFramesActuallyPresented(),
-            generation.generationRequestMisses()
-    );
-}
-```
+当前人工场景入口为 [examples/native-scenes](examples/native-scenes/README.md)，主类 top.ceroxe.rt.renderer.rtxpt.examples.NativeSceneDemo。先运行 balls，由用户关闭且进程退出后再运行 mixed；目标为 1600×1000 窗口、VSync 关闭、无软件帧上限、请求 2×FG，不自动接管窗口。Java 参数支持 --denoising scene|off|relax|rr；默认 scene 保留场景策略，不能为遮盖差异擅自改去噪或 SPP。光学 --native 必须显式取 true 或 false，balls 不支持 --native true。请求 FG 不等于已激活或呈现帧率，须看真实原生状态；光学场景不宣称体散射。
 
-`generatedFramesActuallyPresented` 是 provider/SDK 的累计呈现证据，不是显示器 scanout 测量。
-Capability 与 diagnostics 都是不可变时间点快照；长期监控必须重新查询。
+源码构建入口是 tools/Build-RtxptBridge.ps1；所有重任务使用 tools/Invoke-BoundedBuild.ps1、Gradle --no-daemon，任务进程树合计上限 10 GiB。已通过项无新原因不重复运行。发布按“验证完成 → 全量源码／工具／文档上传 GitHub → Maven Local”执行，本次不发布 Maven Central；生成二进制不上传源码仓库。
 
-`RendererGpuDevice.hardwareCapabilities()` 只描述完整物理设备 probe 得到的厂商中立事实，
-包括 RT prerequisites、limits、memory budget、timestamp，以及按 output format 和 native handle
-区分的 external memory/semaphore 证据。它不表示某项 DLSS、NRD 或 FG 技术已请求或已运行。
-
-需要运行期改变高级功能时，专家调用方通过 `RendererFeatureController` 先 `plan(target)`，再根据
-`RendererFeaturePlan.disposition()` 和 `boundary()` 决定是否调用 `apply(plan)`。swapchain、pipeline、
-scene 或 renderer rebuild 永远由结果显式返回，不会被库静默执行；只有 `APPLIED` 证明 profile 已提交。
-
----
-
-## 🗂️ 项目结构
-
-```text
-renderer-api/                    公共 API、不可变模型、异常、SPI 与 Vulkan 专家扩展
-renderer-core/                   Windows NVIDIA Vulkan RT 后端与预编译 SPIR-V
-renderer-nvidia/                 可选 NVIDIA Streamline、NRD、SER 与 RTXMU 集成
-renderer-rtxpt/                  可选 RTXPT D3D12 托管后端、薄 JNI 与 GPU 组合入口
-demos/hex-ball/                  交互 Demo 与有界 GPU 验收入口
-gradle/published-consumer-smoke/ 独立 Maven 消费方编译门禁
-docs/                            指南、API 参考、互操作与支持矩阵
-```
-
-模块边界是发布契约的一部分：场景代码依赖 `renderer-api`；需要 RTXPT 专家／组合入口时增加
-`renderer-rtxpt`，不直接构造内部后端实现。
-
----
-
-## 🛠️ 构建与验证
-
-项目包含 Gradle Wrapper，并默认使用 JDK 25 toolchain 编译与运行测试；所有 `JavaCompile` 任务强制
-`--release 25`，发布字节码与 API 以 Java 25 为基线。IDEA 的 Gradle JVM 指向本机 JDK 25 后即可直接同步，
-无需为日常构建附加版本属性。
-
-Windows PowerShell 下执行完整 CPU、发布拓扑、ABI、Javadoc 与独立消费方门禁：
-
-```powershell
-$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
-.\gradlew.bat clean check assemble --dependency-verification=strict --no-daemon --console=plain
-```
-
-在符合支持范围的 RTX 主机上运行完整有界硬件验收：
-
-```powershell
-.\gradlew.bat strictAcceptanceTest --dependency-verification=strict --no-daemon --console=plain
-```
-
-单独验证“消费方只声明 `renderer-api`”的 Maven 发布拓扑：
-
-```powershell
-.\gradlew.bat verifyPublishedMavenConsumer --dependency-verification=strict --no-daemon --console=plain
-```
-
-### 🎮 打开三个 Demo
-
-先在仓库根目录构建两个可执行 JAR；已有 JAR 可跳过构建。运行需要 Java 25 和受支持的 RTX GPU，
-可执行包自带 native runtime，源码重建所需 SDK 见下文。
-
-```powershell
-.\gradlew.bat :demos:hex-ball:shadowJar :demos:hex-ball:mediumShadowJar
-
-$demoVersion = (Get-Content .\gradle.properties -Encoding UTF8 | Select-String '^project_version=(.+)$').Matches.Groups[1].Value
-
-# 1. 原 Vulkan 弹球
-java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-$demoVersion.jar" --windowed
-
-# 2. RTXPT 新路径弹球
-java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-$demoVersion.jar" --rtxpt --windowed
-
-# 3. 纯 RTXPT 介质（默认单后端）：六个场景，可在 HUD 下拉框或数字键 1–6 切换
-java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-$demoVersion.jar"
-```
-
-三个入口默认窗口化、1 SPP、请求 2× FG。不带时限会持续运行，手动关闭窗口退出。
-**HexBall JAR 无参数会打开 API 工作台**，直接看球请保留 `--windowed`。
-RTXPT 新弹球默认使用中档 **DLSS SR Performance、1 SPP、2× FG、4 个精确光学界面预算**，通过公共质量 API 请求稳定的 `SCENE_ANALYTIC` 光照输入，不额外开启 RR、NRD、SHaRC 或 ReSTIR。玻璃、不透明 20% 正面反射率球与原金属球可在 HUD 下拉框切换。材质和工作负载不同，默认 FPS 不作为两后端的等条件快慢对照。单独使用 SR 不等于路径追踪降噪。
-
-RTXPT 弹球专用入口无需任何应用参数，窗口、FG 和中档预算由入口默认配置：
-
-```powershell
-java -cp ".\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-$demoVersion.jar" demo.RtxptHexBallDemo
-```
-
-`java -jar <HexBallDemo JAR>` 无参数仍打开 API 工作台；两种入口含义不同。
-
-| 常用设置 | 两个弹球入口 | 介质入口 |
-| --- | --- | --- |
-| 指定 1080p 输出 | `--width=1920 --height=1080` | `--width=1920 --height=1080` |
-| 运行 30 秒后退出 | `--duration-seconds=30` | `--seconds=30` |
-| 场景切换 | 固定弹球场景 | `--scene=mixed\|glass\|nested\|absorption\|rough\|ior`，或窗口内选择 |
-
-关闭 FG：在 `-jar` **之前**加 `-Ddemo.disable-fg=true`。请求 3×／4× MFG：加
-`-Ddemo.fg-multiplier=3`／`4`；是否实际生效看 HUD 与 `frameGenerationEvidence()`。
-
-RTXPT 窗口标题保留应用名称，API 的 `setWindowTitle` 不会再被上游逐帧改写成临时场景路径或调试信息。原生／生成／总 FPS 以 HUD 为准。`GPU RENDER TIME` 只显示 GPU 渲染计时：未开启时显示 `NOT MEASURED`，启用但尚无样本时显示 `WAITING FOR SAMPLES`；它不包含完整 FG／呈现成本，也不再用倒数冒充帧率上限。
-Gradle 启动、完整参数、FG 验收及工作台用法见 [Demo 说明](demos/hex-ball/README.md)。
-
-### 🔧 构建 NVIDIA 原生发布物
-
-普通使用者不需要 NVIDIA SDK 或 CMake。只有维护者构建原生发布物时，才需要外部 NRD、NRI、
-Streamline 与 RTXMU SDK。RTXMU 必须为官方 `v1.4` checkout 的固定 commit
-`0c9ce1177000d5923e2cc6a35ae9cb7ff03748d2`。
-
-```powershell
-.\gradlew.bat :renderer-nvidia:compileNvidiaBridge `
-  -PcmakeExecutable='<cmake-root>\bin\cmake.exe' `
-  -PnrdSdkRoot='<nrd-root>' `
-  -PnriSdkRoot='<nri-root>' `
-  -PstreamlineSdkRoot='<streamline-root>' `
-  -PrtxmuSdkRoot='<rtxmu-root>' `
-  -PjdkHome='<jdk-25-root>' `
-  --no-daemon --console=plain
-```
-
-这些路径只参与本机构建，不会写入发布物或仓库配置。
-
----
-
-## 📚 文档
-
-- [用户工具](tools/README.md)：仅供源码构建使用的三个 PowerShell 工具、路径规则与内存上限。
-- [完整文档清单](docs/documentation-inventory.md)：全部源码文档、许可证、来源清单、质量证据与生成 Javadoc 的分类索引。
-- [Java 开发指南](docs/Java.md)：完整场景、配置、背压、诊断与各 RTX 能力示例。
-- [三个 Demo](demos/hex-ball/README.md)：两个弹球入口、介质六场景、启动参数和默认 FG。
-- [后端选择](docs/backend-routing.md)：固定整场景路由与只部署 RTXPT。
-- [RTXPT 与 Vulkan 组合](docs/d3d12-vulkan-composition.md)：GPU 叠层、最终呈现、热切换和生命周期边界。
-- [介质演示](docs/medium-gallery.md)：当前支持的光学场景及已删除能力。
-- [通用命令与硬件光追](docs/Generic-Commands-and-Ray-Tracing.md)：资源 generation、通用 command transaction、BLAS/TLAS、SPIR-V、SBT、trace、完成证据与回收。
-- [Procedural/AABB 光追](docs/Procedural-Geometry.md)：4.1.0 新增的包围盒布局、intersection/any-hit、BUILD/UPDATE 与生命周期。
-- [整数纹理](docs/Integer-Textures.md)：4.2.0 的 18 种整数格式、类型化清除、shader 图像类型校验与 3D 上传修复。
-- [质量验证与性能报告](docs/quality/verification-report.md#4-1-0-procedural-validation)：历史程序化几何验证、当前介质范围与性能证据索引。
-- [Java API 参考](docs/Java-API-Reference.md)：公共类型与稳定契约。
-- [Vulkan 专家互操作](docs/Vulkan-Interop.md)：external memory、semaphore 与 queue ownership。
-- [兼容性与版本策略](docs/COMPATIBILITY.md)：SemVer、公共 API/SPI 边界、弃用与发布事实。
-
----
-
-## 🤔 常见问题（FAQ）
-
-**Q：应用需要同时依赖 `renderer-core` 或 `renderer-nvidia` 吗？**
-
-A：普通 Vulkan 路径不需要。只声明 api 坐标即可，运行时实现与 native 依赖会传递解析。
-RTXPT 是可选模块，需要另外添加 `renderer-rtxpt`；组合模式仍需保留旧 Vulkan 运行依赖。
-
-**Q：为什么请求了 DLSS、NRD 或 FG，状态却不是 `ACTIVE`？**
-
-A：请求成功只代表能力进入协商。只有真实 dispatch、evaluate 或 present 完成后才会发布 `ACTIVE`；请读取结构化
-capability 与 diagnostics，而不是根据 GPU 型号或日志猜测。
-
-**Q：`presentLatestFrame()` 暂时返回空，是否表示渲染失败？**
-
-A：不一定。它是非阻塞轮询，空值通常表示当前没有可呈现的新帧。应用应通过事件循环稍后重试，并同时检查
-`renderer.health()` 与 diagnostics。
-
-**Q：AMD、Intel 或 Linux 能运行吗？**
-
-A：当前未将它们列为受支持目标。当前兼容范围只包含 Windows x64 与通过运行时 capability gate 的 NVIDIA RTX GPU；具体实机证据以对应提交的验收结果为准。
-
----
-
-## 🔐 许可证
-
-本项目基于 [Apache License 2.0](LICENSE) 开源发布。
+项目适配代码采用 [Apache-2.0](LICENSE)。NVIDIA、Microsoft 等上游组件仍按各自许可证分发。[文档入口](docs/Home.md)区分当前指南和历史证据。

@@ -1,5 +1,7 @@
 # E12: identical-algorithm backend cost comparison
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 The benchmark fixes the scene, camera, baseline attributes, source composition,
 deterministic hemisphere sample pattern, output encoding and requested signals.
 Its default workload uses a 2560×1600 logical viewport and 1280×800 lighting grid,

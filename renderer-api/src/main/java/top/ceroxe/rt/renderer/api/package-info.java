@@ -13,16 +13,13 @@
  * environment data. Packed RGBA8 integers store red in bits 0-7, green in 8-15, blue in 16-23,
  * and alpha in 24-31.</p>
  *
- * <p>The safe default path contains no Vulkan handles or synchronization values. Applications that
- * deliberately need zero-copy Vulkan access opt into the separately named
- * {@link top.ceroxe.rt.renderer.api.interop.vulkan} package. Production renderer defaults
- * capability-gate suitable optional technologies as preferred requests. CPU-readable defaults
- * omit presentation-time generation, while GPU-presentation defaults additionally prefer ordinary
- * FG 2x and never auto-select MFG. Explicit option builders provide the equivalent expert controls
- * without bypassing negotiation or lifecycle safety.</p>
+ * <p>The default renderer owns native presentation. Optional reconstruction, denoising,
+ * generated frames and low-latency controls use the selected native backend. Explicit
+ * configuration and backend extensions describe supported controls without requiring
+ * host graphics handles for ordinary scene submission.</p>
  *
  * <p>Ordinary presets and explicit expert builders use the same immutable values.
- * Retained scenes need no native handles; custom programs, command transactions
- * and cross-API frame leases are explicit capabilities of the selected backend.</p>
+ * Retained scenes need no native handles; external lighting signals and their ownership
+ * protocols remain explicitly selected backend extensions.</p>
  */
 package top.ceroxe.rt.renderer.api;

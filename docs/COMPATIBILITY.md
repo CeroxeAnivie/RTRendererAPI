@@ -1,76 +1,24 @@
-# API Contract
+# 兼容性与版本
 
-当前普通预设、专家显式配置及光照快捷工厂见[普通用法与专家控制](ordinary-and-expert.md)。旧 `expertBuilder()` 不复活，专家能力通过统一配置与公开扩展表达。
+## 8.0.0 迁移候选
 
-RTRendererAPI retains the Java 25 major-7 binary/API contract introduced in 7.0.0. Use matching API,
-backend and NVIDIA modules. Medium data is expressed directly by `Rgb`, `Medium`,
-`MediumBoundary` records. RTXPT keeps only absorption, IOR and nested priority; density,
-scattering, emission, camera-medium and `MediumTransport` controls were removed. The nested 6.x medium type, medium builders
-and compatibility wrappers are absent. Recompile custom retained-scene shaders against the
-current `gpuscene_abi.glsl`; do not embed record strides from an older release.
+8.0.0 是允许破坏性调整的新 major，尚未发布。当前工程只保留 renderer-api 与 renderer-rtxpt；后者正向依赖前者。Java 25、Windows x86_64 与可执行 D3D12/DXR 的受支持 NVIDIA GPU 是当前运行基线。
 
-The current release targets GitHub and Maven Local. Building sources alone does not publish artifacts.
-See [local preparation changes](release-local-scene-preparation.md) and [7.1.0 changes](release-independent-native-and-host-lighting.md)
-for the exact medium API. GPU and packaged-runtime evidence is recorded separately in
-[RTXPT integration](quality/rtxpt-managed-medium-migration.md),
-[advanced-feature audit](quality/rtxpt-advanced-audit-20261101.md), and
-[memory/FPS validation](quality/rtxpt-memory-fps-20261102.md); each result applies to its recorded artifact and settings.
+不保留 7.x 兼容壳：旧自研 Vulkan 后端、独立 renderer-nvidia、旧演示、双后端路由和 RTXPT／Vulkan 组合器均不属于新运行图。旧私有 shader ABI、资源池／准入探针和内部诊断结构也不作为迁移兼容目标。保留通用互操作数据类型不表示旧渲染实现仍可使用。
 
-`Renderer.openForScene` owns one fixed backend for the complete scene. `RTXPT_FOR_MEDIA`
-does not split light transport. `RtxptComposedRenderer` separately supports RTXPT final
-presentation plus Vulkan independent work/UI, or explicit Vulkan final presentation with
-whole-3D switching under different feature constraints. See [backend routing](backend-routing.md)
-and [composition](d3d12-vulkan-composition.md). Unsupported inputs are rejected rather than silently dropped.
+本轮公开面收缩删除 188 个孤立类型。Renderer 只保留生命周期与 SceneTransaction／帧提交；CPU 帧读取、通用 GPU command／resource、假健康、GPU 枚举及固定假指标契约不再保留。RendererConfig 只包含六类真实原生 feature 与资产字节准入预算，不维持 CPU 回读／自定义 shader 等假开关。
 
-The API provides default transparent-background methods and background composition overloads. The
-original ten-argument `D3D12SharedFrame` constructor remains and defaults to `OPAQUE`;
-new producers can explicitly declare `PREMULTIPLIED`. Use matching native and Java modules.
+原生质量控制只保留原版公开设置支持且已接线的字段。exactOpticalInterfaces、SCENE_ANALYTIC、pointLimit、directionalStrata、自定义 SHaRC 容量／训练参数已删除，SHaRC 启停保留。通用 NativeLighting／Sparse／共享同步仍是已实现的外桥能力；宿主专属亮度曲线与画风迁出尚未完成。
 
-## Migration from 4.x
+消费者应按[模块边界](backend-routing.md)、[运行时启动契约](runtime-distribution.md)和[新诊断边界](rtxpt-diagnostics.md)重新接入，不拼用 7.x provider、native DLL 或源码 overlay。显式选择的运行时不完整时应失败，不回退到旧开发目录。
 
-| Historical surface | Current surface |
-| --- | --- |
-| RendererBootstrap / RendererPreset | Renderer.open(), Renderer.open(config), Renderer.devices() |
-| expertBuilder() | RendererConfig.builder() |
-| preset configuration | RendererConfig.recommended() / presentation() |
-| CpuFrame and CPU-specific poll/wait names | FrameSnapshot, pollFrame(), awaitFrame() |
-| RGBA8-only pixel accessors | pixels(), copyPixelsTo(), format(), rowBytes(), origin() |
-| implicit HDR-to-SDR readback | raw RGBA16_FLOAT; application explicitly chooses display conversion |
-| private retained-scene shader replacement | SceneShaderProgram and the public SceneShaderBindings ABI |
-| application data transported through scene assets | RenderFrameRequest.shaderData(List<ResourceData>) |
+官方 RTXPT v1.9.0 的源码、核心 shader、默认算法与生命周期保持原版。本项目自有能力只能位于外部桥；存在上游等价实现时直接调用。独立扩展输出、原版输出和版本间回归分别验证。
 
-`readFrame(FrameConsumer)` provides a confined native pixel view; the callback may not reenter
-its renderer. Native views and all derived buffers expire even when the callback throws. Copy to
-`FrameSnapshot` when retention or sharing is needed. Consumer exceptions retire the frame and
-propagate without failing the renderer; device/provenance failures fail closed.
+## 验证与发布口径
 
-All four public Vulkan retained-scene stages can be replaced. Managed transparent media use
-the optional RTXPT D3D12 backend and its native material/transport implementation. Custom Vulkan scene stages and explicit command pipelines use
-the 7.0.4 shader contracts; no automatic 6.x shader or payload translation is provided.
-Arbitrary shader groups, callable/procedural RT, graphics, compute, descriptor sets, textures
-and samplers remain available through the explicit command API.
+- 公共契约的 ABI baseline 只覆盖受检模块的 Java 二进制表面，不能代替 native／画面／性能验证。
+- 生产 29 帧与原版 beauty 24 帧 proof 已通过；新控制定向验证、正式包、完整负载和人工验收仍未完成。此前编译、提取、符号与失败证据保持原身份，不转签后续变更。
+- 生产资源与直接光、输出租约、生命周期、诊断 OFF、完整流式负载及消费方性能未全部验证前，不发布候选。
+- 本次发布顺序是源码／工具／文档先上传 GitHub，再发布 Maven Local；不发布 Maven Central，不覆盖已发行版本。
 
-The Java API/provider SPI major is 7. Historical ABI baselines and quality reports describe
-their original versions and are not compatibility adapters for the current implementation.
-
-## Contract Shape
-
-Each workload declares its complete resource, shader, pipeline, pass, command, and output facts at
-admission time. Capability probes report executable support; they do not select an undocumented
-alternate implementation. Optional rendering technologies may still report an explicit negotiated
-fallback as runtime evidence, but that fallback is a feature policy, not an alternate API channel.
-
-The aggregate `Renderer` facade is composed from focused contracts: `RendererLifecycle` for health
-and teardown, `RendererFrameAccess` for CPU frame publication, `RendererSceneAccess` for retained
-scene admission, and `RendererCommandAccess` for explicit resource and command transactions.
-Consumers should depend on the narrowest contract they actually use.
-
-Graphics pipelines support empty vertex layouts when the shader derives positions from built-in
-vertex indices. Generic color output readback publishes native-format `FrameView` and `FrameSnapshot` values with stable
-resource identity and explicit completion/retirement semantics.
-
-## Support
-
-The support matrix and backend-specific execution evidence are maintained in the current README
-and the generic rendering documentation. Unsupported or failed operations return typed evidence or
-exceptions; callers must not infer success from object construction or a recorded command alone.
+历史 release-*.md、docs/quality/ 及其数据文件记录各自版本，不代表 8.0.0 兼容性或性能承诺。

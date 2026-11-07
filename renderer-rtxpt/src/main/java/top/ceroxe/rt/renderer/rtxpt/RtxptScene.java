@@ -167,18 +167,6 @@ final class RtxptScene {
         removals.addAll(oldDynamic.keySet());return new ItemChanges(upserts,removals,nodes,reads);
     }
     static FloatBuffer floats(int n){return ByteBuffer.allocateDirect(Math.multiplyExact(n,4)).order(ByteOrder.nativeOrder()).asFloatBuffer();}
-    void uploadInteriors(long handle) {
-        if(!materialIors.isEmpty()) {
-            var iors=floats(materialIors.size());
-            materialIors.values().forEach(iors::put);
-            RtxptNative.materialIors(handle,materialIors.keySet().toArray(String[]::new),iors.flip());
-        }
-        if(interiors.isEmpty())return;
-        var data=floats(interiors.size()*5);for(var b:interiors.values()) {
-            var m=b.medium();data.put(m.absorption().red()).put(m.absorption().green()).put(m.absorption().blue()).put(m.indexOfRefraction()).put(b.priority());
-        }
-        RtxptNative.interiors(handle,interiors.keySet().toArray(String[]::new),data.flip());
-    }
     /** Missing normals require flat triangle corners in the resident mesh representation.
      * Authored shading and all vertex attributes stay intact during memory packing. */
     record ExportGeometry(FloatBuffer positions,FloatBuffer normals,FloatBuffer tangents,

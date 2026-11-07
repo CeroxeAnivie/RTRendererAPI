@@ -1,17 +1,15 @@
 package top.ceroxe.rt.renderer.rtxpt;
 import java.nio.file.Files;
-import java.util.List;
+import java.util.Objects;
 import top.ceroxe.rt.renderer.api.*;
 import top.ceroxe.rt.renderer.spi.RendererBackendProvider;
 
-/** Explicit opt-in: the ordinary Vulkan provider remains the default. */
+/** Provider for the original RTXPT execution chain and external API adapters. */
 public final class RtxptBackendProvider implements RendererBackendProvider {
     @Override public Descriptor descriptor(){return Descriptor.builder("rtxpt").priority(-100).build();}
-    @Override public List<RendererGpuDevice> availableGpuDevices(){return List.of();}
     @Override public ProbeResult probe(RendererConfig config){
         if(!System.getProperty("os.name","").startsWith("Windows"))return ProbeResult.unsupported("RTXPT managed D3D12 requires Windows");
-        var issue=RtxptInputContract.configurationIssue(config);
-        if(issue.isPresent())return ProbeResult.unsupported(issue.orElseThrow());
+        Objects.requireNonNull(config,"config");
         try {
             if(!Files.isRegularFile(RtxptNative.bridge()))return ProbeResult.unsupported("Build RTXPT JNI host first");
             return ProbeResult.compatible("NVIDIA RTXPT 1.9.0 in-process D3D12 managed rendering");

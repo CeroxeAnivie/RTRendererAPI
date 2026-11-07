@@ -62,11 +62,13 @@ public final class RtxptNativeLightingGlSelfTest {
                     for(int y=0;y<HEIGHT;y++)for(int x=0;x<WIDTH;x++){float value=base(x,y);pixels.put(value).put(value).put(value).put(1);}
                     pixels.flip();glTextureSubImage2D(host,0,0,0,WIDTH,HEIGHT,GL_RGBA,GL_FLOAT,pixels);
                 }finally{MemoryUtil.memFree(pixels);}
-                try(var renderer=RtxptRenderers.openNativeLighting(RtxptLightTreeNativeSelfTest.config(4),plan(49,33))){
+                try(var renderer=RtxptRenderers.openNativeLighting(RtxptRenderers.nativeLightingConfiguration(),plan(49,33))){
                     var control=renderer.extension(NativeLightingControl.class).orElseThrow();
                     renderer.apply(SceneTransaction.builder(1).resetScene()
                         .upsert(MaterialAsset.builder(1).roughness(.8f).build())
-                        .upsert(RtxptFramePreparationNativeSelfTest.card(1).toBuilder().lightmapCoordinates(new float[]{.5f,0,.5f,0,.5f,0,.5f,0}).build())
+                        .upsert(MeshAsset.builder(1,new float[]{-4,-4,0,4,-4,0,4,4,0,-4,4,0},
+                                new int[]{0,1,2,0,2,3},new long[]{1,1})
+                                .lightmapCoordinates(new float[]{.5f,0,.5f,0,.5f,0,.5f,0}).build())
                         .upsert(SceneInstance.builder(1,1).build()).build());
                     try(var consumer=new GlLightingPacketConsumer()){
                         for(int i=0;i<8;i++){

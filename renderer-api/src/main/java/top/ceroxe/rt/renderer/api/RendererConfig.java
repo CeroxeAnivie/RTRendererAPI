@@ -2,32 +2,8 @@ package top.ceroxe.rt.renderer.api;
 
 import java.util.Objects;
 
-/**
- * Immutable renderer-lifetime policy assembled through a stable semantic builder.
- *
- * <p>The constructor is intentionally private. Adding an independent renderer policy therefore
- * does not change a public constructor descriptor or force applications to depend on argument
- * ordering.</p>
- */
+/** Immutable configuration for the renderer's implemented native controls. */
 public final class RendererConfig {
-    /**
-     * Default bounded frame concurrency.
-     */
-    public static final int DEFAULT_MAX_FRAMES_IN_FLIGHT = 2;
-    /** Smallest supported bounded frame ring. */
-    public static final int MIN_MAX_FRAMES_IN_FLIGHT = 2;
-    /** Largest supported bounded frame ring. */
-    public static final int MAX_MAX_FRAMES_IN_FLIGHT = 16;
-
-    private final SceneShaderProgram sceneShaders;
-    private final int maxFramesInFlight;
-    private final EvidenceRetentionPolicy evidenceRetention;
-    private final boolean validationEnabled;
-    private final boolean gpuTimingsEnabled;
-    private final boolean cpuFrameReadbackEnabled;
-    private final RendererGpuDevice gpuDevice;
-    private final FrameOutputFormat frameOutputFormat;
-    private final TemporalRenderingOptions temporalRendering;
     private final FrameReconstructionOptions frameReconstruction;
     private final FrameGenerationOptions frameGeneration;
     private final LowLatencyOptions lowLatency;
@@ -35,301 +11,112 @@ public final class RendererConfig {
     private final RayTracingOptimizationOptions rayTracingOptimizations;
     private final PathTracingOptions pathTracing;
     private final RendererResourceOptions resources;
-    private final SurfaceTransportOptions surfaceTransport;
 
     private RendererConfig(Builder builder) {
-        if (builder.maxFramesInFlight < MIN_MAX_FRAMES_IN_FLIGHT
-                || builder.maxFramesInFlight > MAX_MAX_FRAMES_IN_FLIGHT) {
-            throw new IllegalArgumentException(
-                    "maxFramesInFlight must be in ["
-                            + MIN_MAX_FRAMES_IN_FLIGHT + ", " + MAX_MAX_FRAMES_IN_FLIGHT + "]"
-            );
-        }
-        sceneShaders = builder.sceneShaders;
-        maxFramesInFlight = builder.maxFramesInFlight;
-        evidenceRetention = Objects.requireNonNull(builder.evidenceRetention, "evidenceRetention");
-        validationEnabled = builder.validationEnabled;
-        gpuTimingsEnabled = builder.gpuTimingsEnabled;
-        cpuFrameReadbackEnabled = builder.cpuFrameReadbackEnabled;
-        gpuDevice = builder.gpuDevice;
-        frameOutputFormat = Objects.requireNonNull(builder.frameOutputFormat, "frameOutputFormat");
-        temporalRendering = Objects.requireNonNull(builder.temporalRendering, "temporalRendering");
         frameReconstruction = Objects.requireNonNull(builder.frameReconstruction, "frameReconstruction");
         frameGeneration = Objects.requireNonNull(builder.frameGeneration, "frameGeneration");
         lowLatency = Objects.requireNonNull(builder.lowLatency, "lowLatency");
         denoising = Objects.requireNonNull(builder.denoising, "denoising");
-        rayTracingOptimizations = Objects.requireNonNull(
-                builder.rayTracingOptimizations, "rayTracingOptimizations"
-        );
-        pathTracing = Objects.requireNonNull(builder.pathTracing,"pathTracing");
-        resources = Objects.requireNonNull(builder.resources,"resources");
-        surfaceTransport = Objects.requireNonNull(builder.surfaceTransport,"surfaceTransport");
-        if (!temporalRendering.enabled()
-                && frameReconstruction.fallback()
-                == FrameReconstructionOptions.Fallback.BUILT_IN_TEMPORAL) {
-            throw new IllegalArgumentException(
-                    "built-in temporal reconstruction fallback requires temporal rendering"
-            );
-        }
-        if (!temporalRendering.enabled() && denoising.builtInTemporalFallback()) {
-            throw new IllegalArgumentException(
-                    "built-in temporal denoising fallback requires temporal rendering"
-            );
-        }
+        rayTracingOptimizations = Objects.requireNonNull(builder.rayTracingOptimizations, "rayTracingOptimizations");
+        pathTracing = Objects.requireNonNull(builder.pathTracing, "pathTracing");
+        resources = Objects.requireNonNull(builder.resources, "resources");
     }
 
-    /** Recommended CPU-readable policy; optional features are capability-gated. */
+    /** Recommended native GPU presentation; optional features remain capability-gated. */
     public static RendererConfig recommended() {
         return recommended(RendererPerformanceTier.MEDIUM);
     }
 
-    /** Recommended renderer-owned presentation, with optional generated frames and pacing. */
+    /** Recommended native presentation with optional generated frames and pacing. */
     public static RendererConfig presentation() {
         return presentation(RendererPerformanceTier.MEDIUM);
     }
 
-    /** Recommended path-traced GPU presentation; all advanced controls remain in this API. FG is disabled. */
+    /** Recommended path-traced native presentation with frame generation disabled. */
     public static RendererConfig pathTracedPresentation() {
         return pathTracedPresentation(RendererPerformanceTier.MEDIUM);
     }
 
-    /** Returns path budgets and light/cache reuse intent. */
-    public PathTracingOptions pathTracing(){return pathTracing;}
-    public RendererResourceOptions resources(){return resources;}
-    /** Ordinary Vulkan surface budgets; managed RTXPT transport uses {@link #pathTracing()}. */
-    public SurfaceTransportOptions surfaceTransport(){return surfaceTransport;}
-    /** Recommended base policy with explicit low/medium/high workload budgets. */
-    public static RendererConfig recommended(RendererPerformanceTier tier){
-        Objects.requireNonNull(tier);return builder().resources(tier.resources()).surfaceTransport(tier.surfaceTransport())
-            .pathTracing(tier.pathTracing(false)).frameReconstruction(FrameReconstructionOptions.recommended().toBuilder()
-                .quality(tier.reconstructionQuality()).build()).rayTracingOptimizations(RayTracingOptimizationOptions.recommended()).build();
-    }
-    public static RendererConfig presentation(RendererPerformanceTier tier){return recommended(tier).copyBuilder()
-        .cpuFrameReadbackEnabled(false).frameGeneration(FrameGenerationOptions.recommended()).lowLatency(LowLatencyOptions.recommended()).build();}
-    public static RendererConfig pathTracedPresentation(RendererPerformanceTier tier){return recommended(tier).copyBuilder()
-        .cpuFrameReadbackEnabled(false).denoising(DenoisingOptions.recommended()).lowLatency(LowLatencyOptions.recommended())
-        .pathTracing(tier.pathTracing(true)).build();}
-
-    /**
-     * Creates a configuration builder with optional vendor features disabled.
-     * Use {@link #recommended()} for the capability-driven ordinary policy.
-     * @return new single-thread-confined builder
-     */
-    public static Builder builder() {
-        return new Builder();
+    /** Recommended native controls and resource admission limits for the selected tier. */
+    public static RendererConfig recommended(RendererPerformanceTier tier) {
+        Objects.requireNonNull(tier, "tier");
+        return builder().resources(tier.resources()).pathTracing(tier.pathTracing(false))
+                .frameReconstruction(FrameReconstructionOptions.recommended().toBuilder()
+                        .quality(tier.reconstructionQuality()).build())
+                .rayTracingOptimizations(RayTracingOptimizationOptions.recommended()).build();
     }
 
-    /**
-     * Starts an independent builder initialized from this complete value.
-     *
-     * @return new builder containing every current policy
-     */
-    public Builder copyBuilder() {
-        return new Builder(this);
+    /** Recommended native presentation with optional generated frames and pacing. */
+    public static RendererConfig presentation(RendererPerformanceTier tier) {
+        return recommended(tier).copyBuilder().frameGeneration(FrameGenerationOptions.recommended())
+                .lowLatency(LowLatencyOptions.recommended()).build();
     }
 
-    /** @return retained-scene shader replacements and application data layout */
-    public SceneShaderProgram sceneShaders() { return sceneShaders; }
-
-    /** @return bounded frame concurrency in {@code [MIN_MAX_FRAMES_IN_FLIGHT, MAX_MAX_FRAMES_IN_FLIGHT]} */
-    public int maxFramesInFlight() {
-        return maxFramesInFlight;
+    /** Recommended path-traced native presentation with frame generation disabled. */
+    public static RendererConfig pathTracedPresentation(RendererPerformanceTier tier) {
+        return recommended(tier).copyBuilder().denoising(DenoisingOptions.recommended())
+                .lowLatency(LowLatencyOptions.recommended()).pathTracing(tier.pathTracing(true)).build();
     }
 
-    /** Returns generic evidence, identity and resident-generation budgets. */
-    public EvidenceRetentionPolicy evidenceRetention() {
-        return evidenceRetention;
-    }
+    /** Creates a builder with optional vendor features disabled. */
+    public static Builder builder() { return new Builder(); }
 
-    /**
-     * Returns whether backend validation diagnostics are requested.
-     *
-     * @return whether validation is enabled
-     */
-    public boolean validationEnabled() {
-        return validationEnabled;
-    }
+    /** Starts an independent builder initialized from every current property. */
+    public Builder copyBuilder() { return new Builder(this); }
 
-    /**
-     * Returns whether GPU timing collection is requested.
-     *
-     * @return whether GPU timing collection is enabled
-     */
-    public boolean gpuTimingsEnabled() {
-        return gpuTimingsEnabled;
-    }
-
-    /**
-     * Returns whether every frame slot owns an asynchronous managed CPU-readback target.
-     *
-     * <p>Enabled mode keeps {@link Renderer#pollFrame()} allocation-stable on
-     * the Vulkan side and never waits for the whole queue to become idle. Expert consumers that
-     * exclusively import {@code VulkanFrameInterop} images may disable this policy to omit the
-     * otherwise unnecessary image-to-buffer copy and host-visible frame ring.</p>
-     *
-     * @return whether managed CPU frame readback is enabled
-     */
-    public boolean cpuFrameReadbackEnabled() {
-        return cpuFrameReadbackEnabled;
-    }
-
-    /**
-     * Returns the explicitly selected GPU when device selection is pinned.
-     *
-     * @return selected GPU snapshot, or empty for backend selection policy
-     */
-    public java.util.Optional<RendererGpuDevice> gpuDevice() {
-        return java.util.Optional.ofNullable(gpuDevice);
-    }
-
-    /**
-     * Returns the renderer-lifetime native frame encoding.
-     *
-     * @return non-null output format
-     */
-    public FrameOutputFormat frameOutputFormat() {
-        return frameOutputFormat;
-    }
-
-    /**
-     * Returns the renderer-lifetime temporal reconstruction policy.
-     *
-     * @return non-null temporal rendering policy
-     */
-    public TemporalRenderingOptions temporalRendering() {
-        return temporalRendering;
-    }
-
-    /**
-     * Returns the optional renderer-lifetime frame reconstruction policy.
-     *
-     * @return non-null reconstruction policy
-     */
-    public FrameReconstructionOptions frameReconstruction() {
-        return frameReconstruction;
-    }
-
-    /**
-     * Returns the optional presentation-time generated-frame policy.
-     *
-     * @return non-null frame generation policy
-     */
-    public FrameGenerationOptions frameGeneration() {
-        return frameGeneration;
-    }
-
-    /**
-     * Returns the low-latency pacing and frame-marker policy, independent from frame generation.
-     *
-     * @return non-null low-latency policy
-     */
-    public LowLatencyOptions lowLatency() {
-        return lowLatency;
-    }
-
-    /**
-     * Returns the optional renderer-lifetime denoising policy.
-     *
-     * @return non-null denoising policy
-     */
-    public DenoisingOptions denoising() {
-        return denoising;
-    }
-
-    /**
-     * Returns independent advanced ray-tracing optimization preferences.
-     *
-     * @return non-null optimization policy
-     */
-    public RayTracingOptimizationOptions rayTracingOptimizations() {
-        return rayTracingOptimizations;
-    }
+    /** Returns optional native frame reconstruction controls. */
+    public FrameReconstructionOptions frameReconstruction() { return frameReconstruction; }
+    /** Returns optional native generated-frame controls. */
+    public FrameGenerationOptions frameGeneration() { return frameGeneration; }
+    /** Returns optional native pacing and frame-marker controls. */
+    public LowLatencyOptions lowLatency() { return lowLatency; }
+    /** Returns optional native denoising controls. */
+    public DenoisingOptions denoising() { return denoising; }
+    /** Returns optional native ray-tracing optimization controls. */
+    public RayTracingOptimizationOptions rayTracingOptimizations() { return rayTracingOptimizations; }
+    /** Returns native path-tracing controls. */
+    public PathTracingOptions pathTracing() { return pathTracing; }
+    /** Returns the retained scene's asset admission limits. */
+    public RendererResourceOptions resources() { return resources; }
 
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof RendererConfig config)) return false;
-        return sceneShaders.equals(config.sceneShaders)
-                && maxFramesInFlight == config.maxFramesInFlight
-                && evidenceRetention.equals(config.evidenceRetention)
-                && validationEnabled == config.validationEnabled
-                && gpuTimingsEnabled == config.gpuTimingsEnabled
-                && cpuFrameReadbackEnabled == config.cpuFrameReadbackEnabled
-                && Objects.equals(gpuDevice, config.gpuDevice)
-                && frameOutputFormat == config.frameOutputFormat
-                && temporalRendering.equals(config.temporalRendering)
-                && frameReconstruction.equals(config.frameReconstruction)
+        return frameReconstruction.equals(config.frameReconstruction)
                 && frameGeneration.equals(config.frameGeneration)
                 && lowLatency.equals(config.lowLatency)
                 && denoising.equals(config.denoising)
                 && rayTracingOptimizations.equals(config.rayTracingOptimizations)
-                && pathTracing.equals(config.pathTracing) && resources.equals(config.resources)
-                && surfaceTransport.equals(config.surfaceTransport);
+                && pathTracing.equals(config.pathTracing) && resources.equals(config.resources);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(
-                sceneShaders, maxFramesInFlight, evidenceRetention, validationEnabled, gpuTimingsEnabled, cpuFrameReadbackEnabled,
-                gpuDevice, frameOutputFormat, temporalRendering, frameReconstruction, denoising,
-                frameGeneration, lowLatency, rayTracingOptimizations, pathTracing, resources, surfaceTransport
-        );
+        return Objects.hash(frameReconstruction, frameGeneration, lowLatency, denoising,
+                rayTracingOptimizations, pathTracing, resources);
     }
 
     @Override
     public String toString() {
-        return "RendererConfig[maxFramesInFlight=" + maxFramesInFlight
-                + ", evidenceRetention=" + evidenceRetention
-                + ", validationEnabled=" + validationEnabled
-                + ", gpuTimingsEnabled=" + gpuTimingsEnabled
-                + ", cpuFrameReadbackEnabled=" + cpuFrameReadbackEnabled
-                + ", gpuDevice=" + gpuDevice
-                + ", frameOutputFormat=" + frameOutputFormat
-                + ", temporalRendering=" + temporalRendering
-                + ", frameReconstruction=" + frameReconstruction
-                + ", frameGeneration=" + frameGeneration
-                + ", lowLatency=" + lowLatency
-                + ", denoising=" + denoising
-                + ", rayTracingOptimizations=" + rayTracingOptimizations + ", pathTracing="+pathTracing+", resources="+resources
-                + ", surfaceTransport="+surfaceTransport+']';
+        return "RendererConfig[frameReconstruction=" + frameReconstruction
+                + ", frameGeneration=" + frameGeneration + ", lowLatency=" + lowLatency
+                + ", denoising=" + denoising + ", rayTracingOptimizations=" + rayTracingOptimizations
+                + ", pathTracing=" + pathTracing + ", resources=" + resources + ']';
     }
 
-    /**
-     * Single-thread-confined builder for one immutable renderer configuration.
-     */
+    /** Single-thread-confined semantic builder for implemented renderer controls. */
     public static final class Builder {
-        private PathTracingOptions pathTracing = PathTracingOptions.defaults();
-        private RendererResourceOptions resources = RendererResourceOptions.defaults();
-        private SurfaceTransportOptions surfaceTransport = SurfaceTransportOptions.defaults();
-        private SceneShaderProgram sceneShaders = SceneShaderProgram.builtIn();
-        private int maxFramesInFlight = DEFAULT_MAX_FRAMES_IN_FLIGHT;
-        private EvidenceRetentionPolicy evidenceRetention = EvidenceRetentionPolicy.bounded();
-        private boolean validationEnabled;
-        private boolean gpuTimingsEnabled = true;
-        private boolean cpuFrameReadbackEnabled = true;
-        private RendererGpuDevice gpuDevice;
-        private FrameOutputFormat frameOutputFormat = FrameOutputFormat.SDR_RGBA8;
-        private TemporalRenderingOptions temporalRendering = TemporalRenderingOptions.balanced();
         private FrameReconstructionOptions frameReconstruction = FrameReconstructionOptions.disabled();
         private FrameGenerationOptions frameGeneration = FrameGenerationOptions.disabled();
         private LowLatencyOptions lowLatency = LowLatencyOptions.disabled();
         private DenoisingOptions denoising = DenoisingOptions.disabled();
-        private RayTracingOptimizationOptions rayTracingOptimizations =
-                RayTracingOptimizationOptions.disabled();
+        private RayTracingOptimizationOptions rayTracingOptimizations = RayTracingOptimizationOptions.disabled();
+        private PathTracingOptions pathTracing = PathTracingOptions.defaults();
+        private RendererResourceOptions resources = RendererResourceOptions.defaults();
 
-        private Builder() {
-        }
-
+        private Builder() { }
         private Builder(RendererConfig source) {
-            sceneShaders = source.sceneShaders;
-            maxFramesInFlight = source.maxFramesInFlight;
-            evidenceRetention = source.evidenceRetention;
-            validationEnabled = source.validationEnabled;
-            gpuTimingsEnabled = source.gpuTimingsEnabled;
-            cpuFrameReadbackEnabled = source.cpuFrameReadbackEnabled;
-            gpuDevice = source.gpuDevice;
-            frameOutputFormat = source.frameOutputFormat;
-            temporalRendering = source.temporalRendering;
             frameReconstruction = source.frameReconstruction;
             frameGeneration = source.frameGeneration;
             lowLatency = source.lowLatency;
@@ -337,187 +124,51 @@ public final class RendererConfig {
             rayTracingOptimizations = source.rayTracingOptimizations;
             pathTracing = source.pathTracing;
             resources = source.resources;
-            surfaceTransport = source.surfaceTransport;
         }
 
-        /**
-         * Selects the retained-scene shader program and application data interface.
-         *
-         * @param value non-null shader program
-         * @return this builder
-         */
-        public Builder sceneShaders(SceneShaderProgram value) {
-            sceneShaders = Objects.requireNonNull(value, "sceneShaders");
-            return this;
-        }
-
-        /**
-         * Selects bounded frame concurrency in
-         * {@code [MIN_MAX_FRAMES_IN_FLIGHT, MAX_MAX_FRAMES_IN_FLIGHT]}.
-         *
-         * @param value maximum admitted frames
-         * @return this builder
-         */
-        public Builder maxFramesInFlight(int value) {
-            maxFramesInFlight = value;
-            return this;
-        }
-
-        /** Selects fixed generic evidence budgets for this renderer lifetime. */
-        public Builder evidenceRetention(EvidenceRetentionPolicy value) {
-            evidenceRetention = Objects.requireNonNull(value, "evidenceRetention");
-            return this;
-        }
-
-        /**
-         * Enables or disables backend validation diagnostics.
-         *
-         * @param value whether validation is requested
-         * @return this builder
-         */
-        public Builder validationEnabled(boolean value) {
-            validationEnabled = value;
-            return this;
-        }
-
-        /**
-         * Enables or disables GPU timing collection.
-         *
-         * @param value whether GPU timings are requested
-         * @return this builder
-         */
-        public Builder gpuTimingsEnabled(boolean value) {
-            gpuTimingsEnabled = value;
-            return this;
-        }
-
-        /**
-         * Selects whether frame submissions populate a persistent asynchronous CPU-readback ring.
-         *
-         * <p>Disable this for GPU-only presentation or explicit GPU-frame consumption.
-         * The presentation presets select it automatically. Calling managed CPU-frame methods on a renderer built
-         * with this policy disabled is rejected instead of silently introducing a synchronous
-         * fallback.</p>
-         *
-         * @param value whether managed CPU frame readback is enabled
-         * @return this builder
-         */
-        public Builder cpuFrameReadbackEnabled(boolean value) {
-            cpuFrameReadbackEnabled = value;
-            return this;
-        }
-
-        /**
-         * Pins rendering to a non-null device returned by backend enumeration.
-         *
-         * @param value enumerated RT-capable device snapshot
-         * @return this builder
-         */
-        public Builder gpuDevice(RendererGpuDevice value) {
-            gpuDevice = Objects.requireNonNull(value, "gpuDevice");
-            return this;
-        }
-
-        /**
-         * Restores backend GPU selection policy.
-         *
-         * @return this builder
-         */
-        public Builder automaticGpuSelection() {
-            gpuDevice = null;
-            return this;
-        }
-
-        /**
-         * Selects the renderer-lifetime native frame encoding.
-         *
-         * @param value non-null native frame encoding
-         * @return this builder
-         */
-        public Builder frameOutputFormat(FrameOutputFormat value) {
-            frameOutputFormat = Objects.requireNonNull(value, "frameOutputFormat");
-            return this;
-        }
-
-        /**
-         * Selects the renderer-lifetime temporal reconstruction policy.
-         *
-         * @param value non-null temporal rendering policy
-         * @return this builder
-         */
-        public Builder temporalRendering(TemporalRenderingOptions value) {
-            temporalRendering = Objects.requireNonNull(value, "temporalRendering");
-            return this;
-        }
-
-        /**
-         * Selects optional frame reconstruction or native-resolution reconstruction AA.
-         *
-         * @param value non-null reconstruction policy
-         * @return this builder
-         */
+        /** Selects optional native frame reconstruction. */
         public Builder frameReconstruction(FrameReconstructionOptions value) {
             frameReconstruction = Objects.requireNonNull(value, "frameReconstruction");
             return this;
         }
 
-        /**
-         * Selects optional presentation-time frame generation independently from reconstruction.
-         *
-         * @param value non-null generated-frame policy
-         * @return this builder
-         */
+        /** Selects optional native presentation-time frame generation. */
         public Builder frameGeneration(FrameGenerationOptions value) {
             frameGeneration = Objects.requireNonNull(value, "frameGeneration");
             return this;
         }
 
-        /**
-         * Selects low-latency pacing independently from generated presentation.
-         *
-         * @param value non-null low-latency policy
-         * @return this builder
-         */
+        /** Selects optional native pacing independently from generated frames. */
         public Builder lowLatency(LowLatencyOptions value) {
             lowLatency = Objects.requireNonNull(value, "lowLatency");
             return this;
         }
 
-        /**
-         * Selects the optional ray-tracing denoising policy.
-         *
-         * @param value non-null denoising policy
-         * @return this builder
-         */
+        /** Selects optional native denoising. */
         public Builder denoising(DenoisingOptions value) {
             denoising = Objects.requireNonNull(value, "denoising");
             return this;
         }
 
-        /**
-         * Selects independent advanced ray-tracing optimization preferences.
-         *
-         * @param value non-null optimization policy
-         * @return this builder
-         */
+        /** Selects optional native ray-tracing optimizations. */
         public Builder rayTracingOptimizations(RayTracingOptimizationOptions value) {
             rayTracingOptimizations = Objects.requireNonNull(value, "rayTracingOptimizations");
             return this;
         }
 
-        /**
-         * Validates and returns an independent immutable configuration.
-         *
-         * @return immutable validated configuration
-         */
-        public RendererConfig build() {
-            return new RendererConfig(this);
+        /** Selects native path-tracing controls. */
+        public Builder pathTracing(PathTracingOptions value) {
+            pathTracing = Objects.requireNonNull(value, "pathTracing");
+            return this;
         }
 
-        /** Selects native path budgets and optional reuse techniques. */
-        public Builder pathTracing(PathTracingOptions value){pathTracing=Objects.requireNonNull(value,"pathTracing");return this;}
-        public Builder resources(RendererResourceOptions value){resources=Objects.requireNonNull(value,"resources");return this;}
-        /** Sets ordinary Vulkan optical surface workload; takes effect when opening the renderer. */
-        public Builder surfaceTransport(SurfaceTransportOptions value){surfaceTransport=Objects.requireNonNull(value,"surfaceTransport");return this;}
+        /** Selects the retained scene's asset admission limits. */
+        public Builder resources(RendererResourceOptions value) {
+            resources = Objects.requireNonNull(value, "resources");
+            return this;
+        }
+
+        /** Returns an independent immutable configuration. */
+        public RendererConfig build() { return new RendererConfig(this); }
     }
 }

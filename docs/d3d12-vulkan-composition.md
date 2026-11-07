@@ -1,5 +1,7 @@
 # RTXPT 与Vulkan 的 GPU 组合
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 普通完整场景优先使用单后端预设；本页是需要 Vulkan 独立命令／叠层时的专家组合入口。它不同于 7.1 复用宿主主表面的传输／底图增补，入口区别见[普通用法与专家控制](ordinary-and-expert.md)。
 
 > **默认推荐 RTXPT 单后端**完成完整 3D 与最终呈现，显式使用 `Renderer.open("rtxpt", RendererConfig.pathTracedPresentation())`。

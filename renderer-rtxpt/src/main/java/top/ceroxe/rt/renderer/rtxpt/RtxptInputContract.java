@@ -1,33 +1,11 @@
 package top.ceroxe.rt.renderer.rtxpt;
 
 import java.util.Objects;
-import java.util.Optional;
 import top.ceroxe.rt.renderer.api.*;
 
-/** Rejects Vulkan-only inputs before native state or scene files can change. */
+/** Validates frame inputs and monotonic scene revisions before native state changes. */
 final class RtxptInputContract {
     private RtxptInputContract() { }
-
-    static Optional<String> configurationIssue(RendererConfig configuration) {
-        Objects.requireNonNull(configuration, "configuration");
-        if(configuration.maxFramesInFlight()>3)
-            return Optional.of("RTXPT supports two or three frames in flight; larger rings belong to Vulkan");
-        if (configuration.cpuFrameReadbackEnabled())
-            return Optional.of("RTXPT presents GPU frames directly; CPU frame readback is not exposed");
-        if (!configuration.sceneShaders().equals(SceneShaderProgram.builtIn()))
-            return Optional.of("RTXPT uses upstream shaders; SceneShaderProgram replacements belong to Vulkan");
-        if (configuration.frameOutputFormat() != FrameOutputFormat.SDR_RGBA8)
-            return Optional.of("RTXPT presents tone-mapped SDR; linear HDR frame export belongs to Vulkan");
-        if (configuration.gpuDevice().isPresent())
-            return Optional.of("RTXPT does not expose explicit GPU selection; Vulkan GPU identities cannot select its D3D12 device");
-        if (configuration.validationEnabled())
-            return Optional.of("RTXPT does not expose the API validation-layer control; use the native upstream diagnostics");
-        return Optional.empty();
-    }
-
-    static void validateConfiguration(RendererConfig configuration) {
-        configurationIssue(configuration).ifPresent(reason -> { throw new IllegalArgumentException(reason); });
-    }
 
     static void validateFrame(RenderFrameRequest frame) {
         validateFrame(frame,false);

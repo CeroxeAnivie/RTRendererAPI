@@ -1,5 +1,7 @@
 # Host-lit augmentation implementation and connection
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 Use `RtxptRenderers.openHostSurface(plan, augmentation)` for the compatible finite-signal policy. Expert callers can derive `RtxptRenderers.hostSurfaceConfiguration(plan.composition()).copyBuilder()` and pass the full configuration explicitly. Policy convenience does not replace the host's GPU input/output lease contract; see [ordinary and expert use](ordinary-and-expert.md).
 
 `HostSurfaceAugmentation` applies the existing deterministic native style

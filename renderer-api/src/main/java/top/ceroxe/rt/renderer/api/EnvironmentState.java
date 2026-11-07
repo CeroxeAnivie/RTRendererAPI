@@ -10,6 +10,7 @@ public final class EnvironmentState {
     private final float skyGreen;
     private final float skyBlue;
     private final float ambientIntensity;
+    private final EnvironmentMap environmentMap;
     private final float sunDirectionX;
     private final float sunDirectionY;
     private final float sunDirectionZ;
@@ -29,7 +30,8 @@ public final class EnvironmentState {
             float sunRed,
             float sunGreen,
             float sunBlue,
-            float sunIntensity
+            float sunIntensity,
+            EnvironmentMap environmentMap
     ) {
         requireNonNegativeFinite(skyRed, "skyRed");
         requireNonNegativeFinite(skyGreen, "skyGreen");
@@ -44,6 +46,7 @@ public final class EnvironmentState {
         this.skyGreen = skyGreen;
         this.skyBlue = skyBlue;
         this.ambientIntensity = ambientIntensity;
+        this.environmentMap = environmentMap;
         this.sunDirectionX = sunDirectionX;
         this.sunDirectionY = sunDirectionY;
         this.sunDirectionZ = sunDirectionZ;
@@ -121,6 +124,16 @@ public final class EnvironmentState {
      */
     public float ambientIntensity() {
         return ambientIntensity;
+    }
+
+    /**
+     * Returns final equirectangular linear environment radiance, or null for constant sky.
+     * The map replaces sky RGB and ambient intensity without additional sRGB conversion
+     * or ambient multiplication. Sun properties remain independent.
+     * @return immutable environment map, or null
+     */
+    public EnvironmentMap environmentMap() {
+        return environmentMap;
     }
 
     /**
@@ -211,7 +224,7 @@ public final class EnvironmentState {
                 && Float.compare(sunGreen, environment.sunGreen) == 0
                 && Float.compare(sunBlue, environment.sunBlue) == 0
                 && Float.compare(sunIntensity, environment.sunIntensity) == 0
-;
+                && Objects.equals(environmentMap, environment.environmentMap);
     }
 
     @Override
@@ -219,7 +232,7 @@ public final class EnvironmentState {
         return Objects.hash(
                 skyRed, skyGreen, skyBlue, ambientIntensity,
                 sunDirectionX, sunDirectionY, sunDirectionZ,
-                sunRed, sunGreen, sunBlue, sunIntensity
+                sunRed, sunGreen, sunBlue, sunIntensity, environmentMap
         );
     }
 
@@ -230,6 +243,7 @@ public final class EnvironmentState {
                 + ", skyGreen=" + skyGreen
                 + ", skyBlue=" + skyBlue
                 + ", ambientIntensity=" + ambientIntensity
+                + ", environmentMap=" + environmentMap
                 + ", sunDirectionX=" + sunDirectionX
                 + ", sunDirectionY=" + sunDirectionY
                 + ", sunDirectionZ=" + sunDirectionZ
@@ -248,6 +262,7 @@ public final class EnvironmentState {
         private float skyGreen;
         private float skyBlue;
         private float ambientIntensity;
+        private EnvironmentMap environmentMap;
         private float sunDirectionX;
         private float sunDirectionY = 1.0F;
         private float sunDirectionZ;
@@ -264,6 +279,7 @@ public final class EnvironmentState {
             skyGreen = source.skyGreen;
             skyBlue = source.skyBlue;
             ambientIntensity = source.ambientIntensity;
+            environmentMap = source.environmentMap;
             sunDirectionX = source.sunDirectionX;
             sunDirectionY = source.sunDirectionY;
             sunDirectionZ = source.sunDirectionZ;
@@ -296,6 +312,18 @@ public final class EnvironmentState {
          */
         public Builder ambientIntensity(float value) {
             ambientIntensity = value;
+            return this;
+        }
+
+        /**
+         * Selects final linear environment radiance, replacing constant sky RGB and
+         * ambient intensity. No sRGB conversion or extra ambient multiplier is applied.
+         * The sun remains separate. Null restores the constant-sky path.
+         * @param value immutable environment map, or null to clear it
+         * @return this builder
+         */
+        public Builder environmentMap(EnvironmentMap value) {
+            environmentMap = value;
             return this;
         }
 
@@ -351,7 +379,7 @@ public final class EnvironmentState {
             return new EnvironmentState(
                     skyRed, skyGreen, skyBlue, ambientIntensity,
                     sunDirectionX, sunDirectionY, sunDirectionZ,
-                    sunRed, sunGreen, sunBlue, sunIntensity
+                    sunRed, sunGreen, sunBlue, sunIntensity, environmentMap
             );
         }
     }
@@ -360,7 +388,7 @@ public final class EnvironmentState {
         private static final EnvironmentState INSTANCE = new EnvironmentState(
                 0.0F, 0.0F, 0.0F, 0.0F,
                 0.0F, 1.0F, 0.0F,
-                1.0F, 1.0F, 1.0F, 0.0F
+                1.0F, 1.0F, 1.0F, 0.0F, null
         );
     }
 }

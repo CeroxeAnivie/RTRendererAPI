@@ -12,7 +12,7 @@ final class RtxptLightingSelfTest {
         var spot=SceneLight.spot(2,4,5,6,0,-1,0).coneCosines(.9f,.7f).range(8).build();
         var directional=SceneLight.directional(18,1,-1,0).intensity(0).build();
         var tx=SceneTransaction.builder(2).upsert(point).upsert(spot).upsert(directional).build();
-        require(RtxptRenderer.geometryUnchanged(tx,scene),"All light additions are independent of geometry");scene.retain(tx);
+        scene.retain(tx);
         var environment=RtxptAdapterSelfTest.frame(0).environment();
         var state=RtxptLighting.of(environment,scene.lights.values());var values=state.records();
         require(Arrays.equals(state.ids(),new long[]{-1,2,9,18}),"IDs are canonical and the sun cannot collide with application lights");
@@ -23,13 +23,8 @@ final class RtxptLightingSelfTest {
         var reverse=new ArrayList<>(scene.lights.values());Collections.reverse(reverse);
         require(state.equals(RtxptLighting.of(environment,reverse)),"Map insertion order does not cause redundant lighting uploads");
         var replacement=SceneTransaction.builder(3).upsert(SceneLight.spot(9,0,4,0,0,-1,0).build()).removeLight(2).build();
-        require(RtxptRenderer.geometryUnchanged(replacement,scene),"Type replacement and removals do not reload geometry");scene.retain(replacement);
+        scene.retain(replacement);
         require(!state.equals(RtxptLighting.of(environment,scene.lights.values())),"Actual replacements create a new generation");
-        require(!RtxptRenderer.geometryUnchanged(SceneTransaction.builder(4).removeInstance(1).build(),scene),"Geometry removal still reloads");
-        require(!RtxptRenderer.geometryUnchanged(SceneTransaction.builder(4).resetScene().build(),scene),"Reset preserves full-scene semantics");
-        var moving=SceneTransaction.builder(4).upsert(SceneInstance.builder(1,1).mediumBoundary(scene.instances.get(1L).mediumBoundary().orElseThrow())
-            .transform(new AffineTransform(new float[]{1,0,0,1,0,1,0,2,0,0,1,3})).build()).upsert(point).build();
-        require(RtxptRenderer.geometryUnchanged(moving,scene),"Mixed light and transform batch stays incremental");
         // Dependency caching must not hide missing materials or reuse the old mesh's IDs.
         var cached=new RtxptScene();cached.retain(RtxptAdapterSelfTest.scene(1));
         RtxptAdapterSelfTest.rejected(()->new RtxptScene(cached).retain(SceneTransaction.builder(2).removeMaterial(1).build()),"Cached mesh dependency still protects material removal");

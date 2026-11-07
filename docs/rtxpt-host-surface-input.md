@@ -1,5 +1,7 @@
 # 7.1.0 宿主主表面 GPU 输入 ABI
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 普通配置入口为 `RtxptRenderers.openHostSurface(plan)`：分拆传输默认优选 RR，底图增补保持有限信号 NONE；完整配置重载用于专家明确控制。GPU 输入／输出 lease 责任不变，见[普通用法与专家控制](ordinary-and-expert.md)。
 
 `HostSurfaceControl` 管理输入方向的共享槽；`LightingFrameLease` 管理相反方向的光照输出，两者不能互换。输入描述由 API 分配，借用的 Windows handle 不由宿主关闭。实现限同一适配器上的 Windows D3D12／支持 EXT Win32 互操作的 OpenGL；导入前核对完整八字节 LUID。

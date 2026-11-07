@@ -1,5 +1,7 @@
 # Programmable retained scenes
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 For preset-based ordinary use, explicit expert policy and backend selection, see [ordinary and expert use](ordinary-and-expert.md). Custom scene programs remain an explicit Vulkan capability.
 
 7.0.2 exposes retained-scene shader replacement through `SceneShaderProgram`. Ordinary callers

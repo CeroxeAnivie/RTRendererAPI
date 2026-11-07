@@ -1,10 +1,8 @@
 package top.ceroxe.rt.renderer.spi;
 
-import top.ceroxe.rt.renderer.api.RendererGpuDevice;
 import top.ceroxe.rt.renderer.api.Renderer;
 import top.ceroxe.rt.renderer.api.RendererConfig;
 
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -15,7 +13,7 @@ public interface RendererBackendProvider {
      * Major renderer contract required by {@code renderer-api}. Providers must implement
      * this same breaking-release line.
      */
-    int API_MAJOR = 7;
+    int API_MAJOR = 8;
 
     /** Highest minor SPI contract this host can consume without a provider upgrade. */
     int API_MINOR = 0;
@@ -26,13 +24,6 @@ public interface RendererBackendProvider {
      * @return non-null provider descriptor
      */
     Descriptor descriptor();
-
-    /**
-     * Returns current hardware-RT-capable physical devices owned by this provider.
-     *
-     * @return immutable device list; empty when discovery is unsupported or no device qualifies
-     */
-    List<RendererGpuDevice> availableGpuDevices();
 
     /**
      * Performs a read-only configuration-aware probe without retaining native resources.

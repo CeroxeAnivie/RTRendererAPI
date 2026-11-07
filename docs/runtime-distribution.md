@@ -1,59 +1,66 @@
-# RTRendererAPI Windows 制品布局
+# 运行时与 JVM 宿主
 
-当前交付版本为7.1.7。[本版说明](release-7.1.7.md)记录必要正确性、资源机制和制品身份，不将历史完整性能矩阵转签本版。四模块、runtime和匹配符号仅发布Maven Local；GitHub仅发布源码。7.1.6四模块与矩阵记录 `quality/data/resource-architecture-716-release.json` 及7.1.5的[最终验收](quality/resource-latency.md)保留原身份。
+本文对应未发布的 **8.0.0 迁移候选**。实际交付完成前，不能按版本号推定 Maven Local 已存在可用包，也不能混用 7.x 的 native DLL、私有 shader ABI 或 overlay。
 
-普通 Vulkan 路径由 renderer-api、renderer-core、renderer-nvidia 提供。renderer-rtxpt 是显式可选的 D3D12 全场景／透明介质托管后端，包含原生最终呈现和 Vulkan GPU 组合入口；发行目录同时携带这个模块，但 renderer-api 不默认依赖它。
+## 两模块运行图
 
-## 使用
+消费者依赖 renderer-rtxpt，它以 compile 依赖带入同版本 renderer-api。renderer-api 不反向依赖具体 provider。旧 renderer-core、renderer-nvidia、hex-ball 演示及本项目自己的 Vulkan 渲染路线不再构建或打包。
 
-需要 Windows x86_64、Java 25 和通过后端能力检查的 NVIDIA RTX。普通路径使用 Vulkan，RTXPT 使用 D3D12/DXR。应用加入 top.ceroxe.rt:renderer-rtxpt:7.3.3 后，通过 Renderer.open("rtxpt", config) 选择托管路径。
+目标坐标：
 
-```powershell
-java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow `
-  -cp 'lib/*;your-application.jar' your.application.Main
-```
+    top.ceroxe.rt:renderer-rtxpt:8.0.0
 
-RTXPT JAR 自带 JNI、Streamline/DLSS、Agility、shader 和原始许可证。首次运行校验 SHA-256 并解包至用户缓存，之后复用；不需要安装 CUDA，不从开发机路径取 DLL，不在运行时下载 SDK。支持矩阵内 shader 已预编译；首次 PSO 创建仍需准备，普通材质更新复用通用运行期材质路径。具体支持范围见 release-independent-native-and-host-lighting.md。
+当前平台是 Windows x86_64、Java 25、D3D12/DXR 与受支持的 NVIDIA GPU。普通 CPU 帧、旧 Vulkan presenter 和旧 RTXPT／Vulkan 组合器不是本版 provider 的输出承诺。
 
-公共预算支持 LOW／MEDIUM／HIGH，工厂无参与三 Demo 缺省字段统一中档。JAR 内包含已捕获上游动态排列的真实 DXIL，以及每个已捕获场景解析光照排列的 1～6 精确界面六档；未捕获的新组合仍由随包上游 DXC 编译缓存。打包校验源码指纹和二进制哈希，仓库外独立缓存验收使用 `:renderer-rtxpt:rtxptPackagedBudgetNativeSelfTest` 禁止 fallback，检查被测排列均从包加载。构建命令与范围见[预算指南](performance-budgets.md)。
+## 官方布局
 
-### 三个可执行 Demo
+锁定上游为 RTXPT v1.9.0，commit 303b408ab81790a5051abd7573830b7a4112eb8e。官方二进制包 SHA-256 为 d03749c06c4b89befebf1a8938ed88a4aca714ef1053649a6c32f4e7947380dc。
 
-在仓库根目录运行 `./gradlew.bat :demos:hex-ball:shadowJar :demos:hex-ball:mediumShadowJar` 后：
+运行时 ZIP 保留以下相对关系：
 
-```powershell
-$demoVersion = (Get-Content .\gradle.properties -Encoding UTF8 | Select-String '^project_version=(.+)$').Matches.Groups[1].Value
+    bin/
+      rtrenderer_jvm_host.exe
+      rtrenderer_rtxpt.dll
+      D3D12/
+      ShaderDynamic/
+      ShaderPrecompiled/
+      AdapterShaders/
+    Assets/
 
-# 原 Vulkan 弹球
-java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-$demoVersion.jar" --windowed
-# RTXPT 新路径弹球
-java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-HexBallDemo-$demoVersion.jar" --rtxpt --windowed
-# RTXPT 介质
-java -jar ".\demos\hex-ball\build\libs\RTRendererAPI-MediumDemo-$demoVersion.jar"
-```
+bin 中的原版依赖及资源与 Assets 同源；自有 bridge、宿主和 AdapterShaders 独立放置。AdapterShaders 不是向上游 ShaderDynamic/Source 注入的文件。
 
-三个交互入口默认请求 2× FG，HexBall JAR 无参数打开 API 工作台。两个弹球使用 `--duration-seconds=30`，介质使用 `--seconds=30`；不传时限持续运行。完整参数和真实交付判断见 [Demo 说明](../demos/hex-ball/README.md)。启动器会为子 JVM 配置 native access，普通库消费者仍自行管理 JVM 参数。
+官方 source 导出仍只读。用户允许构建工作副本保留唯一内部补丁：SampleCommon::ProgressBarStart 在 HelpersIsNonInteractive() 为真时返回 -1，不创建进度窗口；interactive 保持原版，渲染算法、shader、默认质量和编译清单不因此改变。此项必须按唯一预期差异审计，不能将最终构建写成“零 patch”。目前尚未完成该控窗补丁的 GPU 验证。
 
-## 文件与许可证
+JAR 中的 runtime ZIP 与 SHA-256 位于 META-INF/native/windows-x86_64。RtxptRuntime.binDirectory() 校验并返回 bin，RtxptRuntime.jvmHostExecutable() 返回宿主 EXE；两者不创建设备。打包提取保留摘要校验、进程间锁、安全路径检查和原子 staging；热缓存只复用完整内容。显式 top.ceroxe.rt.rtxpt.runtime 指向 bin，不完整就失败，不回退到旧 build/rtxpt-sdk。
 
-- lib/：完整 API 运行图及可选 RTXPT JAR。
-- maven/：四模块 runtime、sources、Javadoc、POM/module 和校验文件。
-- source/：四模块实现、测试、构建入口与校验工具。源码重建原生后端仍需固定版本的上游依赖。
-- docs/：当前合同和历史记录；历史 CUDA/LuxCore 报告不作为 RTXPT 验收结果。
-- SHA256SUMS 与 maven/SHA256SUMS：目录内文件哈希。
+## JVM 宿主启动契约
 
-项目适配代码采用 Apache-2.0；NVIDIA、Microsoft 和其他第三方运行时遵循各自许可证。RTXPT JAR 的 META-INF/NOTICE-RTXPT.txt 与嵌套 runtime 内 ThirdPartyLicenses/ 必须随包保留，不得将全部原生组件视为 Apache 授权。
+原版 ShaderCompiler、shader 和资产定位依赖真实进程 EXE 目录。rtrenderer_jvm_host.exe 位于官方 bin，使用公开 JNI_CreateJavaVM；不 hook CRT、不改上游路径，不依赖 Java launcher 私有接口或 IPC 服务。
 
-## 验证
+只在子进程环境中设置：
 
-```powershell
-./gradlew.bat :renderer-rtxpt:check
-./gradlew.bat :renderer-rtxpt:rtxptNativeSelfTest
-./gradlew.bat :renderer-rtxpt:rtxptPackagedNativeSelfTest
-./gradlew.bat :demos:hex-ball:rtxptMediumBenchmark
-./gradlew.bat verifyRuntimeDistribution
-```
+| 字段 | 含义 |
+| --- | --- |
+| RTR_JVM_DLL | 绝对 jvm.dll 路径 |
+| RTR_JVM_CLASSPATH | 完整 Java classpath |
+| RTR_JVM_MAIN | Java binary class 名称 |
+| RTR_JVM_OPTION_COUNT | VM 选项数，省略表示 0 |
+| RTR_JVM_OPTION_0…N-1 | 每个字段保存一个完整 VM 选项 |
+| RTR_JVM_ARG_COUNT | Java main 参数数，省略表示 0 |
+| RTR_JVM_ARG_0…N-1 | 每个字段保存一个完整 main 参数，可为空 |
 
-packaged 测试只使用打包 JAR，在仓库外临时工作目录中验证自动解包、实际 DLSS-RR、真实出帧、变换增量、场景切换、截图和输出尺寸变化。显式 native 路径覆盖会使此测试失败。硬件测试串行执行。基准记录真实 Present、实际内部分辨率与重建设置，FG 关闭；预热和一次性编译不计入稳态 FPS。
+参数按字段传递，不再经过一套引号／分隔符解析。数量上限为 4096；classpath 单独传入，不在 VM 选项中重复设置 -Djava.class.path。中文类名、路径、参数与 VM 属性由 Unicode 入口处理。
 
-从源码构建 RTXPT 时，运行 tools/Build-RtxptBridge.ps1，并通过 -StreamlineSdk 指定官方 SDK 目录。代理仅通过调用进程环境配置，不写入项目。具体命令及本轮实测见 quality/rtxpt-managed-medium-migration.md。
+**宿主没有 --jvm、--classpath、--main 启动旗标。**真实 process argv 归原版 RTXPT 解析，应用 Java 参数走 RTR_JVM_ARG_*。宿主调用 main 后由标准 DestroyJavaVM 等待非 daemon 线程；异常、参数错误及 VM 创建失败返回明确退出码。
+
+native nonInteractive 属于原生 process argv／原生配置，不是 NativeSceneDemo 的 Java 参数。原版该模式只关闭需输入的错误弹框，进度窗口由前述唯一授权 guard 补齐；不能靠隐藏宿主、伪造 fullscreen 或 WinEvent 藏窗替代。原版 nonInteractive 编译失败会调用 HelpersExitProcess(1) 终止整个宿主进程，外层须保留真实日志和非零退出码，不能把它写成 JNI 可捕获的恢复异常。
+
+## 源码构建与发布
+
+官方源码位于 build/upstream-rtxpt/source，来源清单位于 build/upstream-rtxpt/source-manifest.json。tools/Assert-RtxptUpstream.ps1 对官方导出同时拒绝原文件变化及清单外新增文件。外桥构建入口是 tools/Build-RtxptBridge.ps1，自有 shader 构建入口是 tools/Build-AdapterShaders.ps1。官方导出继续只读；只有构建工作副本的 ProgressBarStart 非交互 guard 获准例外，须明确记录来源基线与这一处差异，不放宽其它源码／shader 的校验。
+
+所有构建与客户端使用有界进程树入口，合计内存上限 10 GiB；Gradle --no-daemon，重任务串行。来源／唯一补丁差异、CPU、原生出图、正式包及完整负载分别核验。历史生产 29 帧与 beauty 24 帧 proof 不为后续变更转签。最新两模块 Java 全量编译及 API 边界检查已完成，记录 12.918s／构建采集峰值 1.220GB；新增控窗补丁尚未 GPU 验证。本轮人工进程已退出但用户未验收通过，完整负载、消费方性能及正式包仍未通过。
+
+人工[原生场景示例](../examples/native-scenes/README.md)以 top.ceroxe.rt.renderer.rtxpt.examples.NativeSceneDemo 为 Java main。先 balls，待用户关闭且进程退出后再单独 mixed；Java 场景参数的每个 flag 和 value 各占一个 RTR_JVM_ARG_n，不把整条参数串塞进一个字段。--denoising 只接受 scene、off、relax、rr；光学比较的 --native 必须带 true/false，balls 不接受 --native true，--native true 与 --denoising rr 也不能组合。不自动启动第二个窗口，也不以 FG 请求代替原生激活／实际呈现测量。
+
+验证完成后先提交并上传全部源码、正式工具与文档，再发布两模块 Maven Local；本次不发布 Maven Central。项目适配代码的 Apache-2.0 与 NVIDIA／Microsoft 等运行时许可证分别保留，不能将所有原生文件当作项目许可证授权。

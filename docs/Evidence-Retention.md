@@ -1,5 +1,7 @@
 # Generic Evidence Retention
 
+> 历史记录：本文保留 7.x 路线与验收记录，不是 8.0.0 当前用法。当前原生优先的两模块接入见[文档首页](Home.md)和[项目 README](../README.md)。
+
 Version 4.1.0 retains the bounded provider-owned execution history introduced in the 4.0.x line.
 It retains the command and retired-generation
 retention fixes from the published 4.0.2 implementation. Existing query method descriptors remain

@@ -12,14 +12,15 @@ public final class MaterialAsset {
     private final long normalTextureId;
     private final long metallicRoughnessTextureId;
     private final long emissiveTextureId;
-    private final int emissiveColorRgba8;
-    private final float emissiveStrength;
+    private final Rgb emissiveRadiance;
     private final float alphaCutoff;
     private final float roughness;
     private final float metallic;
     private final float transmission;
     private final float indexOfRefraction;
     private final boolean doubleSided;
+    private final PathDecomposition pathDecomposition;
+    private final MotionVectorBlocking motionVectorBlocking;
     private final ShadingModel shadingModel;
     private final SurfaceOverlayState surfaceOverlay;
 
@@ -33,14 +34,14 @@ public final class MaterialAsset {
      * @param normalTextureId            normal-map texture id, or {@code -1}
      * @param metallicRoughnessTextureId metallic-roughness texture id, or {@code -1}
      * @param emissiveTextureId          emissive texture id, or {@code -1}
-     * @param emissiveColorRgba8         packed emissive color
-     * @param emissiveStrength           non-negative emissive multiplier
+     * @param emissiveRadiance           finite non-negative linear RGB radiance
      * @param alphaCutoff                masked-material cutoff in {@code [0, 1]}
      * @param roughness                  perceptual roughness in {@code [0, 1]}
      * @param metallic                   metallic response in {@code [0, 1]}
      * @param transmission               transmission response in {@code [0, 1]}
      * @param indexOfRefraction          refractive index in {@code [1, 4]}
      * @param doubleSided                whether both winding orientations are visible
+     * @param pathDecomposition          path-space decomposition participation and dominant delta lobe
      * @param shadingModel               renderer-owned lighting equation
      * @throws IllegalArgumentException if an identifier or physical parameter is invalid
      * @throws NullPointerException     if an enum component is {@code null}
@@ -53,26 +54,42 @@ public final class MaterialAsset {
             long normalTextureId,
             long metallicRoughnessTextureId,
             long emissiveTextureId,
-            int emissiveColorRgba8,
-            float emissiveStrength,
+            Rgb emissiveRadiance,
             float alphaCutoff,
             float roughness,
             float metallic,
             float transmission,
             float indexOfRefraction,
             boolean doubleSided,
+            PathDecomposition pathDecomposition,
             ShadingModel shadingModel,
+            SurfaceOverlayState surfaceOverlay
+    ) {
+        this(id, blendMode, baseColorRgba8, baseColorTextureId, normalTextureId,
+                metallicRoughnessTextureId, emissiveTextureId, emissiveRadiance,
+                alphaCutoff, roughness, metallic, transmission, indexOfRefraction,
+                doubleSided, pathDecomposition, MotionVectorBlocking.OFF, shadingModel, surfaceOverlay);
+    }
+
+    private MaterialAsset(
+            long id, BlendMode blendMode, int baseColorRgba8,
+            long baseColorTextureId, long normalTextureId, long metallicRoughnessTextureId,
+            long emissiveTextureId, Rgb emissiveRadiance, float alphaCutoff,
+            float roughness, float metallic, float transmission, float indexOfRefraction,
+            boolean doubleSided, PathDecomposition pathDecomposition,
+            MotionVectorBlocking motionVectorBlocking, ShadingModel shadingModel,
             SurfaceOverlayState surfaceOverlay
     ) {
         requireId(id, "id");
         this.blendMode = java.util.Objects.requireNonNull(blendMode, "blendMode");
         this.shadingModel = java.util.Objects.requireNonNull(shadingModel, "shadingModel");
+        this.pathDecomposition = java.util.Objects.requireNonNull(pathDecomposition, "pathDecomposition");
+        this.motionVectorBlocking = java.util.Objects.requireNonNull(motionVectorBlocking, "motionVectorBlocking");
         this.surfaceOverlay = java.util.Objects.requireNonNull(surfaceOverlay, "surfaceOverlay");
         requireOptionalId(baseColorTextureId, "baseColorTextureId");
         requireOptionalId(normalTextureId, "normalTextureId");
         requireOptionalId(metallicRoughnessTextureId, "metallicRoughnessTextureId");
         requireOptionalId(emissiveTextureId, "emissiveTextureId");
-        requireRange(emissiveStrength, 0.0F, Float.MAX_VALUE, "emissiveStrength");
         requireRange(alphaCutoff, 0.0F, 1.0F, "alphaCutoff");
         requireRange(roughness, 0.0F, 1.0F, "roughness");
         requireRange(metallic, 0.0F, 1.0F, "metallic");
@@ -93,8 +110,7 @@ public final class MaterialAsset {
         this.normalTextureId = normalTextureId;
         this.metallicRoughnessTextureId = metallicRoughnessTextureId;
         this.emissiveTextureId = emissiveTextureId;
-        this.emissiveColorRgba8 = emissiveColorRgba8;
-        this.emissiveStrength = emissiveStrength;
+        this.emissiveRadiance = java.util.Objects.requireNonNull(emissiveRadiance, "emissiveRadiance");
         this.alphaCutoff = alphaCutoff;
         this.roughness = roughness;
         this.metallic = metallic;
@@ -107,7 +123,8 @@ public final class MaterialAsset {
      * Starts a physically based opaque material with conservative production defaults.
      *
      * <p>The material starts white, non-emissive, fully rough, non-metallic, non-transmissive,
-     * single-sided, and without textures. Callers only select properties they actually need.</p>
+     * single-sided, excluded from path-space decomposition, and without textures.
+     * Callers only select properties they actually need.</p>
      *
      * @param id stable non-negative material identifier
      * @return single-thread-confined material builder
@@ -209,21 +226,12 @@ public final class MaterialAsset {
     }
 
     /**
-     * Returns the packed emissive color.
-     *
-     * @return packed RGBA8 emissive color
+     * Returns authored linear RGB radiance, before optional emissive texture modulation.
+     * No channel is packed, normalized or clamped to one.
+     * @return immutable finite non-negative radiance
      */
-    public int emissiveColorRgba8() {
-        return emissiveColorRgba8;
-    }
-
-    /**
-     * Returns the non-negative emissive multiplier.
-     *
-     * @return finite non-negative emissive multiplier
-     */
-    public float emissiveStrength() {
-        return emissiveStrength;
+    public Rgb emissiveRadiance() {
+        return emissiveRadiance;
     }
 
     /**
@@ -298,6 +306,22 @@ public final class MaterialAsset {
     }
 
     /**
+     * Returns path-space decomposition participation and dominant delta-lobe selection.
+     * @return non-null path decomposition policy
+     */
+    public PathDecomposition pathDecomposition() {
+        return pathDecomposition;
+    }
+
+    /**
+     * Returns the surface policy for stopping reflected or refracted motion-vector propagation.
+     * @return non-null motion-vector blocking policy; OFF by default
+     */
+    public MotionVectorBlocking motionVectorBlocking() {
+        return motionVectorBlocking;
+    }
+
+    /**
      * Copies this material into an independent builder.
      * @return initialized material builder
      */
@@ -315,14 +339,15 @@ public final class MaterialAsset {
                 && normalTextureId == material.normalTextureId
                 && metallicRoughnessTextureId == material.metallicRoughnessTextureId
                 && emissiveTextureId == material.emissiveTextureId
-                && emissiveColorRgba8 == material.emissiveColorRgba8
-                && Float.compare(emissiveStrength, material.emissiveStrength) == 0
+                && emissiveRadiance.equals(material.emissiveRadiance)
                 && Float.compare(alphaCutoff, material.alphaCutoff) == 0
                 && Float.compare(roughness, material.roughness) == 0
                 && Float.compare(metallic, material.metallic) == 0
                 && Float.compare(transmission, material.transmission) == 0
                 && Float.compare(indexOfRefraction, material.indexOfRefraction) == 0
                 && doubleSided == material.doubleSided
+                && pathDecomposition == material.pathDecomposition
+                && motionVectorBlocking == material.motionVectorBlocking
                 && blendMode == material.blendMode
                 && shadingModel == material.shadingModel
                 && surfaceOverlay.equals(material.surfaceOverlay);
@@ -333,9 +358,9 @@ public final class MaterialAsset {
         return java.util.Objects.hash(
                 id, blendMode, baseColorRgba8,
                 baseColorTextureId, normalTextureId, metallicRoughnessTextureId,
-                emissiveTextureId, emissiveColorRgba8, emissiveStrength,
+                emissiveTextureId, emissiveRadiance,
                 alphaCutoff, roughness, metallic, transmission, indexOfRefraction,
-                doubleSided, shadingModel, surfaceOverlay
+                doubleSided, pathDecomposition, motionVectorBlocking, shadingModel, surfaceOverlay
         );
     }
 
@@ -349,14 +374,15 @@ public final class MaterialAsset {
                 + ", normalTextureId=" + normalTextureId
                 + ", metallicRoughnessTextureId=" + metallicRoughnessTextureId
                 + ", emissiveTextureId=" + emissiveTextureId
-                + ", emissiveColorRgba8=" + emissiveColorRgba8
-                + ", emissiveStrength=" + emissiveStrength
+                + ", emissiveRadiance=" + emissiveRadiance
                 + ", alphaCutoff=" + alphaCutoff
                 + ", roughness=" + roughness
                 + ", metallic=" + metallic
                 + ", transmission=" + transmission
                 + ", indexOfRefraction=" + indexOfRefraction
                 + ", doubleSided=" + doubleSided
+                + ", pathDecomposition=" + pathDecomposition
+                + ", motionVectorBlocking=" + motionVectorBlocking
                 + ", shadingModel=" + shadingModel
                 + ", surfaceOverlay=" + surfaceOverlay
                 + ']';
@@ -378,6 +404,35 @@ public final class MaterialAsset {
          * Fractionally blended surface.
          */
         TRANSLUCENT
+    }
+
+    /** Path-space decomposition policy for specular delta paths. */
+    public enum PathDecomposition {
+        /** Excludes this material from path decomposition; the default. */
+        EXCLUDED,
+        /** Participates and lets the renderer select the dominant delta lobe. */
+        AUTOMATIC,
+        /** Participates with transmission as the dominant delta lobe. */
+        TRANSMISSION,
+        /** Participates with reflection as the dominant delta lobe. */
+        REFLECTION
+    }
+
+    /**
+     * Per-material motion-vector propagation policy for path decomposition.
+     * Curved reflective or refractive surfaces may require stopping propagation
+     * at the surface because a rotation-only path transform cannot represent curvature.
+     * These choices select the renderer's existing behavior, not a custom motion model.
+     */
+    public enum MotionVectorBlocking {
+        /** Propagates motion vectors normally; the original default. */
+        OFF,
+        /** Uses the renderer's less sensitive curvature test. */
+        AUTO_LOW,
+        /** Uses the renderer's more sensitive curvature test. */
+        AUTO_HIGH,
+        /** Always stops motion-vector propagation at this surface. */
+        FULL
     }
 
     /**
@@ -413,14 +468,15 @@ public final class MaterialAsset {
         private long normalTextureId = -1L;
         private long metallicRoughnessTextureId = -1L;
         private long emissiveTextureId = -1L;
-        private int emissiveColorRgba8;
-        private float emissiveStrength;
+        private Rgb emissiveRadiance = Rgb.ZERO;
         private float alphaCutoff = 0.5F;
         private float roughness = 1.0F;
         private float metallic;
         private float transmission;
         private float indexOfRefraction = 1.5F;
         private boolean doubleSided;
+        private PathDecomposition pathDecomposition = PathDecomposition.EXCLUDED;
+        private MotionVectorBlocking motionVectorBlocking = MotionVectorBlocking.OFF;
         private ShadingModel shadingModel = ShadingModel.PHYSICALLY_BASED;
         private SurfaceOverlayState surfaceOverlay = SurfaceOverlayState.disabled();
 
@@ -438,14 +494,15 @@ public final class MaterialAsset {
             normalTextureId = source.normalTextureId;
             metallicRoughnessTextureId = source.metallicRoughnessTextureId;
             emissiveTextureId = source.emissiveTextureId;
-            emissiveColorRgba8 = source.emissiveColorRgba8;
-            emissiveStrength = source.emissiveStrength;
+            emissiveRadiance = source.emissiveRadiance;
             alphaCutoff = source.alphaCutoff;
             roughness = source.roughness;
             metallic = source.metallic;
             transmission = source.transmission;
             indexOfRefraction = source.indexOfRefraction;
             doubleSided = source.doubleSided;
+            pathDecomposition = source.pathDecomposition;
+            motionVectorBlocking = source.motionVectorBlocking;
             shadingModel = source.shadingModel;
             surfaceOverlay = source.surfaceOverlay;
         }
@@ -545,14 +602,31 @@ public final class MaterialAsset {
         /**
          * Selects emissive color and strength without an emissive texture.
          *
+         * <p>RGB bytes use the existing linear numeric convention: red is the low byte,
+         * followed by green and blue. Alpha is ignored. Each byte is divided by 255
+         * and multiplied by strength once when authored; no sRGB transfer is applied.</p>
+         *
          * @param emissiveColorRgba8 packed RGBA8 emissive color
          * @param strength           non-negative finite emissive multiplier
          * @return this builder
          */
         public Builder emissive(int emissiveColorRgba8, float strength) {
             requireRange(strength, 0.0F, Float.MAX_VALUE, "emissiveStrength");
-            this.emissiveColorRgba8 = emissiveColorRgba8;
-            emissiveStrength = strength;
+            emissiveRadiance = new Rgb(
+                    (emissiveColorRgba8 & 0xff) / 255.0F * strength,
+                    ((emissiveColorRgba8 >>> 8) & 0xff) / 255.0F * strength,
+                    ((emissiveColorRgba8 >>> 16) & 0xff) / 255.0F * strength);
+            return this;
+        }
+
+        /**
+         * Selects finite non-negative linear RGB radiance without RGBA8 quantization.
+         * The optional emissive texture multiplies these channels.
+         * @param radiance immutable linear radiance; channels may exceed one
+         * @return this builder
+         */
+        public Builder emissive(Rgb radiance) {
+            emissiveRadiance = java.util.Objects.requireNonNull(radiance, "radiance");
             return this;
         }
 
@@ -567,6 +641,17 @@ public final class MaterialAsset {
         public Builder emissive(TextureAsset texture, int emissiveColorRgba8, float strength) {
             emissiveTextureId = java.util.Objects.requireNonNull(texture, "texture").id();
             return emissive(emissiveColorRgba8, strength);
+        }
+
+        /**
+         * Selects an emissive texture and unquantized linear RGB radiance.
+         * @param texture non-null emissive texture
+         * @param radiance immutable linear modulation radiance
+         * @return this builder
+         */
+        public Builder emissive(TextureAsset texture, Rgb radiance) {
+            emissiveTextureId = java.util.Objects.requireNonNull(texture, "texture").id();
+            return emissive(radiance);
         }
 
         /**
@@ -659,6 +744,28 @@ public final class MaterialAsset {
         }
 
         /**
+         * Selects path-space decomposition participation and the dominant delta lobe.
+         * This policy does not change transmission, roughness, or alpha blending.
+         * @param value non-null path decomposition policy
+         * @return this builder
+         */
+        public Builder pathDecomposition(PathDecomposition value) {
+            pathDecomposition = java.util.Objects.requireNonNull(value, "pathDecomposition");
+            return this;
+        }
+
+        /**
+         * Selects the renderer's surface motion-vector blocking behavior.
+         * Does not enable path decomposition or change surface transport parameters.
+         * @param value non-null motion-vector blocking policy
+         * @return this builder
+         */
+        public Builder motionVectorBlocking(MotionVectorBlocking value) {
+            motionVectorBlocking = java.util.Objects.requireNonNull(value, "motionVectorBlocking");
+            return this;
+        }
+
+        /**
          * Selects the renderer-owned lighting equation.
          *
          * @param shadingModel non-null shading model
@@ -695,9 +802,9 @@ public final class MaterialAsset {
             return new MaterialAsset(
                     id, effectiveBlendMode, baseColorRgba8,
                     baseColorTextureId, normalTextureId, metallicRoughnessTextureId,
-                    emissiveTextureId, emissiveColorRgba8, emissiveStrength,
+                    emissiveTextureId, emissiveRadiance,
                     alphaCutoff, roughness, metallic, transmission, indexOfRefraction,
-                    doubleSided, shadingModel, surfaceOverlay
+                    doubleSided, pathDecomposition, motionVectorBlocking, shadingModel, surfaceOverlay
             );
         }
     }

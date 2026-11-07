@@ -110,7 +110,7 @@ public final class RtxptLocalPreparationSelfTest {
         var mixedDelta=RtxptDelta.prepare(scene,mixed,scene.items(frame),mixed.items(frame),Map.of(),PACKETS);
         require(mixedDelta.work().dependencyVisits()<16&&mixedDelta.meshes()==0,"Mixed material/pose avoids unrelated users of unchanged pose variant");
         var payload=new byte[mixedDelta.memory().remaining()];mixedDelta.memory().duplicate().get(payload);require(new String(payload,java.nio.charset.StandardCharsets.ISO_8859_1).contains("i1"),"Mixed memory delta publishes changed pose");
-        try{scene.validateAssetBudget(new RendererResourceOptions(1,1,1,1,1));throw new AssertionError("Tiny asset budget accepted");}
+        try{scene.validateAssetBudget(new RendererResourceOptions(1,1,1));throw new AssertionError("Tiny asset budget accepted");}
         catch(IllegalArgumentException expected){ }
         System.out.println("LOCAL_PREPARATION_SHARED PASS users=256 mixedDependencies="+mixedDelta.work().dependencyVisits());
     }

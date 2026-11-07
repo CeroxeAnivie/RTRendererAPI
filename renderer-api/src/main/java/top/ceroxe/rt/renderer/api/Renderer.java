@@ -6,16 +6,13 @@ package top.ceroxe.rt.renderer.api;
  * <p>Scene and frame submission are single-writer operations. Observation may occur from another
  * thread, but {@link #close()} must be serialized with all submissions. Implementations may
  * process work asynchronously; accepted input ownership never implies immediate GPU completion.
- * Retained scene and explicit command transactions are separate, explicit workload lanes; neither
- * lane is inferred from missing fields or translated into the other. Focused consumers may depend
- * on {@link RendererLifecycle}, {@link RendererFrameAccess}, {@link RendererSceneAccess}, or
- * {@link RendererCommandAccess} instead of this aggregate facade.</p>
+ * Retained scene publication and frame submission use the original renderer execution chain.
+ * Focused consumers may depend on {@link RendererLifecycle} or {@link RendererSceneAccess}.</p>
  */
-public interface Renderer extends RendererLifecycle, RendererFrameAccess, RendererSceneAccess,
-        RendererCommandAccess {
+public interface Renderer extends RendererLifecycle, RendererSceneAccess {
 
-    /** Opens the recommended CPU-readable renderer using capability-driven optional features. */
-    static Renderer open() { return open(RendererConfig.recommended()); }
+    /** Opens the native path-traced presentation renderer. */
+    static Renderer open() { return open(RendererConfig.pathTracedPresentation()); }
 
     /** Opens one independently owned renderer with an explicit complete configuration. */
     static Renderer open(RendererConfig configuration) { return RendererDiscovery.open(configuration); }
@@ -24,38 +21,6 @@ public interface Renderer extends RendererLifecycle, RendererFrameAccess, Render
     static Renderer open(String providerId, RendererConfig configuration) {
         return RendererDiscovery.open(providerId, configuration);
     }
-
-    /**
-     * Selects one backend for a complete scene, publishes it and submits the first frame.
-     * The chosen provider remains fixed for the returned session. Existing {@code open} methods
-     * retain their provider-discovery behavior.
-     * @param policy explicit Vulkan, explicit RTXPT, or RTXPT only for scenes containing media
-     * @param initialScene complete reset scene with all referenced assets
-     * @param firstFrame first frame, including frame-local primitives
-     * @return owned scene session with inspectable backend selection
-     */
-    static RendererSceneSession openForScene(RendererBackendPolicy policy,SceneTransaction initialScene,
-            RenderFrameRequest firstFrame) {
-        return RendererSceneSession.open(policy,initialScene,firstFrame);
-    }
-
-    /**
-     * Expert scene selection using separate complete configurations for the two providers.
-     * Only the selected configuration is opened; unsupported controls are never translated away.
-     * @param policy scene backend policy
-     * @param initialScene complete reset scene
-     * @param firstFrame first submitted frame
-     * @param vulkanConfiguration configuration used if Vulkan is selected
-     * @param rtxptConfiguration configuration used if RTXPT is selected
-     * @return owned fixed-provider session
-     */
-    static RendererSceneSession openForScene(RendererBackendPolicy policy,SceneTransaction initialScene,
-            RenderFrameRequest firstFrame,RendererConfig vulkanConfiguration,RendererConfig rtxptConfiguration) {
-        return RendererSceneSession.open(policy,initialScene,firstFrame,vulkanConfiguration,rtxptConfiguration);
-    }
-
-    /** Enumerates currently available hardware RT devices. */
-    static java.util.List<RendererGpuDevice> devices() { return RendererDiscovery.availableGpuDevices(); }
 
 
     /**

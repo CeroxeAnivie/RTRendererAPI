@@ -1,12 +1,13 @@
 #pragma once
-#include "rtxpt_streamline_cache.h"
 #include "rtxpt_cached_bindings.h"
-#include <sl_dlss_d.h>
+#include <donut/app/StreamlineInterface.h>
+#include <donut/engine/View.h>
 
 // One diffuse radiance layer. Optional lower-grid RR never changes direct gain
 // or the published lighting extent; all resampling uses this frame's receivers.
 class RtrNativeRR {
 public:
+    donut::app::StreamlineInterface* streamline = nullptr;
     bool requested=false,valid=false,reset=true,guidesNeedClear=false;
     uint64_t evaluated=0,resets=0,lastSequence=0;
     uint32_t width=0,height=0;
@@ -28,12 +29,9 @@ public:
     struct alignas(16) Parameters {dm::float4x4 worldToClip,previousWorldToClip;float4 depth;};
     Parameters parameters{};
     dm::float4x4 previous=dm::float4x4::identity();
-    static void Check(sl::Result result,const char* stage){
-        if(result!=sl::Result::eOk)throw std::runtime_error(std::string("Native GI RR ")+stage+" failed: "+std::to_string(int(result)));
-    }
     void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* base,nvrhi::IBindingLayout* bindless,nvrhi::IBindingLayout* sourceHistory,uint32_t w,uint32_t h,unsigned groupVariant,bool maximum,bool allDynamic,bool channelMaximum){
         if(!requested)return;
-        if(!donut::app::StreamlineIntegration::Get().IsDLSSRRAvailable())throw std::runtime_error("Native diffuse GI RR is not available on this device");
+        if(!streamline || !streamline->IsDLSSRRAvailable())throw std::runtime_error("Native diffuse GI RR is not available on this device");
         if(!pipeline){
             auto desc=*base->getDesc();desc.bindings.push_back(nvrhi::BindingLayoutItem::ConstantBuffer(1));
             for(uint32_t i=5;i<=11;i++)desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(i));
@@ -163,49 +161,43 @@ public:
             nvrhi::ComputeState state;state.pipeline=reducePipeline;state.bindings={reduceBindings.Get(device,bindings,reduceLayout)};
             command->setComputeState(state);command->dispatch((evaluationWidth+7)/8,(evaluationHeight+7)/8);RtrGpuProfile::End(command,scope);
         }
-        auto& slIntegration=donut::app::StreamlineIntegration::Get();auto* token=slIntegration.HostFrameToken();
-        if(!token)throw std::runtime_error("Native GI RR has no Streamline frame token");
+        if(!streamline)throw std::runtime_error("Native GI RR has no public Streamline integration");
+        using Interface = donut::app::StreamlineInterface;
+        // Keep the independent diffuse layer on its own public viewport. The
+        // original sample continues to own frame tokens, SDK calls and errors.
+        streamline->SetViewport(1);
+        struct ViewportGuard { Interface& value; ~ViewportGuard(){value.SetViewport(0);} } viewportGuard{*streamline};
         dm::float4x4 inverseClip,cameraToWorld;std::memcpy(&inverseClip,words,64);std::memcpy(&cameraToWorld,words+16,64);
-        auto toSl=[](const dm::float4x4& value){sl::float4x4 out;std::memcpy(&out,&value,64);return out;};
         auto projection=dm::inverse(inverseClip);
         if(parameters.depth.x==.5f)for(unsigned i=0;i<4;i++)projection[2][i]=.5f*(projection[2][i]+projection[3][i]);
         auto hwInverseClip=dm::inverse(projection);
-        sl::Constants c;c.cameraViewToClip=toSl(dm::transpose(projection));c.clipToCameraView=toSl(dm::transpose(hwInverseClip));
+        Interface::Constants c{};c.cameraViewToClip=dm::transpose(projection);c.clipToCameraView=dm::transpose(hwInverseClip);
         auto previousHardware=parameters.previousWorldToClip;
         if(parameters.depth.x==.5f)for(unsigned i=0;i<4;i++)previousHardware[2][i]=.5f*(previousHardware[2][i]+previousHardware[3][i]);
         const auto reprojection=dm::transpose(cameraToWorld*hwInverseClip)*dm::transpose(previousHardware);
-        c.clipToPrevClip=toSl(reprojection);c.prevClipToClip=toSl(dm::inverse(reprojection));c.clipToLensClip=toSl(dm::float4x4::identity());
+        c.clipToPrevClip=reprojection;c.prevClipToClip=dm::inverse(reprojection);c.clipToLensClip=dm::float4x4::identity();
         c.cameraPos={words[32],words[33],words[34]};c.cameraRight={words[16],words[20],words[24]};c.cameraUp={words[17],words[21],words[25]};c.cameraFwd={-words[18],-words[22],-words[26]};
         c.cameraNear=.001f;c.cameraFar=1e7f;c.cameraFOV=2*std::atan(std::abs(words[5]));c.cameraAspectRatio=std::abs(words[0]/words[5]);
         c.jitterOffset={-words[37]*evaluationWidth*.5f,words[38]*evaluationHeight*.5f};c.mvecScale={1,1};c.cameraPinholeOffset={0,0};
-        c.depthInverted=words[35]>words[36]?sl::Boolean::eTrue:sl::Boolean::eFalse;c.cameraMotionIncluded=sl::Boolean::eTrue;
-        c.motionVectors3D=sl::Boolean::eFalse;c.motionVectorsDilated=sl::Boolean::eFalse;c.motionVectorsJittered=sl::Boolean::eFalse;c.orthographicProjection=sl::Boolean::eFalse;c.motionVectorsInvalidValue=FLT_MIN;c.reset=reset?sl::Boolean::eTrue:sl::Boolean::eFalse;
-        const sl::ViewportHandle viewport(0);Check(slSetConstants(c,*token,viewport),"constants");
-        sl::DLSSDOptions options;options.mode=sl::DLSSMode::eDLAA;options.outputWidth=evaluationWidth;options.outputHeight=evaluationHeight;
-        options.colorBuffersHDR=sl::Boolean::eTrue;options.preExposure=1;options.exposureScale=1;options.normalRoughnessMode=sl::DLSSDNormalRoughnessMode::ePacked;
-        options.worldToCameraView=toSl(dm::transpose(dm::inverse(cameraToWorld)));options.cameraViewToWorld=toSl(dm::transpose(cameraToWorld));
+        c.depthInverted=words[35]>words[36];c.cameraMotionIncluded=true;
+        c.motionVectors3D=false;c.motionVectorsDilated=false;c.motionVectorsJittered=false;c.orthographicProjection=false;c.motionVectorsInvalidValue=FLT_MIN;c.reset=reset;
+        streamline->SetConstants(c);
+        Interface::DLSSRROptions options;options.mode=Interface::DLSSMode::eDLAA;options.outputWidth=evaluationWidth;options.outputHeight=evaluationHeight;
+        options.colorBuffersHDR=true;options.preExposure=1;options.exposureScale=1;options.normalRoughnessMode=Interface::DLSSRRNormalRoughnessMode::ePacked;
+        options.worldToCameraView=dm::transpose(dm::inverse(cameraToWorld));options.cameraViewToWorld=dm::transpose(cameraToWorld);
         // Options carry the current camera matrices as well as the extent.
-        Check(slDLSSDSetOptions(viewport,options),"options");
+        streamline->SetDLSSRROptions(options);
         auto& actualGuides=divisor>1?reducedGuides:guides;
-        std::array<nvrhi::ITexture*,8> textures{divisor>1?reducedRaw.Get():raw,actualGuides[0],actualGuides[1],actualGuides[2],actualGuides[3],actualGuides[4],actualGuides[5],reconstructed};
-        const std::array<sl::BufferType,8> types{sl::kBufferTypeScalingInputColor,sl::kBufferTypeAlbedo,sl::kBufferTypeSpecularAlbedo,sl::kBufferTypeNormalRoughness,sl::kBufferTypeMotionVectors,sl::kBufferTypeDepth,sl::kBufferTypeSpecularHitDistance,sl::kBufferTypeScalingOutputColor};
-        sl::Extent extent{0,0,evaluationWidth,evaluationHeight};std::array<sl::Resource,8> resources;std::array<sl::ResourceTag,8> tags;
-        for(unsigned i=0;i<8;i++){
-            command->setTextureState(textures[i],nvrhi::AllSubresources,nvrhi::ResourceStates::Common);
-            resources[i]=sl::Resource{sl::ResourceType::eTex2d,textures[i]->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource),nullptr,nullptr,D3D12_RESOURCE_STATE_COMMON};
-            tags[i]=sl::ResourceTag{&resources[i],types[i],sl::ResourceLifecycle::eValidUntilEvaluate,&extent};
-        }
-        command->commitBarriers();void* native=command->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList);
+        donut::engine::PlanarView view;
+        view.SetViewport(nvrhi::Viewport(float(evaluationWidth),float(evaluationHeight)));
+        view.SetMatrices(dm::homogeneousToAffine(options.worldToCameraView),c.cameraViewToClip);view.UpdateCache();
+        streamline->TagResourcesGeneral(command,&view,actualGuides[3],actualGuides[4],divisor>1?reducedRaw.Get():raw);
+        streamline->TagResourcesDLSSRR(command,&view,dm::int2(evaluationWidth,evaluationHeight),
+            dm::int2(evaluationWidth,evaluationHeight),divisor>1?reducedRaw.Get():raw,
+            actualGuides[0],actualGuides[1],actualGuides[2],nullptr,actualGuides[5],nullptr,reconstructed);
+        command->commitBarriers();
         const auto scope=RtrGpuProfile::Begin(command,"NativeDiffuseGiDLSSRR",-1,0,0,divisor);
-        // Borrow resources for this evaluation instead of publishing volatile
-        // global tags, which make Streamline clone the inputs before evaluation.
-        // setTextureState above retains all eight textures on this command list
-        // until GPU completion, including across resize and disabling RR. Local
-        // tags neither leave dangling global references nor promise a Present
-        // lifetime to an offscreen session whose presentation belongs to the host.
-        std::array<const sl::BaseStructure*,9> inputs;inputs[0]=&viewport;
-        for(unsigned i=0;i<tags.size();++i)inputs[i+1]=&tags[i];
-        Check(slEvaluateFeature(sl::kFeatureDLSS_RR,*token,inputs.data(),uint32_t(inputs.size()),native),"evaluate");
+        streamline->EvaluateDLSSRR(command);
         command->clearState();RtrGpuProfile::End(command,scope);
         nvrhi::BindingSetDesc bindings;bindings.bindings={nvrhi::BindingSetItem::Texture_SRV(0,reconstructed),nvrhi::BindingSetItem::Texture_SRV(1,raw),nvrhi::BindingSetItem::Texture_UAV(0,result)};
         nvrhi::ComputeState state;

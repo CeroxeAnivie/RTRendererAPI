@@ -11,6 +11,7 @@ struct RtrSource {float4 position,direction,color,extent,cone,identity;};
 struct RtrNode {float4 lower,left,upper,right;};
 struct RtrInstance {float4 rolesVisibility;float4 baseline;};
 struct RtrVertexAttributes {float2 baseline;uint color;uint reserved;};
+struct RtrGeometryAttributes {uint offset,triangles,basePolicy,normalPolicy,ormPolicy,emissivePolicy;float maskedOpacity;};
 struct RtrAnalytic {float4 position,direction,color,cone;};
 struct RtrNativeConstants
 {
@@ -36,33 +37,39 @@ StructuredBuffer<RtrSource> t_Sources : register(t4);
 StructuredBuffer<RtrNode> t_SourceTree : register(t5);
 StructuredBuffer<RtrInstance> t_InstanceAttributes : register(t6);
 StructuredBuffer<RtrVertexAttributes> t_Baselines : register(t7);
-StructuredBuffer<uint2> t_GeometryBaselines : register(t8); // offset, triangle count
+StructuredBuffer<RtrGeometryAttributes> t_GeometryBaselines : register(t8);
 ByteAddressBuffer t_Application : register(t9);
 StructuredBuffer<float2> t_BaselineLookup : register(t10); // baseline float2[256], packed host-response RGB[256]
 StructuredBuffer<RtrAnalytic> t_Analytic : register(t11); // resident lights followed by their exact support tree
 ByteAddressBuffer t_Buffers[] : register(t0,space1);
 Texture2D<float4> t_Textures[] : register(t0,space2);
 SamplerState s_Material : register(s0);
+SamplerState s_TexturePolicy0 : register(s1);
+SamplerState s_TexturePolicy1 : register(s2);
+SamplerState s_TexturePolicy2 : register(s3);
+SamplerState s_TexturePolicy3 : register(s4);
+SamplerState s_TexturePolicy4 : register(s5);
+SamplerState s_TexturePolicy5 : register(s6);
+SamplerState s_TexturePolicy6 : register(s7);
+SamplerState s_TexturePolicy7 : register(s8);
 RWTexture2D<float4> u_Direct : register(u0);
 RWTexture2D<float4> u_Indirect : register(u1);
 RWTexture2D<float4> u_Geometry : register(u2);
 RWTexture2D<uint4> u_Identity : register(u3);
 RWByteAddressBuffer u_Work : register(u4);
 
-// Three bits per material slot: clamp U, clamp V, nearest. Zero is the fast default.
+// Adapter-owned slot metadata: clamp U, clamp V, nearest. Material flags stay upstream-owned.
 float4 RtrSampleTexture(int textureIndex,float2 uv,uint policy){
-    if(policy==0)return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_Material,uv,0);
-    uint w,h;t_Textures[NonUniformResourceIndex(textureIndex)].GetDimensions(w,h);int2 extent=int2(w,h);
-    float2 normalized=float2((policy&1)!=0?saturate(uv.x):frac(uv.x),(policy&2)!=0?saturate(uv.y):frac(uv.y));
-    float2 position=normalized*extent-((policy&4)!=0?0:.5);int2 origin=int2(floor(position));float2 f=frac(position);
-    int2 a=origin,b=origin+1;
-    a.x=(policy&1)!=0?clamp(a.x,0,extent.x-1):(a.x%extent.x+extent.x)%extent.x;
-    a.y=(policy&2)!=0?clamp(a.y,0,extent.y-1):(a.y%extent.y+extent.y)%extent.y;
-    if((policy&4)!=0)return t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(a,0));
-    b.x=(policy&1)!=0?clamp(b.x,0,extent.x-1):(b.x%extent.x+extent.x)%extent.x;
-    b.y=(policy&2)!=0?clamp(b.y,0,extent.y-1):(b.y%extent.y+extent.y)%extent.y;
-    return lerp(lerp(t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(a,0)),t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(b.x,a.y,0)),f.x),
-        lerp(t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(a.x,b.y,0)),t_Textures[NonUniformResourceIndex(textureIndex)].Load(int3(b,0)),f.x),f.y);
+    switch(policy&7){
+        case 0:return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_TexturePolicy0,uv,0);
+        case 1:return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_TexturePolicy1,uv,0);
+        case 2:return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_TexturePolicy2,uv,0);
+        case 3:return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_TexturePolicy3,uv,0);
+        case 4:return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_TexturePolicy4,uv,0);
+        case 5:return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_TexturePolicy5,uv,0);
+        case 6:return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_TexturePolicy6,uv,0);
+        default:return t_Textures[NonUniformResourceIndex(textureIndex)].SampleLevel(s_TexturePolicy7,uv,0);
+    }
 }
 
 struct RtrReceiver
@@ -103,7 +110,7 @@ void RtrFlushWork(){
     }
 #endif
 }
-uint RtrQueryFlags(){return (g.publication.w&4)!=0?RAY_FLAG_NONE:((g.publication.w&2)!=0||g.style.limits.w!=0?RAY_FLAG_FORCE_NON_OPAQUE:RAY_FLAG_NONE);}
+uint RtrQueryFlags(){return (g.publication.w&32)!=0?RAY_FLAG_FORCE_NON_OPAQUE:((g.publication.w&4)!=0?RAY_FLAG_NONE:((g.publication.w&2)!=0||g.style.limits.w!=0?RAY_FLAG_FORCE_NON_OPAQUE:RAY_FLAG_NONE));}
 float3 RtrPosition(ByteAddressBuffer vertices,GeometryData geometry,uint i){return asfloat(vertices.Load3(geometry.positionOffset+i*12));}
 float2 RtrUv(ByteAddressBuffer vertices,GeometryData geometry,uint i)
 {return geometry.texCoord1Offset==0xffffffff?0:asfloat(vertices.Load2(geometry.texCoord1Offset+i*8));}
@@ -111,7 +118,8 @@ float4 RtrVertexColor(uint packed){return float4(packed&255,(packed>>8)&255,(pac
 RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes,float3 origin,float3 direction,float distance,float3x4 worldToObject)
 {
     RtrReceiver r=(RtrReceiver)0;r.instance=instance;r.geometry=geometry;r.primitive=primitive;r.distance=distance;r.barycentrics=attributes;
-    InstanceData inst=t_Instances[instance];GeometryData geom=t_Geometry[inst.firstGeometryIndex+geometry];
+    InstanceData inst=t_Instances[instance];uint geometryIndex=inst.firstGeometryIndex+geometry;
+    GeometryData geom=t_Geometry[geometryIndex];RtrGeometryAttributes geometryAttributes=t_GeometryBaselines[geometryIndex];
     ByteAddressBuffer indices=t_Buffers[NonUniformResourceIndex(geom.indexBufferIndex)];
     ByteAddressBuffer vertices=t_Buffers[NonUniformResourceIndex(geom.vertexBufferIndex)];
     uint3 tri=indices.Load3(geom.indexOffset+primitive*12);float3 bary=float3(1-attributes.x-attributes.y,attributes);
@@ -131,18 +139,19 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
     }
     r.position=origin+direction*distance;
     r.uv=RtrUv(vertices,geom,tri.x)*bary.x+RtrUv(vertices,geom,tri.y)*bary.y+RtrUv(vertices,geom,tri.z)*bary.z;
-    MaterialConstants mat=t_Materials[geom.materialIndex];float4 base=float4(mat.baseOrDiffuseColor,mat.opacity);
+    MaterialConstants mat=t_Materials[geom.materialIndex];
+    bool masked=mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested;
+    float4 base=float4(mat.baseOrDiffuseColor,masked?geometryAttributes.maskedOpacity:mat.opacity);
     if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)
-        base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,r.uv,(uint(mat.flags)>>12)&7);
+        base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,r.uv,geometryAttributes.basePolicy);
     if((mat.flags&MaterialFlags_UseOpacityTexture)!=0)
         base.a*=t_Textures[NonUniformResourceIndex(mat.opacityTextureIndex)].SampleLevel(s_Material,r.uv,0).r;
-    uint2 vertexRange=t_GeometryBaselines[inst.firstGeometryIndex+geometry];
-    if(primitive<vertexRange.y){uint first=vertexRange.x+primitive*3;
+    if(primitive<geometryAttributes.triangles){uint first=geometryAttributes.offset+primitive*3;
         base*=RtrVertexColor(t_Baselines[first].color)*bary.x+RtrVertexColor(t_Baselines[first+1].color)*bary.y+RtrVertexColor(t_Baselines[first+2].color)*bary.z;}
     r.albedo=max(base.rgb,0);r.opacity=saturate(base.a);
     r.roughness=mat.roughness;r.metalness=mat.metalness;r.transmission=mat.transmissionFactor;
     if((mat.flags&MaterialFlags_UseMetalRoughOrSpecularTexture)!=0&&(mat.flags&MaterialFlags_UseSpecularGlossModel)==0){
-        float4 sampled=RtrSampleTexture(mat.metalRoughOrSpecularTextureIndex,r.uv,(uint(mat.flags)>>18)&7);
+        float4 sampled=RtrSampleTexture(mat.metalRoughOrSpecularTextureIndex,r.uv,geometryAttributes.ormPolicy);
         r.roughness*=sampled.g;r.metalness*=(mat.flags&MaterialFlags_MetalnessInRedChannel)!=0?sampled.r:sampled.b;}
     if((mat.flags&MaterialFlags_UseTransmissionTexture)!=0)r.transmission*=t_Textures[NonUniformResourceIndex(mat.transmissionTextureIndex)].SampleLevel(s_Material,r.uv,0).r;
     r.roughness=saturate(r.roughness);r.metalness=saturate(r.metalness);r.transmission=saturate(r.transmission);
@@ -153,14 +162,14 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
             +Unpack_RGBA8_SNORM(vertices.Load(geom.tangentOffset+tri.y*4))*bary.y
             +Unpack_RGBA8_SNORM(vertices.Load(geom.tangentOffset+tri.z*4))*bary.z;
         float3 t=mul((float3x3)inst.transform,tangent.xyz);t=RtrNormalize(t-r.normal*dot(t,r.normal));
-        float3 map=RtrSampleTexture(mat.normalTextureIndex,r.uv,(uint(mat.flags)>>15)&7).xyz*2-1;
+        float3 map=RtrSampleTexture(mat.normalTextureIndex,r.uv,geometryAttributes.normalPolicy).xyz*2-1;
         map.xy*=mat.normalTextureScale;
         r.normal=RtrNormalize(t*map.x+cross(r.normal,t)*sign(tangent.w)*map.y+r.normal*map.z);
         if(dot(r.normal,r.geometricNormal)<0)r.normal=-r.normal;
     }
     RtrInstance data=t_InstanceAttributes[instance];r.visibility=data.rolesVisibility.y;r.fog=data.rolesVisibility.z;
-    uint2 baseline=t_GeometryBaselines[inst.firstGeometryIndex+geometry];float2 coordinates=0;
-    if(primitive<baseline.y){uint offset=baseline.x+primitive*3;
+    float2 coordinates=0;
+    if(primitive<geometryAttributes.triangles){uint offset=geometryAttributes.offset+primitive*3;
         coordinates=t_Baselines[offset].baseline*bary.x+t_Baselines[offset+1].baseline*bary.y+t_Baselines[offset+2].baseline*bary.z;}
     coordinates=saturate(coordinates*data.baseline.xy+data.baseline.zw);
     float2 p=coordinates*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
@@ -189,9 +198,13 @@ bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attrib
     if((roles&role)==0||(role==1&&(roles&8)!=0&&!frontFace)||(role==2&&(roles&16)==0&&!frontFace))return false;
     // Per-instance coverage classification is part of the same attribute commit.
     // Role-only opaque candidates need no material, UV or corner color reads.
-    if((g.publication.w&4)!=0&&t_InstanceAttributes[instance].rolesVisibility.w==0){opaque=role==2;return true;}
-    InstanceData inst=t_Instances[instance];GeometryData geom=t_Geometry[inst.firstGeometryIndex+geometry];
-    MaterialConstants mat=t_Materials[geom.materialIndex];float4 base=float4(mat.baseOrDiffuseColor,mat.opacity);
+    InstanceData inst=t_Instances[instance];uint geometryIndex=inst.firstGeometryIndex+geometry;
+    GeometryData geom=t_Geometry[geometryIndex];RtrGeometryAttributes geometryAttributes=t_GeometryBaselines[geometryIndex];
+    MaterialConstants mat=t_Materials[geom.materialIndex];
+    bool masked=mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested;
+    if((g.publication.w&4)!=0&&t_InstanceAttributes[instance].rolesVisibility.w==0&&(!masked||geometryAttributes.maskedOpacity==1))
+        {opaque=role==2;return true;}
+    float4 base=float4(mat.baseOrDiffuseColor,masked?geometryAttributes.maskedOpacity:mat.opacity);
     float3 bary=float3(1-attributes.x-attributes.y,attributes);float2 uv=0;
     const uint textureMask=MaterialFlags_UseBaseOrDiffuseTexture|MaterialFlags_UseOpacityTexture|MaterialFlags_UseTransmissionTexture;
     if((mat.flags&textureMask)!=0){
@@ -199,11 +212,10 @@ bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attrib
         ByteAddressBuffer vertices=t_Buffers[NonUniformResourceIndex(geom.vertexBufferIndex)];
         uint3 tri=indices.Load3(geom.indexOffset+primitive*12);
         uv=RtrUv(vertices,geom,tri.x)*bary.x+RtrUv(vertices,geom,tri.y)*bary.y+RtrUv(vertices,geom,tri.z)*bary.z;
-        if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,uv,(uint(mat.flags)>>12)&7);
+        if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,uv,geometryAttributes.basePolicy);
         if((mat.flags&MaterialFlags_UseOpacityTexture)!=0)base.a*=t_Textures[NonUniformResourceIndex(mat.opacityTextureIndex)].SampleLevel(s_Material,uv,0).r;
     }
-    uint2 range=t_GeometryBaselines[inst.firstGeometryIndex+geometry];
-    if(primitive<range.y){uint first=range.x+primitive*3;
+    if(primitive<geometryAttributes.triangles){uint first=geometryAttributes.offset+primitive*3;
         base*=RtrVertexColor(t_Baselines[first].color)*bary.x+RtrVertexColor(t_Baselines[first+1].color)*bary.y+RtrVertexColor(t_Baselines[first+2].color)*bary.z;}
     float opacity=saturate(base.a);
     if(mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested){if(opacity<mat.alphaCutoff)return false;}

@@ -1,40 +1,21 @@
-# Native-lighting release SDK
+# 外部 shader 与 SDK 边界
 
-The extracted `rtxpt-runtime.zip` includes `tools/`, `sdk/`, the extension,
-native-lighting OpenGL and host-surface OpenGL examples, and their API documentation. `native-lighting-sdk.json` records each
-file's SHA-256 and the public shader ABI identity. The runtime's pinned DXC is at
-`ShaderDynamic/Tools/d3d12/x64/dxc.exe`; no checkout or compiler download is needed.
+本文对应 8.0.0 迁移候选。旧 native-lighting-sdk.json、bundle.json、六档私有 shader ABI 和旧上游 overlay 不是新版本的交付契约。
 
-From the extracted runtime root, build the supplied receiver extension:
+锁定的官方 RTXPT 源码与核心 shader 保持只读。自有视觉、正确有用的性能适配和诊断留在外部桥；上游有等价实现必须直接调用。独立 shader 即使复用了上游场景或加速结构，也不因此成为 RTXPT 原版光照算法。
 
-```powershell
-./tools/Build-NativeLightingExtension.ps1 `
-  -ExtensionSource examples/native-lighting-extension/ReceiverTint.hlsli `
-  -SdkDirectory sdk -RuntimeDirectory . `
-  -OutputDirectory receiver-tint `
-  -Name receiver-tint-v1 -ApplicationSchema rtr.receiver-tint/v1 -MinimumApplicationBytes 16
-./tools/Build-NativeLightingExtension.ps1 -OutputDirectory receiver-tint -VerifyOnly
-```
+## 独立编译
 
-Use the Java artifacts from the same build and the example's `manifest.json` when
-activating the evaluator. The extension build is offline; activation consumes
-precompiled DXIL. The shader SDK hash must match the native backend. Keep the
-compiled bundle's `sdk/`, source inventory and manifest together.
+自有 Rtr shader 位于 renderer-rtxpt/src/main/cpp，入口清单位于同目录 AdapterShaders.cfg。tools/Build-AdapterShaders.ps1 只读使用固定上游 ShaderMake、DXC 与 include，输出到运行时 bin/AdapterShaders；不复制到官方源树，不改原版 target、shader 清单或默认实现。
 
-For release preparation in the source repository:
+外部 pass 使用自己的 ShaderFactory base、pipeline layout 和必要元数据。纹理过滤直接使用 Donut／NVRHI 硬件 sampler，不维持另一套手工过滤算法；元数据不得塞进原版 MaterialConstants flags 或其他私有字段。
 
-```powershell
-./tools/Stage-NativeLightingSdk.ps1
-./tools/Stage-NativeLightingSdk.ps1 -VerifyOnly
-./tools/Build-RtxptShaderBudgets.ps1 -PlanOnly -RequireReleaseCoverage
-./tools/Build-RtxptShaderBudgets.ps1 -VerifyOnly -RequireReleaseCoverage
-```
+原版扩展入口的实际调用点需核对：有声明不代表会执行。不能因为某个钩子名称合适，就补一个上游本不存在的调用或扩展原 binding layout。官方没有等价支持时，明确列限制和外部适配成本，不静默改变消费者要求的图像语义。
 
-The shader bundle check requires every captured runtime command key, all six
-analytic optical budgets, and reference/build/fill branches for host-supplied
-primary surfaces, analytic lighting and small-point lighting. Capture a missing
-configuration with `RTR_RTXPT_SHADER_MANIFEST_DIR` before building the bundle.
-`-PlanOnly` performs no shader compilation or GPU work. Runtime thresholds stay
-out of shader identities; legacy exact-light-limit macros are removed from old
-captures before deriving keys. Final package tests must disable dynamic shader
-compilation to establish that the packaged configurations are self-contained.
+## 验证范围
+
+独立 shader 的路径检查、编译、布局／ABI、实际出帧与最终包验证分别报告。此前 AdapterShaders 120／120 编译及对应 native／JNI 检查保留原制品身份；当前上游 20 仓／4426 原文件保持，生产 29 帧和原版 beauty 24 帧 proof 已通过。新原生控制定向验证、完整动态负载、人工验收与正式包仍未完成，不能把短帧 proof 当作等性能或所有画面通过。各项修复的保留、原生接管与退役范围见[迁移映射](consumer-agent-handoff.md#既有修复的迁移映射)。
+
+通用直接光、稀疏源和共享同步的已实现扩展保留在外桥；宿主专属曲线、画风与最终合成由消费方承担，现有宿主策略迁出尚未完成。旧离线 manifest 激活接口、无数据指标与 retired shader ABI 不以空壳继续暴露。
+
+正式包保留官方 bin 与相邻 Assets，详见[运行时分发](runtime-distribution.md)。历史 7.x 扩展教程保留原版本含义，不可直接拿其 manifest／SDK 与 8.0.0 混用。
