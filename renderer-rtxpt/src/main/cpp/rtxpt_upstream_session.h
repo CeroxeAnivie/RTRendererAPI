@@ -93,6 +93,10 @@ public:
         std::lock_guard lock(m_mutex);
         return m_stopped && !m_failure;
     }
+    bool Stopped() {
+        std::lock_guard lock(m_mutex);
+        return m_stopped;
+    }
 
     void Close() noexcept {
         {

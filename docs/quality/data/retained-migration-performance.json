@@ -1,0 +1,271 @@
+{
+  "renderPass": true,
+  "freshFrames": 69,
+  "gpuOldPercent": 2,
+  "gpuNewPercent": 0,
+  "rates": [
+    {
+      "phase": "warmup",
+      "old": 558.3589829491126,
+      "new": 519.1467822633501,
+      "delta": -39.21220068576247,
+      "percent": -7.0227580970674826
+    },
+    {
+      "phase": "movement",
+      "old": 4.521367985097571,
+      "new": 30.500211086877563,
+      "delta": 25.978843101779994,
+      "percent": 574.5792686506884
+    }
+  ],
+  "steps": [
+    {
+      "phase": "warmup",
+      "step": "apply_wall",
+      "stat": "mean_ms",
+      "old": 0.022575,
+      "new": 0.0243125,
+      "delta": 0.0017374999999999995,
+      "percent": 7.696566998892584
+    },
+    {
+      "phase": "warmup",
+      "step": "apply_wall",
+      "stat": "p95_ms",
+      "old": 0.0401,
+      "new": 0.0341,
+      "delta": -0.005999999999999998,
+      "percent": -14.962593516209477
+    },
+    {
+      "phase": "warmup",
+      "step": "submit_wall",
+      "stat": "mean_ms",
+      "old": 1.088225,
+      "new": 1.1942625,
+      "delta": 0.1060375,
+      "percent": 9.744078660203549
+    },
+    {
+      "phase": "warmup",
+      "step": "submit_wall",
+      "stat": "p95_ms",
+      "old": 1.9193,
+      "new": 1.8724,
+      "delta": -0.04689999999999994,
+      "percent": -2.443599228885529
+    },
+    {
+      "phase": "warmup",
+      "step": "apply_to_fresh_wall",
+      "stat": "mean_ms",
+      "old": 1.7909625,
+      "new": 1.9262375,
+      "delta": 0.13527500000000003,
+      "percent": 7.553201141844124
+    },
+    {
+      "phase": "warmup",
+      "step": "apply_to_fresh_wall",
+      "stat": "p95_ms",
+      "old": 3.9934,
+      "new": 3.4277,
+      "delta": -0.5656999999999996,
+      "percent": -14.165873691591113
+    },
+    {
+      "phase": "movement",
+      "step": "apply_wall",
+      "stat": "mean_ms",
+      "old": 0.4346316666666667,
+      "new": 0.4177766666666667,
+      "delta": -0.01685500000000001,
+      "percent": -3.877996311052656
+    },
+    {
+      "phase": "movement",
+      "step": "apply_wall",
+      "stat": "p95_ms",
+      "old": 0.6756,
+      "new": 0.5981,
+      "delta": -0.07750000000000001,
+      "percent": -11.471284783895797
+    },
+    {
+      "phase": "movement",
+      "step": "submit_wall",
+      "stat": "mean_ms",
+      "old": 220.23699666666667,
+      "new": 28.669655,
+      "delta": -191.56734166666666,
+      "percent": -86.9823619855332
+    },
+    {
+      "phase": "movement",
+      "step": "submit_wall",
+      "stat": "p95_ms",
+      "old": 301.3532,
+      "new": 54.707,
+      "delta": -246.64620000000002,
+      "percent": -81.84621898821715
+    },
+    {
+      "phase": "movement",
+      "step": "apply_to_fresh_wall",
+      "stat": "mean_ms",
+      "old": 221.172,
+      "new": 32.786658333333335,
+      "delta": -188.38534166666665,
+      "percent": -85.17594526733342
+    },
+    {
+      "phase": "movement",
+      "step": "apply_to_fresh_wall",
+      "stat": "p95_ms",
+      "old": 302.5894,
+      "new": 61.4477,
+      "delta": -241.14170000000001,
+      "percent": -79.69271230254596
+    },
+    {
+      "phase": "movement",
+      "step": "VALIDATION",
+      "stat": "mean_ms",
+      "old": 0.050895,
+      "new": 0.03731166666666667,
+      "delta": -0.013583333333333336,
+      "percent": -26.68893473491175
+    },
+    {
+      "phase": "movement",
+      "step": "VALIDATION",
+      "stat": "p95_ms",
+      "old": 0.0811,
+      "new": 0.0561,
+      "delta": -0.02500000000000001,
+      "percent": -30.826140567200998
+    },
+    {
+      "phase": "movement",
+      "step": "TRANSLATION",
+      "stat": "mean_ms",
+      "old": 0.497415,
+      "new": 0.5124433333333334,
+      "delta": 0.015028333333333366,
+      "percent": 3.021286719003924
+    },
+    {
+      "phase": "movement",
+      "step": "TRANSLATION",
+      "stat": "p95_ms",
+      "old": 0.8461,
+      "new": 0.8031,
+      "delta": -0.04299999999999993,
+      "percent": -5.082141590828504
+    },
+    {
+      "phase": "movement",
+      "step": "RESOURCES",
+      "stat": "mean_ms",
+      "old": 0.40904,
+      "new": 0.4076066666666667,
+      "delta": -0.001433333333333342,
+      "percent": -0.3504139774431203
+    },
+    {
+      "phase": "movement",
+      "step": "RESOURCES",
+      "stat": "p95_ms",
+      "old": 0.7855,
+      "new": 0.7946,
+      "delta": 0.009099999999999997,
+      "percent": 1.158497772119671
+    },
+    {
+      "phase": "movement",
+      "step": "LIGHTING",
+      "stat": "mean_ms",
+      "old": 0.09014,
+      "new": 0.08767166666666668,
+      "delta": -0.0024683333333333224,
+      "percent": -2.7383329635381926
+    },
+    {
+      "phase": "movement",
+      "step": "LIGHTING",
+      "stat": "p95_ms",
+      "old": 0.1174,
+      "new": 0.1148,
+      "delta": -0.002600000000000005,
+      "percent": -2.2146507666098825
+    },
+    {
+      "phase": "movement",
+      "step": "ATTRIBUTES",
+      "stat": "mean_ms",
+      "old": 0.59182,
+      "new": 0.592915,
+      "delta": 0.0010949999999999571,
+      "percent": 0.18502247304923447
+    },
+    {
+      "phase": "movement",
+      "step": "ATTRIBUTES",
+      "stat": "p95_ms",
+      "old": 1.1745,
+      "new": 1.0289,
+      "delta": -0.14560000000000017,
+      "percent": -12.396764580672636
+    },
+    {
+      "phase": "movement",
+      "step": "RTXPT_FRAME",
+      "stat": "mean_ms",
+      "old": 218.49969,
+      "new": 26.938626666666668,
+      "delta": -191.56106333333332,
+      "percent": -87.67109158522528
+    },
+    {
+      "phase": "movement",
+      "step": "RTXPT_FRAME",
+      "stat": "p95_ms",
+      "old": 299.509,
+      "new": 51.9891,
+      "delta": -247.5199,
+      "percent": -82.64189056088465
+    }
+  ],
+  "oldOracleFailure": "java.lang.IllegalStateException: Movement path was shortened",
+  "newOracle": "same trajectory and measurement, exact chord length in final assertion",
+  "nativeContract": {
+    "frames": 48,
+    "passed": true,
+    "validation": "Official D3D12 debug layer; zero warning/error callbacks",
+    "coverage": [
+      "near180",
+      "signedNonuniformScale",
+      "shear",
+      "previousPose",
+      "attributeKeepsBlas",
+      "failedOwnerClose",
+      "nativeBoundaryStages"
+    ],
+    "identity": "before output-ring-only fix; final ring separately covered by 69-frame streaming"
+  },
+  "failures": [
+    "First local test launcher repeated JAVA_HOME in PATH; fixed invocation, not runtime",
+    "New streaming command list freed DXR scratch in flight; D3D12 id 921; fixed by fence-retained command owner",
+    "Missing GPU queue edges for external geometry/AS/copy work; added native queue waits",
+    "Java still rejected shear before native two-node decomposition; removed obsolete restriction",
+    "Fast unimported lease return hit false ring-full; same-graphics-queue FIFO reuse; imported reader fence unchanged"
+  ],
+  "upstream": {
+    "commit": "303b408ab81790a5051abd7573830b7a4112eb8e",
+    "files": 4426,
+    "repositories": 20,
+    "unchanged": true,
+    "onlyPriorBuildException": "noninteractive progress window guard"
+  }
+}

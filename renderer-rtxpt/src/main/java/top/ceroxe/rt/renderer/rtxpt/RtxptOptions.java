@@ -92,6 +92,7 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
             "--overrideSubSamplingMode",Integer.toString(quality.subSampling().ordinal()),"--overrideAutoexposureOff=true",
             "--overrideExposureOffset="+Float.toString(quality.postProcessing().exposureOffset())));
         if(!ser) a.add("--noSER");
+        if(Boolean.getBoolean("top.ceroxe.rt.rtxpt.validation")) a.add("--debug");
         return a.toArray(String[]::new);
     }
     void applyQuality(long handle){

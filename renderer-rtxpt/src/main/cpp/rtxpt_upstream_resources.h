@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -15,6 +16,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include "rtxpt_affine_adapter.h"
 
 #include <donut/core/vfs/VFS.h>
 #include <donut/engine/Scene.h>
@@ -22,8 +24,30 @@
 #include "SampleCommon/ExtendedScene.h"
 #include "Materials/MaterialsBaker.h"
 #include "rtxpt_memory_resources.h"
+#include "rtxpt_diagnostics.h"
 
 namespace rtr::upstream {
+// Extend the documented Scene subclass boundary; expose no SDK type to Java.
+// The base uploader still creates buffers/descriptors and packs geometry rows.
+class SceneBufferUpload : public donut::engine::Scene {
+public:
+    static void Run(donut::engine::Scene& scene,nvrhi::ICommandList* commands){
+        // Form the pointer through the derived extension, then retain virtual
+        // dispatch to ExtendedScene's original (private) override. No downcast.
+        const auto upload=&SceneBufferUpload::CreateMeshBuffers;
+        (scene.*upload)(commands);
+    }
+};
+class ManagedScene final : public ExtendedScene {
+public:
+    using ExtendedScene::ExtendedScene;
+    void RefreshAttributes(nvrhi::ICommandList* commands,
+        const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
+        SceneBufferUpload::Run(*this,commands);
+        for(const auto& mesh:meshes)UpdateGeometry(mesh);
+        WriteGeometryBuffer(commands);
+    }
+};
 
 // Converts the private, synchronous resource packet into original scene objects.
 // GPU buffers, upload pages, descriptors, BLAS/TLAS and their retirement belong
@@ -35,6 +59,11 @@ public:
         bool materials = false;
         bool transforms = false;
         bool textures = false;
+        bool attributes = false;
+        std::vector<std::shared_ptr<donut::engine::MeshInfo>> retiredMeshes;
+        std::vector<std::shared_ptr<donut::engine::BufferGroup>> retiredBuffers;
+        bool existingMaterialsChanged = false;
+        bool coverageChanged = false;
         std::vector<std::string> retiredInstances;
         std::vector<std::string> retiredGeometries;
     };
@@ -58,6 +87,11 @@ public:
             result[12+row*4+3]=previous.m_translation[row];
         }
         return result;
+    }
+    std::array<double,2> MeshResourceState(const std::string& name)const{
+        const auto& mesh=*m_meshes.at(m_nodes.contains(name)?m_nodes.at(name).mesh:name);
+        return {double(mesh.accelStruct?mesh.accelStruct->getDeviceAddress():0),
+            double(reinterpret_cast<uintptr_t>(mesh.buffers->vertexBuffer.Get()))};
     }
     size_t GeometryCorners(const std::string& name) const {
         const auto separator=name.rfind(':');
@@ -96,6 +130,7 @@ public:
     void Reset() {
         m_nodes.clear();
         m_meshes.clear();
+        m_meshSources.clear();
         m_materials.clear();
         if(m_textureCache)for(const auto& [id,texture]:m_textures)
             if(texture.loaded)m_textureCache->UnloadTexture(texture.loaded);
@@ -114,7 +149,7 @@ public:
     void ApplyPendingTransforms() {
         for(const auto& [name,input]:m_pendingTransforms)
             if(auto node=m_nodes.find(name);node!=m_nodes.end())
-                node->second.node->SetTransform(&input.translation,&input.rotation,&input.scaling);
+                SetPose(node->second,input);
         m_pendingTransforms.clear();
     }
 
@@ -154,7 +189,8 @@ public:
     }
 
     Changes Apply(const void* bytes, size_t size, donut::engine::Scene& scene,
-        nvrhi::ICommandList* commands, uint32_t frameIndex) {
+        nvrhi::ICommandList* commands, uint32_t frameIndex,
+        const std::function<void(bool)>& beforeStructural = {}) {
         if (!bytes || !size || !commands)
             throw std::invalid_argument("A resource packet and open command list are required");
         auto graph = scene.GetSceneGraph();
@@ -164,14 +200,33 @@ public:
             throw std::logic_error("Reset resource identities before replacing the original scene");
 
         // Decode and validate the complete packet before changing any scene object.
-        Packet packet = Decode(bytes, size);
+        RtrDiagnostics::Scope applyScope(RtrDiagnostics::Resources,0,0,1,0,0,0,0,size);
+        Packet packet;{RtrDiagnostics::Scope decodeScope(RtrDiagnostics::Import);packet=Decode(bytes,size);}
         ValidateReferences(packet);
+        // Exact input equality avoids turning an unchanged material into a
+        // scene reload. No epsilon or hash collision can suppress a real edit.
+        for(auto i=packet.materials.begin();i!=packet.materials.end();)
+            if(auto old=m_materials.find(i->first);old!=m_materials.end()&&SameMaterial(old->second,i->second))i=packet.materials.erase(i);
+            else ++i;
+        std::unordered_set<std::string> attributeMeshes;
+        for(const auto& [name,mesh]:packet.meshes)
+            if(CanUpdateAttributes(name,*mesh))attributeMeshes.insert(name);
         Changes changes;
+        changes.attributes=!attributeMeshes.empty();
         changes.textures = !packet.textures.empty() || !packet.removeTextures.empty();
         changes.materials = !packet.materials.empty();
-        changes.topology = !packet.meshes.empty() || !packet.removeNodes.empty()
+        changes.topology = packet.meshes.size()!=attributeMeshes.size() || !packet.removeNodes.empty()
             || !packet.coverage.empty();
         changes.transforms = !packet.nodes.empty();
+        changes.coverageChanged = !packet.coverage.empty();
+        bool structural=changes.topology||changes.materials||changes.textures||changes.attributes;
+        for(const auto& node:packet.nodes){
+            const auto old=m_nodes.find(node.name);
+            structural |= old==m_nodes.end()||old->second.mesh!=node.mesh;
+        }
+        // The sample's TLAS holds device addresses, not leases on removed pooled
+        // BLASes. Retire previous GPU readers before graph edits can free them.
+        if(structural&&beforeStructural)beforeStructural(!changes.materials&&!changes.textures&&!changes.coverageChanged);
 
         if (!packet.textures.empty() && !m_textureCache)
             throw std::logic_error("Inject the original TextureCache before importing textures");
@@ -213,6 +268,7 @@ public:
         for (auto& [name, entry] : packet.materials) {
             auto old = m_materials.find(name);
             if (old != m_materials.end()) {
+                changes.existingMaterialsChanged = true;
                 changes.topology |= old->second.material->domain != entry.material->domain;
                 const auto constants = old->second.material->materialConstants;
                 const auto materialID = old->second.material->materialID;
@@ -248,8 +304,24 @@ public:
         }
 
         std::unordered_set<std::string> touchedMeshes, touchedMaterials;
+        std::vector<std::shared_ptr<Mesh>> attributeUpdates;
         for (auto& [name, mesh] : packet.meshes) {
+            if(attributeMeshes.contains(name)){
+                // Original Scene buffers have permanent read states and cannot
+                // be rewritten as CopyDest. Reuse the immutable built BLAS and
+                // ask the original uploader for the replacement attribute buffer.
+                // BLAS traversal no longer reads its original vertex input.
+                auto& resident=*m_meshes.at(name);
+                changes.retiredBuffers.push_back(resident.buffers);
+                resident.buffers=std::move(mesh->buffers);
+                attributeUpdates.push_back(m_meshes.at(name));
+                continue;
+            }
+            // The original uploader frees its CPU arrays. Retain only the
+            // geometry inputs needed to prove a future update does not need AS.
+            m_meshSources.insert_or_assign(name,MeshSource{mesh->buffers->positionData,mesh->buffers->indexData});
             if (auto old = m_meshes.find(name); old != m_meshes.end()) {
+                changes.retiredMeshes.push_back(old->second);
                 for(size_t i=0;i<old->second->geometries.size();++i)
                     changes.retiredGeometries.push_back(name+":"+std::to_string(i));
                 UnlinkMeshMaterials(name, *old->second, touchedMaterials);
@@ -265,7 +337,7 @@ public:
                 changes.retiredInstances.push_back(name);
                 touchedMeshes.insert(i->second.mesh);
                 m_meshNodes.at(i->second.mesh).erase(name);
-                graph->Detach(i->second.node);
+                graph->Detach(i->second.poseNode);
                 m_nodes.erase(i);
                 m_pendingTransforms.erase(name);
             }
@@ -273,6 +345,7 @@ public:
         // Replacing a mesh must also replace all existing leaves referencing it.
         // SetLeaf handles official resource registration and graph dirty flags.
         for (const auto& [meshName, mesh] : packet.meshes) {
+            if(attributeMeshes.contains(meshName))continue;
             auto users = m_meshNodes.find(meshName);
             if (users == m_meshNodes.end()) continue;
             for (const auto& name : users->second)
@@ -283,10 +356,11 @@ public:
             auto old = m_nodes.find(input.name);
             const bool created=old==m_nodes.end();
             if (created) {
-                auto node = graph->AttachLeafNode(graph->GetRootNode(),
-                    m_factory.CreateMeshInstance(m_meshes.at(input.mesh)));
+                auto poseNode=std::make_shared<Node>();poseNode->SetName(input.name+"/affine");
+                graph->Attach(graph->GetRootNode(),poseNode);
+                auto node = graph->AttachLeafNode(poseNode,m_factory.CreateMeshInstance(m_meshes.at(input.mesh)));
                 node->SetName(input.name);
-                old = m_nodes.emplace(input.name, Instance{input.mesh, std::move(node)}).first;
+                old = m_nodes.emplace(input.name, Instance{input.mesh,node,poseNode}).first;
                 m_meshNodes[input.mesh].insert(input.name);
                 changes.topology = true;
             } else if (old->second.mesh != input.mesh) {
@@ -298,7 +372,7 @@ public:
                 changes.topology = true;
             }
             if(created)
-                old->second.node->SetTransform(&input.translation,&input.rotation,&input.scaling);
+                SetPose(old->second,input);
             else
                 m_pendingTransforms.insert_or_assign(input.name,input);
         }
@@ -312,6 +386,8 @@ public:
                 for(size_t i=0;i<mesh->second->geometries.size();++i)
                     changes.retiredGeometries.push_back(name+":"+std::to_string(i));
                 UnlinkMeshMaterials(name, *mesh->second, touchedMaterials);
+                changes.retiredMeshes.push_back(mesh->second);
+                m_meshSources.erase(name);
                 m_meshes.erase(mesh);
             }
         }
@@ -331,7 +407,9 @@ public:
         // before its bakers run. Existing-node poses remain staged until Render.
         // A transform-only packet needs neither this refresh nor a GPU submission.
         if(changes.topology||changes.materials||changes.textures)
-            scene.Refresh(commands,frameIndex);
+            {RtrDiagnostics::Scope refreshScope(RtrDiagnostics::SceneFullRefresh);scene.Refresh(commands,frameIndex);}
+        else if(!attributeUpdates.empty())
+            {RtrDiagnostics::Scope attributeScope(RtrDiagnostics::AttributePreparation,attributeUpdates.size());dynamic_cast<ManagedScene&>(scene).RefreshAttributes(commands,attributeUpdates);}
         return changes;
     }
 
@@ -365,13 +443,52 @@ private:
     };
     struct Instance {
         std::string mesh;
-        std::shared_ptr<Node> node;
+        std::shared_ptr<Node> node,poseNode;
     };
     struct NodeInput {
         std::string name, mesh;
-        donut::math::double3 translation, scaling;
-        donut::math::dquat rotation;
+        AffinePose pose;
     };
+    static void SetPose(Instance& instance,const NodeInput& input){
+        const auto& pose=input.pose;
+        instance.poseNode->SetTransform(&pose.translation,&pose.rotation,&pose.scaling);
+        if(instance.poseNode!=instance.node)instance.node->SetRotation(pose.inner);
+    }
+    struct MeshSource {
+        std::vector<donut::math::float3> positions;
+        std::vector<uint32_t> indices;
+    };
+    std::unordered_map<std::string,MeshSource> m_meshSources;
+    template<class T>static bool SameArray(const std::vector<T>& a,const std::vector<T>& b){
+        return a.size()==b.size()&&(a.empty()||std::memcmp(a.data(),b.data(),a.size()*sizeof(T))==0);
+    }
+    bool CanUpdateAttributes(const std::string& name,const Mesh& mesh)const{
+        const auto old=m_meshes.find(name),end=m_meshes.end();
+        const auto shadow=m_meshSources.find(name);
+        if(old==end||shadow==m_meshSources.end()||!old->second->buffers->vertexBuffer
+            ||old->second->geometries.size()!=mesh.geometries.size())return false;
+        const auto& a=*old->second;const auto& b=*mesh.buffers;
+        if(!SameArray(shadow->second.positions,b.positionData)||!SameArray(shadow->second.indices,b.indexData))return false;
+        for(size_t i=0;i<a.geometries.size();++i){
+            const auto& x=*a.geometries[i];const auto& y=*mesh.geometries[i];
+            if(x.material->name!=y.material->name||x.indexOffsetInMesh!=y.indexOffsetInMesh||x.numIndices!=y.numIndices)return false;
+        }
+        auto sizeMatches=[&](donut::engine::VertexAttribute attribute,size_t bytes){return a.buffers->getVertexBufferRange(attribute).byteSize==bytes;};
+        return sizeMatches(donut::engine::VertexAttribute::Normal,b.normalData.size()*sizeof(uint32_t))
+            &&sizeMatches(donut::engine::VertexAttribute::Tangent,b.tangentData.size()*sizeof(uint32_t))
+            &&sizeMatches(donut::engine::VertexAttribute::TexCoord1,b.texcoord1Data.size()*sizeof(donut::math::float2));
+    }
+    static bool SameMaterial(const MaterialEntry& a,const MaterialEntry& b){
+        const auto& x=*a.material;const auto& y=*b.material;
+        return a.textures==b.textures&&a.ior==b.ior&&a.psdExclude==b.psdExclude&&a.psdDominant==b.psdDominant
+            &&a.psdBlockMotionVectors==b.psdBlockMotionVectors&&a.boundary==b.boundary&&a.priority==b.priority
+            &&std::memcmp(&a.absorption,&b.absorption,sizeof(a.absorption))==0
+            &&std::memcmp(&x.baseOrDiffuseColor,&y.baseOrDiffuseColor,sizeof(x.baseOrDiffuseColor))==0
+            &&std::memcmp(&x.emissiveColor,&y.emissiveColor,sizeof(x.emissiveColor))==0
+            &&x.opacity==y.opacity&&x.roughness==y.roughness&&x.metalness==y.metalness
+            &&x.transmissionFactor==y.transmissionFactor&&x.alphaCutoff==y.alphaCutoff
+            &&x.domain==y.domain&&x.doubleSided==y.doubleSided;
+    }
     struct Packet {
         std::unordered_map<int64_t, Texture> textures;
         std::unordered_map<std::string, MaterialEntry> materials;
@@ -625,22 +742,7 @@ private:
             for (int row = 0; row < 3; ++row)
                 for (int col = 0; col < 3; ++col) transform.m_linear[col][row] = double(values[row * 4 + col]);
             transform.m_translation = donut::math::double3(values[3], values[7], values[11]);
-            // API matrices act on column vectors, while SceneGraph uses row
-            // vectors and constructs S*R*T. The original decomposeAffine takes
-            // scale from columns: decompose the column convention and conjugate
-            // the original quaternion to obtain SceneGraph's row convention.
-            auto decomposition = transform;
-            decomposition.m_linear = donut::math::transpose(transform.m_linear);
-            donut::math::decomposeAffine(decomposition, &input.translation, &input.rotation, &input.scaling);
-            input.rotation = donut::math::conjugate(input.rotation);
-            const auto rebuilt = donut::math::scaling(input.scaling) * input.rotation.toAffine()
-                * donut::math::translation(input.translation);
-            for (int row = 0; row < 3; ++row)
-                for (int col = 0; col < 3; ++col) {
-                    const auto expected = transform.m_linear[row][col], actual = rebuilt.m_linear[row][col];
-                    if (!std::isfinite(actual) || std::abs(expected - actual) > 1.e-5 * std::max(1., std::abs(expected)))
-                        throw std::invalid_argument("Original SceneGraph TRS cannot represent this affine transform without loss");
-                }
+            input.pose=AffinePose::Decode(transform);
             packet.nodes.push_back(std::move(input));
         }
         for (uint32_t n = reader.count(); n; --n) packet.coverage.push_back(Name(reader));

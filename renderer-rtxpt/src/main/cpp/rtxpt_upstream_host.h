@@ -5,7 +5,11 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <cstdio>
+#include <d3d12sdklayers.h>
 #include "OpacityMicroMap/OmmBaker.h"
+#include "SampleCommon/AccelerationStructureUtil.h"
+#include "SampleCommon/BlasCompactor.h"
 #include "rtxpt_upstream_resources.h"
 #include "rtxpt_gpu_profile.h"
 #include "rtxpt_sparse_lighting.h"
@@ -72,7 +76,19 @@ class PathTracer final : public AdvancedPathTracer {
 public:
     PathTracer(donut::app::DeviceManager& manager, const CommandLineOptions& options,
         bool managedScene) : AdvancedPathTracer(manager, options),
-        m_adapterOptions(options), m_managedScene(managedScene) { }
+        m_adapterOptions(options), m_managedScene(managedScene) {
+        if(options.debug||options.gpuValidation){
+            auto* native=static_cast<ID3D12Device*>(GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device));
+            if(native&&SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&m_validationQueue))))
+                m_validationQueue->RegisterMessageCallback([](D3D12_MESSAGE_CATEGORY,
+                    D3D12_MESSAGE_SEVERITY severity,D3D12_MESSAGE_ID id,LPCSTR description,void*){
+                    if(severity<=D3D12_MESSAGE_SEVERITY_WARNING){
+                        std::fprintf(stderr,"D3D12 validation id=%u: %s\n",unsigned(id),description);
+                        std::fflush(stderr);
+                    }
+                },D3D12_MESSAGE_CALLBACK_FLAG_NONE,nullptr,&m_validationCookie);
+        }
+    }
     const char* GetWindowTitle() override {
         return m_consumerTitle.empty() ? AdvancedPathTracer::GetWindowTitle() : m_consumerTitle.c_str();
     }
@@ -84,6 +100,7 @@ public:
         return {m_renderSize.x,m_renderSize.y,m_displaySize.x,m_displaySize.y};
     }
     ~PathTracer() override {
+        if(m_validationQueue){m_validationQueue->UnregisterMessageCallback(m_validationCookie);m_validationQueue->Release();}
         if(!m_skyPath.empty()){std::error_code ignored;std::filesystem::remove(m_skyPath,ignored);}
     }
 
@@ -161,6 +178,11 @@ public:
             throw std::invalid_argument("Exposure compensation must be finite and in [-12,12]");
         m_exposure=compensation;m_exposureConfigured=true;ApplyExposure();
     }
+    void SceneUnloading() override {
+        if(!m_resourceRetirement.empty()){GetDevice()->waitForIdle();m_resourceRetirement.clear();}
+        AdvancedPathTracer::SceneUnloading();
+    }
+    std::array<double,2> MeshResourceState(const std::string& name)const{return m_resources.MeshResourceState(name);}
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
         if(m_presentationConfigured)ApplyPresentation();
@@ -247,6 +269,7 @@ public:
     void Render(nvrhi::IFramebuffer* framebuffer) override {
         // Original Render refreshes the graph and uploads current/previous poses.
         // Keep publication-side lifecycle refreshes from consuming these poses.
+        PollResourceRetirement();
         if(m_managedScene&&m_scene&&IsSceneLoaded())m_resources.ApplyPendingTransforms();
         if (!m_managedScene || !IsSceneLoaded() || !m_scene ||
             !m_scene->GetSceneGraph()->GetMeshInstances().empty()) {
@@ -269,6 +292,7 @@ public:
 
     void ClearResources() {
         if (!m_managedScene || !m_scene) throw std::logic_error("No managed scene");
+        GetDevice()->waitForIdle();m_resourceRetirement.clear();
         m_resources.Reset();
         analytic.Reset(m_scene.get());
         m_lights.clear();
@@ -364,7 +388,7 @@ public:
         // The supported virtual scene-loading hook creates an ordinary empty
         // ExtendedScene. Sample retains SceneLoaded/AS/render/shutdown ownership.
         m_currentSceneName = "API managed scene";
-        m_scene = std::make_shared<ExtendedScene>(GetDevice(), *m_shaderFactory,
+        m_scene = std::make_shared<ManagedScene>(GetDevice(), *m_shaderFactory,
             std::move(fs), m_TextureCache, m_DescriptorTable,
             std::make_shared<ExtendedSceneTypeFactory>());
         auto graph = m_scene->CreateSceneGraph();
@@ -383,29 +407,68 @@ public:
     void ApplyResources(const std::vector<uint8_t>& packet) {
         if (!m_managedScene || !m_scene || !IsSceneLoaded())
             throw std::logic_error("In-memory resources require the loaded managed scene");
+        RtrDiagnostics::Scope resourceScope(RtrDiagnostics::ResourcePlan);
+        PollResourceRetirement();
         m_resources.SetTextureCache(m_TextureCache);
         auto commands = GetDevice()->createCommandList();
         commands->open();
+        bool retainRemoved=false;
         const auto changed = m_resources.Apply(packet.data(), packet.size(),
-            *m_scene, commands, GetFrameIndex());
+            *m_scene, commands, GetFrameIndex(),[&](bool geometryOnly){
+                retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
+                if(!retainRemoved){RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();}
+            });
+        if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty())){
+            if(m_resourceRetirement.size()>=64){GetDevice()->waitForIdle();m_resourceRetirement.clear();}
+            RetiredResources retired;
+            retired.graphics=GetDevice()->createEventQuery();retired.compute=GetDevice()->createEventQuery();
+            GetDevice()->setEventQuery(retired.graphics,nvrhi::CommandQueue::Graphics);
+            GetDevice()->setEventQuery(retired.compute,nvrhi::CommandQueue::Compute);
+            retired.meshes=changed.retiredMeshes;retired.buffers=changed.retiredBuffers;
+            m_resourceRetirement.push_back(std::move(retired));
+        }
         for(const auto& name:changed.retiredInstances)lighting.RetireInstance(name);
         for(const auto& name:changed.retiredGeometries)lighting.RetireGeometry(name);
         commands->close();
-        if(changed.topology||changed.materials||changed.textures)
-            GetDevice()->executeCommandList(commands);
+        if(changed.topology||changed.materials||changed.textures||changed.attributes){
+            const auto submitted=GetDevice()->executeCommandList(commands);
+            // These uploads are outside Sample::Render's own lastGraphicsSubmit.
+            // Its async prefix must observe them before reading the scene tables.
+            GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,
+                nvrhi::CommandQueue::Graphics,submitted);
+        }
         if (changed.topology || changed.materials || changed.textures) {
             // The original baker exposes scene-wide reimport rather than an
             // incremental material-registration API. Reuse that lifecycle; do
             // not maintain a second PT material table or rebuild SceneLoaded.
-            ReimportMaterials();
+            const auto& currentMaterials=m_scene->GetSceneGraph()->GetMaterials();
+            bool materialSetChanged=currentMaterials.size()!=m_importedMaterials.size();
+            if(!materialSetChanged)
+                for(const auto& material:currentMaterials)
+                    if(!m_importedMaterials.contains(material.get())){materialSetChanged=true;break;}
+            if(changed.materials||changed.textures||materialSetChanged) ReimportMaterials();
+            else if(changed.topology) {
+                InvalidateBindingSet();
+                m_ui.AccelerationStructRebuildRequested=true;
+            }
             // These original scene consumers cache geometry-sized state. A
             // host graph edit does not pass through Sample::SceneLoaded again.
             if(m_ommBaker)m_ommBaker->SceneLoaded(*m_scene);
             if(m_lightsBaker)m_lightsBaker->SceneReloaded();
             if(auto* sharc=GetSharc())sharc->NotifySceneReloaded();
+            // Direct consumers use ordinary, non-OMM BLASes. The sample's
+            // scene-wide rebuild discards every pooled handle; its public
+            // compactor can instead build just the newly published meshes.
+            // Keep policy edits on the original complete rebuild path.
+            if(changed.topology&&!changed.existingMaterialsChanged&&!changed.coverageChanged
+                &&!changed.textures) {
+                if(!RefreshRetainedDirectStructures()){
+                    GetDevice()->waitForIdle();m_resourceRetirement.clear();
+                }
+            }
         }
         if (changed.topology || changed.materials || changed.textures) lighting.metadataDirty = true;
-        if (changed.topology || changed.transforms) ++lighting.geometryGeneration;
+        if (changed.topology || changed.transforms || changed.attributes) ++lighting.geometryGeneration;
         m_ui.ResetAccumulation = true;
     }
 
@@ -431,6 +494,61 @@ public:
     }
 
 private:
+    ID3D12InfoQueue1* m_validationQueue=nullptr;
+    DWORD m_validationCookie=0;
+    struct RetiredResources {
+        nvrhi::EventQueryHandle graphics,compute;
+        nvrhi::CommandListHandle commands;
+        std::vector<std::shared_ptr<donut::engine::MeshInfo>> meshes;
+        std::vector<std::shared_ptr<donut::engine::BufferGroup>> buffers;
+    };
+    std::vector<RetiredResources> m_resourceRetirement;
+    void PollResourceRetirement(){
+        for(auto i=m_resourceRetirement.begin();i!=m_resourceRetirement.end();)
+            if(GetDevice()->pollEventQuery(i->graphics)&&GetDevice()->pollEventQuery(i->compute))i=m_resourceRetirement.erase(i);
+            else ++i;
+    }
+    bool RefreshRetainedDirectStructures() {
+        RtrDiagnostics::Scope structureScope(RtrDiagnostics::Acceleration);
+        if(!lighting.active||m_ommBaker||!m_blasPool||m_scene->GetSceneGraph()->GetMeshInstances().empty())return false;
+        for(const auto& mesh:m_scene->GetSceneGraph()->GetMeshes())
+            if(!mesh->isSkinPrototype&&bvh::IsSkinnedMesh(*mesh))return false;
+        auto commands=GetDevice()->createCommandList();commands->open();
+        for(const auto& mesh:m_scene->GetSceneGraph()->GetMeshes()){
+            if(mesh->isSkinPrototype||mesh->accelStruct)continue;
+            auto description=bvh::GetMeshBlasDesc(
+                bvh::Config{.excludeTransmissive=m_ui.AS.ExcludeTransmissive},*mesh,nullptr,false);
+            // The native load-time compactor documents two GPU round trips per
+            // batch. Streaming uses the sample's ordinary NVRHI build path,
+            // avoiding those CPU readbacks. Existing BLASes are not rebuilt.
+            description.buildFlags=description.buildFlags&~nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+            RtrDiagnostics::Scope blasScope(RtrDiagnostics::BlasBuild,1);
+            auto structure=GetDevice()->createAccelStruct(description);
+            if(!structure)throw std::runtime_error("Native streaming BLAS allocation failed");
+            nvrhi::utils::BuildBottomLevelAccelStruct(commands,structure,description);
+            mesh->accelStruct=std::move(structure);
+        }
+        InvalidateBindingSet();m_bindingCache->Clear();
+        {RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasAllocate);CreateTlas(commands);}
+        m_tlasInstanceDataDirty=true;
+        commands->close();
+        const auto submitted=GetDevice()->executeCommandList(commands);
+        // UpdateTLAS runs in the original async compute prefix. Its ordinary
+        // frame fence predates this external build; add the missing GPU edge.
+        GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,
+            nvrhi::CommandQueue::Graphics,submitted);
+        // NVRHI's DXR scratch allocator belongs to the command list, unlike
+        // ordinary submitted resource references. Keep that owner until the
+        // actual build completes instead of releasing its scratch in flight.
+        RetiredResources pending;pending.commands=commands;
+        pending.graphics=GetDevice()->createEventQuery();
+        pending.compute=GetDevice()->createEventQuery();
+        GetDevice()->setEventQuery(pending.graphics,nvrhi::CommandQueue::Graphics);
+        GetDevice()->setEventQuery(pending.compute,nvrhi::CommandQueue::Compute);
+        m_resourceRetirement.push_back(std::move(pending));
+        m_ui.AccelerationStructRebuildRequested=false;
+        return true;
+    }
     void RenderAnalyticBeauty(nvrhi::ICommandList* commands){
         if(!m_adapterShaders){
             auto fs=std::make_shared<donut::vfs::NativeFileSystem>();
@@ -540,10 +658,14 @@ private:
         m_ui.EnvironmentMapParams.Intensity=1.f;
     }
     void ReimportMaterials() {
+        RtrDiagnostics::Scope importScope(RtrDiagnostics::Materials);
         m_materialsBaker->SceneReloaded();
         m_materialsBaker->CreateRenderPassesAndLoadMaterials(m_bindlessLayout,
             m_CommonPasses, m_scene, m_currentScenePath, GetLocalPath(c_AssetsFolder));
         m_resources.ConfigureMaterials(true);
+        m_importedMaterials.clear();
+        for(const auto& material:m_scene->GetSceneGraph()->GetMaterials())
+            m_importedMaterials.insert(material.get());
         InvalidateBindingSet();
         m_ui.AccelerationStructRebuildRequested = true;
     }
@@ -557,6 +679,7 @@ private:
     bool m_qualityConfigured=false;
     Quality m_quality{};
     Resources m_resources;
+    std::unordered_set<const donut::engine::Material*> m_importedMaterials;
     std::shared_ptr<donut::engine::ShaderFactory> m_adapterShaders;
     std::shared_ptr<donut::engine::LoadedTexture> m_skyTexture;
     std::vector<float> m_skyInput;

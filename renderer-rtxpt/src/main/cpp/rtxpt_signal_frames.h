@@ -33,7 +33,12 @@ class RtrSignalFrameRing {
         RtrProtocolTrace::Record(1,adapter,0,uint64_t(&slot-slots.data()),slot.generation,slot.sequence,slot.revision,slot.completion-1,slot.completion,completed,
             1|(slot.leased?2:0)|(slot.returned?4:0)|(slot.consumerImported?8:0));
         if(!slot.leased&&completed>=slot.completion-1)return true;
-        if(slot.returned&&completed>=slot.completion){slot.published=slot.leased=slot.returned=false;return true;}
+        // An unimported returned lease has no external GPU reader. Release
+        // already enqueued its completion on this producer graphics queue, so
+        // the next copy is ordered after it without waiting for a CPU poll.
+        if(slot.returned&&(!slot.consumerImported||completed>=slot.completion)){
+            slot.published=slot.leased=slot.returned=false;return true;
+        }
         return false;
     }
 public:
@@ -79,7 +84,12 @@ public:
             copy->copyTexture(slot.textures[i],nvrhi::TextureSlice(),sources[i],nvrhi::TextureSlice());
             copy->setTextureState(slot.textures[i],nvrhi::AllSubresources,nvrhi::ResourceStates::Common);
         }
-        copy->commitBarriers();RtrGpuProfile::End(copy,copyScope);copy->close();device->executeCommandList(copy);
+        copy->commitBarriers();RtrGpuProfile::End(copy,copyScope);copy->close();
+        const auto submitted=device->executeCommandList(copy);
+        // The copy follows Sample's own graphics submission. Its next async
+        // compute prefix must not overwrite the source planes before this copy.
+        device->queueWaitForCommandList(nvrhi::CommandQueue::Compute,
+            nvrhi::CommandQueue::Graphics,submitted);
         slot.sequence=sequence;slot.revision=revision;slot.completion+=2;
         slot.attributes=attributes;slot.time=time;slot.delta=delta;
         slot.encoding=encoding;std::memcpy(&slot.maximumGiBits,&maximumGi,sizeof(maximumGi));

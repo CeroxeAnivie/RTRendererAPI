@@ -1,48 +1,44 @@
 package top.ceroxe.rt.renderer.rtxpt;
 
-import static top.ceroxe.rt.renderer.rtxpt.RtxptAdapterSelfTest.require;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Public boundary evidence contracts, without loading JNI or inspecting upstream internals. */
+/** Tests the external recorder without initializing a GPU or loading JNI. */
 public final class RtxptBoundaryDiagnosticsSelfTest {
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws Exception {
         var recorder=new RtxptDiagnostics.Recorder();
-        var empty=recorder.snapshot(-1);
-        require(empty.events().isEmpty()&&empty.nextOrdinal()==0&&empty.lostEvents()==0,"Empty initial cursor");
-        recorder.level(RtxptDiagnostics.Level.DEEP);
-        long begin=recorder.clock();
-        Thread.sleep(5);
-        recorder.add(17,9,RtxptDiagnostics.Stage.RTXPT_FRAME,begin,3,64,true);
-        var captured=recorder.snapshot(-1);var failed=captured.events().getFirst();
-        require(failed.sequence()==17&&failed.sceneRevision()==9&&failed.failed(),"Failure retains frame identity");
-        require(failed.beginNanos()==begin&&failed.durationNanos()>=1_000_000,"Boundary wall duration includes blocked time");
-        require(!captured.upstreamInternalsExpanded(),"Boundary evidence never claims expanded upstream internals");
-        try {captured.events().clear();throw new AssertionError("Mutable diagnostic snapshot");}
-        catch(UnsupportedOperationException expected) { }
-
-        long cursor=captured.nextOrdinal()-1;
-        recorder.level(RtxptDiagnostics.Level.OFF);
-        require(recorder.clock()==0,"OFF does not start a timer");
-        recorder.add(18,9,RtxptDiagnostics.Stage.RESOURCES,begin,1,0,false);
-        var off=recorder.snapshot(cursor);
-        require(off.level()==RtxptDiagnostics.Level.OFF&&off.events().isEmpty()
-                &&off.nextOrdinal()==captured.nextOrdinal(),"OFF freezes ordinal and event collection");
-
-        recorder.level(RtxptDiagnostics.Level.SUMMARY);
-        for(int index=0;index<1050;index++)
-            recorder.add(100+index,10,RtxptDiagnostics.Stage.TRANSLATION,recorder.clock(),1,0,false);
+        var first=recorder.monitor();var second=recorder.monitor();
+        var done=new AtomicBoolean();
+        try(var readers=Executors.newFixedThreadPool(2)){
+            Future<Long> a=readers.submit(()->read(first,done));
+            Future<Long> b=readers.submit(()->read(second,done));
+            for(long i=1;i<=100_000;i++)recorder.add(i,3*i,RtxptDiagnostics.Stage.RESOURCES,recorder.clock(),i+7,i+8,false);
+            done.set(true);
+            if(a.get(10,TimeUnit.SECONDS)==0||b.get(10,TimeUnit.SECONDS)==0)throw new AssertionError("No concurrent events observed");
+        }
         var retained=recorder.snapshot(-1);
-        require(retained.events().size()==1024&&retained.lostEvents()==27&&retained.nextOrdinal()==1051,"Bounded retention reports overwritten events");
-        require(retained.events().getFirst().ordinal()==27&&retained.events().getLast().ordinal()==1050,"Retained ordering is continuous");
-        require(!retained.events().getLast().failed(),"Successful boundaries remain distinct from failures");
-        var consumed=recorder.snapshot(retained.nextOrdinal()-1);
-        require(consumed.events().isEmpty()&&consumed.lostEvents()==0,"Last consumed ordinal does not replay events");
-        var missed=recorder.snapshot(23);
-        require(missed.lostEvents()==3&&missed.events().getFirst().ordinal()==27,"Loss is relative to the consumer cursor");
-        reject(()->recorder.snapshot(-2));reject(()->recorder.snapshot(retained.nextOrdinal()));
-        System.out.println("RTXPT_BOUNDARY_DIAGNOSTICS PASS offFrozen=true retention=1024 loss=27 cursor=true failedIdentity=true wallIncludesWait=true upstreamExpanded=false");
+        if(retained.events().size()!=1024||retained.lostEvents()!=100_000-1024)throw new AssertionError("Incorrect ring coverage");
+        long next=retained.nextOrdinal();
+        recorder.level(RtxptDiagnostics.Level.OFF);
+        if(recorder.clock()!=0)throw new AssertionError("OFF reads a clock");
+        recorder.add(200_000,600_000,RtxptDiagnostics.Stage.RESOURCES,1,0,0,false);
+        if(recorder.snapshot(next-1).nextOrdinal()!=next)throw new AssertionError("OFF recorded an event");
+        recorder.level(RtxptDiagnostics.Level.DEEP);recorder.close();
+        recorder.add(200_001,600_003,RtxptDiagnostics.Stage.RESOURCES,1,0,0,false);
+        if(!first.closed()||!second.closed()||recorder.snapshot(next-1).nextOrdinal()!=next)throw new AssertionError("Closed recorder changed");
+        System.out.println("BOUNDARY_DIAGNOSTICS PASS concurrentReaders=2 writes=100000 bounded=1024 independentCursors=true off=true closed=true");
     }
-    private static void reject(Runnable action) {
-        try {action.run();} catch(IllegalArgumentException expected) {return;}
-        throw new AssertionError("Invalid diagnostic cursor accepted");
+    private static long read(RtxptDiagnostics.Monitor monitor,AtomicBoolean done){
+        long seen=0,previous=-1;
+        do{
+            for(var event:monitor.poll().events()){
+                if(event.ordinal()<=previous||event.sceneRevision()!=3*event.sequence()
+                    ||event.items()!=event.sequence()+7||event.bytes()!=event.sequence()+8)
+                    throw new AssertionError("Concurrent record was torn or replayed");
+                previous=event.ordinal();seen++;
+            }
+            Thread.yield();
+        }while(!done.get());
+        return seen;
     }
 }

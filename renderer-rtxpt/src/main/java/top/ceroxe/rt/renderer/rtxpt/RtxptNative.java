@@ -23,6 +23,8 @@ final class RtxptNative {
     /** Test-only: fresh process, before creating any renderer; observes the public upstream progress API. */
     static native long[] progressWindowProof();
     static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,String[] options);
+    static native void diagnosticLevel(long handle,int level);
+    static native long[] boundaryDiagnostics(long handle,long generation,long nextOrdinal);
     static native void frameContext(long handle,long sequence,long revision);
     static native void presentation(long handle,int maxBounces,int diffuseBounces,boolean reflex,int generatedFrames);
     static native long[] presentationState(long handle);
@@ -34,6 +36,7 @@ final class RtxptNative {
     static native int denoiserState(long handle);
     static native long[] renderingState(long handle);
     static native String frameStatistics(long handle);
+    static native double[] meshResourceState(long handle,String mesh);
     static native double[] instanceTransformState(long handle,String instance);
     static native long[] windowState(long handle);
     static native void overlayText(long handle,String text);

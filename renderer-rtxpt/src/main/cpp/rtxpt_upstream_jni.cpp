@@ -202,6 +202,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(JNIEnv* env, jclass, jstrin
         arguments.push_back("--height=" + std::to_string(height));
         const auto scenePath = scene ? String(env, scene) : std::string();
         if (!scenePath.empty()) arguments.push_back("--scene=" + scenePath);
+        RtrDiagnostics::Reset();
         auto renderer = std::make_shared<Renderer>();
         renderer->session = std::make_unique<rtr::upstream::Session>(std::move(arguments), scenePath.empty());
         if (externalPresentation) renderer->session->Invoke([](auto& app) {
@@ -221,10 +222,35 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frameContext(JNIEnv* env, jclass, 
         auto renderer = Get(handle);
         renderer->sequence = uint64_t(sequence); renderer->revision = uint64_t(revision);
         renderer->session->Enqueue([sequence, revision](auto& app) {
+            RtrDiagnostics::Context(uint64_t(sequence),uint64_t(revision));
             app.Renderer().lighting.sequence = uint64_t(sequence);
             app.Renderer().lighting.sceneRevision = uint64_t(revision);
         });
     } catch (const std::exception& error) { Throw(env, error); }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_diagnosticLevel(JNIEnv* env,jclass,jlong handle,jint level){
+    try {Get(handle);RtrDiagnostics::Configure(unsigned(level));}
+    catch(const std::exception& error){Throw(env,error);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_boundaryDiagnostics(JNIEnv* env,jclass,jlong handle,jlong generation,jlong next){
+    try {
+        Get(handle);
+        if(generation<0||next<1)throw std::invalid_argument("Invalid boundary diagnostic cursor");
+        const auto snapshot=RtrDiagnostics::Snapshot(uint64_t(generation),UINT64_MAX,uint64_t(next),UINT64_MAX);
+        return LongArray(env,std::vector<jlong>(snapshot.begin(),snapshot.end()));
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_meshResourceState(JNIEnv* env,jclass,jlong handle,jstring name){
+    try{
+        auto renderer=Get(handle);auto id=String(env,name);std::array<double,2> state{};
+        renderer->session->Invoke([&](auto& app){state=app.Renderer().MeshResourceState(id);});
+        auto result=env->NewDoubleArray(2);if(result)env->SetDoubleArrayRegion(result,0,2,state.data());return result;
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -413,6 +439,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingPatch(JNIEnv* env,jclass,j
 extern "C" JNIEXPORT jint JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frame(JNIEnv* env, jclass, jlong handle) {
     try { auto renderer = Get(handle);
+        RtrDiagnostics::Scope frameScope(RtrDiagnostics::Frame,0,0,1,0,0,0,0,0,renderer->sequence,renderer->revision);
         const bool completed = renderer->session->Frame([&](auto& app) {
             auto& pass = app.Renderer().lighting;
             if (pass.active) renderer->signals.Publish(app.DeviceManager().GetDevice(), pass.Outputs(),
@@ -429,7 +456,15 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCanPublish(JNIEnv* e
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingConsumersRetired(JNIEnv* env, jclass, jlong handle) {
-    try { auto renderer = Get(handle); bool result = false; renderer->session->Invoke([&](auto&) { result = renderer->signals.ConsumersRetired(); }); return result;
+    try { auto renderer = Get(handle); bool result = false;
+        try {renderer->session->Invoke([&](auto&) { result = renderer->signals.ConsumersRetired(); });}
+        catch (...) {
+            if(!renderer->session->Stopped())throw;
+            // No owner can mutate the ring after Run has finished. Preserve the
+            // external completion fence contract even when rendering failed.
+            result=renderer->signals.ConsumersRetired();
+        }
+        return result;
     } catch (const std::exception& error) { Throw(env, error); return false; }
 }
 extern "C" JNIEXPORT jlongArray JNICALL
@@ -625,8 +660,9 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_close(JNIEnv* env, jclass, jlong h
             renderer->session->Invoke([&](auto& app) {
                 renderer->signals.RequireRetired(); app.DeviceManager().GetDevice()->waitForIdle(); renderer->signals.Clear();
             });
-        } catch (const rtr::upstream::Session::ClosedError&) {
-            if (!renderer->session->StoppedNormally()) throw;
+        } catch (...) {
+            if (!renderer->session->Stopped()) throw;
+            renderer->signals.RequireRetired();
             stoppedNormally = true;
         }
         renderer->session->Close();

@@ -306,7 +306,13 @@ public final class RtxptStreamingWorkload {
             require(Files.isRegularFile(capture)&&Files.size(capture)>8,"Endpoint capture is missing");
             var image=ImageIO.read(capture.toFile());require(image!=null&&image.getWidth()>0&&image.getHeight()>0,"Endpoint capture is invalid");
             run.captured=true;run.captureWidth=image.getWidth();run.captureHeight=image.getHeight();
-            if(config.frames()==config.ticks()*config.framesPerTick())require(Math.abs(run.world.travelled-DISTANCE)<.01,"Movement path was shortened");
+            if(config.frames()==config.ticks()*config.framesPerTick()){
+                // The sampled trajectory sums chords, not the continuous arc.
+                // At 60 steps its exact length is 708.987041646, not 709.
+                // Keep the same tolerance and verify the unchanged full path.
+                double expected=2*(DISTANCE/TURN)*config.frames()*Math.sin(TURN/(2*config.frames()));
+                require(Math.abs(run.world.travelled-expected)<.01,"Movement path was shortened");
+            }
             require(run.accepted==run.verified,"An accepted frame has no verified fresh output");
             if(config.fullSpecification())require(run.phases.get("movement").fresh.rate()>=180,"Formal pipeline mean exceeds the 180 Hz frame budget");
             run.completed=true;

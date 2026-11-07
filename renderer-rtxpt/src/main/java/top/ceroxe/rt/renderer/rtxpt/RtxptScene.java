@@ -117,11 +117,8 @@ final class RtxptScene {
         if(b!=null && !m.isClosedManifold())throw new IllegalArgumentException("Medium requires a closed outward-wound manifold mesh");
         if(!state.equals(InstanceRenderState.defaults()) || !shadow || mask!=255)
             throw new IllegalArgumentException("Custom ray masks, no-shadow instances and game surface overrides belong to Vulkan");
-        // Upstream scene nodes use TRS. Reject shear instead of silently changing geometry.
-        for(int a=0;a<3;a++)for(int c=a+1;c<3;c++) {
-            double dot=0,aa=0,cc=0;for(int r=0;r<3;r++){double x=transform.element(r*4+a),y=transform.element(r*4+c);dot+=x*y;aa+=x*x;cc+=y*y;}
-            if(Math.abs(dot)>1e-5*Math.sqrt(aa*cc))throw new IllegalArgumentException("RTXPT scene transforms must be TRS without shear");
-        }
+        // AffineTransform already enforces finite, invertible input. The native
+        // adapter composes two original TRS nodes when a shear needs both.
     }
     record Item(String name,long mesh,AffineTransform transform,MediumBoundary boundary,float visibility) { }
     private static final class Items extends AbstractList<Item> implements RandomAccess {

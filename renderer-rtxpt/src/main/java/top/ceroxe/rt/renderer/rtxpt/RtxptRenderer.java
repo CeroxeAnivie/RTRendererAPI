@@ -64,8 +64,10 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             .latestSubmittedFrameSequence(submitted).latestCompletedFrameSequence(completed)
             .residentMeshes(scene.meshes.size()).residentInstances(scene.instances.size()).build();
     }
-    @Override public void diagnosticLevel(RtxptDiagnostics.Level level){ready();recorder.level(level);}
+    @Override public void diagnosticLevel(RtxptDiagnostics.Level level){ready();recorder.level(level);resourcePackets.diagnostics(level!=RtxptDiagnostics.Level.OFF);if(handle!=0)RtxptNative.diagnosticLevel(handle,level.ordinal());}
     @Override public RtxptDiagnostics.Snapshot diagnosticSnapshot(long afterOrdinal){ready();return recorder.snapshot(afterOrdinal);}
+    @Override public RtxptDiagnostics.Monitor diagnosticMonitor(){ready();return recorder.monitor();}
+    @Override public RtxptDiagnostics.NativeMonitor nativeDiagnosticMonitor(){ready();if(handle==0)throw new IllegalStateException("Submit before acquiring native diagnostics");return RtxptDiagnostics.nativeMonitor(handle);}
     @Override public <T> Optional<T> extension(Class<T> type){Objects.requireNonNull(type);return type.isInstance(this)?Optional.of(type.cast(this)):Optional.empty();}
     @Override public SceneUpdateResult apply(SceneTransaction tx){return apply(tx,List.of(),LongBuffer.allocate(0));}
     @Override public SceneUpdateResult apply(SceneTransaction tx,List<SparseLightSource> upserts,LongBuffer removals){
@@ -123,6 +125,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         try{
             if(first){
                 handle=RtxptNative.create(RtxptNative.runtime().toString(),nativeScene==null?null:nativeScene.toString(),nativeWidth,nativeHeight,externalPresentation,options.arguments());
+                RtxptNative.diagnosticLevel(handle,recorder.level().ordinal());
                 RtxptNative.presentation(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.generatedFrames());
                 options.applyQuality(handle);
                 RtxptNative.denoiser(handle,options.relaxDenoiser());
@@ -373,7 +376,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         if(closed)return;ready();
         if(handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingConsumersRetired(handle))throw new IllegalStateException("Complete imported lighting consumers before closing");
         if(handle!=0)RtxptNative.close(handle);
-        handle=0;closed=true;scene=new RtxptScene();residentScene=new RtxptScene();previous=List.of();memoryTextures.clear();resourcePackets.close();
+        handle=0;closed=true;recorder.close();scene=new RtxptScene();residentScene=new RtxptScene();previous=List.of();memoryTextures.clear();resourcePackets.close();
         attributeGroups.clear();lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingGeometryVariants=List.of();
         pendingBaselineLookup=null;lightingBaselineLookup=null;lightingHostResponse=null;applicationData.clear();
     }
