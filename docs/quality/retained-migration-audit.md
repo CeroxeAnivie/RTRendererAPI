@@ -86,7 +86,7 @@
 
 原八 case 长窗旧新计划已调整：`baseline-medium-OFF` 在 185.0100174s 后因反复全场景材质导入/AS 构建、预计超过 600s 单 case 限制而主动停止，见 `build/reports/bridge-heavy-final/baseline-medium-OFF/cancelled.json`。旧包长窗不是 PASS 或真实崩溃，不从部分日志推算 FPS。完整新包 `build/reports/bridge-heavy-current-final` 的 medium/fast × OFF/DEEP 四 case 均 PASS，各 60 tick、540 移动帧、30 warmup、90 静止帧、661/661 fresh；medium/fast 分别 183/610 mesh 入出，覆盖真正区域流入。同 bytecode 的 fast 2 tick、18 移动帧短窗旧/新均 PASS，但只测 texture/pose/source churn、不跨 tile，不能替代长窗。fast20 前后同输入语义观测也已完成，不宣称相同 class。
 
-三组详细表及原始精度见[通用流式结果](streaming-scene-results.md)与 data/streaming-scene-results.json，各窗口独立计算，缺项不补零。完整 fast 模拟率 OFF/DEEP 为 97.913697/93.845884，pipeline 为 110.362964/106.181967，均未达 180；fast20 移动 pipeline 79.982056→106.263426（+32.86%），静止 188.613646→128.447422（−31.90%），退化保留且不推测原因。OFF→DEEP fast 完整模拟观测 −4.15%，不是严格诊断成本因果。`Frame` 是调用线程等待壁钟，self 也不是 exclusive CPU/GPU；GetThreadTimes 粒度约15.625ms，0不代表精确零成本。当前验证已完成、未发布，消费方验收仍待进行。
+三组详细表及原始精度见[通用流式结果](streaming-scene-results.md)与 data/streaming-scene-results.json，各窗口独立计算，缺项不补零。完整 fast 模拟率 OFF/DEEP 为 97.913697/93.845884，pipeline 为 110.362964/106.181967，均未达 180；fast20 移动 pipeline 79.982056→106.263426（+32.86%），静止 188.613646→128.447422（−31.90%），退化保留且不推测原因。OFF→DEEP fast 完整模拟观测 −4.15%，不是严格诊断成本因果。`Frame` 是调用线程等待壁钟，self 也不是 exclusive CPU/GPU；GetThreadTimes 粒度约15.625ms，0不代表精确零成本。当前验证已完成，源码161619d0先推GitHub后覆盖Maven Local，两模块18项身份检查通过；消费方验收仍待进行。
 
 ### 修复前 fast 重场景首轮（历史）
 
@@ -113,7 +113,7 @@
 
 以下门禁判断来自源码与既有分发证据审查；本轮候选已经统一构建并完成上述合同与分窗负载，最终制品已通过398项包检查，正式发布与Local身份尚待回执。rtxpt_precompiled_runtime.h 在安装前要求进程禁止创建子进程，逐一核对 source catalogue 与 DXIL blob 的 SHA-256，再按实际安装路径生成原版缓存别名；未知全局宏签名明确拒绝。该安装步骤只复制已构建二进制，不进行 shader/native 编译；这项静态检查本身不能证明所有运行路径都无后编译。未知组合不允许回退编译，公开材质排列约束和具体已收录配置仍以 docs/quality/precompiled-runtime.md 与构建命令清单为准，不能外推为任意配置都受支持。
 
-既有新目录/材质切换/损坏输入证据不等于当前最终制品已交付。最终打包已有398项检查通过，150个预编译条目、236个source条目及受测DLL／独立ZIP／JAR内ZIP身份一致，热缓存未入包，回执见 precompiled-runtime.md。当前仍待正式发布与消费方验证：保持 8.0.0；全量源码、正式工具和文档先提交并推 GitHub，确认成功后才覆盖 Maven Local；消费方再核对两模块新制品与 runtime 身份并重验受影响画面、同条件整体性能及无运行时后编译。未收录配置须离线构建发布，不能用本机热缓存代替可分发制品。
+既有新目录/材质切换/损坏输入证据不等于当前最终制品已交付。最终打包已有398项检查通过，150个预编译条目、236个source条目及受测DLL／独立ZIP／JAR内ZIP身份一致，热缓存未入包，回执见 precompiled-runtime.md。当前已按顺序完成正式发布：保持 8.0.0，全量源码、工具和文档161619d0先推GitHub，确认后覆盖Maven Local；两模块18项身份检查通过，见data/bridge-publication.json。消费方仍须重验受影响画面、同条件整体性能及无运行时后编译。未收录配置须离线构建发布，不能用本机热缓存代替可分发制品。
 
 ### 新增 Scope 的 OFF 静态审查
 

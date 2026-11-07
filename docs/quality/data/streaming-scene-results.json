@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "asOf": "2026-11-07",
-  "status": "three-datasets-completed-performance-target-not-met",
+  "status": "validation-complete-and-maven-local-published-consumer-not-verified",
   "fullCurrentMatrix": {
     "scope": "60 ticks, regional inflow, current runtime only; no completed matched long baseline",
     "runs": {
@@ -17411,7 +17411,7 @@
     "changedByThesePerformanceRuns": false
   },
   "movement180Passed": false,
-  "publicationCompleted": false,
+  "publicationCompleted": true,
   "consumerPerformanceVerified": false,
   "finalPackageVerification": {
     "source": "build/reports/bridge-final-package-verification.json",
@@ -17451,5 +17451,7 @@
     "oldFrameP95ReconstructibleFromSummary": false,
     "frameP95ComparisonAvailable": false,
     "note": "Keep raw event means/P95 and counts. Composition changed from 97 mixed calls to 3 topology-only calls; their per-event percentage is not a same-distribution performance regression. Mean amortization uses event sum divided by 180 frames; frame P95 cannot be recovered from event summary."
-  }
+  },
+  "publicationReceipt": "bridge-publication.json",
+  "publishedSourceCommit": "161619d005667aa26584ba4bc006c5f00a6d9635"
 }

@@ -2,7 +2,7 @@
 
 2026-11-07 最终桥接包补验：新宿主真实子进程门禁再次通过，启动 cmd.exe 返回 Win32 367，childCreationBlocked=true；本轮没有运行时编译回退。该宿主与完整流式矩阵、最终包398项身份核验对应同一字节，未用热缓存替代可分发清单。
 
-2026-11-07。本批保持 8.0.0，构建期着色器、运行时禁编译门禁及下述分发检查已有实现和实测；本轮桥接候选也已统一构建并完成集中合同与通用分窗负载。最终包身份与398项包检查已通过；正式源码／工具／文档上传及随后覆盖 Maven Local 的身份仍待实际回执，不能提前标为 Local 通过。此前正式包存在真实 DXC 回退，本批替换这一交付方式。
+2026-11-07。本批保持 8.0.0，构建期着色器、运行时禁编译门禁及下述分发检查已有实现和实测；本轮桥接候选也已统一构建并完成集中合同与通用分窗负载。最终包身份与398项包检查已通过；正式源码／工具／文档161619d0已先上传GitHub，随后覆盖Maven Local，两模块18项身份检查通过，见[data/bridge-publication.json](data/bridge-publication.json)。此前正式包存在真实 DXC 回退，本批替换这一交付方式。
 
 根因是原版缓存键包含源与 include 的绝对路径；直接搬运构建机缓存到消费者机器会失配。材质的非确定性调试名也进入 shader export 名，导致同一 StandardBSDF 数据模型随场景名字生成新编译命令。
 
@@ -32,9 +32,9 @@ native 会话只校验、复制二进制并用原版 `ShaderCompilerUtils::Compu
 
 最终桥接 40 帧集中合同、CPU high-framerate 检查及 20 仓库／4426 原文件 Unexpected=0 已通过。通用完整新包 medium/fast × OFF/DEEP 四场各 661/661 fresh；另有同 bytecode 18 移动帧短窗旧新控制与同输入语义、不同统计 class 的 fast20 前后观测，结果分开见[流式场景报告](streaming-scene-results.md)。完整 fast 模拟率 OFF 97.913697／DEEP 93.845884 帧/秒，未达 180；OFF/DEEP 为顺序观测，不能称已证明近零诊断成本。
 
-这些结果证明本轮候选已完成所列验证。最终 JAR／独立 runtime ZIP／受测 DLL 的一致性已通过398项包检查，但 Maven Local 及消费方链路尚未核验。正式交付仍按全量源码／工具／文档先提交推 GitHub，再覆盖 8.0.0 Maven Local，随后核对最终 runtime／两模块身份及消费方受影响画面、整体性能和无运行时后编译。未收录宏组合仍必须离线扩充并发布，不能借本机热缓存回退运行时编译。
+这些结果证明本轮候选已完成所列验证。最终 JAR／独立 runtime ZIP／受测 DLL 的一致性已通过398项包检查，Maven Local两模块与受测包也已完成18项身份检查。正式交付已按源码／工具／文档先推GitHub、再覆盖8.0.0 Maven Local的顺序完成；消费方受影响画面、整体性能和无运行时后编译仍须单独验收。未收录宏组合仍必须离线扩充并发布，不能借本机热缓存回退运行时编译。
 
-### 最终打包回执（待发布）
+### 最终打包与发布回执
 
 build/reports/bridge-final-package-verification.json：398项通过，150个预编译条目、236个source条目；JAR内ZIP与独立ZIP一致，包内DLL与本轮受测身份一致，运行时热缓存未入包。打包wall120.110s，Job提交峰1.609GB；这不是任务管理器内存。
 
@@ -45,4 +45,4 @@ build/reports/bridge-final-package-verification.json：398项通过，150个预�
 |renderer-rtxpt JAR|5a9c379e7b41ee6a1b87e265c6de75a8f636688c020d3e7c033dc181c39195b9|
 |renderer-api JAR|8f7a6c06ccaa3d08c3e7c70eb44fe72ffc84564d25f10202f5ddf1a06541a62c|
 
-上述为待发布最终包，不是Maven Local回执；先GitHub全量源码／工具／文档，成功后才覆盖Local。
+上述最终包已覆盖Maven Local，且确认与受测字节一致。GitHub源提交161619d005667aa26584ba4bc006c5f00a6d9635先于Local发布；正式回执见[data/bridge-publication.json](data/bridge-publication.json)。

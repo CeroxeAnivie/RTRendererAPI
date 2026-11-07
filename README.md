@@ -4,6 +4,8 @@
 
 当前版本 **8.0.0**。此前弹球与介质已由用户人工通过，本批补齐构建期着色器交付与运行时禁编译。新目录冷缓存介质、弹球与三种材质切换已通过隐藏出图；这不代表消费方整体性能已经验收。源码上传与覆盖 Maven Local 的当前身份见[禁止运行时编译](docs/quality/precompiled-runtime.md)。
 
+本轮源码 **161619d0** 已先上传 GitHub，再覆盖 Maven Local **8.0.0**；两模块18项身份核验通过。[发布回执](docs/quality/data/bridge-publication.json)记录受测 DLL、runtime ZIP 和 JAR 身份。
+
 ## 原生优先的两模块结构
 
 | 模块 | 职责 |

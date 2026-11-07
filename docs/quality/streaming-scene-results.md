@@ -1,6 +1,6 @@
 # 通用流式场景：分窗性能结果
 
-2026-11-07。本轮最终40帧集中合同通过，完整新包四场、同bytecode短窗旧新控制及fast20前后观测均已完成；移动180目标未通过，尚未覆盖正式Maven Local或消费方画面/FPS验收。
+2026-11-07。本轮最终40帧集中合同通过，完整新包四场、同bytecode短窗旧新控制及fast20前后观测均已完成；移动180目标未通过；正式Maven Local已覆盖并核对，消费方画面/FPS仍未验收。
 
 三种数据分开使用：完整新包60tick/540移动/30warmup/90静止覆盖真正区域流入；同class短窗2tick/18移动只含texture/pose/source churn、没有tile跨界；fast20/180移动/8warmup/30静止为同输入语义的前后观测，fixture新增计时、不是相同class。均非交错ABBA，不跨窗口合并收益。旧包长窗185.0100174s后主动停止，不能从部分日志推算吞吐，也不标作PASS或真实崩溃。
 
@@ -482,7 +482,7 @@ native事件统计按实际事件计，样本数保存在JSON；当前按帧分�
 
 所有wall退化照列；完整CPU原始分布及对照差值保存在data/streaming-scene-results.json，但量化粒度使短scope的0和细微差值不能当作精确CPU结论。完整新包没有匹配完成的旧长窗，不能用短窗数值填入。fast20静止下降与移动改善同时保留，不归因未经证明的外部负载。
 
-53项审计分类仍为24活跃/29不可达旧glue清理；原图registry/reindex、scene表上传粒度、exact-size TLAS及真正材质definition完整导入仍未等价恢复。正确性通过、原版源码纯度及本报告均不能替代消费方画面/整体性能/无后编译验收。版本保持8.0.0，正式GitHub全量→Maven Local身份仍待实际完成，本文不预签Local通过。
+53项审计分类仍为24活跃/29不可达旧glue清理；原图registry/reindex、scene表上传粒度、exact-size TLAS及真正材质definition完整导入仍未等价恢复。正确性通过、原版源码纯度及本报告均不能替代消费方画面/整体性能/无后编译验收。版本保持8.0.0，源码、工具和文档已先上传GitHub（161619d0），再覆盖Maven Local；两模块18项发布身份检查通过，回执见[data/bridge-publication.json](data/bridge-publication.json)。这不代替消费方验收。
 
 ## 最终包与发布状态
 
