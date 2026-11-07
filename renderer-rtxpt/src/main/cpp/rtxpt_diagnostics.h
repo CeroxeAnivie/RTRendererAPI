@@ -48,7 +48,7 @@ enum Trait : uint64_t { HasFrame=1, HasUpdate=2, HasResize=4, HasWait=8, IsIniti
 // immutable transaction revision; identity hashes the stable native resource ID.
 enum ResourceReason : uint64_t { Inflow=1, Deformation=2, Topology=4, BuildFlags=8,
     Pose=16, Coverage=32, Material=64, Removal=128, Texture=256,
-    PoolHit=512, CapacityGrowth=1024, RefitRefresh=2048, IndexMigration=4096, Attributes=8192 };
+    PoolHit=512, CapacityGrowth=1024, RefitRefresh=2048, IndexMigration=4096, Attributes=8192, MappedBatch=16384 };
 struct Live { Event event{};uint64_t children=0,traits=0;bool occupied=false;uint64_t cpuChildren=0; };
 inline std::atomic<unsigned> level{0};
 inline std::atomic<uint64_t> frame{0},revision{0},inputGeneration{0},outputGeneration{0},nextId{1},generation{1},monitorGeneration{1};

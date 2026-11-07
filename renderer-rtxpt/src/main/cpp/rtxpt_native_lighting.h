@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include "rtxpt_native_application_ranges.h"
 #include "rtxpt_attribute_ranges.h"
+#include "rtxpt_attribute_capacity.h"
+#include "rtxpt_allocation_failure.h"
 #include "rtxpt_host_response_lookup.h"
 #include "rtxpt_gpu_profile.h"
 #include "rtxpt_native_rr.h"
@@ -125,9 +127,15 @@ public:
     uint32_t AllocateAttributeRange(uint32_t count){return attributeRanges.Allocate(count);}
     void EnsureAttributeBuffer(nvrhi::IDevice* device,nvrhi::ICommandList* command,nvrhi::BufferHandle& buffer,size_t bytes,size_t stride,const char* name){
         bytes=std::max(bytes,stride);if(buffer&&buffer->getDesc().byteSize>=bytes)return;
-        size_t capacity=std::max<size_t>(256,stride);while(capacity<bytes)capacity*=2;
-        if(capacity>512ULL*1024*1024)throw std::runtime_error("Attribute arena exceeds 512 MiB capacity");
-        auto next=Buffer(device,capacity,stride,name);
+        const size_t oldCapacity=buffer?buffer->getDesc().byteSize:0;
+        const size_t capacity=rtr::AttributeBufferCapacity(bytes,oldCapacity,stride);
+        nvrhi::BufferHandle next;
+        try{next=Buffer(device,capacity,stride,name);}
+        catch(const std::runtime_error& failure){
+            uint64_t retiredBytes=0;for(const auto& old:retired)retiredBytes+=old.bytes;
+            throw std::runtime_error(std::string(failure.what())+" liveBytes="+std::to_string(bytes)+" oldCapacityBytes="+std::to_string(oldCapacity)
+                +" retiredBytes="+std::to_string(retiredBytes)+" reclaimerPendingBytes="+std::to_string(reclaimer->pendingBytes.load()));
+        }
         if(buffer){auto copy=buffer->getDesc().byteSize;command->copyBuffer(next,0,buffer,0,copy);attributeMigrationBytes+=copy;Retire(device,{buffer});}
         buffer=next;
     }
@@ -195,7 +203,7 @@ public:
     static nvrhi::BufferHandle Buffer(nvrhi::IDevice* device,size_t bytes,size_t stride,const char* name,bool raw=false){
         nvrhi::BufferDesc desc;desc.byteSize=std::max<size_t>(bytes,stride?stride:4);desc.structStride=uint32_t(stride);
         desc.debugName=name;desc.initialState=nvrhi::ResourceStates::ShaderResource;desc.keepInitialState=true;desc.canHaveRawViews=raw;
-        auto buffer=device->createBuffer(desc);if(!buffer)throw std::runtime_error(std::string("Could not allocate ")+name);return buffer;
+        auto buffer=device->createBuffer(desc);if(!buffer)throw std::runtime_error(RtrAllocationFailure(device,name,desc.byteSize));return buffer;
     }
     void Retire(nvrhi::IDevice* device,std::vector<nvrhi::BufferHandle> buffers,std::vector<nvrhi::TextureHandle> textures={}){
         PollRetired(device);if(retired.size()>=64)throw std::runtime_error("Lighting retirement capacity exhausted");

@@ -1,0 +1,17 @@
+{
+  "memoryDiagnostics": 0,
+  "resourceCensus": 0,
+  "backgroundWindow": 1,
+  "ciCompilerCount": 2,
+  "rendererJar": "",
+  "nativeSha256": "7d4d48f5f3ec96b445aa496a93770db409e510ae14f8fbdbdcda2cc68f62c0fa",
+  "cases": [
+    {
+      "name": "RtxptSparseUploadNativeSelfTest",
+      "passed": false,
+      "exit": 1,
+      "wallSeconds": 30.2695745,
+      "stdout": "RtxptSparseUploadNativeSelfTest.log"
+    }
+  ]
+}

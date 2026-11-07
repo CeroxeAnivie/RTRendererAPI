@@ -98,13 +98,37 @@ def main():
     retained = evidence.get("releaseKind") == "compatible-retained-update-maintenance"
     managed = evidence.get("releaseKind") == "compatible-managed-resource-locality"
     continuous = evidence.get("releaseKind") == "compatible-continuous-bootstrap"
+    batched = evidence.get("releaseKind") == "compatible-receiver-arena-batched-upload"
     check("affected-checks-pass", all((c["passed"] is True if managed or continuous else c["passed"])
           and c["exit"] == 0 for c in evidence["correctness"].values())
           and (len(evidence["correctness"]) == 1 if continuous else len(evidence["correctness"]) >= 12 if managed else
-               len(evidence["correctness"]) >= 6 if retained else len(evidence["correctness"]) == 3))
+               len(evidence["correctness"]) >= 6 if retained else len(evidence["correctness"]) == 4 if batched else len(evidence["correctness"]) == 3))
     for group in ("productionSourceSha256", "productionClassSha256", "testClassSha256", "evidenceFileSha256"):
         check(group, bool(evidence[group]) and all(sha((ROOT / p).read_bytes()) == h for p, h in evidence[group].items()))
-    if continuous:
+    if batched:
+        check("batched-baseline-version", previous_patch_baseline(evidence))
+        capacity = evidence["attributeCapacity"]
+        check("real-receiver-capacity-and-limit", capacity["liveBytes"] == 3318040 * 3 * 16
+              and capacity["newColdBytes"] >= capacity["liveBytes"]
+              and capacity["newColdBytes"] - capacity["liveBytes"] < 65536
+              and capacity["oldColdBytes"] == 256 * 1024 * 1024
+              and capacity["limitBytes"] == 512 * 1024 * 1024 and capacity["oversizeRejected"] is True)
+        upload = evidence["mappedUpload"]
+        check("actual-mapped-batch-execution", upload["frames"] == upload["mappedBatchRequests"] == 24
+              and upload["mappedCopies"] > 0 and 0 < upload["maxMappedCopyBytes"] <= 1024 * 1024
+              and upload["maxWriteBytes"] <= 1024 * 1024
+              and upload["initializations"] == 1 and upload["sameFrame"] is True
+              and upload["steadyLeaseRelease"] is True
+              and upload["maxMappedAllocationBytes"] <= max(4 * 1024 * 1024,
+                  math.ceil(upload["maxBatchRequestBytes"] / (2 * 1024 * 1024)) * 2 * 1024 * 1024))
+        captures = evidence["outputEquivalence"]
+        check("four-fresh-output-captures", len(captures) == 4 and all(
+            r["baselineSha256"] == r["candidateSha256"] and len(r["baselineSha256"]) == 64 for r in captures.values()))
+        check("affected-tests-current-source", bool(evidence["testSourceSha256"]) and all(
+            sha((ROOT / p).read_bytes()) == h for p, h in evidence["testSourceSha256"].items()))
+        check("allocation-memory-domain-evidence-not-invented", evidence["failureAttribution"]["hresult"] == "0x8007000e"
+              and evidence["failureAttribution"]["exclusiveMemoryDomainProven"] is False)
+    elif continuous:
         check("continuous-baseline-version", previous_patch_baseline(evidence))
         check("current-bootstrap-test-source", bool(evidence["testSourceSha256"]) and all(
             sha((ROOT / p).read_bytes()) == h for p, h in evidence["testSourceSha256"].items()))

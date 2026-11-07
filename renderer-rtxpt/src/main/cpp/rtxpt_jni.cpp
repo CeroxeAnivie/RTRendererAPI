@@ -452,7 +452,8 @@ public:
         if(hostSurface.active)hostOutputs.Prepare(GetDevice(),*m_shaderFactory,m_commandList,m_renderSize.x,m_renderSize.y,m_displaySize.x,m_displaySize.y);
     }
     void PrepareHostLightResources() {
-        if(sparseLighting.Ensure(GetDevice())){GetBindingCache().Clear();InvalidateBindingSet();}
+        uploadArena.Prepare(GetDevice());
+        if(sparseLighting.Ensure(GetDevice(),&uploadArena)){GetBindingCache().Clear();InvalidateBindingSet();}
         if(lightStatsEnabled&&!lightStatsBuffer){
             nvrhi::BufferDesc desc;desc.byteSize=16;desc.canHaveUAVs=true;desc.canHaveRawViews=true;
             desc.initialState=nvrhi::ResourceStates::UnorderedAccess;desc.keepInitialState=true;desc.debugName="RtrLightWork";
@@ -1188,6 +1189,7 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         auto before=s.externalPresentation?s.rendered:s.presented;
         if(s.presentationTrace)s.probeMark=Session::ProbeClock::now();
         if (!dm->HostFrame()) throw std::runtime_error("RTXPT render/present failed");
+        static_cast<HostPathTracer*>(s.app->HostRenderPass())->sparseLighting.RecordUploads(dm->GetDevice());
         if(static_cast<HostPathTracer*>(s.app->HostRenderPass())->hostSurface.active&&s.rendered==before){
             static_cast<HostPathTracer*>(s.app->HostRenderPass())->AbortHostRead();
             throw std::runtime_error("Host-surface input was not consumed; the published input remains available for retry");

@@ -22,7 +22,7 @@ public:
     static uint32_t Hash(Cell c){return (uint32_t(c.x)*73856093u)^(uint32_t(c.y)*19349663u)^(uint32_t(c.z)*83492791u);}
     struct HashCell {size_t operator()(Cell c)const{return Hash(c);}};
     struct Root {std::array<float,7> bounds{};std::vector<Cell> cells;std::vector<uint32_t> members,cellSlots;bool global=false;uint32_t globalSlot=0;};
-    struct CellEntry {std::vector<uint32_t> roots,rootCellIndices;uint32_t slot=None,block=None,order=0;bool overflow=false;};
+    struct CellEntry {std::vector<uint32_t> roots,rootCellIndices;uint32_t slot=None,block=None,order=0;bool overflow=false;uint64_t changedEpoch=0;};
     struct Shape {
         std::array<float,7> bounds{};uint32_t parent=None,left=None,right=None;int height=-2,kind=-2;
         bool operator==(const Shape& b)const{return bounds==b.bounds&&parent==b.parent&&left==b.left&&right==b.right&&height==b.height&&kind==b.kind;}
@@ -38,6 +38,7 @@ public:
     std::unordered_map<uint32_t,std::vector<Cell>> overflowByHome;
     std::vector<uint32_t> hashHoles;
     std::vector<uint32_t> publishRoots;
+    std::vector<Cell> changedCells;
     uint64_t linkRemovals=0;
     uint64_t affectedEpoch=0;
     std::array<std::set<uint32_t>,MaxPoolOrder+1> freeBlocks;
@@ -51,13 +52,13 @@ public:
     // bounded hash-probe overflows, uploaded bytes.
     std::array<uint64_t,9> work{};
     size_t CpuBytes()const{
-        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity())*4+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity()+oldRootEpochs.capacity())*8;
+        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity())*4+changedCells.capacity()*sizeof(Cell)+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity()+oldRootEpochs.capacity())*8;
         for(const auto& [id,r]:roots)bytes+=sizeof(Root)+r.cells.capacity()*sizeof(Cell)+(r.members.capacity()+r.cellSlots.capacity())*4;
         for(const auto& [cell,e]:cells)bytes+=sizeof(CellEntry)+(e.roots.capacity()+e.rootCellIndices.capacity())*4;
         return bytes; // tracked payload capacity; unordered-map allocator metadata is excluded
     }
     void Clear(){
-        roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();oldRootEpochs.clear();affectedEpoch=0;dirtyNodes.clear();queuedNodes.clear();overflowByHome.clear();hashHoles.clear();
+        roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();oldRootEpochs.clear();affectedEpoch=0;dirtyNodes.clear();queuedNodes.clear();overflowByHome.clear();hashHoles.clear();changedCells.clear();
         for(auto& blocks:freeBlocks)blocks.clear();buckets=poolNodes=tombstones=0;globalWords=GlobalWordCapacity;links=0;
         dirty=full=true;indexed=true;initialized=false;for(size_t i=2;i<=6;i++)work[i]=0;
     }
@@ -84,7 +85,15 @@ public:
     }
 private:
     friend struct RtrSparseRegionsTestAccess;
-    using ChangedCells=std::unordered_set<Cell,HashCell>;
+    // The resident cell already supplies stable identity and a transaction
+    // epoch. Reuse a contiguous journal instead of allocating another hash
+    // node for every affected cell on every source transaction.
+    struct ChangedCells {
+        std::vector<Cell>& values;uint64_t epoch;
+        void Add(Cell cell,CellEntry& entry){if(entry.changedEpoch!=epoch){values.push_back(cell);entry.changedEpoch=epoch;}}
+        bool empty()const{return values.empty();}size_t size()const{return values.size();}
+        auto begin(){return values.begin();}auto end(){return values.end();}
+    };
     static Shape Describe(const rtr::RetainedLightTree& tree,const std::vector<rtr::LightTreeNode>& nodes,uint32_t id){
         Shape s;s.height=tree.heights[id];s.parent=tree.parents[id];
         if(s.height<0)return s;const auto& n=nodes[id];s.bounds=Bounds(n);s.kind=n.light>=0?1:0;
@@ -103,11 +112,11 @@ private:
         const auto moved=entry.roots.back(),movedIndex=entry.rootCellIndices.back();
         entry.roots[slot]=moved;entry.rootCellIndices[slot]=movedIndex;entry.roots.pop_back();entry.rootCellIndices.pop_back();
         if(slot<entry.roots.size())roots.at(moved).cellSlots.at(movedIndex)=slot;
-        --links;++linkRemovals;changed.insert(cell);
+        --links;++linkRemovals;changed.Add(cell,entry);
     }
     uint32_t Link(uint32_t id,Cell cell,uint32_t index,ChangedCells& changed){
         auto& entry=cells[cell];const auto slot=uint32_t(entry.roots.size());
-        entry.roots.push_back(id);entry.rootCellIndices.push_back(index);++links;changed.insert(cell);return slot;
+        entry.roots.push_back(id);entry.rootCellIndices.push_back(index);++links;changed.Add(cell,entry);return slot;
     }
     void RemoveRoot(uint32_t id,ChangedCells& changed){
         auto old=roots.find(id);if(old==roots.end())return;auto& root=old->second;
@@ -316,11 +325,12 @@ public:
             const std::vector<uint32_t>& nodeChanges,bool reset=false){
         if(!enabled||tree.root==rtr::RetainedLightTree::None){if(initialized||!packed.empty())Clear();return;}
         if(reset&&initialized)Clear();
-        ChangedCells changed;const auto oldGlobal=global;
+        changedCells.clear();const auto oldGlobal=global;
         const bool rebuilding=!initialized;owners.resize(nodes.size(),None);
         shapes.resize(nodes.size());
         affectedEpochs.resize(nodes.size());topologyEpochs.resize(nodes.size());oldRootEpochs.resize(nodes.size());
-        if(++affectedEpoch==0){std::fill(affectedEpochs.begin(),affectedEpochs.end(),0);std::fill(topologyEpochs.begin(),topologyEpochs.end(),0);std::fill(oldRootEpochs.begin(),oldRootEpochs.end(),0);++affectedEpoch;}
+        if(++affectedEpoch==0){std::fill(affectedEpochs.begin(),affectedEpochs.end(),0);std::fill(topologyEpochs.begin(),topologyEpochs.end(),0);std::fill(oldRootEpochs.begin(),oldRootEpochs.end(),0);for(auto& [cell,entry]:cells)entry.changedEpoch=0;++affectedEpoch;}
+        ChangedCells changed{changedCells,affectedEpoch};
         bool affected=false,topologyChanged=false;std::vector<uint32_t> oldRoots;
         auto inspect=[&](uint32_t id){if(id>=nodes.size())return;auto shape=Describe(tree,nodes,id);
             if(rebuilding||!(shape==shapes[id])){
@@ -339,18 +349,18 @@ public:
         initialized=true;
         const bool coverageChanged=!changed.empty();
         {RtrDiagnostics::Scope erase(RtrDiagnostics::SparseHashErase,changed.size());
-        for(auto i=changed.begin();i!=changed.end();){auto entry=cells.find(*i);
+        for(auto cell:changed){auto entry=cells.find(cell);
             if(entry!=cells.end()&&entry->second.roots.empty()){
                 if(entry->second.block!=None)FreeBlock(entry->second.block,entry->second.order);
                 if(buckets)EraseHash(entry->first,entry->second);
-                cells.erase(entry);i=changed.erase(i);
-            }else ++i;}}
+                cells.erase(entry);
+            }}}
         const bool globalChanged=oldGlobal!=global;
         if(rebuilding||!buckets){
             FullPack();
         }else{
             RtrDiagnostics::Scope publish(RtrDiagnostics::SparseRegionPublish,changed.size(),roots.size());
-            for(auto cell:changed)PublishCell(cell,cells.at(cell));
+            for(auto cell:changed){auto entry=cells.find(cell);if(entry!=cells.end())PublishCell(cell,entry->second);}
             {RtrDiagnostics::Scope recover(RtrDiagnostics::SparseHashRecover,hashHoles.size(),overflowByHome.size());RecoverOverflow();}
             if(globalChanged)for(uint32_t i=0;i<global.size();i++)WriteWord(i,global[i]);
         }

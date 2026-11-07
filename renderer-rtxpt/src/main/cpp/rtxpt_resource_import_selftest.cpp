@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include "rtxpt_attribute_ranges.h"
+#include "rtxpt_attribute_capacity.h"
 #include "rtxpt_memory_resources.h"
 #include "rtxpt_host_response_lookup.h"
 
@@ -68,4 +69,19 @@ static void Lookup(){
     }
     std::cout<<"HOST_RESPONSE_DEFAULTS PASS poisonedConstructor=1 baselinePairs=256 initializedTailPairs=384\n";
 }
-int main(){try{Ranges();Reader();Lookup();Benchmark();return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+static void AttributeCapacity(){
+    constexpr size_t MiB=1024*1024,Page=64*1024,Limit=512*MiB;
+    constexpr size_t corners=3318040ull*3,live=corners*16;
+    const auto cold=rtr::AttributeBufferCapacity(live,0,16);
+    Check(cold>=live&&cold-live<Page,"Cold attributes reserve a scene-sized tail");
+    size_t capacity=0,growths=0,migrations=0;
+    for(size_t required=16;required<=300*MiB;required+=310123){auto next=rtr::AttributeBufferCapacity(required,capacity,16);
+        Check(next>=required&&next>=capacity&&next<=Limit,"Attribute growth lost capacity");
+        if(next!=capacity){migrations+=capacity;++growths;if(required>=16*MiB)Check(next-required<=16*MiB+Page,"Attribute growth headroom exceeds bound");}capacity=next;}
+    Check(rtr::AttributeBufferCapacity(Limit,0,16)==Limit,"Maximum attributes rejected");
+    bool rejected=false;try{rtr::AttributeBufferCapacity(Limit+1,0,16);}catch(const std::runtime_error&){rejected=true;}
+    Check(rejected,"Oversized attributes accepted");
+    std::cout<<"ATTRIBUTE_CAPACITY PASS liveBytes="<<live<<" oldColdBytes="<<256*MiB<<" newColdBytes="<<cold
+        <<" oldColdSlackBytes="<<256*MiB-live<<" newColdSlackBytes="<<cold-live<<" growths="<<growths<<" migrationBytes="<<migrations<<" limitBytes="<<Limit<<"\n";
+}
+int main(){try{AttributeCapacity();Ranges();Reader();Lookup();Benchmark();return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

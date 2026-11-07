@@ -70,7 +70,7 @@ private:
         }
         discarded.reset();
         try{
-            RtrDiagnostics::Scope allocation(RtrDiagnostics::StagingAllocate,1,1,2,0,0,0,RtrDiagnostics::CapacityGrowth,bytes);
+            RtrDiagnostics::Scope allocation(RtrDiagnostics::StagingAllocate,1,1,2,0,0,0,RtrDiagnostics::CapacityGrowth|RtrDiagnostics::MappedBatch,bytes);
             auto page=std::make_shared<Page>();page->device=s->device;
             page->used.resize(bytes/Unit);page->free=page->largest=bytes/Unit;
             nvrhi::BufferDesc desc;desc.byteSize=bytes;desc.cpuAccess=nvrhi::CpuAccessMode::Write;

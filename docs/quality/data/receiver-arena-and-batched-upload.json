@@ -1,0 +1,338 @@
+{
+  "version": "7.3.4",
+  "baselineVersion": "7.3.3",
+  "branch": "codex/resource-root-followup",
+  "releaseKind": "compatible-receiver-arena-batched-upload",
+  "nativeSha256": "89e2ea6c87d2f2c4b08e65a98829e72862cff182bee50f2cf344affe3dce08ca",
+  "correctness": {
+    "attributeCapacityCpu": {
+      "passed": true,
+      "exit": 0,
+      "source": "rtxpt_resource_import_selftest.cpp",
+      "observation": "Bounded executable result captured in task; 50000 allocator operations, large cold/growth/overflow checks passed"
+    },
+    "sparseRegionCpu": {
+      "passed": true,
+      "exit": 0,
+      "sources": 25000,
+      "probes": 2198,
+      "observation": "Bounded executable result captured in task; collision/backshift/overflow/travel oracle passed"
+    },
+    "RtxptSparseUploadNativeSelfTest": {
+      "name": "RtxptSparseUploadNativeSelfTest",
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 6.893044,
+      "stdout": "RtxptSparseUploadNativeSelfTest.log"
+    },
+    "RtxptAttributeTopologyNativeSelfTest": {
+      "name": "RtxptAttributeTopologyNativeSelfTest",
+      "passed": true,
+      "exit": 0,
+      "wallSeconds": 37.8558868,
+      "stdout": "RtxptAttributeTopologyNativeSelfTest.log"
+    }
+  },
+  "attributeCapacity": {
+    "liveBytes": 159265920,
+    "oldColdBytes": 268435456,
+    "newColdBytes": 159318016,
+    "limitBytes": 536870912,
+    "oversizeRejected": true,
+    "growthSlackBytes": 16777216,
+    "growthFixture": {
+      "requiredIncrementBytes": 310123,
+      "maximumRequiredBytes": 314572800,
+      "growths": 26,
+      "migrationBytes": 3017081088,
+      "limit": "Lower retained capacity can require more migrations. Not a measured MC transfer total or speedup."
+    }
+  },
+  "mappedUpload": {
+    "frames": 24,
+    "mappedBatchRequests": 24,
+    "mappedCopies": 1605,
+    "maxMappedCopyBytes": 524224,
+    "maxWriteBytes": 1048576,
+    "initializations": 1,
+    "maxBatchRequestBytes": 17862912,
+    "maxMappedAllocationBytes": 18874368,
+    "sameFrame": true,
+    "steadyLeaseRelease": true
+  },
+  "outputEquivalence": {
+    "upload-0.pfm": {
+      "baselineSha256": "f72079fcb5b665608d44ba44cb4e73667ae6383c062f8c3e4c221b08a2a2bb60",
+      "candidateSha256": "f72079fcb5b665608d44ba44cb4e73667ae6383c062f8c3e4c221b08a2a2bb60",
+      "bytes": 36878
+    },
+    "upload-16.pfm": {
+      "baselineSha256": "f72079fcb5b665608d44ba44cb4e73667ae6383c062f8c3e4c221b08a2a2bb60",
+      "candidateSha256": "f72079fcb5b665608d44ba44cb4e73667ae6383c062f8c3e4c221b08a2a2bb60",
+      "bytes": 36878
+    },
+    "upload-23.pfm": {
+      "baselineSha256": "f72079fcb5b665608d44ba44cb4e73667ae6383c062f8c3e4c221b08a2a2bb60",
+      "candidateSha256": "f72079fcb5b665608d44ba44cb4e73667ae6383c062f8c3e4c221b08a2a2bb60",
+      "bytes": 36878
+    },
+    "upload-8.pfm": {
+      "baselineSha256": "f72079fcb5b665608d44ba44cb4e73667ae6383c062f8c3e4c221b08a2a2bb60",
+      "candidateSha256": "f72079fcb5b665608d44ba44cb4e73667ae6383c062f8c3e4c221b08a2a2bb60",
+      "bytes": 36878
+    }
+  },
+  "fixtureTimings": {
+    "baseline": {
+      "request": {
+        "samples": 24,
+        "meanMs": 224.22757916666666,
+        "p95Ms": 8.5987,
+        "maximumMs": 5344.2258
+      },
+      "allocationSelf": {
+        "samples": 24,
+        "meanMs": 0.23979166666666665,
+        "p95Ms": 0.0,
+        "maximumMs": 5.755
+      },
+      "sparseRegionSelf": {
+        "samples": 24,
+        "meanMs": 0.15690833333333334,
+        "p95Ms": 0.6019,
+        "maximumMs": 1.8575
+      },
+      "allocationCount": 27,
+      "afterFirstRequest": {
+        "samples": 23,
+        "meanMs": 1.6189608695652173,
+        "p95Ms": 4.9578,
+        "maximumMs": 8.5987
+      },
+      "summary": {
+        "frames": "24",
+        "grow128to4096": "true",
+        "remove3072": "true",
+        "sameFrame": "true",
+        "initializations": "1",
+        "maxWriteBytes": "1048576",
+        "maxStagingAllocationBytes": "2097152",
+        "defaultCreates": "42",
+        "cpuResizes": "6",
+        "ommRefreshes": "1",
+        "stagingRequests": "1720",
+        "stagingBytes": "24217428",
+        "recordBytes": "675840",
+        "indexBytes": "20492096",
+        "mappedBatchRequests": "0",
+        "maxBatchRequestBytes": "0",
+        "mappedCopies": "0",
+        "maxMappedCopyBytes": "0"
+      }
+    },
+    "candidate": {
+      "request": {
+        "samples": 24,
+        "meanMs": 212.72033333333334,
+        "p95Ms": 9.3994,
+        "maximumMs": 5063.1026
+      },
+      "allocationSelf": {
+        "samples": 24,
+        "meanMs": 0.21575,
+        "p95Ms": 0.0054,
+        "maximumMs": 5.1663
+      },
+      "sparseRegionSelf": {
+        "samples": 24,
+        "meanMs": 0.17109166666666667,
+        "p95Ms": 0.5181,
+        "maximumMs": 2.4198
+      },
+      "allocationCount": 31,
+      "afterFirstRequest": {
+        "samples": 23,
+        "meanMs": 1.8341478260869566,
+        "p95Ms": 9.2322,
+        "maximumMs": 9.3994
+      },
+      "summary": {
+        "frames": "24",
+        "grow128to4096": "true",
+        "remove3072": "true",
+        "sameFrame": "true",
+        "initializations": "1",
+        "maxWriteBytes": "1048576",
+        "maxStagingAllocationBytes": "1048576",
+        "defaultCreates": "46",
+        "cpuResizes": "6",
+        "ommRefreshes": "1",
+        "stagingRequests": "112",
+        "stagingBytes": "20938580",
+        "recordBytes": "675840",
+        "indexBytes": "20442432",
+        "mappedBatchRequests": "24",
+        "maxBatchRequestBytes": "17862912",
+        "mappedCopies": "1605",
+        "maxMappedCopyBytes": "524224",
+        "maxMappedAllocationBytes": "18874368",
+        "steadyLeaseRelease": "true"
+      }
+    }
+  },
+  "baselineNativeSha256": "4220b80e7a00ffda75e9dc10c2f7499f73f84d93d4dd13f1d37f912f52b117c4",
+  "failureAttribution": {
+    "hresult": "0x8007000e",
+    "buffer": "Native receiver attributes arena",
+    "exclusiveMemoryDomainProven": false,
+    "hostTreeLimitBytes": 9500000000,
+    "hostReportedPeakBytes": 9712000000,
+    "newQueries": [
+      "process",
+      "systemCommit",
+      "job",
+      "DXGI_local",
+      "DXGI_nonLocal"
+    ],
+    "newFailureSnapshotRuntimeExercised": false
+  },
+  "productionSourceSha256": {
+    "renderer-rtxpt/src/main/cpp/rtxpt_allocation_failure.h": "ea538f04608ebe84fee283d92f9a2a1489cb221dc0f30bbc670afaf004062b1d",
+    "renderer-rtxpt/src/main/cpp/rtxpt_attribute_capacity.h": "04c1d94bfbfcc17939cccbeecde03bb97c1e151e6593e36b778e5ebfa8167ef3",
+    "renderer-rtxpt/src/main/cpp/rtxpt_diagnostics.h": "0aa5af5c30c640eec662eb48cd802a96104b710fc3f60288aeadbdb559560e95",
+    "renderer-rtxpt/src/main/cpp/rtxpt_jni.cpp": "1adde654c296b157a604851d116f64b7666ff802d129048cf1d5b10de92845db",
+    "renderer-rtxpt/src/main/cpp/rtxpt_native_lighting.h": "a9a6b3c4fb01de0dd0d993d76c7a1b5773576d3faa6e00b8529ddef6b9c101ea",
+    "renderer-rtxpt/src/main/cpp/rtxpt_resource_import_selftest.cpp": "734dacf82c5538101c2ae26eb34b7c9f80abeb8d3461c01665e90b366e15ab41",
+    "renderer-rtxpt/src/main/cpp/rtxpt_sparse_lighting.h": "0477ae611be337a71d226ac178403994d3680aa9bf312f1fad5328209a579bb6",
+    "renderer-rtxpt/src/main/cpp/rtxpt_sparse_regions.h": "c75dbe7ffc465f57f1c8c98fc2ed8ec881e1912d32f7bf2c3ae3d688aaad2d85",
+    "renderer-rtxpt/src/main/cpp/rtxpt_upload_arena.h": "369e7280bc0890794ad018c6bc8ca07573b2d0ac898dc5a64d74439dcece7286"
+  },
+  "productionClassSha256": {
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$BridgeTimings.class": "c4f282e9218bf2c72f0e96b94faabae4c28cd1845ec3f82e14d852c1514219b8",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$DynamicResourceStatistics.class": "9ea39dfd7ec803246daa9e6601a7be6285796d6519d90b5d2c9370109c1f1a2c",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$HistoryActions.class": "796f2ca2e272236401990c825197780f49a7d8eaa7c251f3362a33993e3bdeba",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$HistoryCause.class": "be3f1b4aec41697bdd8de92c0a6f82a6aef9b5bf77e584f7e6f70930e96a0327",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$HistoryFrame.class": "bae90f97686ebd070760410d0163ada7bef4a60a937bc5b65249203b432119bc",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$LightingTimings.class": "2352ff62b0bd98aab09ca477fc0f09ce36679e329842b45154d6cfdeb002ca7c",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$LightSamplingMode.class": "15a03921505139dac01b40e58ccbdcdaeed9d5143cb08d1815015c5a06bad92f",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$LightSamplingStatus.class": "7f720cf8b80da55f8593bd3d562a4cbea0b7d818af596dcdd00126439340edc3",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$NativePreparationStatistics.class": "abb4aeca8f8798b0786f3339f09273055b5f529f215e8a444e81112458398d5f",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$PathQualityStatus.class": "304b8ec00df863a8c27084e46fea70293ddedb3dd6d351f49189dc56e2313613",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$PreparationStatistics.class": "4582e8e7bc3c57e3cfeb756073dfdbb4d64e2beff195d673cb4ea114115cc230",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$PresentationStatus.class": "9865c335e1c0e8a2b7bab58f106703efa5956d5c31ce1c366555eec969a2a58b",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$Reconstruction.class": "99c74690d13df3737dee95468aa4d3c5bb04c966601de4241dffd42c70c8d3ae",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$ResourceArenaStatistics.class": "9014889421ddd279a6654cb9c1169789f973c37715dcb1126d5bdfc083441df3",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$ResourceMaintenance.class": "3bdd7248ef21e3fea5d521a53876a98be5cb3eedb081f41396a3d21ee92904ba",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$ResourcePressure.class": "4a9c54e88f4c853f4442e096ac5ce1aef5ff00451ba95434ce8e806c762beaab",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$RetainedUpdateMode.class": "6be91d09f8c6e65ce32a639e882b13c94a38649034e8e21137e3e69280384faa",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$RetainedUpdateTimings.class": "b9c331db4c3439fe21d7b4b198be799236340ccdff6e21d3c0e2348e379219dc",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$RuntimeStatus.class": "5276d9588877ae50fce3d506ccf018b40353590dc85d8274965a01635a10b5f6",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess$SubmitStages.class": "eec852f1cb58ebd8dc2bd832abd0048d35faf7ca2007329cae4fad746f42025f",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAccess.class": "cd278e3f31261d700467af7a8db12f56a0acd066e371ca8673c69459b654d597",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptApplicationData$PatchWriter.class": "9da2290a06ce9e0a9b5ef37fb85c674d5f6b5a1cf228e57af2f0d74a44586aae",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptApplicationData.class": "e18b5cca822dd45f607f39928e547a66ebcd0a00937d88f6671259de35a827c4",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAttributeBatch$Entry.class": "c29978d549d4f8eb05ea5a374be1256c69c22969424d2a9bfe93462f2cd26f99",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAttributeBatch$Group.class": "b6824ee7bafd257202207db1a095b4af324dac0352429a989319a51162bbd816",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAttributeBatch$GroupIndex.class": "a019164414abe9d41ca61e749c38c8fea5b42eeeaac8e215c70041fd142f3e28",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAttributeBatch$MutableGroup.class": "d9b9f8c34172993153a3b86f017971baeb144d613508e24a5488bb5f4fe8d8ca",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptAttributeBatch.class": "ae021af028248baff4866ef169b931fcf759fa7596b5a010e140e364aef03304",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptBackendProvider.class": "353c67cf7f029f95a1209dc2cd255221f484bcb491f754f9acfaefcfd8c8e558",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptComposedRenderer$DiagnosticView.class": "dc1c35c914ffc64ae128907cd1bdf47b50101a22c4144da4ce034e8ab5167df6",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptComposedRenderer$WorkSnapshot.class": "be7fa44858766b914eab7b810e688a2b4c770301ecee63cd241634408b084f83",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptComposedRenderer.class": "4839c82e23e52ad8a4e35e2cd248563f43fe0d4f4b025ad3cf14c086522109cb",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDelta$Prepared.class": "f98b8967148ce06e4e3597923742c15e2acbcaa813b9c38202f8ea507d44ee6b",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDelta$Selection.class": "58b951a3be6b4e2a9fe150c98dbf845ce6a58c1279afa91f87ba4a793954d42f",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDelta$Work.class": "87f3f446de89978ec3ee21413976c30984a2d770f80fa09522078f8f4f252606",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDelta.class": "b7b9b25751315769ac7657fa788c822e4bb3ec979292941372a92aa4e9b91812",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnosticAccess.class": "82c597e370eed10e8bf54306130ea8ee2ead420313ac3a54014d8443f21afe98",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$1.class": "27aa276a28947112bcf8d7b79aca37d2e7ec7803dd77539ba70dd90e02fd0321",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$2.class": "0877a5ecef3858d6c385c49268a51b733a037dbcec8d870dfed9f31bc5f91c78",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$3.class": "1d22667c8afd798b9b7ab6096b128d7942a719cce467988e9b8d0aa16f7ed51e",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$CpuEvent.class": "9bc3946293f0030fe73ca75ce745e9491cad114a50357cb5169d2791337b664d",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$Distribution.class": "1f114db475d05b9442162c06ba26322c7a0e13db1de13adba8b3c07bb24052ab",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$GpuMonitor.class": "b6a51d3d5457f982158dd7fc0902765de9f1b99b6202d05d7b0600f922738c8b",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$GpuScope.class": "f4a8c3bef5d7fbc840000651d64f9e48ede34f1ca0fbc8f3b2e2f9bbf93adfc1",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$GpuSnapshot.class": "d87a793cb952bc6cc4558090c1a61bf93b708cc4bbd1da74e4cc6e2d84d0b1c5",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$Level.class": "fd0a6e988dc30d07cb923a4e822504a7c7a81e744fa76726b76f2c153faa3d66",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$LightUpdates.class": "6a56a94196b1fbc627450918e288c03469a0810ab3ac2df91ab8d8618559cb18",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$Monitor.class": "1f47844cfb632e54283cb49c2fb66039aa5d7e440d897de189366804491665f0",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$ProtocolEvent.class": "9d52249ed896f36402f2f56be6f6b1f7f7929037fa37918333f70a1d0c08265f",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$ProtocolMonitor.class": "03c590f40c107226109dd70823f0f0e07ae02ee88ca9123166be3f0612973bbd",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$ProtocolSnapshot.class": "74b6a1bd19bf52f60710a08c0489436b710bb795bead388403d85ffb2f2cb35e",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$SlowFrameGroup.class": "36e53ebf94b6bd4a4f6e42cc8ecaf0ff8c0cc42b9780a479d95dc5541b705a7b",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$Snapshot.class": "e790add380ee81741bf55a2bf85384a61c9acc8258067a5314226bae1b373314",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$Stage.class": "3ec779c1ac4f855319e4309a5693c5f6bc2c92cda0c0d9fe75ca284952cb7d2d",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$SubmissionKind.class": "3d5ccc930deb019c30a86e3356747f5823d1a4cb1666fb61201bf7a2b8e8b8c4",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$SubmissionSample.class": "a0ca8ab87521e6f8b21176f771c19e5a94019b3dd2670ce3b230de005a8404b0",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics$UploadMemory.class": "af9c6f7270cef3cdbddc7cbd2197ac6e25fa30226b61dbd9ba0d71342b9722bc",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnostics.class": "d1ac60c31999685a1f93ccbe9303d121cbd388fdd48fb28a8d28e3890ed11fe7",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptFeatureController$Host.class": "3d7ab95d884bf3f7a567f3bcdbfd41e34a6dea9542cc94e03b69b27407b974f8",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptFeatureController.class": "8fb12d6c197a7dc7a2edee92767ce2557262518b5f2db146a1d6f0cb7feb4e18",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptHostSurfaceFrameLease.class": "76881c41bab987c0c2b91dee975d561d58df10cc4e3400d623f41e58034f7e40",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptHostSurfaceInputLease.class": "f91aa49898a2d099847f243b1227619bd5963a6cd80b69e2e627eaac750513ce",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptHostSurfaceView.class": "01cf5c305314bdc672d98a776e5fd9aa4f7d2c745e62b15d0c71aeb199476cbb",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptInputContract.class": "299a7310ef634a6eb567f7dc5e72606044b7e66628b4bf4d0dd485e5eeadc259",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptJson.class": "a8194cb460575242851524bcae52c71985c487bd229c129cb13a8ad2e6f9d346",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptLighting$1.class": "71138741b01b63e6d5f6fd03154907af33c11a2d5c9856b0fa34c7a58eee3691",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptLighting.class": "a1e9e650c42955d224570227e7f47fc84d334ea79ad82458c049a1d7ede4ad40",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptLightingFrameLease.class": "c4fa5b7658e958a98e49ff4483bf74a9842934821b148832abb2dc817ecc501c",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptLightMap.class": "92f5830a5a11b70e8e3162d499d73e8c515723daaffdb342ada3333e73b40548",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptMemoryResources$Geometry.class": "1dae846f4a45c089484293578897596c6956e6f74bd5c92eabe75a8612695942",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptMemoryResources$PacketPool$Borrow.class": "efb5c52dc0635e9334c9ebd3f37fb27cb61fc08712ffcadd86976f0744337ac8",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptMemoryResources$PacketPool.class": "aca777c944a24450cbd919095bd3cb5be0739708bfae56eb5cb55b2426e0cbb5",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptMemoryResources$Writer.class": "91fb37e15e009dac2ea64bf507c819c3c03d2dfd55ee56beef9769769bef3fb4",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptMemoryResources.class": "8505630101d045200c58bdff055a354fa9779c84ce0d4daeb1bd5fdc1b39c7c9",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptNative$Compositor.class": "3592dc8ef1ba947e56f4d3011ba6cba0cb7636c48708e69d637775dabc7bf4e5",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptNative$RuntimePath.class": "b5859973a6575b8ecb669bb7f4215a18c9c518262b594e93aa4455a5f776ec34",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptNative.class": "73ca16342935d661fa07aa1f172973d76359f9bdad20f41680b0e28d6bc47416",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptNativeLightingParameters$1.class": "773e4c2141798ede2c730c3012e0084bde15e51cba139b232c84b368d45266dc",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptNativeLightingParameters.class": "c25c51111ef9b25ee261370f5db5f5d734d082c3542c969f4f773a567d94a5be",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptOptions$1.class": "51ad16367e29399e6d5bef57bf1d8607ade0d057577a677c6ec5429c3cba5045",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptOptions$DlssQuality.class": "00ffb66dffe84ef002737ffa02c776cf7f6a54fcbcf9be0f95aa811d59c67d9a",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptOptions.class": "844063e392fbb1806b13ff48e089c29192ccb9fdb8aed068b3220f5a82ec7a15",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptPersistentMap$1$1.class": "13fe35ec2ad8be2931aedc8afbac1db00fa717d2d1d1e4f2c9be261c8035639b",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptPersistentMap$1.class": "22ee3c7bf451754db7861b1fc6e66e3b5825207295ca02dcdc57a18cd43bbae1",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptPersistentMap$Node.class": "6154f404e51abb70a358e726fcbf26b37432129394d89924538a4c18f38a75f7",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptPersistentMap.class": "d78363109052e5dee8aed899e64fae5c17d0718cc466dddac029c8e2ac7e7166",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer$1.class": "4818b0add90d10bf56bfbdfc039818b09df83d7c1bde1c325865a03cc1f1e5a5",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer$2.class": "480a12609072071a0b493e37872313c79fc0ddc1f5363ce5594e392e1f8a8dcc",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer$AttributeGroups.class": "f4f8bdebfae069b401c20e92d3ae50ab50b7a6f16aea8c60807a5db87e7fcdee",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer$HostRequest.class": "04bb54143c1cac00984bc4470febb9ca1399c1524eb5bff185af2fd3b1535068",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer$LightingExtensionState.class": "771c3b38e1cc9d04aecf51d2deaf8799b00e56122a2f04ee9390eacfc848ecc8",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer$PreparedResources.class": "4fda1c4879b2facf47f00fb556b5ccbfd63d8487e2b10186689d83207c008666",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer$PreparedScene.class": "14ad45a96d537e842a9d816a9dfff940643578f4cc37610640cbc76197905206",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderer.class": "b04e5cf94dde5b6ef36cdccbc5b5508a7e7660581703fe7540cca8c23a106b0b",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRenderers.class": "843ab3bf270c9305eef203a31e26cfe70cc13125098ba4bcf17778fc8f533924",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptResourcePacketEvent.class": "38299d529e41df12f0b30b01cd0828d39604f99987f34936f5e202cd146d8051",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptResourcePendingException.class": "f6968320f7444f46896b576566f5cbe47f8a92fef899dffec60bd86db36a734f",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptRuntimeBundle.class": "a45b23022e267438618ee65daa7712ae4b4fb436afdfcd929683189729b7ebf9",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptScene$ExportGeometry.class": "3ee4b5da95af6a13ac2724cb5de56d42af96407c56513ffe6ff1cbf8ae56cf80",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptScene$Item.class": "70c51b43a24649b63783e4db4dcc7a99377b4eeefa99560343562c81e1fef735",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptScene$ItemChanges.class": "b5658b8b654b6800be365e04699543225420e8f0f4d3a23de70813b25dc25145",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptScene$Items$1.class": "0f88d2509bb93e0a4312dbe228847158d30f34d2be1b39c445c62911becb9e53",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptScene$Items.class": "f47de934c1a5481c6b9146d29ce192a1d36b470aad5aef0b6c4beeb1136af438",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptScene$MeshMaterials.class": "e85b5fcf1da501d9627830512ab7eabb9592670fcbe6e33821ed7d660e306940",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptScene$Variant.class": "1b9cee40543af75ac3437a8d772476f85f9a33bd5daaa4ca442ed6f6196b5ab1",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptScene.class": "731835f0f92f05093352a86080e68e5883e01ec5470c8c9dbf99b549a3a808af",
+    "renderer-rtxpt/build/classes/java/main/top/ceroxe/rt/renderer/rtxpt/RtxptSparseSources.class": "69ea9fa8f999e31d3c0805ad73668ff89cbea12f648367580fd5798f9301ae95"
+  },
+  "testSourceSha256": {
+    "renderer-rtxpt/src/test/java/top/ceroxe/rt/renderer/rtxpt/RtxptSparseUploadNativeSelfTest.java": "ce41633b802b285725a477b2f6442c0b9399a0cdf56ea41caeab5d9d926606f7"
+  },
+  "testClassSha256": {
+    "renderer-rtxpt/build/classes/java/test/top/ceroxe/rt/renderer/rtxpt/RtxptSparseUploadNativeSelfTest.class": "352d2f697c497aebc8342d2f4aca8cd14583ea1035090ee9a1055a829e0a7ca4"
+  },
+  "evidenceFileSha256": {
+    "docs/quality/data/receiver-arena-upload/baseline/initial-gpu.log": "cfa8dad1d592c83079a6290026629e7dd41697b699d4a26e99442128ca95ba2a",
+    "docs/quality/data/receiver-arena-upload/baseline/receipt.json": "becaec4a11f3aad2455c086c0ac07060b2efb7cb78e16fdbbae7ce9e739da357",
+    "docs/quality/data/receiver-arena-upload/baseline/RtxptSparseUploadNativeSelfTest.log": "2b0a65499727781274e8f3406af6d01a7428e2f28cd5860f97245a0d666b4701",
+    "docs/quality/data/receiver-arena-upload/candidate/initial-gpu.log": "cfa8dad1d592c83079a6290026629e7dd41697b699d4a26e99442128ca95ba2a",
+    "docs/quality/data/receiver-arena-upload/candidate/receipt.json": "4dfbf4c3a3b29e4c9cd87233c38b8fd2a5bbcbafde15d79d90988dbb5945b111",
+    "docs/quality/data/receiver-arena-upload/candidate/RtxptAttributeTopologyNativeSelfTest.log": "951385b0b9df72b19bae962d674ee17c866b9b7c6e8cfb70d6f0c712d2137cc4",
+    "docs/quality/data/receiver-arena-upload/candidate/RtxptSparseUploadNativeSelfTest.log": "a1f5da0383bd030b51e85a15681b033b1a01adbcc10c5c74b77fc50f1bf1834c",
+    "docs/quality/data/receiver-arena-upload/failed-assertion/initial-gpu.log": "7ba8c4a6817d710de51e88e00ca77940e8874d68fb08e48d868ab639778488d9",
+    "docs/quality/data/receiver-arena-upload/failed-assertion/receipt.json": "0f08b88f020447ce5e7c48376fccccb6c0ef8c37f0f50ad4320b7352b81de2d0",
+    "docs/quality/data/receiver-arena-upload/failed-assertion/RtxptSparseUploadNativeSelfTest.log": "20611958862b9c80a0ad8bbe17147a7569c932eaf920e8cdada9c71f1d4ffd0a"
+  },
+  "limits": "Only affected native correctness and same-fixture 24-update observations. Not MC 709-block performance, not 180 FPS. CPU terminal observations retain their actual completed result; no raw CPU log was redirected at execution time. Failed first candidate's obsolete transient-page assertion is retained. Large receiver cold allocation/reopen must be exercised by the host."
+}

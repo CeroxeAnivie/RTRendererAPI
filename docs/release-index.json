@@ -39,5 +39,6 @@
   "7.3.0": "docs/quality/incremental-diagnostic-transport.md",
   "7.3.1": "docs/quality/retained-update-maintenance.md",
   "7.3.2": "docs/quality/retained-update-locality.md",
-  "7.3.3": "docs/quality/continuous-lighting-bootstrap.md"
+  "7.3.3": "docs/quality/continuous-lighting-bootstrap.md",
+  "7.3.4": "docs/quality/receiver-arena-and-batched-upload.md"
 }

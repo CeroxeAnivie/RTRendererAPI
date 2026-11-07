@@ -2,6 +2,7 @@
 #include "rtxpt_retained_light_tree.h"
 #include "rtxpt_sparse_regions.h"
 #include "rtxpt_upload_ranges.h"
+#include "rtxpt_upload_arena.h"
 #include <array>
 #include <cstring>
 #include <cstdlib>
@@ -39,6 +40,22 @@ public:
     bool SingleGroup()const{return (groupMask&(groupMask-1))==0;}
     uint32_t recordCapacity=0,nodeCapacity=0,regionCapacity=0;
     nvrhi::BufferHandle sourceBuffer,treeBuffer;
+    nvrhi::IDevice* uploadDevice=nullptr;
+    RtrUploadArena* mappedUploadArena=nullptr;
+    struct UploadCopy {nvrhi::IBuffer* buffer;const void* data;size_t bytes,offset;};
+    struct UploadLease {RtrUploadArena::Storage storage;nvrhi::EventQueryHandle done;bool submitted=false;};
+    std::vector<UploadCopy> uploadCopies;
+    std::vector<UploadLease> uploadLeases;
+    std::vector<nvrhi::EventQueryHandle> uploadQueries;
+    uint64_t mappedUploadBatches=0,mappedUploadBytes=0,fallbackUploadBatches=0;
+    void RecordUploads(nvrhi::IDevice* device){
+        for(auto& upload:uploadLeases)if(!upload.submitted){device->setEventQuery(upload.done,nvrhi::CommandQueue::Graphics);upload.submitted=true;}
+    }
+    void PollUploads(nvrhi::IDevice* device){
+        for(auto at=uploadLeases.begin();at!=uploadLeases.end();)if(at->submitted&&device->pollEventQuery(at->done)){
+            uploadQueries.push_back(std::move(at->done));at=uploadLeases.erase(at);
+        }else ++at;
+    }
     struct Retired {nvrhi::BufferHandle sources,nodes;nvrhi::EventQueryHandle graphics,compute;};
     std::vector<Retired> retired;
     std::array<uint64_t,8> work{}; // represented,patches,upserts,removals,nodesVisited,recordBytes,nodeBytes,growths
@@ -141,7 +158,8 @@ public:
         }
         return changed;
     }
-    bool Ensure(nvrhi::IDevice* device){
+    bool Ensure(nvrhi::IDevice* device,RtrUploadArena* arena=nullptr){
+        uploadDevice=device;mappedUploadArena=arena;
         for(auto i=retired.begin();i!=retired.end();)if(device->pollEventQuery(i->graphics)&&device->pollEventQuery(i->compute))i=retired.erase(i);else ++i;
         if(sourceBuffer&&records.size()<=recordCapacity&&tree.nodes.size()<=nodeCapacity&&regions.packed.size()<=regionCapacity)return false;
         // These are the existing public source/index budgets, not scene-sized
@@ -165,14 +183,18 @@ public:
         for(size_t done=0;done<bytes;){const size_t count=std::min(UploadChunkBytes,bytes-done);
             command->writeBuffer(buffer,input+done,count,offset+done);done+=count;}
     }
-    template<class T> void UploadSpans(nvrhi::ICommandList* command,nvrhi::IBuffer* buffer,const std::vector<T>& data,std::vector<uint32_t>& dirty,size_t offset,int counter){
-        if(full){if(!data.empty()){WriteBounded(command,buffer,data.data(),data.size()*sizeof(T),offset*sizeof(T));work[counter]+=data.size()*sizeof(T);}return;}
+    void PlanCopy(nvrhi::IBuffer* buffer,const void* data,size_t bytes,size_t offset=0){if(bytes)uploadCopies.push_back({buffer,data,bytes,offset});}
+    template<class T> void UploadSpans(nvrhi::IBuffer* buffer,const std::vector<T>& data,std::vector<uint32_t>& dirty,size_t offset,int counter){
+        if(full){if(!data.empty()){PlanCopy(buffer,data.data(),data.size()*sizeof(T),offset*sizeof(T));work[counter]+=data.size()*sizeof(T);}return;}
         rtr::UploadRanges::ForEach(dirty,data.size(),sizeof(T),[&](size_t first,size_t count){
-            WriteBounded(command,buffer,&data.at(first),count*sizeof(T),(offset+first)*sizeof(T));work[counter]+=count*sizeof(T);},
+            PlanCopy(buffer,&data.at(first),count*sizeof(T),(offset+first)*sizeof(T));work[counter]+=count*sizeof(T);},
             CoalesceUploads()?rtr::UploadRanges::MergeGapBytes:0);
     }
     void Upload(nvrhi::ICommandList* command){
+        auto* device=uploadDevice;
+        PollUploads(device);
         if(!headerDirty)return;
+        uploadCopies.clear();
         RtrDiagnostics::Scope evidence(RtrDiagnostics::SparseUpload,dirtyRecords.size(),regions.dirtyNodes.size(),1,0,0,0,
             full||regions.full?RtrDiagnostics::CapacityGrowth:RtrDiagnostics::PoolHit,
             full||regions.full?regions.packed.size()*64:regions.dirtyNodes.size()*64);
@@ -186,16 +208,44 @@ public:
         const char* disable=std::getenv("RTR_RTXPT_DISABLE_SPARSE_NODE_BOUNDS");
         header.position[3]=(!disable||std::string(disable)!="1")?(VisibleMax()?1.f:ChannelMax()?2.f:0.f):0.f;
         if(regions.buckets&&regions.indexed){header.cone={float(nodeCapacity),float(regions.buckets-1),float(nodeCapacity+regions.buckets),float(RtrSparseRegions::CellSize)};header.extent[1]=float(regions.global.size());}
-        command->writeBuffer(sourceBuffer,&header,sizeof(header));
-        UploadSpans(command,sourceBuffer,records,dirtyRecords,1,5);UploadSpans(command,treeBuffer,queryNodes,dirtyNodes,0,6);
+        PlanCopy(sourceBuffer,&header,sizeof(header));
+        UploadSpans(sourceBuffer,records,dirtyRecords,1,5);UploadSpans(treeBuffer,queryNodes,dirtyNodes,0,6);
         if(!regions.packed.empty()){
-            if(full||regions.full){const auto bytes=regions.packed.size()*64;WriteBounded(command,treeBuffer,regions.packed.data(),bytes,size_t(nodeCapacity)*64);work[6]+=bytes;regions.work[8]+=bytes;}
+            if(full||regions.full){const auto bytes=regions.packed.size()*64;PlanCopy(treeBuffer,regions.packed.data(),bytes,size_t(nodeCapacity)*64);work[6]+=bytes;regions.work[8]+=bytes;}
             else{
                 rtr::UploadRanges::ForEach(regions.dirtyNodes,regions.packed.size(),64,[&](size_t first,size_t count){
-                    const auto bytes=count*64;WriteBounded(command,treeBuffer,&regions.packed[first],bytes,(size_t(nodeCapacity)+first)*64);work[6]+=bytes;regions.work[8]+=bytes;},
+                    const auto bytes=count*64;PlanCopy(treeBuffer,&regions.packed[first],bytes,(size_t(nodeCapacity)+first)*64);work[6]+=bytes;regions.work[8]+=bytes;},
                     CoalesceUploads()?rtr::UploadRanges::MergeGapBytes:4*64);
             }
         }
+        // All source images remain authoritative and stable throughout this
+        // recording. One persistent mapped lease replaces one transient
+        // allocator/map interaction per small span. A cold/pressured arena
+        // keeps the complete ordinary upload path while its worker prepares.
+        size_t bytes=0;for(const auto& copy:uploadCopies)bytes+=(copy.bytes+255)&~size_t(255);
+        RtrUploadArena::Storage storage;
+        {RtrDiagnostics::Scope reserve(RtrDiagnostics::StagingAcquire,uploadCopies.size(),0,1,0,0,0,RtrDiagnostics::MappedBatch,bytes);
+            if(mappedUploadArena&&uploadLeases.size()<64)mappedUploadArena->Reserve(bytes,storage);}
+        if(storage){
+            nvrhi::EventQueryHandle done;
+            if(uploadQueries.empty())done=device->createEventQuery();else{done=std::move(uploadQueries.back());uploadQueries.pop_back();device->resetEventQuery(done);}
+            if(!done)throw std::runtime_error("Could not allocate sparse upload completion query");
+            uploadLeases.push_back({std::move(storage),std::move(done),false});
+            const auto& lease=uploadLeases.back().storage;size_t cursor=0;
+            for(const auto& copy:uploadCopies){
+                {RtrDiagnostics::Scope copyScope(RtrDiagnostics::StagingCopy,1,0,1,0,0,0,RtrDiagnostics::MappedBatch,copy.bytes);
+                    std::memcpy(lease->Data()+cursor,copy.data,copy.bytes);}
+                for(size_t done=0;done<copy.bytes;){const auto count=std::min(UploadChunkBytes,copy.bytes-done);
+                    RtrDiagnostics::Scope record(RtrDiagnostics::StagingRecord,1,0,1,0,0,0,RtrDiagnostics::MappedBatch,count);
+                    command->copyBuffer(copy.buffer,copy.offset+done,lease->Buffer(),lease->Offset()+cursor+done,count);done+=count;}
+                cursor+=(copy.bytes+255)&~size_t(255);
+            }
+            ++mappedUploadBatches;mappedUploadBytes+=bytes;
+        }else{
+            for(const auto& copy:uploadCopies)WriteBounded(command,copy.buffer,copy.data,copy.bytes,copy.offset);
+            ++fallbackUploadBatches;
+        }
+        uploadCopies.clear();
         regions.Uploaded();
         dirtyRecords.clear();dirtyNodes.clear();full=headerDirty=false;
     }
