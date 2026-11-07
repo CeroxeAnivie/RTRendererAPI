@@ -1,5 +1,13 @@
 # Native-lighting submission
 
+## Stable geometry deformation follow-up
+
+An actual consumer exposed a missed dirty-domain case: position-only changes replaced MeshInfo/leaves and triggered global graph refresh/TLAS allocation every frame. The pose-only workload missed this case. The external direct adapter now retains identities, uploads immutable vertex buffers through the original uploader, rebuilds only changed BLAS through NVRHI, and uses the original bounds/table/TLAS updates. True topology/material/coverage changes keep the full path; beauty is unchanged. Pooled/compacted and asynchronously unsafe predecessors retire behind both native queues. Upstream source remains unchanged.
+
+Four directed contract frames passed hit-away-hit pixels, fresh sequence/geometry, retained second BLAS address, distinct vertex buffer and full refresh for a real index change. Evidence: `build/reports/stable-deformation-contract/`.
+
+The paired test now deforms geometry on all 210 post-admission frames, with identical class bytes, 3,662 meshes, 45,000 sources, 256 admission frames and 466/466 fresh outputs on each runtime. Stationary full refresh/TLAS allocation: 30/30 to 0/0 (-100%). Moving: 180/180 to 8/8 (-95.56%). Required BLAS builds stay 30 stationary and 363 moving; lost/failed native events stay zero. Busy initial GPU prevents timing/FPS benefit claims. Evidence: `build/reports/scene-update-fix/stable-geometry-comparison/runs.json`. Formal publication and actual-host crash/memory/FPS validation remain pending.
+
 The direct-lighting consumer now follows retained resources, exact dirty domains and incremental submission without running the unrelated beauty tail on ordinary initialized frames. It still calls the original RTXPT/Donut material, scene and acceleration operations. No upstream rendering implementation, allocator defaults or shader was patched.
 
 ## Changes

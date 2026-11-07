@@ -1,87 +1,67 @@
 {
   "schema": "bridge-publication-v1",
-  "publishedAtUtc": "2026-11-07T11:50:15.480764+00:00",
+  "publishedAtUtc": "2026-11-07T13:07:05.470385+00:00",
   "version": "8.0.0",
-  "sourceCommit": "161619d005667aa26584ba4bc006c5f00a6d9635",
+  "sourceCommit": "38ab874e14df6e621f06c84f16fa1fc85a48620e",
   "githubBranch": "main",
   "githubConfirmedBeforeMavenLocal": true,
   "mavenLocalCompleted": true,
   "mavenCentralPublished": false,
   "modules": {
     "renderer-api": {
-      "renderer-api-8.0.0.jar": {
-        "sha256": "8f7a6c06ccaa3d08c3e7c70eb44fe72ffc84564d25f10202f5ddf1a06541a62c",
-        "bytes": 288718
+      "renderer-api-8.0.0-javadoc.jar": {
+        "sha256": "b7fc6e40dc82505b3a6e8ea8e422058ed088a3fd5480c31498c1270f0a7fff44",
+        "bytes": 4962746
       },
       "renderer-api-8.0.0-sources.jar": {
         "sha256": "76929910127c57de4bfc21bb8c7b4fc6d414f2ec759d84de39b4db049a9d7678",
         "bytes": 147703
       },
-      "renderer-api-8.0.0-javadoc.jar": {
-        "sha256": "b7fc6e40dc82505b3a6e8ea8e422058ed088a3fd5480c31498c1270f0a7fff44",
-        "bytes": 4962746
-      },
-      "renderer-api-8.0.0.pom": {
-        "sha256": "f37389dc120b0514837041dbd8ad55a1b64640cf5d56ca3a80dc785bc3d3c3a7",
-        "bytes": 1537
+      "renderer-api-8.0.0.jar": {
+        "sha256": "8f7a6c06ccaa3d08c3e7c70eb44fe72ffc84564d25f10202f5ddf1a06541a62c",
+        "bytes": 288718
       },
       "renderer-api-8.0.0.module": {
         "sha256": "b316249ed415272a8d40ae2986f3cc4a8065f28675f1862d0215288b97d158d4",
         "bytes": 3486
+      },
+      "renderer-api-8.0.0.pom": {
+        "sha256": "f37389dc120b0514837041dbd8ad55a1b64640cf5d56ca3a80dc785bc3d3c3a7",
+        "bytes": 1537
       }
     },
     "renderer-rtxpt": {
-      "renderer-rtxpt-8.0.0.jar": {
-        "sha256": "5a9c379e7b41ee6a1b87e265c6de75a8f636688c020d3e7c033dc181c39195b9",
-        "bytes": 2042537272
-      },
-      "renderer-rtxpt-8.0.0-sources.jar": {
-        "sha256": "51c638ff03f86691a477ac17a93651ba3ecee136f234190c9030d0c5a4233105",
-        "bytes": 46596
-      },
       "renderer-rtxpt-8.0.0-javadoc.jar": {
         "sha256": "b5e42cad25ce5ea972e721d1ef389777974ec4ab95cd0ca036341f93d56e4661",
         "bytes": 4224623
       },
+      "renderer-rtxpt-8.0.0-sources.jar": {
+        "sha256": "e6f8c56a9fae143f6f1622512c4c4cb7f21db0f2851687e99bcd9b5330fda28e",
+        "bytes": 46673
+      },
+      "renderer-rtxpt-8.0.0.jar": {
+        "sha256": "c4e1e79d92fa3e7660eb28e679ceeab0a4f7bd5f3f7a6c852c3ce40a90f746c2",
+        "bytes": 3959360991
+      },
+      "renderer-rtxpt-8.0.0.module": {
+        "sha256": "816b3e59fc86c58b4793a98859c54f4112dfa913b30a0656712c77e4b1ff619e",
+        "bytes": 3895
+      },
       "renderer-rtxpt-8.0.0.pom": {
         "sha256": "2da145de0583bae21f6da3d6aaae5021c6d804a1eaffadec55ac06978d9cc728",
         "bytes": 1788
-      },
-      "renderer-rtxpt-8.0.0.module": {
-        "sha256": "f164f536da095043138f52f01e318cda4ac72dd81e6c465c4943c0d847c1d5dc",
-        "bytes": 3895
       }
     }
   },
-  "nativeDllSha256": "151f86b94fcfa8c869d8d6bc2ecdaf937e28ea476ee3d9f126db28a1c50dce09",
-  "nativeRuntimeZipSha256": "118d01b056a3f7e28c76f70257ab56e95d7a18425d2d48e65f1fb3714b78b785",
-  "packageChecks": 398,
-  "precompiledEntries": 150,
-  "precompiledSourceEntries": 236,
-  "runtimeChildCreationGuard": {
-    "passed": true,
-    "win32": 367
-  },
+  "nativeDllSha256": "6f3097978b21187f6dc1561f0f7532e20881d748abc680f69b7a626caf24a402",
+  "nativeRuntimeZipSha256": "342f75c3c7baa8403a58967c35a45b7179d9de56f33bcdd617fcd43a8075bde6",
   "checks": [
-    "renderer-api-jar-matches-build",
-    "renderer-api-sources-jar-matches-build",
-    "renderer-api-javadoc-jar-matches-build",
-    "renderer-api-pom-version",
-    "renderer-api-pom-matches-build",
-    "renderer-api-module-version",
-    "renderer-api-module-matches-build",
-    "renderer-rtxpt-jar-matches-build",
-    "renderer-rtxpt-sources-jar-matches-build",
-    "renderer-rtxpt-javadoc-jar-matches-build",
-    "renderer-rtxpt-pom-version",
-    "renderer-rtxpt-pom-matches-build",
-    "renderer-rtxpt-module-version",
-    "renderer-rtxpt-module-matches-build",
-    "only-current-api-dependency",
-    "published-api-equals-final-verified-jar",
-    "published-rtxpt-equals-final-verified-jar",
-    "published-native-runtime-equals-tested-package"
+    "api-and-rtxpt-main-source-javadoc-pom-module-match-build",
+    "verifyMajorReleaseContract-passed",
+    "verifyPublishedMavenTopology-passed",
+    "native-dll-equals-46-frame-and-466-frame-tested-dll"
   ],
-  "consumerRuntimeStarted": false,
+  "consumerRuntimeStarted": true,
+  "consumerRuntimeRunTag": "lean-native-memory-20261107-210401",
   "performanceTarget180Passed": false
 }

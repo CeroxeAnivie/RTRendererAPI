@@ -95,6 +95,8 @@ public:
         bool attributes = false;
         std::vector<std::shared_ptr<donut::engine::MeshInfo>> retiredMeshes;
         std::vector<std::shared_ptr<donut::engine::BufferGroup>> retiredBuffers;
+        std::vector<nvrhi::rt::AccelStructHandle> retiredStructures;
+        std::vector<std::shared_ptr<donut::engine::MeshInfo>> deformedMeshes;
         std::vector<std::shared_ptr<donut::engine::LoadedTexture>> retiredTextures;
         bool existingMaterialsChanged = false;
         bool coverageChanged = false;
@@ -293,9 +295,17 @@ public:
         for(auto i=packet.materials.begin();i!=packet.materials.end();)
             if(auto old=m_materials.find(i->first);old!=m_materials.end()&&SameMaterial(old->second,i->second))i=packet.materials.erase(i);
             else ++i;
-        std::unordered_set<std::string> attributeMeshes;
-        for(const auto& [name,mesh]:packet.meshes)
+        std::unordered_set<std::string> attributeMeshes,deformedMeshes;
+        // Position changes are not graph topology changes when indices, groups,
+        // materials and vertex layouts stay identical. The external direct path
+        // can rebuild this one native BLAS without replacing its MeshInfo/leaf.
+        const bool allowDeformation=m_externalTextureSampling&&packet.materials.empty()&&packet.coverage.empty();
+        for(const auto& [name,mesh]:packet.meshes) {
             if(CanUpdateAttributes(name,*mesh))attributeMeshes.insert(name);
+            else if(allowDeformation&&CanUpdateAttributes(name,*mesh,true)) {
+                attributeMeshes.insert(name);deformedMeshes.insert(name);
+            }
+        }
         Changes changes;
         changes.attributes=!attributeMeshes.empty();
         // A generation/rectangle publication can contain identical pixels. It
@@ -402,11 +412,25 @@ public:
         for (auto& [name, mesh] : packet.meshes) {
             if(attributeMeshes.contains(name)){
                 // Original Scene buffers have permanent read states and cannot
-                // be rewritten as CopyDest. Reuse the immutable built BLAS and
-                // ask the original uploader for the replacement attribute buffer.
-                // BLAS traversal no longer reads its original vertex input.
+                // be rewritten as CopyDest. Ask its uploader for the new buffer;
+                // unchanged positions retain the BLAS, while stable-topology
+                // deformation requests a native rebuild of only this mesh.
                 auto& resident=*m_meshes.at(name);
                 changes.retiredBuffers.push_back(resident.buffers);
+                if(deformedMeshes.contains(name)) {
+                    m_meshSources.at(name).positions=mesh->buffers->positionData;
+                    resident.objectSpaceBounds=mesh->objectSpaceBounds;
+                    for(size_t i=0;i<resident.geometries.size();++i)
+                        resident.geometries[i]->objectSpaceBounds=mesh->geometries[i]->objectSpaceBounds;
+                    changes.deformedMeshes.push_back(m_meshes.at(name));
+                    // A public no-value transform edit marks the new leaf bounds
+                    // dirty without unregistering/reordering any scene resource.
+                    // Consume it only in the normal Render refresh, preserving
+                    // the current/previous pose publication boundary.
+                    if(auto users=m_meshNodes.find(name);users!=m_meshNodes.end())
+                        for(const auto& instance:users->second)
+                            m_nodes.at(instance).node->SetTransform(nullptr,nullptr,nullptr);
+                }
                 resident.buffers=std::move(mesh->buffers);
                 attributeUpdates.push_back(m_meshes.at(name));
                 continue;
@@ -572,19 +596,26 @@ private:
     template<class T>static bool SameArray(const std::vector<T>& a,const std::vector<T>& b){
         return a.size()==b.size()&&(a.empty()||std::memcmp(a.data(),b.data(),a.size()*sizeof(T))==0);
     }
-    bool CanUpdateAttributes(const std::string& name,const Mesh& mesh)const{
+    bool CanUpdateAttributes(const std::string& name,const Mesh& mesh,bool allowPositionChanges=false)const{
         const auto old=m_meshes.find(name),end=m_meshes.end();
         const auto shadow=m_meshSources.find(name);
         if(old==end||shadow==m_meshSources.end()||!old->second->buffers->vertexBuffer
             ||old->second->geometries.size()!=mesh.geometries.size())return false;
         const auto& a=*old->second;const auto& b=*mesh.buffers;
-        if(!SameArray(shadow->second.positions,b.positionData)||!SameArray(shadow->second.indices,b.indexData))return false;
+        if(a.totalVertices!=mesh.totalVertices||a.totalIndices!=mesh.totalIndices
+            ||a.vertexOffset!=mesh.vertexOffset||a.indexOffset!=mesh.indexOffset||a.type!=mesh.type
+            ||a.isSkinPrototype||a.skinPrototype.use_count()!=0
+            ||shadow->second.positions.size()!=b.positionData.size()
+            ||(!allowPositionChanges&&!SameArray(shadow->second.positions,b.positionData))
+            ||!SameArray(shadow->second.indices,b.indexData))return false;
         for(size_t i=0;i<a.geometries.size();++i){
             const auto& x=*a.geometries[i];const auto& y=*mesh.geometries[i];
-            if(x.material->name!=y.material->name||x.indexOffsetInMesh!=y.indexOffsetInMesh||x.numIndices!=y.numIndices)return false;
+            if(x.material->name!=y.material->name||x.indexOffsetInMesh!=y.indexOffsetInMesh||x.numIndices!=y.numIndices
+                ||x.vertexOffsetInMesh!=y.vertexOffsetInMesh||x.numVertices!=y.numVertices)return false;
         }
         auto sizeMatches=[&](donut::engine::VertexAttribute attribute,size_t bytes){return a.buffers->getVertexBufferRange(attribute).byteSize==bytes;};
-        return sizeMatches(donut::engine::VertexAttribute::Normal,b.normalData.size()*sizeof(uint32_t))
+        return sizeMatches(donut::engine::VertexAttribute::Position,b.positionData.size()*sizeof(donut::math::float3))
+            &&sizeMatches(donut::engine::VertexAttribute::Normal,b.normalData.size()*sizeof(uint32_t))
             &&sizeMatches(donut::engine::VertexAttribute::Tangent,b.tangentData.size()*sizeof(uint32_t))
             &&sizeMatches(donut::engine::VertexAttribute::TexCoord1,b.texcoord1Data.size()*sizeof(donut::math::float2));
     }

@@ -10,6 +10,7 @@
 #include "OpacityMicroMap/OmmBaker.h"
 #include "SampleCommon/AccelerationStructureUtil.h"
 #include "SampleCommon/BlasCompactor.h"
+#include "SampleCommon/BlasPool.h"
 #include "SampleCommon/CaptureScriptManager.h"
 #include "rtxpt_upstream_resources.h"
 #include "rtxpt_gpu_profile.h"
@@ -461,19 +462,22 @@ public:
         m_resources.SetTextureResources(GetDevice(),m_DescriptorTable);
         nvrhi::CommandListHandle commands;
         bool retainRemoved=false;
-        const auto changed = m_resources.Apply(packet.data(), packet.size(),
+        auto changed = m_resources.Apply(packet.data(), packet.size(),
             *m_scene, [&]()->nvrhi::ICommandList*{commands=OpenResourceCommands();return commands;},
             GetFrameIndex(),[&](bool geometryOnly){
                 retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
                 if(!retainRemoved){RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();}
             });
-        if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty()||!changed.retiredTextures.empty())){
+        if(!changed.deformedMeshes.empty())RefreshDeformedDirectStructures(changed,commands);
+        if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty()
+            ||!changed.retiredStructures.empty()||!changed.retiredTextures.empty())){
             if(m_resourceRetirement.size()>=64){GetDevice()->waitForIdle();m_resourceRetirement.clear();}
             RetiredResources retired;
             retired.graphics=GetDevice()->createEventQuery();retired.compute=GetDevice()->createEventQuery();
             GetDevice()->setEventQuery(retired.graphics,nvrhi::CommandQueue::Graphics);
             GetDevice()->setEventQuery(retired.compute,nvrhi::CommandQueue::Compute);
-            retired.meshes=changed.retiredMeshes;retired.buffers=changed.retiredBuffers;retired.textures=changed.retiredTextures;
+            retired.meshes=changed.retiredMeshes;retired.buffers=changed.retiredBuffers;
+            retired.structures=changed.retiredStructures;retired.textures=changed.retiredTextures;
             m_resourceRetirement.push_back(std::move(retired));
         }
         for(const auto& name:changed.retiredInstances)lighting.RetireInstance(name);
@@ -628,6 +632,7 @@ private:
         nvrhi::EventQueryHandle graphics,compute;
         std::vector<std::shared_ptr<donut::engine::MeshInfo>> meshes;
         std::vector<std::shared_ptr<donut::engine::BufferGroup>> buffers;
+        std::vector<nvrhi::rt::AccelStructHandle> structures;
         std::vector<std::shared_ptr<donut::engine::LoadedTexture>> textures;
     };
     std::vector<RetiredResources> m_resourceRetirement;
@@ -635,6 +640,45 @@ private:
         for(auto i=m_resourceRetirement.begin();i!=m_resourceRetirement.end();)
             if(GetDevice()->pollEventQuery(i->graphics)&&GetDevice()->pollEventQuery(i->compute))i=m_resourceRetirement.erase(i);
             else ++i;
+    }
+    void RefreshDeformedDirectStructures(Resources::Changes& changed,nvrhi::ICommandList* commands){
+        if(!lighting.active||m_ommBaker||!commands)
+            throw std::logic_error("Stable geometry updates require the native direct command list");
+        for(const auto& mesh:changed.deformedMeshes) {
+            auto description=bvh::GetMeshBlasDesc(
+                bvh::Config{.excludeTransmissive=m_ui.AS.ExcludeTransmissive},*mesh,nullptr,false);
+            description.buildFlags=description.buildFlags&~nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+            auto structure=mesh->accelStruct;
+            // Only an ordinary, uncompressed NVRHI allocation of the same
+            // immutable topology can be rebuilt in place. Pooled handles are
+            // address-only and must never be passed into NVRHI build methods.
+            bool reusable=structure&&!m_lastFrameAsyncPrefix&&!bvh::PooledAccelStruct::IsPooled(structure)
+                &&!structure->isCompacted()&&structure->getDesc().buildFlags==description.buildFlags;
+            // An earlier complete frame can have a compute prefix in flight.
+            // Give that case a new BLAS and retire its predecessor with both
+            // native queues instead of assuming a completed CPU future fences it.
+#ifdef NVRHI_WITH_RTXMU
+            // Its update entry point requires separately authored update-capable
+            // builds; retain the ordinary allocation path for this build policy.
+            reusable=false;
+#endif
+            if(!reusable) {
+                structure=GetDevice()->createAccelStruct(description);
+                if(!structure)throw std::runtime_error("Native deformed BLAS allocation failed");
+                if(mesh->accelStruct)changed.retiredStructures.push_back(mesh->accelStruct);
+                mesh->accelStruct=structure;
+            }
+            RtrDiagnostics::Scope blasScope(RtrDiagnostics::BlasBuild,1);
+            commands->setAccelStructState(structure,nvrhi::ResourceStates::AccelStructWrite);
+            nvrhi::utils::BuildBottomLevelAccelStruct(commands,structure,description);
+            // The native TLAS builder reads device addresses through its table;
+            // just as in UpdateSkinnedBLASs, explicitly order the preceding build.
+            commands->setAccelStructState(structure,nvrhi::ResourceStates::AccelStructBuildBlas);
+        }
+        commands->commitBarriers();
+        // Bounds changed even when BLAS addresses did not. Reuse the original
+        // table refresh/UpdateTLAS, not CreateTlas's new TLAS and sub-instance pair.
+        m_tlasInstanceDataDirty=true;
     }
     bool RefreshRetainedDirectStructures() {
         RtrDiagnostics::Scope structureScope(RtrDiagnostics::Acceleration);

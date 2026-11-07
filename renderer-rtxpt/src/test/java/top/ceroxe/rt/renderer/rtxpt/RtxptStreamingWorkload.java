@@ -16,11 +16,11 @@ public final class RtxptStreamingWorkload {
     private static final LongBuffer NO_REMOVALS=LongBuffer.allocate(0).asReadOnlyBuffer();
 
     private record Config(int meshes,int sources,int ticks,int framesPerTick,int frames,int warmup,Path output,
-            boolean textureUpdates,int textureSize,RtxptDiagnostics.Level diagnostics,String motionProfile,int stationaryFrames,int admissionBatches) {
+            boolean textureUpdates,int textureSize,RtxptDiagnostics.Level diagnostics,String motionProfile,int stationaryFrames,int admissionBatches,boolean deformGeometry) {
         static Config parse(String[] args) {
             var values=new HashMap<String,String>();
             var allowed=Set.of("meshes","sources","ticks","frames-per-tick","frames","warmup-frames","output",
-                    "texture-updates","texture-size","diagnostics","motion-profile","stationary-frames","admission-batches");
+                    "texture-updates","texture-size","diagnostics","motion-profile","stationary-frames","admission-batches","deform-geometry");
             for(int i=0;i<args.length;i+=2) {
                 if(!args[i].startsWith("--")||i+1==args.length||!allowed.contains(args[i].substring(2)))
                     throw new IllegalArgumentException("Expected --option value: "+args[i]);
@@ -33,6 +33,8 @@ public final class RtxptStreamingWorkload {
             String textures=values.getOrDefault("texture-updates","false");
             if(!textures.equals("true")&&!textures.equals("false"))throw new IllegalArgumentException("texture-updates must be true or false");
             boolean textureUpdates=Boolean.parseBoolean(textures);
+            String deformation=values.getOrDefault("deform-geometry","false");
+            if(!deformation.equals("true")&&!deformation.equals("false"))throw new IllegalArgumentException("deform-geometry must be true or false");
             int textureSize=positive(values,"texture-size",1024);
             if(textureSize<16||textureSize>4096)throw new IllegalArgumentException("texture-size must be 16..4096");
             var diagnostics=RtxptDiagnostics.Level.valueOf(values.getOrDefault("diagnostics","DEEP"));
@@ -46,14 +48,14 @@ public final class RtxptStreamingWorkload {
                 throw new IllegalArgumentException("Invalid workload extent or source capacity");
             return new Config(meshes,sources,ticks,perTick,frames,warmup,
                     Path.of(values.getOrDefault("output","build/reports/streaming-workload")).toAbsolutePath(),
-                    textureUpdates,textureSize,diagnostics,motion,stationary,admissionBatches);
+                    textureUpdates,textureSize,diagnostics,motion,stationary,admissionBatches,Boolean.parseBoolean(deformation));
         }
         private static int positive(Map<String,String> values,String name,int fallback) {
             int value=Integer.parseInt(values.getOrDefault(name,Integer.toString(fallback)));
             if(value<1)throw new IllegalArgumentException(name+" must be positive");return value;
         }
         boolean fullSpecification() {return meshes==3662&&sources==45000&&ticks==300&&framesPerTick==9&&frames==2700
-                &&motionProfile.equals("legacy")&&stationaryFrames==0&&admissionBatches==1&&!textureUpdates&&diagnostics==RtxptDiagnostics.Level.DEEP;}
+                &&motionProfile.equals("legacy")&&stationaryFrames==0&&admissionBatches==1&&!textureUpdates&&!deformGeometry&&diagnostics==RtxptDiagnostics.Level.DEEP;}
         double logicalSpeed() {return switch(motionProfile){case "medium"->16;case "fast"->48;default->DISTANCE*20/ticks;};}
         double distance() {return motionProfile.equals("legacy")?DISTANCE:logicalSpeed()*ticks/20;}
     }
@@ -98,11 +100,13 @@ public final class RtxptStreamingWorkload {
         return new Geometry(floats(p),floats(n),floats(uv),floats(baseline),ints(colors),ints(indices),longs(materials));
     }
     private static double height(double x,double z){return .65*Math.sin(x*Math.PI/8)*Math.cos(z*Math.PI/8);}
-    private static MeshAsset entityMesh() {
+    private static MeshAsset entityMesh() {return entityMesh(0);}
+    private static MeshAsset entityMesh(float shear) {
         float[] p={-.5f,0,-.5f,.5f,0,-.5f,.5f,2,-.5f,-.5f,2,-.5f,
                 -.5f,0,.5f,.5f,0,.5f,.5f,2,.5f,-.5f,2,.5f};
         int[] indices={0,2,1,0,3,2,4,5,6,4,6,7,0,4,7,0,7,3,1,2,6,1,6,5,3,7,6,3,6,2,0,1,5,0,5,4};
         float[] n=new float[p.length];for(int i=0;i<8;i++){n[i*3]=p[i*3];n[i*3+1]=p[i*3+1]-.5f;n[i*3+2]=p[i*3+2];}
+        for(int i=0;i<8;i++){n[i*3+1]-=shear*.5f*n[i*3];p[i*3]+=shear*.5f*p[i*3+1];}
         long[] materials=new long[12];Arrays.fill(materials,2);
         return MeshAsset.builder(1,p,indices,materials).normals(n).build();
     }
@@ -117,7 +121,7 @@ public final class RtxptStreamingWorkload {
         final Map<Cell,Tile> tiles=new LinkedHashMap<>();
         final int tileCount,columns,rows;long nextId=2,sequence,lastClock;Cell center;
         TextureAsset texture;long textureFullGenerations,texturePatches,textureSamplerChanges;
-        long tileCenterChanges,xTileBoundaries,zTileBoundaries;
+        long tileCenterChanges,xTileBoundaries,zTileBoundaries,deformationMeshUpserts;
         Position previous=new Position(0,0,0);double travelled;int sourceUpdates;
         World(Config config){this.config=config;tileCount=config.meshes()-1;columns=(int)Math.ceil(Math.sqrt(tileCount));rows=(tileCount+columns-1)/columns;}
         private Cell cell(int index,Cell origin){return new Cell(origin.x()+index%columns-columns/2,origin.z()+index/columns-rows/2);}
@@ -172,6 +176,12 @@ public final class RtxptStreamingWorkload {
                 }
                 tx.upsert(texture);
             }
+            boolean deform=config.deformGeometry()&&!initial&&!admission;
+            if(deform){
+                // Stable identity/connectivity with fresh vertex positions on every frame.
+                // Pose-only movement cannot expose scene-table rebuilds caused by animation.
+                tx.upsert(entityMesh((float)(.3*Math.sin(identity*.037))));deformationMeshUpserts++;
+            }
             var newCenter=new Cell((int)Math.floor(position.x()/TILE),(int)Math.floor(position.z()/TILE));
             if(!newCenter.equals(center)||tiles.size()<admittedTiles) {
                 if(center!=null&&movementFrame>=0){tileCenterChanges++;xTileBoundaries+=Math.abs((long)newCenter.x()-center.x());zTileBoundaries+=Math.abs((long)newCenter.z()-center.z());}
@@ -214,7 +224,7 @@ public final class RtxptStreamingWorkload {
                     .clock(FrameClock.of(clock,identity==1?0:clock-lastClock)).build();lastClock=clock;
             var publication=new NativeLightingPublication(identity,attributes,List.of(),null,null,initial?response():null);
             var transaction=tx.build();
-            return new Step(transaction,List.copyOf(sources),publication,frame,added+(initial?1:0),removed,
+            return new Step(transaction,List.copyOf(sources),publication,frame,added+(initial||deform?1:0),removed,
                     instanceUpserts,removed,movementFrame>=0&&updateSources?1:0,entityPoseUpserts,System.nanoTime()-begin);
         }
         private SparseLightSource source(int index,int epoch,Cell origin) {
@@ -481,6 +491,7 @@ public final class RtxptStreamingWorkload {
                             "admission_batches",config.admissionBatches(),"admission_mode",config.admissionBatches()==1?"single-transaction":"progressive-fresh-output-per-batch",
                             "output_width",OUTPUT_W,"output_height",OUTPUT_H,"lighting_width",GRID_W,"lighting_height",GRID_H,"gi_samples",0,"reconstruction","NONE",
                             "texture_updates",config.textureUpdates(),"texture_size",config.textureSize(),"diagnostics",config.diagnostics().name(),
+                            "continuous_geometry_deformation",config.deformGeometry(),
                             "motion_profile",config.motionProfile(),"scene_tick_hz",20,"logical_speed_units_per_second",config.logicalSpeed(),
                             "logical_movement_seconds",config.frames()/(20.0*config.framesPerTick()),"full_path_distance",config.distance()),
                     "actual",map("accepted_frames",accepted,"verified_fresh_frames",verified,"resident_meshes",residentMeshes,"resident_instances",residentInstances,
@@ -489,7 +500,7 @@ public final class RtxptStreamingWorkload {
                             "accepted_input_sparse_sources",initialSceneApplied?config.sources():null,"source_delta_updates",movement==null?0:movement.sourceUpserts,
                             "planned_source_delta_updates",world.sourceUpdates,"retained_payload_bytes",world.payloadBytes(),
                             "texture_full_noop_generations",world.textureFullGenerations,"texture_rectangle_updates",world.texturePatches,
-                            "texture_sampler_only_changes",world.textureSamplerChanges,
+                            "texture_sampler_only_changes",world.textureSamplerChanges,"deformation_mesh_upserts",world.deformationMeshUpserts,
                             "planned_tile_center_changes",world.tileCenterChanges,"planned_x_tile_boundaries",world.xTileBoundaries,"planned_z_tile_boundaries",world.zTileBoundaries,
                             "movement_mesh_upserts_per_logical_second",movement==null?null:movement.meshUpserts/(config.frames()/(20.0*config.framesPerTick())),
                             "movement_mesh_removals_per_logical_second",movement==null?null:movement.meshRemovals/(config.frames()/(20.0*config.framesPerTick())),
@@ -546,6 +557,8 @@ public final class RtxptStreamingWorkload {
                 require(Math.abs(run.world.travelled-expected)<.01,"Movement path was shortened");
             }
             require(run.accepted==run.verified,"An accepted frame has no verified fresh output");
+            if(config.deformGeometry())require(run.world.deformationMeshUpserts==(long)config.warmup()+config.stationaryFrames()+config.frames(),
+                    "Continuous geometry deformation did not reach every post-admission frame");
             if(config.fullSpecification())require(run.phases.get("movement").fresh.rate()>=180,"Formal pipeline mean exceeds the 180 Hz frame budget");
             run.completed=true;
         } catch(Throwable failure) {run.failure=failure.getClass().getName()+": "+failure.getMessage();throw failure;}

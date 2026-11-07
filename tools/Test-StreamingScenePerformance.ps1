@@ -14,6 +14,7 @@ param(
     [ValidateRange(0,3600)][int]$WarmupFrames=30,
     [ValidateRange(1,3600)][int]$StationaryFrames=90,
     [ValidateRange(16,4096)][int]$TextureSize=1024,
+    [bool]$DeformGeometry=$true,
     [ValidateRange(1,86400)][int]$TimeoutSeconds=900,
     [switch]$RequireIdle,
     [switch]$CheckPaths
@@ -99,7 +100,8 @@ try {
         Write-Host "Streaming scene: $tag meshes=$Meshes sources=$Sources logicalTicks=$Ticks renderFrames=$($Ticks*$FramesPerTick)"
         $arguments=@('--meshes',[string]$Meshes,'--admission-batches',[string]$AdmissionBatches,'--sources',[string]$Sources,'--ticks',[string]$Ticks,'--frames-per-tick',[string]$FramesPerTick,
             '--frames',[string]($Ticks*$FramesPerTick),'--warmup-frames',[string]$WarmupFrames,'--stationary-frames',[string]$StationaryFrames,
-            '--motion-profile',$profile,'--texture-updates','true','--texture-size',[string]$TextureSize,'--diagnostics',$level,'--output',$case)
+            '--motion-profile',$profile,'--texture-updates','true','--texture-size',[string]$TextureSize,
+            '--deform-geometry',$DeformGeometry.ToString().ToLowerInvariant(),'--diagnostics',$level,'--output',$case)
         Save-Json (Join-Path $case 'host-arguments.json') ([ordered]@{hostRunner=$hostRunner;mainClass='top.ceroxe.rt.renderer.rtxpt.RtxptStreamingWorkload';applicationArguments=$arguments;runtimeDirectory=$runtimes[$identity];classpathFile=$classpathPath;timeoutSeconds=$TimeoutSeconds})
         # Keep paths and application arguments as data. This constant launcher
         # invokes the existing bounded host; native processes cannot escape its Job.

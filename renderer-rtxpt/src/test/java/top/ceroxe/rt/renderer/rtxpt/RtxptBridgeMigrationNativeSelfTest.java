@@ -22,6 +22,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
     public static void main(String[] args) throws Exception {
         Path output=Path.of(args.length==0?"build/reports/bridge-migration-contract":args[0]).toAbsolutePath();
         Files.createDirectories(output);
+        if(args.length>1&&args[1].equals("--deformation-only")) {checkDeformationContract(output);return;}
         var rows=new ArrayList<String>();
         rows.add("sequence,case,apply_to_fresh_ms,materials_events,blas_events,attribute_events,native_events");
         var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.NORMAL_DISTANCE),
@@ -189,6 +190,68 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             require(lighting.nativeLightingExecution().fullBeautyFrames()==0,"Direct-only contract executed full beauty");
         } finally {Files.write(output.resolve("cases.csv"),rows,StandardCharsets.UTF_8);}
         System.out.println("BRIDGE_MIGRATION PASS frames="+FRAMES+" noOpGenerations=true rectangleParents=true samplerMetadata=true samplerPixels=true mixedAttributes=true mixedTopology=true denseReindex=true maskedScalarPixels=true independentMonitors=true diagnosticOff=true retainedLease=true poseFastPathFrames=3 materialRegistryFrames=3");
+    }
+
+    /** Four fresh frames: bootstrap, move away, move back, then a real index edit. */
+    private static void checkDeformationContract(Path output) throws Exception {
+        var rows=new ArrayList<String>();
+        rows.add("sequence,case,apply_to_fresh_ms,materials_events,blas_events,attribute_events,native_events");
+        var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.NORMAL_DISTANCE),
+                0,6,0,NativeLightingStyle.defaults());
+        try(var renderer=RtxptRenderers.openNativeLighting(RtxptRenderers.nativeLightingConfiguration(),plan)) {
+            var access=renderer.extension(RtxptAccess.class).orElseThrow();
+            var lighting=renderer.extension(NativeLightingControl.class).orElseThrow();
+            access.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
+            var handleField=RtxptRenderer.class.getDeclaredField("handle");handleField.setAccessible(true);
+            var camera=CameraState.lookAt(0,0,3,0,0,0).build();
+            renderer.apply(SceneTransaction.builder(1).resetScene()
+                    .upsert(MaterialAsset.builder(2).doubleSided(true).build())
+                    .upsert(deformationMesh(0,false)).upsert(SceneInstance.builder(22,2).build()).build());
+            publish(lighting,1);
+            renderer.submit(RenderFrameRequest.builder(1,SIZE,SIZE,camera).minimumSceneRevision(1).build());
+            access.awaitIdle();
+            long handle=handleField.getLong(renderer);
+            try(var lease=lighting.acquireLightingFrame().orElseThrow()){checkFrame(lease.frame(),1);}
+            Path initial=output.resolve("deformation-bootstrap.pfm");
+            RtxptNative.nativeLightingCapture(handle,initial.toString(),2);checkCenterGeometry(initial,true);
+            var monitor=access.nativeDiagnosticMonitor();monitor.poll();
+            double[] previous=RtxptNative.meshResourceState(handle,"i22");
+            for(int sequence=2;sequence<=4;sequence++) {
+                boolean topology=sequence==4,away=sequence==2;
+                long[] commandsBefore=RtxptNative.commandWorkState(handle);
+                long begin=System.nanoTime();
+                renderer.apply(SceneTransaction.builder(sequence).upsert(deformationMesh(away?3:0,topology)).build());
+                publish(lighting,sequence);
+                renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,camera).minimumSceneRevision(sequence).build());
+                access.awaitIdle();
+                try(var lease=lighting.acquireLightingFrame().orElseThrow()){checkFrame(lease.frame(),sequence);}
+                double elapsed=(System.nanoTime()-begin)/1_000_000.0;
+                double[] current=RtxptNative.meshResourceState(handle,"i22");
+                var snapshot=monitor.poll();require(snapshot.lostEvents()==0,"Deformation diagnostics lost events");
+                long full=count(snapshot,"SceneFullRefresh"),tlas=count(snapshot,"TlasAllocate");
+                long blas=count(snapshot,"BlasBuild"),attributes=count(snapshot,"AttributePreparation"),materials=count(snapshot,"Materials");
+                require(materials==0&&blas>0,"Geometry edit lost its native BLAS build or reimported materials");
+                if(!topology) {
+                    require(full==0&&tlas==0&&attributes>0,"Stable geometry edit rebuilt native scene/TLAS instead of its buffers");
+                    require(previous[1]!=current[1],"Stable geometry edit omitted its new immutable vertex input");
+                    if(sequence==3)require(previous[0]==current[0],"Second deformation failed to reuse the ordinary native BLAS");
+                    long[] after=RtxptNative.commandWorkState(handle);
+                    require(after[7]-commandsBefore[7]==1&&after[8]==commandsBefore[8],"Stable deformation did not execute exactly one lean frame");
+                }else require(full>0&&tlas>0,"A real index edit incorrectly entered the stable topology fast path");
+                String name=topology?"deformation-real-index-change":away?"deformation-away":"deformation-back";
+                Path image=output.resolve(name+".pfm");
+                RtxptNative.nativeLightingCapture(handle,image.toString(),2);checkCenterGeometry(image,!away);
+                rows.add(sequence+","+name+","+elapsed+","+materials+","+blas+","+attributes+","+snapshot.events().size());
+                previous=current;
+                System.out.println("BRIDGE_DEFORMATION sequence="+sequence+" case="+name+" fullRefresh="+full+" tlasAllocate="+tlas+" PASS");
+            }
+        }finally {Files.write(output.resolve("deformation-cases.csv"),rows,StandardCharsets.UTF_8);}
+        System.out.println("BRIDGE_DEFORMATION PASS frames=4 freshPixels=true stableIdentity=true blasReuse=true realTopologyFallback=true");
+    }
+    private static MeshAsset deformationMesh(float x,boolean changedIndices) {
+        int[] indices=changedIndices?new int[]{1,2,0,2,3,0}:new int[]{0,1,2,0,2,3};
+        return MeshAsset.builder(2,new float[]{x-1,-1,0,x+1,-1,0,x+1,1,0,x-1,1,0},indices,new long[]{2,2})
+                .normals(new float[]{0,0,1,0,0,1,0,0,1,0,0,1}).build();
     }
 
     private static void checkPoseFastPath(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,
