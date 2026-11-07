@@ -433,6 +433,14 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingTelemetry(JNIEnv* en
     });return LongArray(env,values);}catch(const std::exception& error){Throw(env,error);return nullptr;}
 }
 extern "C" JNIEXPORT jlongArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingMetadataWork(JNIEnv* env,jclass,jlong handle) {
+    try {std::vector<jlong> values;Get(handle)->session->Invoke([&](auto& app){const auto& pass=app.Renderer().lighting;
+        values.assign(pass.metadataWork.begin(),pass.metadataWork.end());
+        values.insert(values.end(),pass.attributeWork.begin(),pass.attributeWork.end());
+        values.push_back(jlong(pass.attributeMigrationBytes));values.push_back(jlong(pass.attributeTableVisits));
+    });return LongArray(env,values);}catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+extern "C" JNIEXPORT jlongArray JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingReconstructionState(JNIEnv* env,jclass,jlong handle) {
     try {std::vector<jlong> values;Get(handle)->session->Invoke([&](auto& app){const auto& rr=app.Renderer().lighting.reconstruction;
         values={rr.requested?1:0,rr.requested&&rr.valid?1:0,rr.width,rr.height,jlong(rr.evaluated),jlong(rr.resets),rr.valid?1:0};

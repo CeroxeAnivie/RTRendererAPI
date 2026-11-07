@@ -1,8 +1,8 @@
 {
   "schema": "bridge-publication-v1",
-  "publishedAtUtc": "2026-11-07T13:38:14.8674342Z",
+  "publishedAtUtc": "2026-11-07T14:31:52.4091470Z",
   "version": "8.0.0",
-  "sourceCommit": "5d375d967c6e3b5964c943a8acabb76b29cd209d",
+  "sourceCommit": "7c26bc79fa54437a36478c95874cafe395ebcec0",
   "githubBranch": "main",
   "githubConfirmedBeforeMavenLocal": true,
   "mavenLocalCompleted": true,
@@ -32,12 +32,12 @@
     },
     "renderer-rtxpt": {
       "renderer-rtxpt-8.0.0.jar": {
-        "bytes": 3959367647,
-        "sha256": "9dad448e5d2e3fd5a6023d0e804f5a94ea1088119c513b006a26b8c2ab646bc3"
+        "bytes": 3959038776,
+        "sha256": "9f607fe5e4df80019c760701b38f55ee3a559f88e74b6bc76ff4de136862845f"
       },
       "renderer-rtxpt-8.0.0-sources.jar": {
-        "bytes": 46673,
-        "sha256": "e6f8c56a9fae143f6f1622512c4c4cb7f21db0f2851687e99bcd9b5330fda28e"
+        "bytes": 46782,
+        "sha256": "62c83900ca63f0f3b2c69d235ecdd16d95a069e5de0e0ec029784425235c8774"
       },
       "renderer-rtxpt-8.0.0-javadoc.jar": {
         "bytes": 4224623,
@@ -49,19 +49,21 @@
       },
       "renderer-rtxpt-8.0.0.module": {
         "bytes": 3895,
-        "sha256": "3f0e5210653559e44d8789ed1bd1ae4bf1a65c60029d344c3930025bbacca320"
+        "sha256": "05dfd6fa9be17491c2b1cdf254e83c1c3fddd59fd75d8e83aa878525f373b136"
       }
     }
   },
-  "nativeDllSha256": "5cdb86fe1854a976f874c17cfbc5b7cd40a7b95f394f86ef71e423aa48a7182e",
-  "nativeRuntimeZipSha256": "a334439b43b25f39fd444500417ec51cfcd6b7d23395b3ec45b2f14d4844c297",
+  "nativeDllSha256": "40aef07aa801cc5647455ff1e339f2d34fe286ccdca0b786034ac6ae757b7962",
+  "nativeRuntimeZipSha256": "42300d206ec7943005c9c4b3a6459e8e59708b1725675f1a2ac6aa3252c6b683",
   "checks": [
     "ten-published-artifacts-match-build",
     "verifyMajorReleaseContract-passed",
     "verifyPublishedMavenTopology-passed",
     "native-dll-equals-stable-deformation-tested-dll"
   ],
-  "consumerRuntimeStarted": false,
-  "consumerRuntimeRunTag": null,
-  "performanceTarget180Passed": false
+  "consumerRuntimeStarted": true,
+  "consumerRuntimeRunTag": "native-memory-repaired-20261107-223015-run",
+  "performanceTarget180Passed": false,
+  "nativeSha256": "40aef07aa801cc5647455ff1e339f2d34fe286ccdca0b786034ac6ae757b7962",
+  "runtimeSha256": "42300d206ec7943005c9c4b3a6459e8e59708b1725675f1a2ac6aa3252c6b683"
 }

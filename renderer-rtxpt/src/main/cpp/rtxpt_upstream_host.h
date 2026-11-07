@@ -483,7 +483,7 @@ public:
                 retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
                 if(!retainRemoved){RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();}
             });
-        if(!changed.deformedMeshes.empty())RefreshDeformedDirectStructures(changed,commands);
+        if(!changed.deformedMeshes.empty()||!changed.reshapedMeshes.empty())RefreshDeformedDirectStructures(changed,commands);
         if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty()
             ||!changed.retiredStructures.empty()||!changed.retiredTextures.empty())){
             if(m_resourceRetirement.size()>=64){GetDevice()->waitForIdle();m_resourceRetirement.clear();}
@@ -516,12 +516,13 @@ public:
             bool hasUnregisteredMaterial=false;
             for(const auto& material:currentMaterials)
                 if(!m_importedMaterials.contains(material)){hasUnregisteredMaterial=true;break;}
-            if(changed.materials||hasUnregisteredMaterial) ReimportMaterials();
-            else if(changed.topology) {
+            if(hasUnregisteredMaterial) ReimportMaterials();
+            else if(changed.materials)m_resources.ConfigureMaterials();
+            if(!hasUnregisteredMaterial&&changed.topology) {
                 InvalidateBindingSet();
                 m_ui.AccelerationStructRebuildRequested=true;
             }
-            if(changed.textures)m_resources.RebindMaterialTextures(GetLocalPath(c_AssetsFolder));
+            if(changed.textures||changed.materials)m_resources.RebindMaterialTextures(GetLocalPath(c_AssetsFolder));
             // These original scene consumers cache geometry-sized state. A
             // host graph edit does not pass through Sample::SceneLoaded again.
             if(m_ommBaker){m_ommBaker->SceneLoaded(*m_scene);m_ui.AccelerationStructRebuildRequested=true;}
@@ -531,13 +532,14 @@ public:
             // scene-wide rebuild discards every pooled handle; its public
             // compactor can instead build just the newly published meshes.
             // Keep policy edits on the original complete rebuild path.
-            if(changed.topology&&!changed.existingMaterialsChanged&&!changed.requiresCoverageRebuild) {
-                if(!RefreshRetainedDirectStructures()){
+            if(changed.topology&&!changed.materialDomainsChanged&&!changed.requiresCoverageRebuild) {
+                if(!RefreshRetainedDirectStructures(changed)){
                     GetDevice()->waitForIdle();m_resourceRetirement.clear();
                 }
             }
         }
-        if (changed.topology || changed.materials || changed.textures) lighting.metadataDirty = true;
+        if (changed.topology || changed.materials || changed.textures || !changed.reshapedMeshes.empty()) lighting.metadataDirty = true;
+        if (changed.materials || changed.textures) lighting.materialMetadataDirty = true;
         if (changed.topology || changed.transforms || changed.attributes) ++lighting.geometryGeneration;
         if(changed.topology||changed.materials||changed.textures||changed.transforms||changed.attributes)
             m_ui.ResetAccumulation = true;
@@ -662,7 +664,7 @@ private:
     void RefreshDeformedDirectStructures(Resources::Changes& changed,nvrhi::ICommandList* commands){
         if(!lighting.active||m_ommBaker||!commands)
             throw std::logic_error("Stable geometry updates require the native direct command list");
-        for(const auto& mesh:changed.deformedMeshes) {
+        auto rebuild=[&](const std::shared_ptr<donut::engine::MeshInfo>& mesh,bool immutableTopology) {
             auto description=bvh::GetMeshBlasDesc(
                 bvh::Config{.excludeTransmissive=m_ui.AS.ExcludeTransmissive},*mesh,nullptr,false);
             description.buildFlags=description.buildFlags&~nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
@@ -670,7 +672,7 @@ private:
             // Only an ordinary, uncompressed NVRHI allocation of the same
             // immutable topology can be rebuilt in place. Pooled handles are
             // address-only and must never be passed into NVRHI build methods.
-            bool reusable=structure&&!m_lastFrameAsyncPrefix&&!bvh::PooledAccelStruct::IsPooled(structure)
+            bool reusable=immutableTopology&&structure&&!m_lastFrameAsyncPrefix&&!bvh::PooledAccelStruct::IsPooled(structure)
                 &&!structure->isCompacted()&&structure->getDesc().buildFlags==description.buildFlags;
             // An earlier complete frame can have a compute prefix in flight.
             // Give that case a new BLAS and retire its predecessor with both
@@ -692,16 +694,20 @@ private:
             // The native TLAS builder reads device addresses through its table;
             // just as in UpdateSkinnedBLASs, explicitly order the preceding build.
             commands->setAccelStructState(structure,nvrhi::ResourceStates::AccelStructBuildBlas);
-        }
+        };
+        for(const auto& mesh:changed.deformedMeshes)rebuild(mesh,true);
+        // A changed index/range/count can require a larger native allocation.
+        // Preserve graph identities, never reuse an AS sized for old geometry.
+        for(const auto& mesh:changed.reshapedMeshes)rebuild(mesh,false);
         commands->commitBarriers();
         // Bounds changed even when BLAS addresses did not. Reuse the original
         // table refresh/UpdateTLAS, not CreateTlas's new TLAS and sub-instance pair.
         m_tlasInstanceDataDirty=true;
     }
-    bool RefreshRetainedDirectStructures() {
+    bool RefreshRetainedDirectStructures(const Resources::Changes& changed) {
         RtrDiagnostics::Scope structureScope(RtrDiagnostics::Acceleration);
         if(!lighting.active||m_ommBaker||!m_blasPool||m_scene->GetSceneGraph()->GetMeshInstances().empty())return false;
-        for(const auto& mesh:m_scene->GetSceneGraph()->GetMeshes())
+        for(const auto& mesh:changed.buildMeshes)
             if(!mesh->isSkinPrototype&&bvh::IsSkinnedMesh(*mesh))return false;
         if(!m_structureCommands){
             m_structureCommands=GetDevice()->createCommandList();
@@ -709,7 +715,7 @@ private:
             ++m_commandWork[2];
         }else ++m_commandWork[3];
         auto commands=m_structureCommands;commands->open();
-        for(const auto& mesh:m_scene->GetSceneGraph()->GetMeshes()){
+        for(const auto& mesh:changed.buildMeshes){
             if(mesh->isSkinPrototype||mesh->accelStruct)continue;
             auto description=bvh::GetMeshBlasDesc(
                 bvh::Config{.excludeTransmissive=m_ui.AS.ExcludeTransmissive},*mesh,nullptr,false);
@@ -724,7 +730,18 @@ private:
             mesh->accelStruct=std::move(structure);
         }
         InvalidateBindingSet();m_bindingCache->Clear();
-        {RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasAllocate);CreateTlas(commands);}
+        const auto& instances=m_scene->GetSceneGraph()->GetMeshInstances();
+        size_t subInstances=0;
+        for(const auto& instance:instances)subInstances+=instance->GetMesh()->geometries.size();
+        // A graph content replacement can keep both native table dimensions.
+        // Rebuild current TLAS contents below, but retain the original exact-
+        // capacity allocation and sub-instance buffer when neither size changed.
+        // No custom spare capacity, pool, growth policy or index table is added.
+        const bool sameLayout=m_topLevelAS&&m_subInstanceBuffer
+            &&m_topLevelAS->getDesc().topLevelMaxInstances==instances.size()
+            &&m_subInstanceData.size()==subInstances;
+        if(!sameLayout){RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasAllocate);CreateTlas(commands);}
+        else std::fill(m_subInstanceData.begin(),m_subInstanceData.end(),SubInstanceData::Default());
         m_tlasInstanceDataDirty=true;
         commands->close();
         const auto submitted=GetDevice()->executeCommandList(commands);

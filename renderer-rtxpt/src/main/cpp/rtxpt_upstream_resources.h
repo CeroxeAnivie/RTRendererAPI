@@ -97,8 +97,11 @@ public:
         std::vector<std::shared_ptr<donut::engine::BufferGroup>> retiredBuffers;
         std::vector<nvrhi::rt::AccelStructHandle> retiredStructures;
         std::vector<std::shared_ptr<donut::engine::MeshInfo>> deformedMeshes;
+        std::vector<std::shared_ptr<donut::engine::MeshInfo>> reshapedMeshes;
+        std::vector<std::shared_ptr<donut::engine::MeshInfo>> buildMeshes;
         std::vector<std::shared_ptr<donut::engine::LoadedTexture>> retiredTextures;
         bool existingMaterialsChanged = false;
+        bool materialDomainsChanged = false;
         bool coverageChanged = false;
         bool requiresCoverageRebuild = false;
         std::vector<std::string> retiredInstances;
@@ -203,10 +206,28 @@ public:
     // through the original, public PTMaterial data and its dirty contract.
     void ConfigureMaterials(bool sceneReloaded = false) {
         auto configure = [&](const std::string& name, MaterialEntry& entry) {
+            RtrDiagnostics::Scope materialRow(RtrDiagnostics::SceneMaterialRows,1,0,1,0,
+                RtrDiagnostics::Identity(name),0,RtrDiagnostics::Material);
             auto material = std::dynamic_pointer_cast<MaterialEx>(entry.material);
             if (!material || !material->PTMaterial)
                 throw std::runtime_error("Original material bake has not completed: " + name);
             auto& target = *material->PTMaterial;
+            // These are authored API parameters, mapped to the public native
+            // data model. The baker keeps its GPUDataIndex/permutation and
+            // performs FillData/upload on GPUDataDirty in its ordinary Update.
+            // ImportFromDonut is private and is deliberately not copied here.
+            target.BaseOrDiffuseColor=material->baseOrDiffuseColor;
+            target.EmissiveColor=material->emissiveColor;
+            target.Opacity=material->opacity;
+            target.Roughness=material->roughness;
+            target.Metalness=material->metalness;
+            target.TransmissionFactor=material->transmissionFactor;
+            target.AlphaCutoff=material->alphaCutoff;
+            target.EnableAlphaTesting=material->domain==donut::engine::MaterialDomain::AlphaTested
+                ||material->domain==donut::engine::MaterialDomain::TransmissiveAlphaTested;
+            target.EnableTransmission=material->domain==donut::engine::MaterialDomain::Transmissive
+                ||material->domain==donut::engine::MaterialDomain::TransmissiveAlphaBlended
+                ||material->domain==donut::engine::MaterialDomain::TransmissiveAlphaTested;
             target.IoR = entry.ior;
             // Public upstream material controls (Docs/Design.md, Path Decomposition).
             // Preserve its opt-out default; consumers explicitly select optical layers.
@@ -219,6 +240,10 @@ public:
                     std::exp(-entry.absorption.z));
                 target.VolumeAttenuationDistance = 1.f;
                 target.NestedPriority = entry.priority;
+            } else {
+                target.VolumeAttenuationColor=donut::math::float3(1.f);
+                target.VolumeAttenuationDistance=std::numeric_limits<float>::max();
+                target.NestedPriority=PTMaterial::kMaterialMaxNestedPriority;
             }
             target.GPUDataDirty = true;
         };
@@ -295,15 +320,26 @@ public:
         for(auto i=packet.materials.begin();i!=packet.materials.end();)
             if(auto old=m_materials.find(i->first);old!=m_materials.end()&&SameMaterial(old->second,i->second))i=packet.materials.erase(i);
             else ++i;
-        std::unordered_set<std::string> attributeMeshes,deformedMeshes;
+        bool requiresMaterialLifecycle=false;
+        for(const auto& [name,entry]:packet.materials) {
+            const auto previous=m_materials.find(name);
+            requiresMaterialLifecycle|=previous==m_materials.end()
+                ||previous->second.material->domain!=entry.material->domain;
+        }
+        std::unordered_set<std::string> attributeMeshes,deformedMeshes,reshapedMeshes;
         // Position changes are not graph topology changes when indices, groups,
         // materials and vertex layouts stay identical. The external direct path
         // can rebuild this one native BLAS without replacing its MeshInfo/leaf.
-        const bool allowDeformation=m_externalTextureSampling&&packet.materials.empty()&&packet.coverage.empty();
+        const bool allowDeformation=m_externalTextureSampling&&!requiresMaterialLifecycle&&packet.coverage.empty();
         for(const auto& [name,mesh]:packet.meshes) {
             if(CanUpdateAttributes(name,*mesh))attributeMeshes.insert(name);
             else if(allowDeformation&&CanUpdateAttributes(name,*mesh,true)) {
                 attributeMeshes.insert(name);deformedMeshes.insert(name);
+            } else if(allowDeformation&&CanRetainGeometryLayout(name,*mesh)) {
+                // Geometry contents/counts are BLAS inputs, not scene-graph
+                // identities. Keep the registered mesh/geometry slots when
+                // their material layout has not changed; rebuild this BLAS.
+                attributeMeshes.insert(name);reshapedMeshes.insert(name);
             }
         }
         Changes changes;
@@ -333,7 +369,7 @@ public:
         }
         // The sample's TLAS holds device addresses, not leases on removed pooled
         // BLASes. Retire previous GPU readers before graph edits can free them.
-        if(structural&&beforeStructural)beforeStructural(!changes.materials&&!changes.requiresCoverageRebuild);
+        if(structural&&beforeStructural)beforeStructural(!requiresMaterialLifecycle&&!changes.requiresCoverageRebuild);
 
         if (!packet.textures.empty() && (!m_textureDevice||!m_textureDescriptors))
             throw std::logic_error("Inject native texture resources before importing textures");
@@ -367,7 +403,9 @@ public:
             auto old = m_materials.find(name);
             if (old != m_materials.end()) {
                 changes.existingMaterialsChanged = true;
-                changes.topology |= old->second.material->domain != entry.material->domain;
+                const bool domainChanged=old->second.material->domain!=entry.material->domain;
+                changes.materialDomainsChanged|=domainChanged;
+                changes.topology|=domainChanged;
                 const auto constants = old->second.material->materialConstants;
                 const auto materialID = old->second.material->materialID;
                 UnlinkMaterialTextures(name, old->second);
@@ -390,6 +428,7 @@ public:
         for (auto& [name, entry] : packet.materials) {
             LinkMaterialTextures(name, entry);
             m_pendingMaterials.insert(name);
+            m_pendingTextureMaterials.insert(name);
             m_materials.insert_or_assign(name, std::move(entry));
         }
         for (auto& [id, texture] : packet.textures) {
@@ -411,18 +450,37 @@ public:
         std::vector<std::shared_ptr<Mesh>> attributeUpdates;
         for (auto& [name, mesh] : packet.meshes) {
             if(attributeMeshes.contains(name)){
+                RtrDiagnostics::Scope retainedMesh(RtrDiagnostics::SceneMeshPreparation,1,0,1,0,
+                    RtrDiagnostics::Identity(name),0,reshapedMeshes.contains(name)?RtrDiagnostics::Topology
+                        :(deformedMeshes.contains(name)?RtrDiagnostics::Deformation:RtrDiagnostics::Attributes));
                 // Original Scene buffers have permanent read states and cannot
                 // be rewritten as CopyDest. Ask its uploader for the new buffer;
                 // unchanged positions retain the BLAS, while stable-topology
                 // deformation requests a native rebuild of only this mesh.
                 auto& resident=*m_meshes.at(name);
                 changes.retiredBuffers.push_back(resident.buffers);
-                if(deformedMeshes.contains(name)) {
-                    m_meshSources.at(name).positions=mesh->buffers->positionData;
+                if(deformedMeshes.contains(name)||reshapedMeshes.contains(name)) {
+                    auto& source=m_meshSources.at(name);
+                    source.positions=mesh->buffers->positionData;
+                    if(reshapedMeshes.contains(name))source.indices=mesh->buffers->indexData;
                     resident.objectSpaceBounds=mesh->objectSpaceBounds;
-                    for(size_t i=0;i<resident.geometries.size();++i)
+                    resident.totalVertices=mesh->totalVertices;
+                    resident.totalIndices=mesh->totalIndices;
+                    resident.vertexOffset=mesh->vertexOffset;
+                    resident.indexOffset=mesh->indexOffset;
+                    for(size_t i=0;i<resident.geometries.size();++i) {
                         resident.geometries[i]->objectSpaceBounds=mesh->geometries[i]->objectSpaceBounds;
-                    changes.deformedMeshes.push_back(m_meshes.at(name));
+                        if(reshapedMeshes.contains(name)) {
+                            // globalGeometryIndex and the native material owner
+                            // remain registered; only authored ranges change.
+                            auto& target=*resident.geometries[i];const auto& input=*mesh->geometries[i];
+                            target.indexOffsetInMesh=input.indexOffsetInMesh;
+                            target.vertexOffsetInMesh=input.vertexOffsetInMesh;
+                            target.numIndices=input.numIndices;target.numVertices=input.numVertices;
+                        }
+                    }
+                    if(reshapedMeshes.contains(name))changes.reshapedMeshes.push_back(m_meshes.at(name));
+                    else changes.deformedMeshes.push_back(m_meshes.at(name));
                     // A public no-value transform edit marks the new leaf bounds
                     // dirty without unregistering/reordering any scene resource.
                     // Consume it only in the normal Render refresh, preserving
@@ -431,6 +489,7 @@ public:
                         for(const auto& instance:users->second)
                             m_nodes.at(instance).node->SetTransform(nullptr,nullptr,nullptr);
                 }
+                mesh->buffers->instanceBuffer=resident.buffers->instanceBuffer;
                 resident.buffers=std::move(mesh->buffers);
                 attributeUpdates.push_back(m_meshes.at(name));
                 continue;
@@ -469,7 +528,7 @@ public:
             for (const auto& name : users->second)
                 m_nodes.at(name).node->SetLeaf(m_factory.CreateMeshInstance(m_meshes.at(meshName)));
         }
-        if (changes.materials || changes.requiresCoverageRebuild) graph->GetRootNode()->InvalidateContent();
+        if (requiresMaterialLifecycle || changes.requiresCoverageRebuild) graph->GetRootNode()->InvalidateContent();
         for (const auto& input : packet.nodes) {
             auto old = m_nodes.find(input.name);
             const bool created=old==m_nodes.end();
@@ -521,6 +580,13 @@ public:
             m_pendingMaterials.erase(name);
         }
         m_graph = graph;
+        // The native uploader/builders still own GPU resources. Hand them only
+        // actual incoming/replaced meshes, not a repeated resident-scene scan.
+        for(const auto& [name,mesh]:packet.meshes)
+            if(!attributeMeshes.contains(name)) {
+                const auto resident=m_meshes.find(name);
+                if(resident!=m_meshes.end())changes.buildMeshes.push_back(resident->second);
+            }
         // Structural/material initialization still needs original buffer allocation
         // before its bakers run. Existing-node poses remain staged until Render.
         // A transform-only packet needs neither this refresh nor a GPU submission.
@@ -529,7 +595,7 @@ public:
         // refreshes that same current frame before MaterialsBaker::Update and our
         // lighting pass; an eager texture-only refresh would scan the scene twice.
         // New structure and material definitions still need immediate preparation.
-        if(changes.topology||changes.materials)
+        if(changes.topology||requiresMaterialLifecycle)
             {RtrDiagnostics::Scope refreshScope(RtrDiagnostics::SceneFullRefresh);scene.Refresh(commands,frameIndex);}
         // A texture/material refresh need not have a structural dirty flag, so the original
         // Scene does not upload replacement attribute buffers or geometry rows.
@@ -613,11 +679,28 @@ private:
             if(x.material->name!=y.material->name||x.indexOffsetInMesh!=y.indexOffsetInMesh||x.numIndices!=y.numIndices
                 ||x.vertexOffsetInMesh!=y.vertexOffsetInMesh||x.numVertices!=y.numVertices)return false;
         }
-        auto sizeMatches=[&](donut::engine::VertexAttribute attribute,size_t bytes){return a.buffers->getVertexBufferRange(attribute).byteSize==bytes;};
+        auto sizeMatches=[&](donut::engine::VertexAttribute attribute,size_t bytes){
+            // Scene::AppendBufferRange stores the native uploader's 16-byte
+            // padded range, not the logical attribute byte count.
+            return a.buffers->getVertexBufferRange(attribute).byteSize==nvrhi::align(bytes,size_t(16));
+        };
         return sizeMatches(donut::engine::VertexAttribute::Position,b.positionData.size()*sizeof(donut::math::float3))
             &&sizeMatches(donut::engine::VertexAttribute::Normal,b.normalData.size()*sizeof(uint32_t))
             &&sizeMatches(donut::engine::VertexAttribute::Tangent,b.tangentData.size()*sizeof(uint32_t))
             &&sizeMatches(donut::engine::VertexAttribute::TexCoord1,b.texcoord1Data.size()*sizeof(donut::math::float2));
+    }
+    bool CanRetainGeometryLayout(const std::string& name,const Mesh& mesh)const{
+        const auto old=m_meshes.find(name);
+        if(old==m_meshes.end()||!old->second->buffers->vertexBuffer)return false;
+        const auto& resident=*old->second;
+        if(resident.type!=mesh.type||resident.geometries.size()!=mesh.geometries.size()
+            ||resident.isSkinPrototype||resident.skinPrototype.use_count()!=0
+            ||mesh.isSkinPrototype||mesh.skinPrototype.use_count()!=0)return false;
+        for(size_t i=0;i<resident.geometries.size();++i) {
+            const auto& previous=*resident.geometries[i];const auto& next=*mesh.geometries[i];
+            if(previous.material->name!=next.material->name||previous.type!=next.type)return false;
+        }
+        return true;
     }
     static bool SameMaterial(const MaterialEntry& a,const MaterialEntry& b){
         const auto& x=*a.material;const auto& y=*b.material;
