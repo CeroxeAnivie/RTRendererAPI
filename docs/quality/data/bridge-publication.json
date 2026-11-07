@@ -1,8 +1,8 @@
 {
   "schema": "bridge-publication-v1",
-  "publishedAtUtc": "2026-11-07T14:31:52.4091470Z",
+  "publishedAtUtc": "2026-11-07T15:25:08.555504+00:00",
   "version": "8.0.0",
-  "sourceCommit": "7c26bc79fa54437a36478c95874cafe395ebcec0",
+  "sourceCommit": "028c95705f3d6709bc60f7ca589f1ff84e7fc2e5",
   "githubBranch": "main",
   "githubConfirmedBeforeMavenLocal": true,
   "mavenLocalCompleted": true,
@@ -10,60 +10,63 @@
   "modules": {
     "renderer-api": {
       "renderer-api-8.0.0.jar": {
-        "bytes": 288718,
-        "sha256": "8f7a6c06ccaa3d08c3e7c70eb44fe72ffc84564d25f10202f5ddf1a06541a62c"
+        "sha256": "8f7a6c06ccaa3d08c3e7c70eb44fe72ffc84564d25f10202f5ddf1a06541a62c",
+        "bytes": 288718
       },
       "renderer-api-8.0.0-sources.jar": {
-        "bytes": 147703,
-        "sha256": "76929910127c57de4bfc21bb8c7b4fc6d414f2ec759d84de39b4db049a9d7678"
+        "sha256": "76929910127c57de4bfc21bb8c7b4fc6d414f2ec759d84de39b4db049a9d7678",
+        "bytes": 147703
       },
       "renderer-api-8.0.0-javadoc.jar": {
-        "bytes": 4962746,
-        "sha256": "b7fc6e40dc82505b3a6e8ea8e422058ed088a3fd5480c31498c1270f0a7fff44"
+        "sha256": "b7fc6e40dc82505b3a6e8ea8e422058ed088a3fd5480c31498c1270f0a7fff44",
+        "bytes": 4962746
       },
       "renderer-api-8.0.0.pom": {
-        "bytes": 1537,
-        "sha256": "f37389dc120b0514837041dbd8ad55a1b64640cf5d56ca3a80dc785bc3d3c3a7"
+        "sha256": "f37389dc120b0514837041dbd8ad55a1b64640cf5d56ca3a80dc785bc3d3c3a7",
+        "bytes": 1537
       },
       "renderer-api-8.0.0.module": {
-        "bytes": 3486,
-        "sha256": "b316249ed415272a8d40ae2986f3cc4a8065f28675f1862d0215288b97d158d4"
+        "sha256": "b316249ed415272a8d40ae2986f3cc4a8065f28675f1862d0215288b97d158d4",
+        "bytes": 3486
       }
     },
     "renderer-rtxpt": {
       "renderer-rtxpt-8.0.0.jar": {
-        "bytes": 3959038776,
-        "sha256": "9f607fe5e4df80019c760701b38f55ee3a559f88e74b6bc76ff4de136862845f"
+        "sha256": "42aee5e2a55b71e1ad59e81c78ea6a009a1bdb62a7008cd8f210ac8422175188",
+        "bytes": 3959112706
       },
       "renderer-rtxpt-8.0.0-sources.jar": {
-        "bytes": 46782,
-        "sha256": "62c83900ca63f0f3b2c69d235ecdd16d95a069e5de0e0ec029784425235c8774"
+        "sha256": "f36d9a9a5b8f8eda1cbd8e661650dac1c468bc3c4db1160c7c10b1b06282061e",
+        "bytes": 47360
       },
       "renderer-rtxpt-8.0.0-javadoc.jar": {
-        "bytes": 4224623,
-        "sha256": "b5e42cad25ce5ea972e721d1ef389777974ec4ab95cd0ca036341f93d56e4661"
+        "sha256": "b5e42cad25ce5ea972e721d1ef389777974ec4ab95cd0ca036341f93d56e4661",
+        "bytes": 4224623
       },
       "renderer-rtxpt-8.0.0.pom": {
-        "bytes": 1788,
-        "sha256": "2da145de0583bae21f6da3d6aaae5021c6d804a1eaffadec55ac06978d9cc728"
+        "sha256": "2da145de0583bae21f6da3d6aaae5021c6d804a1eaffadec55ac06978d9cc728",
+        "bytes": 1788
       },
       "renderer-rtxpt-8.0.0.module": {
-        "bytes": 3895,
-        "sha256": "05dfd6fa9be17491c2b1cdf254e83c1c3fddd59fd75d8e83aa878525f373b136"
+        "sha256": "5c9a8d210b54935cb6658864f29600adcd941534ae4badd69191ed6aee4ff530",
+        "bytes": 3895
       }
     }
   },
-  "nativeDllSha256": "40aef07aa801cc5647455ff1e339f2d34fe286ccdca0b786034ac6ae757b7962",
-  "nativeRuntimeZipSha256": "42300d206ec7943005c9c4b3a6459e8e59708b1725675f1a2ac6aa3252c6b683",
+  "nativeDllSha256": "092cd812dba7e358278c701228630627f8b611ccd04cf46b2c5af9366c87d4d4",
+  "nativeRuntimeZipSha256": "fd2d09dde3f02c13a0e7b466afe5e4fe54bbc6b18ac5010395826fd61a91b6f4",
+  "nativeSha256": "092cd812dba7e358278c701228630627f8b611ccd04cf46b2c5af9366c87d4d4",
+  "runtimeSha256": "fd2d09dde3f02c13a0e7b466afe5e4fe54bbc6b18ac5010395826fd61a91b6f4",
   "checks": [
     "ten-published-artifacts-match-build",
     "verifyMajorReleaseContract-passed",
     "verifyPublishedMavenTopology-passed",
-    "native-dll-equals-stable-deformation-tested-dll"
+    "packaged-native-dll-equals-final-streaming-tested-dll",
+    "46-frame-bridge-contract-passed",
+    "11-frame-mixed-deformation-contract-passed",
+    "20-frame-material-mutation-contract-passed"
   ],
-  "consumerRuntimeStarted": true,
-  "consumerRuntimeRunTag": "native-memory-repaired-20261107-223015-run",
-  "performanceTarget180Passed": false,
-  "nativeSha256": "40aef07aa801cc5647455ff1e339f2d34fe286ccdca0b786034ac6ae757b7962",
-  "runtimeSha256": "42300d206ec7943005c9c4b3a6459e8e59708b1725675f1a2ac6aa3252c6b683"
+  "consumerRuntimeStarted": false,
+  "consumerRuntimeRunTag": null,
+  "performanceTarget180Passed": false
 }

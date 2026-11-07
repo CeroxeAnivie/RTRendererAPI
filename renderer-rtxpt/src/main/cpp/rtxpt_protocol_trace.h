@@ -22,7 +22,8 @@ inline void Reset(){std::lock_guard lock(mutex);++token;written=0;enabled.store(
 inline uint64_t Token(){std::lock_guard lock(mutex);return token;}
 inline void Record(uint64_t kind,uint64_t adapter,uint64_t queue,uint64_t slot,uint64_t generation,
         uint64_t sequence,uint64_t revision,uint64_t ready,uint64_t done,uint64_t observed,uint64_t flags,uint64_t error=0){
-    if(!error&&!enabled.load(std::memory_order_relaxed))return;
+    if(!error&&(!enabled.load(std::memory_order_relaxed)
+        ||RtrDiagnostics::level.load(std::memory_order_relaxed)==0))return;
     std::lock_guard lock(mutex);auto& row=records[written%records.size()];
     row={++written,kind,adapter,queue,slot,generation,sequence,revision,ready,done,observed,flags,error,
         GetTickCount64(),GetCurrentThreadId(),RtrDiagnostics::level.load(std::memory_order_relaxed)};

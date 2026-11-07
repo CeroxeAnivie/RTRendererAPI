@@ -20,6 +20,9 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private final RtxptDiagnostics.Recorder recorder=new RtxptDiagnostics.Recorder();
     private final RtxptMemoryResources.PacketPool resourcePackets=new RtxptMemoryResources.PacketPool();
     private final Map<Long,TextureAsset> memoryTextures=new HashMap<>();
+    // Only semantic variant declarations, not GPU ownership or a second scene.
+    // A temporary lack of geometry users does not delete a MaterialAsset.
+    private final Map<Long,Map<String,RtxptScene.Variant>> memoryMaterialVariants=new HashMap<>();
     private RtxptScene scene=new RtxptScene(),residentScene=new RtxptScene();
     private List<RtxptScene.Item> previous=List.of();
     private long handle,revision,submitted=-1,completed=-1;
@@ -105,16 +108,22 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         ready();Objects.requireNonNull(frame);
         if(handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingCanPublish(handle))
             return new FrameSubmissionDeferred(SubmissionDeferralReason.FRAME_RING_FULL,"Return lighting leases before submitting another frame");
-        return new FrameSubmitted(submit(frame));
+        return new FrameSubmitted(submit(frame,true));
     }
     @Override public FrameSubmissionResult submit(RenderFrameRequest frame){
+        return submit(frame,false);
+    }
+    private FrameSubmissionResult submit(RenderFrameRequest frame,boolean admitted){
         ready();Objects.requireNonNull(frame);long begin=recorder.clock();
         RtxptInputContract.validateFrame(frame,nativeLightingPlan!=null);
         if(frame.sequence()<=submitted||frame.minimumSceneRevision()>revision)throw new IllegalArgumentException("Frame sequence or resident revision mismatch");
         if(frame.width()>16384||frame.height()>16384)throw new IllegalArgumentException("Output extent exceeds the D3D12 limit");
         if(nativeLightingPlan!=null&&nativeLightingPlan.style().additionMode()==NativeLightingStyle.AdditionMode.HOST_RESPONSE_RATIO_V1&&lightingHostResponse==null)
             throw new IllegalStateException("Publish the host response before HOST_RESPONSE_RATIO_V1");
-        if(handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingCanPublish(handle))throw new IllegalStateException("Lighting output ring is full");
+        // trySubmit already checked this renderer-thread admission. No other
+        // frame can be submitted between that check and this call; lease
+        // returns can only make additional slots available.
+        if(!admitted&&handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingCanPublish(handle))throw new IllegalStateException("Lighting output ring is full");
         recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.VALIDATION,begin,0,0,false);
         // Independent lighting owns its requested grid and exact projection.
         // The sample's unused presentation targets need that grid, not another
@@ -147,8 +156,8 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             boolean resourcesChanged=nativeScene==null&&(reset||!scene.meshes.sameSnapshot(before.meshes)||!scene.materials.sameSnapshot(before.materials)||!scene.textures.sameSnapshot(before.textures)||!RtxptScene.sameItems(items,previous));
             if(resourcesChanged){
                 begin=recorder.clock();
-                if(reset)memoryTextures.clear();
-                var delta=RtxptDelta.prepare(before,scene,reset?List.of():previous,items,memoryTextures,resourcePackets);
+                if(reset){memoryTextures.clear();memoryMaterialVariants.clear();}
+                var delta=RtxptDelta.prepare(before,scene,reset?List.of():previous,items,memoryTextures,memoryMaterialVariants,resourcePackets);
                 recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.TRANSLATION,begin,delta.work().itemReads(),delta.memory()==null?0:delta.memory().remaining(),false);
                 pendingGeometryVariants=delta.changedVariants();
                 if(delta.hasWork()){
@@ -157,6 +166,8 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
                     finally{recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.RESOURCES,begin,delta.meshes(),bytes,failed);}
                     for(var entry:delta.translated().textures.entrySet())memoryTextures.put(entry.getKey(),entry.getValue());
                     scene.textures.forEachChanged(before.textures,(id,value)->{if(value==null)memoryTextures.remove(id);});
+                    scene.materials.forEachChanged(before.materials,(id,value)->{if(value==null)memoryMaterialVariants.remove(id);});
+                    for(var variant:delta.materialVariants())memoryMaterialVariants.computeIfAbsent(variant.material(),id->new LinkedHashMap<>()).put(variant.name(),variant);
                 }
                 if(reset)resourcePackets.clear();
             }
@@ -383,7 +394,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         if(closed)return;ready();
         if(handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingConsumersRetired(handle))throw new IllegalStateException("Complete imported lighting consumers before closing");
         if(handle!=0)RtxptNative.close(handle);
-        handle=0;closed=true;recorder.close();scene=new RtxptScene();residentScene=new RtxptScene();previous=List.of();memoryTextures.clear();resourcePackets.close();
+        handle=0;closed=true;recorder.close();scene=new RtxptScene();residentScene=new RtxptScene();previous=List.of();memoryTextures.clear();memoryMaterialVariants.clear();resourcePackets.close();
         attributeGroups.clear();lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingGeometryVariants=List.of();
         pendingBaselineLookup=null;lightingBaselineLookup=null;lightingHostResponse=null;applicationData.clear();
     }

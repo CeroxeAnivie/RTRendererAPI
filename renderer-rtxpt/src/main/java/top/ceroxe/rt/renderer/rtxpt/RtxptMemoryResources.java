@@ -70,6 +70,11 @@ final class RtxptMemoryResources {
     static ByteBuffer pack(RtxptScene old,RtxptScene scene,Collection<RtxptScene.Item> meshes,
             Collection<RtxptScene.Variant> materials,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,
             Map<Long,TextureAsset> resident,PacketPool pool){
+        return pack(old,scene,meshes,materials,nodes,removals,coverage,resident,pool,List.of());
+    }
+    static ByteBuffer pack(RtxptScene old,RtxptScene scene,Collection<RtxptScene.Item> meshes,
+            Collection<RtxptScene.Variant> materials,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,
+            Map<Long,TextureAsset> resident,PacketPool pool,List<String> removedMaterials){
         var textures=new LinkedHashMap<Long,TextureAsset>();
         for(var variant:materials){var material=scene.materials.get(variant.material());
             for(long id:new long[]{material.baseColorTextureId(),material.normalTextureId(),material.metallicRoughnessTextureId(),material.emissiveTextureId()})
@@ -77,13 +82,13 @@ final class RtxptMemoryResources {
         var geometry=new ArrayList<Geometry>();
         for(var item:meshes){var mesh=scene.meshes.get(item.mesh());geometry.add(new Geometry(item,RtxptScene.ExportGeometry.from(mesh),scene.attributeGroups(mesh)));}
         var removedTextures=new ArrayList<Long>();scene.textures.forEachChanged(old.textures,(id,value)->{if(value==null)removedTextures.add(id);});
-        var size=new Writer(null);write(size,textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,resident);
+        var size=new Writer(null);write(size,textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,removedMaterials,resident);
         if(size.offset>512L*1024*1024)throw new IllegalArgumentException("Dynamic resource packet exceeds 512 MiB staging capacity; split the transaction");
         var packet=pool.acquire(Math.toIntExact(size.offset));
-        write(new Writer(packet),textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,resident);pool.packed();return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        write(new Writer(packet),textures,materials,geometry,nodes,removals,coverage,scene,removedTextures,removedMaterials,resident);pool.packed();return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static void write(Writer w,Map<Long,TextureAsset> textures,Collection<RtxptScene.Variant> materials,
-            List<Geometry> meshes,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,RtxptScene scene,List<Long> removedTextures,Map<Long,TextureAsset> resident){
+            List<Geometry> meshes,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,RtxptScene scene,List<Long> removedTextures,List<String> removedMaterials,Map<Long,TextureAsset> resident){
         w.i(0x52445257);w.i(textures.size());
         for(var t:textures.values()){w.l(t.id());w.i(t.width());w.i(t.height());w.i(t.mipLevelCount());w.i(t.colorSpace().ordinal());
             w.i(t.addressU().ordinal());w.i(t.addressV().ordinal());w.i(t.filter().ordinal());w.l(t.generation());
@@ -107,6 +112,7 @@ final class RtxptMemoryResources {
         w.i(nodes.size());for(var node:nodes){w.s(node.name());w.s(RtxptScene.meshName(node));w.floats(node.transform().elements());}
         w.i(coverage.size());for(var name:coverage)w.s(name);
         w.i(removedTextures.size());for(long id:removedTextures)w.l(id);
+        w.i(removedMaterials.size());for(var name:removedMaterials)w.s(name);
     }
     private static final class Writer {
         final ByteBuffer data;long offset;

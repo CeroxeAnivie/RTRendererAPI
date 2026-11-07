@@ -44,13 +44,242 @@ public:
 class ManagedScene final : public ExtendedScene {
 public:
     using ExtendedScene::ExtendedScene;
+    // The original complete renderer can refresh Scene directly. Its host hook
+    // calls this after that refresh, so a later A->B->A edit cannot compare
+    // against a journal older than the native CPU/GPU table publication.
+    void SyncNativeRowsAfterCompleteRefresh(){if(FitsNativeTables())RememberNativeRows();else m_tableJournalReady=false;}
     void RefreshAttributes(nvrhi::ICommandList* commands,
         const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
-        SceneBufferUpload::Run(*this,commands);
-        for(const auto& mesh:meshes)UpdateGeometry(mesh);
-        WriteGeometryBuffer(commands);
+        UploadMeshes(commands,meshes);
+        {RtrDiagnostics::Scope rows(RtrDiagnostics::SceneGeometryRows,meshes.size());
+            for(const auto& mesh:meshes){UpdateGeometry(mesh);RememberGeometry(mesh);}}
+        {RtrDiagnostics::Scope upload(RtrDiagnostics::SceneTableUpload,1);WriteGeometryBuffer(commands);}
+    }
+    void RefreshTopology(nvrhi::ICommandList* commands,uint32_t frameIndex,
+        const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& pendingMeshes){
+        {RtrDiagnostics::Scope graphScope(RtrDiagnostics::SceneGraphRefresh);RefreshSceneGraph(frameIndex);}
+        // Native RefreshBuffers remains the CPU-array allocation authority. Its
+        // factories allocate matching native CPU/GPU capacities in 1024 rows.
+        // Reuse only proven existing capacity; never mirror/resize Resources.
+        if(!m_tableJournalReady||!FitsNativeTables()||!GetSceneGraph()->GetSkinnedMeshInstances().empty()) {
+            RtrDiagnostics::Scope fallback(RtrDiagnostics::SceneTopologyFallback,pendingMeshes.size(),GetSceneGraph()->GetMeshes().size());
+            fallback.event[11]|=RtrDiagnostics::CacheMiss;
+            fallback.event[20]=!m_tableJournalReady?RtrDiagnostics::Inflow:
+                (!GetSceneGraph()->GetSkinnedMeshInstances().empty()?RtrDiagnostics::BuildFlags:RtrDiagnostics::CapacityGrowth);
+            {RtrDiagnostics::Scope full(RtrDiagnostics::SceneFullRefresh);RefreshBuffers(commands,frameIndex);}
+            RememberNativeRows();return;
+        }
+        UploadMeshes(commands,pendingMeshes);
+        RefreshMaterialRows(commands);
+        bool geometryChanged=false;uint64_t written=0,examined=0;
+        {RtrDiagnostics::Scope rows(RtrDiagnostics::SceneGeometryRows);
+            m_geometryJournal.resize(GetSceneGraph()->GetGeometryCount());
+            for(const auto& mesh:GetSceneGraph()->GetMeshes()) {
+                mesh->buffers->instanceBuffer=m_InstanceBuffer;
+                bool changed=false;
+                for(const auto& geometry:mesh->geometries) {
+                    ++examined;const auto& old=m_geometryJournal.at(geometry->globalGeometryIndex);
+                    changed|=!SameOwner(old.owner,geometry)||!SameOwner(old.buffers,mesh->buffers)
+                        ||old.material!=(geometry->material?geometry->material->materialID:-1)
+                        ||old.authoredRanges!=GeometryRanges(*mesh,*geometry);
+                }
+                if(changed){UpdateGeometry(mesh);RememberGeometry(mesh);written+=mesh->geometries.size();geometryChanged=true;}
+            }
+            rows.event[8]=written;rows.event[9]=examined;rows.event[11]|=RtrDiagnostics::CacheHit;
+        }
+        if(geometryChanged){RtrDiagnostics::Scope upload(RtrDiagnostics::SceneTableUpload,1);WriteGeometryBuffer(commands);}
+        RefreshInstanceRows(commands);
+    }
+    bool RefreshPreparedTransforms(nvrhi::ICommandList* commands,uint32_t frameIndex){
+        const auto graph=GetSceneGraph();
+        if(!m_tableJournalReady||graph->HasPendingStructureChanges()||!graph->GetSkinnedMeshInstances().empty()||!FitsNativeTables()
+            ||m_instanceJournal.size()!=graph->GetMeshInstances().size()
+            ||m_materialJournal.size()!=graph->GetMaterials().size()
+            ||m_geometryJournal.size()!=graph->GetGeometryCount())return false;
+        // Capture the native dirty state before Refresh consumes it. Its public
+        // contract includes previous-pose convergence on the following frame.
+        const bool transformsPending=graph->HasPendingTransformChanges();
+        {RtrDiagnostics::Scope graphScope(RtrDiagnostics::SceneGraphRefresh);RefreshSceneGraph(frameIndex);}
+        // Native animation can dirty materials independently of resource input.
+        RefreshMaterialRows(commands);RefreshInstanceRows(commands,transformsPending);return true;
     }
 private:
+    template<class T>static bool SameOwner(const std::weak_ptr<T>& previous,const std::shared_ptr<T>& current){
+        return !previous.owner_before(current)&&!current.owner_before(previous);
+    }
+    struct GeometryJournal {
+        std::weak_ptr<donut::engine::MeshGeometry> owner;
+        std::weak_ptr<donut::engine::BufferGroup> buffers;
+        int material=-1;
+        std::array<uint32_t,6> authoredRanges{};
+    };
+    struct InstanceJournal {
+        std::weak_ptr<donut::engine::MeshInstance> owner;
+        std::array<float,24> pose{};
+        std::array<uint32_t,4> geometry{};
+    };
+    std::vector<GeometryJournal> m_geometryJournal;
+    std::vector<std::weak_ptr<donut::engine::Material>> m_materialJournal;
+    std::vector<InstanceJournal> m_instanceJournal;
+    bool m_tableJournalReady=false;
+    static std::array<uint32_t,6> GeometryRanges(const donut::engine::MeshInfo& mesh,
+        const donut::engine::MeshGeometry& geometry){
+        // Input metadata only; native UpdateGeometry still owns all GPU packing.
+        return {mesh.indexOffset,mesh.vertexOffset,geometry.indexOffsetInMesh,
+            geometry.vertexOffsetInMesh,geometry.numIndices,geometry.numVertices};
+    }
+    bool FitsNativeTables()const {
+        const auto fits=[](const nvrhi::BufferHandle& buffer,size_t count,size_t stride){return !count||(buffer&&buffer->getDesc().byteSize/stride>=count);};
+        return m_EnableBindlessResources&&fits(m_GeometryBuffer,GetSceneGraph()->GetGeometryCount(),sizeof(GeometryData))
+            &&fits(m_MaterialBuffer,GetSceneGraph()->GetMaterials().size(),sizeof(MaterialConstants))
+            &&fits(m_InstanceBuffer,GetSceneGraph()->GetMeshInstances().size(),sizeof(InstanceData));
+    }
+    void RememberGeometry(const std::shared_ptr<donut::engine::MeshInfo>& mesh){
+        for(const auto& geometry:mesh->geometries) {
+            const size_t index=geometry->globalGeometryIndex;
+            if(m_geometryJournal.size()<=index)m_geometryJournal.resize(index+1);
+            m_geometryJournal[index]={geometry,mesh->buffers,geometry->material?geometry->material->materialID:-1,GeometryRanges(*mesh,*geometry)};
+        }
+    }
+    static InstanceJournal InstanceRow(const std::shared_ptr<donut::engine::MeshInstance>& instance) {
+        InstanceJournal result;result.owner=instance;
+        const auto* node=instance->GetNode();
+        const auto& current=node->GetLocalToWorldTransformFloat();const auto& previous=node->GetPrevLocalToWorldTransformFloat();
+        for(unsigned r=0;r<3;++r){
+            for(unsigned c=0;c<3;++c){result.pose[r*4+c]=current.m_linear[c][r];result.pose[12+r*4+c]=previous.m_linear[c][r];}
+            result.pose[r*4+3]=current.m_translation[r];result.pose[12+r*4+3]=previous.m_translation[r];
+        }
+        const auto& mesh=instance->GetMesh();
+        result.geometry={uint32_t(instance->GetGeometryInstanceIndex()),uint32_t(mesh->geometries.size()),
+            mesh->geometries.empty()?~0u:uint32_t(mesh->geometries.front()->globalGeometryIndex),uint32_t(mesh->type)};
+        return result;
+    }
+    void RememberNativeRows(){
+        m_geometryJournal.resize(GetSceneGraph()->GetGeometryCount());
+        for(const auto& mesh:GetSceneGraph()->GetMeshes())RememberGeometry(mesh);
+        m_materialJournal.resize(GetSceneGraph()->GetMaterials().size());
+        for(const auto& material:GetSceneGraph()->GetMaterials())m_materialJournal.at(material->materialID)=material;
+        m_instanceJournal.resize(GetSceneGraph()->GetMeshInstances().size());
+        for(const auto& instance:GetSceneGraph()->GetMeshInstances())m_instanceJournal.at(instance->GetInstanceIndex())=InstanceRow(instance);
+        m_tableJournalReady=true;
+    }
+    void RefreshMaterialRows(nvrhi::ICommandList* commands){
+        bool changed=false;uint64_t written=0;
+        RtrDiagnostics::Scope rows(RtrDiagnostics::SceneMaterialRows);
+        m_materialJournal.resize(GetSceneGraph()->GetMaterials().size());
+        for(const auto& material:GetSceneGraph()->GetMaterials()) {
+            auto& old=m_materialJournal.at(material->materialID);
+            if(material->dirty||!SameOwner(old,material)){UpdateMaterial(material);old=material;changed=true;++written;}
+            if(!material->materialConstants){material->materialConstants=CreateMaterialConstantBuffer(material->name);material->dirty=true;}
+            if(material->dirty) {
+                // The supported native method is the sole packing authority.
+                MaterialConstants data{};material->FillConstantBuffer(data,m_UseResourceDescriptorHeapBindless);
+                commands->writeBuffer(material->materialConstants,&data,sizeof(data));material->dirty=false;
+            }
+        }
+        rows.event[8]=written;rows.event[9]=GetSceneGraph()->GetMaterials().size();rows.event[11]|=RtrDiagnostics::CacheHit;
+        if(changed){RtrDiagnostics::Scope upload(RtrDiagnostics::SceneTableUpload,1);WriteMaterialBuffer(commands);}
+    }
+    void RefreshInstanceRows(nvrhi::ICommandList* commands,bool transformsPending=true){
+        bool changed=false;uint64_t written=0;
+        RtrDiagnostics::Scope rows(RtrDiagnostics::SceneInstanceRows);
+        rows.event[11]|=RtrDiagnostics::CacheHit;
+        // Keep an explicit zero-work event: no rows examined is distinguishable
+        // from a missing diagnostic sample while every frame remains fresh.
+        if(!transformsPending){rows.event[8]=0;rows.event[9]=0;return;}
+        m_instanceJournal.resize(GetSceneGraph()->GetMeshInstances().size());
+        for(const auto& instance:GetSceneGraph()->GetMeshInstances()) {
+            auto row=InstanceRow(instance);auto& old=m_instanceJournal.at(instance->GetInstanceIndex());
+            if(!SameOwner(old.owner,instance)||old.pose!=row.pose||old.geometry!=row.geometry) {
+                UpdateInstance(instance);old=std::move(row);changed=true;++written;
+            }
+        }
+        rows.event[8]=written;rows.event[9]=GetSceneGraph()->GetMeshInstances().size();
+        if(changed){RtrDiagnostics::Scope upload(RtrDiagnostics::SceneTableUpload,1);WriteInstanceBuffer(commands);}
+    }
+    void UploadMeshes(nvrhi::ICommandList* commands,
+        const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
+        if(meshes.empty())return;
+        // Match GltfImporter's supported shared BufferGroup input, rather than
+        // asking the original uploader for a committed buffer pair per mesh.
+        // Batches are immutable generations, not a second GPU allocator/pool.
+        RtrDiagnostics::Scope preparation(RtrDiagnostics::SceneMeshPreparation,meshes.size());
+        BatchMeshInputs(meshes);
+        // The original virtual uploader accepts a graph, not a mesh range.
+        // Give it new temporary leaves referencing only this transaction's
+        // changed MeshInfo objects. Never refresh this view: native dense IDs,
+        // real leaf ownership and current/previous poses belong to the live graph.
+        auto view=m_SceneTypeFactory->CreateGraph();
+        auto root=std::make_shared<donut::engine::SceneGraphNode>();view->SetRootNode(root);
+        for(const auto& mesh:meshes)view->AttachLeafNode(root,m_SceneTypeFactory->CreateMeshInstance(mesh));
+        struct RestoreGraph {
+            std::shared_ptr<donut::engine::SceneGraph>& target;
+            std::shared_ptr<donut::engine::SceneGraph> original;
+            ~RestoreGraph(){target=std::move(original);}
+        } restore{m_SceneGraph,m_SceneGraph};
+        m_SceneGraph=std::move(view);
+        {RtrDiagnostics::Scope upload(RtrDiagnostics::MeshBufferUpload);
+            if(upload.enabled) {
+                std::unordered_map<donut::engine::BufferGroup*,std::array<bool,2>> pending;
+                for(const auto& mesh:meshes)if(mesh->buffers)
+                    pending.try_emplace(mesh->buffers.get(),std::array<bool,2>{!mesh->buffers->indexBuffer,!mesh->buffers->vertexBuffer});
+                SceneBufferUpload::Run(*this,commands);
+                for(const auto& [buffers,missing]:pending) {
+                    if(missing[0]&&buffers->indexBuffer){++upload.event[8];upload.event[21]+=buffers->indexBuffer->getDesc().byteSize;}
+                    if(missing[1]&&buffers->vertexBuffer){++upload.event[8];upload.event[21]+=buffers->vertexBuffer->getDesc().byteSize;}
+                }
+            }else SceneBufferUpload::Run(*this,commands);
+        }
+        m_SceneGraph=restore.original;
+    }
+    static void BatchMeshInputs(const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
+        using Mesh=donut::engine::MeshInfo;
+        using Buffers=donut::engine::BufferGroup;
+        constexpr size_t byteBudget=1024*1024,maxMeshes=32;
+        std::vector<Mesh*> batch;size_t bytes=0;uint32_t layout=0;
+        auto flush=[&](){
+            if(batch.size()>1) {
+                auto shared=std::make_shared<Buffers>();
+                size_t vertices=0,indices=0;
+                for(const auto* mesh:batch){vertices+=mesh->totalVertices;indices+=mesh->totalIndices;}
+                shared->indexData.reserve(indices);shared->positionData.reserve(vertices);
+                if(layout&1)shared->normalData.reserve(vertices);
+                if(layout&2)shared->tangentData.reserve(vertices);
+                if(layout&4)shared->texcoord1Data.reserve(vertices);
+                if(layout&8)shared->texcoord2Data.reserve(vertices);
+                auto append=[](auto& target,const auto& source){target.insert(target.end(),source.begin(),source.end());};
+                for(auto* mesh:batch) {
+                    const auto source=mesh->buffers;
+                    mesh->vertexOffset=uint32_t(shared->positionData.size());
+                    mesh->indexOffset=uint32_t(shared->indexData.size());
+                    append(shared->indexData,source->indexData);append(shared->positionData,source->positionData);
+                    append(shared->normalData,source->normalData);append(shared->tangentData,source->tangentData);
+                    append(shared->texcoord1Data,source->texcoord1Data);append(shared->texcoord2Data,source->texcoord2Data);
+                    mesh->buffers=shared;
+                }
+            }
+            batch.clear();bytes=0;
+        };
+        for(const auto& mesh:meshes) {
+            const auto& b=mesh->buffers;
+            if(!b||b->indexBuffer||b->vertexBuffer||mesh->vertexOffset||mesh->indexOffset
+                ||mesh->type!=donut::engine::MeshType::Triangles||mesh->isSkinPrototype||mesh->skinPrototype.use_count()
+                ||!b->jointData.empty()||!b->weightData.empty()||!b->radiusData.empty()||!b->morphTargetData.empty()
+                ||b->positionData.size()!=mesh->totalVertices||b->indexData.size()!=mesh->totalIndices)continue;
+            const size_t count=b->positionData.size();
+            const auto aligned=[&](const auto& data){return data.empty()||data.size()==count;};
+            if(!aligned(b->normalData)||!aligned(b->tangentData)||!aligned(b->texcoord1Data)||!aligned(b->texcoord2Data))continue;
+            const uint32_t mask=(!b->normalData.empty()?1u:0u)|(!b->tangentData.empty()?2u:0u)
+                |(!b->texcoord1Data.empty()?4u:0u)|(!b->texcoord2Data.empty()?8u:0u);
+            const size_t size=b->indexData.size()*sizeof(uint32_t)+count*sizeof(donut::math::float3)
+                +(b->normalData.size()+b->tangentData.size())*sizeof(uint32_t)
+                +(b->texcoord1Data.size()+b->texcoord2Data.size())*sizeof(donut::math::float2);
+            if(size>byteBudget){flush();continue;}
+            if(!batch.empty()&&(layout!=mask||batch.size()>=maxMeshes||bytes+size>byteBudget))flush();
+            layout=mask;batch.push_back(mesh.get());bytes+=size;
+        }
+        flush();
+    }
     // Original RefreshBuffers owns CPU capacities, dense indices and uploads.
     // Its factories run only after the corresponding public graph count has
     // grown past capacity (Scene.cpp:617-635). Match its 1024-row rounding and
@@ -206,7 +435,8 @@ public:
     // Donut Material has no IOR/volume fields. After the original SceneLoaded /
     // MaterialsBaker lifecycle has created PTMaterial, map those transport fields
     // through the original, public PTMaterial data and its dirty contract.
-    void ConfigureMaterials(bool sceneReloaded = false) {
+    void ConfigureMaterials(const std::unordered_set<std::shared_ptr<donut::engine::Material>>& registered,
+        bool sceneReloaded = false,bool independentLighting = false) {
         auto configure = [&](const std::string& name, MaterialEntry& entry) {
             RtrDiagnostics::Scope materialRow(RtrDiagnostics::SceneMaterialRows,1,0,1,0,
                 RtrDiagnostics::Identity(name),0,RtrDiagnostics::Material);
@@ -249,13 +479,34 @@ public:
             }
             target.GPUDataDirty = true;
         };
-        if (sceneReloaded) {
+        if(independentLighting) {
+            if(auto graph=m_graph.lock())for(const auto& source:graph->GetMaterials()) {
+                auto found=m_materials.find(source->name);
+                if(found==m_materials.end())throw std::logic_error("Managed graph material has no declared definition");
+                auto material=std::dynamic_pointer_cast<MaterialEx>(source);
+                if(!material)throw std::logic_error("Managed graph requires the original material type");
+                const bool created=!material->PTMaterial;
+                if(created) {
+                    // Public CPU data for the original AS flags. No GPU material
+                    // row, shader permutation or invented GPUDataIndex is created.
+                    material->PTMaterial=std::make_shared<PTMaterial>();
+                    material->PTMaterial->Name=source->name;
+                    material->PTMaterial->DonutCounterpart=material.get();
+                }
+                if(created||m_pendingMaterials.contains(source->name))configure(source->name,found->second);
+            }
+        } else if (sceneReloaded) {
             // A complete original bake replaces every PTMaterial; reapply only
             // the transport fields unavailable on Donut Material in that case.
-            for (auto& [name, entry] : m_materials) configure(name, entry);
+            for (auto& [name, entry] : m_materials) {
+                if(registered.contains(entry.material))configure(name,entry);
+                else if(auto material=std::dynamic_pointer_cast<MaterialEx>(entry.material))
+                    material->PTMaterial.reset();
+            }
         } else {
             for (const auto& name : m_pendingMaterials)
-                if (auto i = m_materials.find(name); i != m_materials.end()) configure(name, i->second);
+                if (auto i = m_materials.find(name); i != m_materials.end()&&registered.contains(i->second.material))
+                    configure(name, i->second);
         }
         m_pendingMaterials.clear();
     }
@@ -268,8 +519,10 @@ public:
             auto resident=m_materials.find(name);
             if(resident==m_materials.end())continue;
             auto material=std::dynamic_pointer_cast<MaterialEx>(resident->second.material);
-            if(!material||!material->PTMaterial)
-                throw std::logic_error("Original material must be imported before rebinding textures");
+            if(!material)throw std::logic_error("Managed material requires the original material type");
+            // A declared definition may currently have no graph users and no
+            // baker row. Its authored textures are imported when it is attached.
+            if(!material->PTMaterial)continue;
             auto& target=*material->PTMaterial;
             target.BaseTexture.InitFromLoadedTexture(material->baseOrDiffuseTexture,true,false,mediaPath);
             target.NormalTexture.InitFromLoadedTexture(material->normalTexture,false,true,mediaPath);
@@ -300,7 +553,7 @@ public:
         // packet/reference validation, then stage the exact authored transforms
         // for the original frame refresh, without opening an upload command list.
         const bool posesOnly=packet.textures.empty()&&packet.materials.empty()&&packet.meshes.empty()
-            &&packet.removeNodes.empty()&&packet.coverage.empty()&&packet.removeTextures.empty()
+            &&packet.removeNodes.empty()&&packet.coverage.empty()&&packet.removeTextures.empty()&&packet.removeMaterials.empty()
             &&std::all_of(packet.nodes.begin(),packet.nodes.end(),[&](const auto& input){
                 const auto old=m_nodes.find(input.name);
                 return old!=m_nodes.end()&&old->second.mesh==input.mesh;
@@ -346,11 +599,17 @@ public:
             const auto previous=m_materials.find(name);
             const bool isNew=previous==m_materials.end();
             const bool domainChanged=!isNew&&previous->second.material->domain!=entry.material->domain;
-            requiresMaterialLifecycle|=isNew?referencedNewMaterials.contains(name):domainChanged;
+            requiresMaterialLifecycle|=isNew?(!m_externalTextureSampling&&referencedNewMaterials.contains(name)):domainChanged;
             if(domainChanged)domainChangedMaterials.insert(name);
             if(isNew||previous->second.textures!=entry.textures)changes.materialPolicyChanges.insert(name);
             if(isNew||previous->second.material->opacity!=entry.material->opacity)changes.materialOpacityChanges.insert(name);
         }
+        // Atomic replacement can reuse an actually vacated native container.
+        // The live graph never contains a dead placeholder, and its dense IDs
+        // remain authoritative. Unmatched topology keeps the original lifecycle.
+        const auto containerReuses=PlanContainerReuses(packet,domainChangedMaterials);
+        std::unordered_set<std::string> reusedMeshes;
+        for(const auto& reuse:containerReuses)reusedMeshes.insert(reuse.newMesh);
         std::unordered_set<std::string> attributeMeshes,deformedMeshes,reshapedMeshes;
         // Position changes are not graph topology changes when indices, groups,
         // materials and vertex layouts stay identical. The external direct path
@@ -358,6 +617,9 @@ public:
         // This pass evaluates coverage itself; a simultaneous sampler/pixel
         // delta does not turn an otherwise stable mesh into graph topology.
         for(const auto& [name,mesh]:packet.meshes) {
+            if(reusedMeshes.contains(name)) {
+                attributeMeshes.insert(name);reshapedMeshes.insert(name);continue;
+            }
             const bool allowDeformation=m_externalTextureSampling
                 &&std::none_of(mesh->geometries.begin(),mesh->geometries.end(),[&](const auto& geometry){
                     return domainChangedMaterials.contains(geometry->material->name);
@@ -385,13 +647,13 @@ public:
                 if(auto users=m_textureMaterials.find(id);users!=m_textureMaterials.end())
                     changes.materialPolicyChanges.insert(users->second.begin(),users->second.end());
         }
-        changes.materials = !packet.materials.empty();
+        changes.materials = !packet.materials.empty()||!packet.removeMaterials.empty();
         changes.coverageChanged = !packet.coverage.empty();
         // The independent pass evaluates opacity itself without OMMs, so pixel/
         // sampler coverage changes do not change its BLAS geometry flags. Native
         // beauty retains the original conservative coverage rebuild lifecycle.
         changes.requiresCoverageRebuild=changes.coverageChanged&&!m_externalTextureSampling;
-        changes.topology = packet.meshes.size()!=attributeMeshes.size() || !packet.removeNodes.empty()
+        changes.topology = packet.meshes.size()!=attributeMeshes.size() || packet.removeNodes.size()!=containerReuses.size()
             || changes.requiresCoverageRebuild;
         changes.transforms = !packet.nodes.empty();
         bool structural=changes.topology||changes.materials||changes.textures||changes.attributes;
@@ -402,6 +664,7 @@ public:
         // The sample's TLAS holds device addresses, not leases on removed pooled
         // BLASes. Retire previous GPU readers before graph edits can free them.
         if(structural&&beforeStructural)beforeStructural(!requiresMaterialLifecycle&&!changes.requiresCoverageRebuild);
+        RebindContainers(packet,containerReuses,changes);
 
         if (!packet.textures.empty() && (!m_textureDevice||!m_textureDescriptors))
             throw std::logic_error("Inject native texture resources before importing textures");
@@ -491,10 +754,12 @@ public:
                 // deformation requests a native rebuild of only this mesh.
                 auto& resident=*m_meshes.at(name);
                 changes.retiredBuffers.push_back(resident.buffers);
+                // Authored offsets are local to this generation; a prior
+                // shared native batch may have placed this mesh at any offset.
+                resident.vertexOffset=mesh->vertexOffset;
+                resident.indexOffset=mesh->indexOffset;
+                m_meshSources.at(name)=MeshSource::Capture(*mesh);
                 if(deformedMeshes.contains(name)||reshapedMeshes.contains(name)) {
-                    auto& source=m_meshSources.at(name);
-                    source.positions=mesh->buffers->positionData;
-                    if(reshapedMeshes.contains(name))source.indices=mesh->buffers->indexData;
                     resident.objectSpaceBounds=mesh->objectSpaceBounds;
                     resident.totalVertices=mesh->totalVertices;
                     resident.totalIndices=mesh->totalIndices;
@@ -528,7 +793,7 @@ public:
             }
             // The original uploader frees its CPU arrays. Retain only the
             // geometry inputs needed to prove a future update does not need AS.
-            m_meshSources.insert_or_assign(name,MeshSource{mesh->buffers->positionData,mesh->buffers->indexData});
+            m_meshSources.insert_or_assign(name,MeshSource::Capture(*mesh));
             if (auto old = m_meshes.find(name); old != m_meshes.end()) {
                 changes.retiredMeshes.push_back(old->second);
                 for(size_t i=0;i<old->second->geometries.size();++i)
@@ -605,11 +870,17 @@ public:
             auto users = m_materialMeshes.find(name);
             if (users != m_materialMeshes.end() && !users->second.empty()) continue;
             m_materialMeshes.erase(name);
+        }
+        // A material is a declared resource, not a mesh-owned temporary. The
+        // public scene keeps it across periods with no instances; only an
+        // explicit definition removal retires its identity and texture links.
+        for(const auto& name:packet.removeMaterials) {
             if (auto material = m_materials.find(name); material != m_materials.end()) {
                 UnlinkMaterialTextures(name, material->second);
                 m_materials.erase(material);
             }
             m_pendingMaterials.erase(name);
+            m_pendingTextureMaterials.erase(name);
         }
         m_graph = graph;
         // The native uploader/builders still own GPU resources. Hand them only
@@ -628,7 +899,12 @@ public:
         // lighting pass; an eager texture-only refresh would scan the scene twice.
         // New structure and material definitions still need immediate preparation.
         if(changes.topology||requiresMaterialLifecycle)
-            {RtrDiagnostics::Scope refreshScope(RtrDiagnostics::SceneFullRefresh);scene.Refresh(commands,frameIndex);}
+            {
+                if(m_externalTextureSampling) {
+                    auto pending=changes.buildMeshes;pending.insert(pending.end(),attributeUpdates.begin(),attributeUpdates.end());
+                    dynamic_cast<ManagedScene&>(scene).RefreshTopology(commands,frameIndex,pending);
+                } else {RtrDiagnostics::Scope refreshScope(RtrDiagnostics::SceneFullRefresh);scene.Refresh(commands,frameIndex);}
+                }
         // A texture/material refresh need not have a structural dirty flag, so the original
         // Scene does not upload replacement attribute buffers or geometry rows.
         // Do not lose those updates merely because a texture shares the packet.
@@ -676,6 +952,7 @@ private:
     struct Instance {
         std::string mesh;
         std::shared_ptr<Node> node,poseNode;
+        AffinePose pose;
     };
     struct NodeInput {
         std::string name, mesh;
@@ -685,10 +962,19 @@ private:
         const auto& pose=input.pose;
         instance.poseNode->SetTransform(&pose.translation,&pose.rotation,&pose.scaling);
         if(instance.poseNode!=instance.node)instance.node->SetRotation(pose.inner);
+        instance.pose=pose;
     }
     struct MeshSource {
         std::vector<donut::math::float3> positions;
         std::vector<uint32_t> indices;
+        std::array<size_t,4> attributeSizes{};
+        uint32_t vertexOffset=0,indexOffset=0;
+        static MeshSource Capture(const Mesh& mesh){
+            const auto& b=*mesh.buffers;
+            return {b.positionData,b.indexData,{b.positionData.size()*sizeof(donut::math::float3),
+                b.normalData.size()*sizeof(uint32_t),b.tangentData.size()*sizeof(uint32_t),
+                b.texcoord1Data.size()*sizeof(donut::math::float2)},mesh.vertexOffset,mesh.indexOffset};
+        }
     };
     std::unordered_map<std::string,MeshSource> m_meshSources;
     template<class T>static bool SameArray(const std::vector<T>& a,const std::vector<T>& b){
@@ -701,7 +987,7 @@ private:
             ||old->second->geometries.size()!=mesh.geometries.size())return false;
         const auto& a=*old->second;const auto& b=*mesh.buffers;
         if(a.totalVertices!=mesh.totalVertices||a.totalIndices!=mesh.totalIndices
-            ||a.vertexOffset!=mesh.vertexOffset||a.indexOffset!=mesh.indexOffset||a.type!=mesh.type
+            ||shadow->second.vertexOffset!=mesh.vertexOffset||shadow->second.indexOffset!=mesh.indexOffset||a.type!=mesh.type
             ||a.isSkinPrototype||a.skinPrototype.use_count()!=0
             ||shadow->second.positions.size()!=b.positionData.size()
             ||(!allowPositionChanges&&!SameArray(shadow->second.positions,b.positionData))
@@ -711,15 +997,9 @@ private:
             if(x.material->name!=y.material->name||x.indexOffsetInMesh!=y.indexOffsetInMesh||x.numIndices!=y.numIndices
                 ||x.vertexOffsetInMesh!=y.vertexOffsetInMesh||x.numVertices!=y.numVertices)return false;
         }
-        auto sizeMatches=[&](donut::engine::VertexAttribute attribute,size_t bytes){
-            // Scene::AppendBufferRange stores the native uploader's 16-byte
-            // padded range, not the logical attribute byte count.
-            return a.buffers->getVertexBufferRange(attribute).byteSize==nvrhi::align(bytes,size_t(16));
-        };
-        return sizeMatches(donut::engine::VertexAttribute::Position,b.positionData.size()*sizeof(donut::math::float3))
-            &&sizeMatches(donut::engine::VertexAttribute::Normal,b.normalData.size()*sizeof(uint32_t))
-            &&sizeMatches(donut::engine::VertexAttribute::Tangent,b.tangentData.size()*sizeof(uint32_t))
-            &&sizeMatches(donut::engine::VertexAttribute::TexCoord1,b.texcoord1Data.size()*sizeof(donut::math::float2));
+        // Compare the authored row, not the aggregate range of a native batch.
+        return shadow->second.attributeSizes==std::array<size_t,4>{b.positionData.size()*sizeof(donut::math::float3),
+            b.normalData.size()*sizeof(uint32_t),b.tangentData.size()*sizeof(uint32_t),b.texcoord1Data.size()*sizeof(donut::math::float2)};
     }
     bool CanRetainGeometryLayout(const std::string& name,const Mesh& mesh)const{
         const auto old=m_meshes.find(name);
@@ -749,10 +1029,99 @@ private:
         std::unordered_map<int64_t, Texture> textures;
         std::unordered_map<std::string, MaterialEntry> materials;
         std::unordered_map<std::string, std::shared_ptr<Mesh>> meshes;
-        std::vector<std::string> removeNodes, coverage;
+        std::vector<std::string> removeNodes, coverage, removeMaterials;
         std::vector<int64_t> removeTextures;
         std::vector<NodeInput> nodes;
     };
+
+    struct ContainerReuse {std::string oldNode,oldMesh,newNode,newMesh;};
+    static bool SamePose(const AffinePose& a,const AffinePose& b) {
+        for(unsigned i=0;i<3;++i)if(a.translation[i]!=b.translation[i]||a.scaling[i]!=b.scaling[i])return false;
+        return a.rotation.w==b.rotation.w&&a.rotation.x==b.rotation.x&&a.rotation.y==b.rotation.y&&a.rotation.z==b.rotation.z
+            &&a.inner.w==b.inner.w&&a.inner.x==b.inner.x&&a.inner.y==b.inner.y&&a.inner.z==b.inner.z&&a.split==b.split;
+    }
+    static bool StationaryPose(const Instance& instance) {
+        const auto& current=instance.node->GetLocalToWorldTransformFloat();
+        const auto& previous=instance.node->GetPrevLocalToWorldTransformFloat();
+        for(unsigned r=0;r<3;++r) {
+            if(current.m_translation[r]!=previous.m_translation[r])return false;
+            for(unsigned c=0;c<3;++c)if(current.m_linear[c][r]!=previous.m_linear[c][r])return false;
+        }
+        return true;
+    }
+    static std::string ContainerLayout(const Mesh& mesh) {
+        std::string key=std::to_string(uint32_t(mesh.type))+"/";
+        for(const auto& geometry:mesh.geometries) {
+            const auto& name=geometry->material->name;
+            key+=std::to_string(uint32_t(geometry->type))+":"+std::to_string(name.size())+":"+name+"/";
+        }
+        return key;
+    }
+    std::vector<ContainerReuse> PlanContainerReuses(const Packet& packet,
+        const std::unordered_set<std::string>& domainChanges) const {
+        std::vector<ContainerReuse> result;
+        if(!m_externalTextureSampling||packet.removeNodes.empty()||packet.meshes.empty())return result;
+        std::unordered_map<std::string,size_t> incomingUsers;
+        for(const auto& input:packet.nodes)++incomingUsers[input.mesh];
+        std::unordered_map<std::string,std::vector<std::string>> available;
+        uint64_t moving=0,notVacant=0,layoutMismatch=0,poseMismatch=0;
+        for(const auto& name:packet.removeNodes) {
+            const auto old=m_nodes.find(name);
+            if(old==m_nodes.end()){++notVacant;continue;}
+            if(m_pendingTransforms.contains(name)||!StationaryPose(old->second)){++moving;continue;}
+            const auto& meshName=old->second.mesh;
+            const auto users=m_meshNodes.find(meshName);
+            if(users==m_meshNodes.end()||users->second.size()!=1||packet.meshes.contains(meshName)||incomingUsers.contains(meshName)){++notVacant;continue;}
+            available[ContainerLayout(*m_meshes.at(meshName))].push_back(name);
+        }
+        for(const auto& input:packet.nodes) {
+            if(m_nodes.contains(input.name)||m_meshes.contains(input.mesh)||incomingUsers.at(input.mesh)!=1)continue;
+            const auto incoming=packet.meshes.find(input.mesh);if(incoming==packet.meshes.end())continue;
+            const auto& mesh=*incoming->second;
+            if(std::any_of(mesh.geometries.begin(),mesh.geometries.end(),[&](const auto& geometry){return domainChanges.contains(geometry->material->name);}))continue;
+            auto bucket=available.find(ContainerLayout(mesh));if(bucket==available.end()){++layoutMismatch;continue;}
+            auto& candidates=bucket->second;
+            for(size_t i=candidates.size();i>0;--i) {
+                const auto& old=m_nodes.at(candidates[i-1]);
+                if(!SamePose(old.pose,input.pose)){++poseMismatch;continue;}
+                if(!CanRetainGeometryLayout(old.mesh,mesh)){++layoutMismatch;continue;}
+                result.push_back({candidates[i-1],old.mesh,input.name,input.mesh});
+                candidates.erase(candidates.begin()+i-1);break;
+            }
+        }
+        // Counts reuse rejections, not original RefreshBuffers invocations.
+        // The reason mask distinguishes these from capacity/skin fallback.
+        const auto rejected=[&](uint64_t count,uint64_t reason){if(count){
+            RtrDiagnostics::Scope miss(RtrDiagnostics::SceneTopologyFallback,count,packet.removeNodes.size(),1,0,0,0,reason);
+            miss.event[11]|=RtrDiagnostics::CacheMiss;
+        }};
+        rejected(moving+poseMismatch,RtrDiagnostics::Pose);rejected(notVacant,RtrDiagnostics::Removal);
+        rejected(layoutMismatch,RtrDiagnostics::Topology|RtrDiagnostics::Material);
+        return result;
+    }
+    void RebindContainers(Packet& packet,const std::vector<ContainerReuse>& reuses,Changes& changes) {
+        std::unordered_set<std::string> consumed;
+        for(const auto& reuse:reuses) {
+            RtrDiagnostics::Scope replacement(RtrDiagnostics::SceneMeshPreparation,1,0,1,0,
+                RtrDiagnostics::Identity(reuse.newMesh),0,RtrDiagnostics::Topology);
+            auto mesh=m_meshes.extract(reuse.oldMesh);
+            for(size_t i=0;i<mesh.mapped()->geometries.size();++i) {
+                changes.retiredGeometries.push_back(reuse.oldMesh+":"+std::to_string(i));
+                auto& users=m_materialMeshes.at(mesh.mapped()->geometries[i]->material->name);
+                users.erase(reuse.oldMesh);users.insert(reuse.newMesh);
+            }
+            mesh.mapped()->name=reuse.newMesh;mesh.key()=reuse.newMesh;m_meshes.insert(std::move(mesh));
+            auto source=m_meshSources.extract(reuse.oldMesh);source.key()=reuse.newMesh;m_meshSources.insert(std::move(source));
+            auto users=m_meshNodes.extract(reuse.oldMesh);users.key()=reuse.newMesh;
+            users.mapped().erase(reuse.oldNode);users.mapped().insert(reuse.newNode);m_meshNodes.insert(std::move(users));
+            auto node=m_nodes.extract(reuse.oldNode);node.key()=reuse.newNode;node.mapped().mesh=reuse.newMesh;
+            node.mapped().node->SetName(reuse.newNode);node.mapped().poseNode->SetName(reuse.newNode+"/affine");
+            m_nodes.insert(std::move(node));m_pendingTransforms.erase(reuse.oldNode);
+            changes.retiredInstances.push_back(reuse.oldNode);consumed.insert(reuse.oldNode);
+            replacement.event[11]|=RtrDiagnostics::CacheHit;
+        }
+        if(!consumed.empty())std::erase_if(packet.removeNodes,[&](const auto& name){return consumed.contains(name);});
+    }
 
     // Authored raw RGBA8 needs no container decode. Use the native allocator,
     // descriptor table and uploader directly; no second pool or upload arena.
@@ -1061,12 +1430,22 @@ private:
                 throw std::invalid_argument("Duplicate or conflicting texture removal");
             packet.removeTextures.push_back(id);
         }
+        std::unordered_set<std::string> removedMaterials;
+        for(uint32_t n=reader.count();n;--n) {
+            auto name=Name(reader);
+            if(packet.materials.contains(name)||!removedMaterials.insert(name).second)
+                throw std::invalid_argument("Duplicate or conflicting material removal");
+            packet.removeMaterials.push_back(std::move(name));
+        }
         reader.finish();
         return packet;
     }
 
     void ValidateReferences(const Packet& packet) {
         const std::unordered_set<int64_t> removed(packet.removeTextures.begin(), packet.removeTextures.end());
+        const std::unordered_set<std::string> removedMaterials(packet.removeMaterials.begin(),packet.removeMaterials.end());
+        std::unordered_set<std::string> replacedNodes(packet.removeNodes.begin(),packet.removeNodes.end()),publishedMeshes;
+        if(!removedMaterials.empty())for(const auto& node:packet.nodes){replacedNodes.insert(node.name);publishedMeshes.insert(node.mesh);}
         auto validateMaterial = [&](const MaterialEntry& entry) {
             for (auto id : entry.textures) {
                 if (id < -1) throw std::invalid_argument("Invalid texture reference sentinel");
@@ -1077,8 +1456,14 @@ private:
             }
         };
         for (const auto& [name, entry] : packet.materials) validateMaterial(entry);
+        for(auto id:packet.removeTextures)if(auto users=m_textureMaterials.find(id);users!=m_textureMaterials.end())
+            for(const auto& name:users->second)
+                if(!removedMaterials.contains(name)&&!packet.materials.contains(name))
+                    throw std::invalid_argument("Cannot remove a texture referenced by a declared material");
         auto validateMesh = [&](const std::shared_ptr<Mesh>& mesh) {
             for (const auto& geometry : mesh->geometries) {
+                if(removedMaterials.contains(geometry->material->name))
+                    throw std::invalid_argument("Cannot remove a referenced material");
                 const auto& entry = FindMaterial(geometry->material->name, packet);
                 if (entry.textures[1] >= 0 && mesh->buffers->tangentData.empty()
                     && !mesh->buffers->hasAttribute(donut::engine::VertexAttribute::Tangent))
@@ -1086,6 +1471,14 @@ private:
             }
         };
         for (const auto& [name, mesh] : packet.meshes) validateMesh(mesh);
+        for(const auto& name:packet.removeMaterials)if(auto users=m_materialMeshes.find(name);users!=m_materialMeshes.end())
+            for(const auto& mesh:users->second) {
+                if(packet.meshes.contains(mesh))continue;
+                if(publishedMeshes.contains(mesh))throw std::invalid_argument("Cannot remove a referenced material");
+                if(auto instances=m_meshNodes.find(mesh);instances!=m_meshNodes.end())
+                    for(const auto& node:instances->second)if(!replacedNodes.contains(node))
+                        throw std::invalid_argument("Cannot remove a referenced material");
+            }
         for (const auto& [name, entry] : packet.materials) {
             auto users = m_materialMeshes.find(name);
             if (users == m_materialMeshes.end()) continue;
@@ -1107,7 +1500,10 @@ private:
         for (const auto& input : packet.nodes)
             if (!packet.meshes.count(input.mesh) && !m_meshes.count(input.mesh))
                 throw std::invalid_argument("Unknown instance mesh: " + input.mesh);
-        for (const auto& name : packet.coverage) (void)FindMaterial(name, packet);
+        for (const auto& name : packet.coverage) {
+            if(removedMaterials.contains(name))throw std::invalid_argument("Cannot update coverage of a removed material");
+            (void)FindMaterial(name, packet);
+        }
     }
 
     ExtendedSceneTypeFactory m_factory;

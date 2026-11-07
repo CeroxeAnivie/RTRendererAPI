@@ -18,6 +18,10 @@ int main(){
     auto token=RtrProtocolTrace::Token();auto snapshot=RtrProtocolTrace::Snapshot(token);require(snapshot[2]==1&&snapshot[5]==4,"Fault remains independently observable");
     RtrProtocolTrace::enabled=false;RtrProtocolTrace::Record(2,0,0,0,0,0,0,0,0,0,0);require(RtrProtocolTrace::Snapshot(token)[2]==1,"OFF records no diagnostic events");
     RtrProtocolTrace::Reset();rejected=false;try{RtrProtocolTrace::Snapshot(token);}catch(const std::exception&){rejected=true;}require(rejected,"Replacement session expires an old observer");
+    RtrDiagnostics::Configure(0);
+    RtrProtocolTrace::Record(2,0,0,0,0,0,0,0,0,0,0);
+    require(RtrProtocolTrace::Snapshot(RtrProtocolTrace::Token())[2]==0,
+        "Unified diagnostic OFF suppresses ordinary protocol sampling after reset");
     std::atomic<unsigned> destroyed{0};
     struct Item{std::atomic<unsigned>* value;explicit Item(std::atomic<unsigned>* v):value(v){}~Item(){++*value;}};
     {RtrResourceReclaimer release;for(unsigned i=0;i<16;i++){auto object=std::make_shared<Item>(&destroyed);require(release.Enqueue(object),"Bounded release queue accepts available capacity");}

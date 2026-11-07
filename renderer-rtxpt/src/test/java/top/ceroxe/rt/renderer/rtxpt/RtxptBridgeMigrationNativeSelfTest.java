@@ -167,7 +167,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                     require(javaSnapshot.events().equals(javaSecond.events()),"Independent Java cursors diverged");
                     long materials=count(snapshot,"Materials"),blas=count(snapshot,"BlasBuild"),attributes=count(snapshot,"AttributePreparation");
                     if(sequence<37) {
-                        if(sequence!=11&&sequence!=12&&sequence!=13)require(materials==0,
+                        require(materials==0,
                                 "Texture or geometry delta caused full material import at sequence="+sequence);
                         if(!topology&&sequence!=11&&sequence!=12&&sequence!=13)require(count(snapshot,"SceneFullRefresh")==0,
                                 "Texture/attribute update caused an extra full scene refresh at sequence="+sequence);
@@ -193,7 +193,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             require(sawRealTexture&&sawAttributes&&sawTopology,"Required mixed resource paths were not observed");
             require(lighting.nativeLightingExecution().fullBeautyFrames()==0,"Direct-only contract executed full beauty");
         } finally {Files.write(output.resolve("cases.csv"),rows,StandardCharsets.UTF_8);}
-        System.out.println("BRIDGE_MIGRATION PASS frames="+FRAMES+" noOpGenerations=true rectangleParents=true samplerMetadata=true samplerPixels=true mixedAttributes=true mixedTopology=true denseReindex=true maskedScalarPixels=true independentMonitors=true diagnosticOff=true retainedLease=true poseFastPathFrames=3 materialRegistryFrames=3");
+        System.out.println("BRIDGE_MIGRATION PASS frames="+FRAMES+" noOpGenerations=true rectangleParents=true samplerMetadata=true samplerPixels=true mixedAttributes=true mixedTopology=true denseReindex=true maskedScalarPixels=true independentMonitors=true diagnosticOff=true retainedLease=true poseFastPathFrames=6 settledInstanceReads=0 cameraInstanceReads=0 materialRegistryFrames=3");
     }
 
     /** Eleven fresh frames: unrelated publications cannot turn geometry into topology. */
@@ -291,23 +291,30 @@ public final class RtxptBridgeMigrationNativeSelfTest {
 
     private static void checkPoseFastPath(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,
             CameraState camera,long handle,List<String> rows) {
+        access.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
+        var monitor=access.nativeDiagnosticMonitor();
         double[] previous=RtxptNative.instanceTransformState(handle,"i11");
-        for(int sequence=FRAMES+1;sequence<=FRAMES+3;sequence++) {
+        for(int sequence=FRAMES+1;sequence<=FRAMES+6;sequence++) {
+            var diagnosticBefore=monitor.poll();
             long[] workBefore=RtxptNative.commandWorkState(handle);
             long[] resourceBefore=RtxptNative.resourceWorkState(handle);
             require(workBefore.length==10,"Unexpected command work counters");
             var transaction=SceneTransaction.builder(sequence);
             boolean empty=sequence==FRAMES+3;
+            boolean settled=sequence>=FRAMES+4;
             float x=sequence==FRAMES+1?1.25f:-2.5f;
             if(empty) {
                 // Empty native transport is legal even though Java normally elides it.
-                var packet=ByteBuffer.allocateDirect(32).order(ByteOrder.LITTLE_ENDIAN);
-                packet.putInt(0x52445257);for(int index=0;index<7;index++)packet.putInt(0);
+                var packet=ByteBuffer.allocateDirect(36).order(ByteOrder.LITTLE_ENDIAN);
+                packet.putInt(0x52445257);for(int index=0;index<8;index++)packet.putInt(0);
                 RtxptNative.resourcesMemory(handle,sequence,packet.flip());
-            }else transaction.upsert(SceneInstance.builder(11,1)
+            }else if(!settled)transaction.upsert(SceneInstance.builder(11,1)
                     .transform(new AffineTransform(new float[]{1,0,0,x,0,1,0,0,0,0,1,0})).build());
             long begin=System.nanoTime();renderer.apply(transaction.build());publish(lighting,sequence);
-            renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,camera).minimumSceneRevision(sequence).build());
+            var view=sequence>=FRAMES+5?CameraState.lookAt(.1f*(sequence-FRAMES-4),0,3,0,0,0).build():camera;
+            var request=RenderFrameRequest.builder(sequence,SIZE,SIZE,view).minimumSceneRevision(sequence).build();
+            if(settled)require(renderer.trySubmit(request) instanceof Renderer.FrameSubmitted,"Available fresh output was deferred");
+            else renderer.submit(request);
             access.awaitIdle();
             try(var lease=lighting.acquireLightingFrame().orElseThrow()){checkFrame(lease.frame(),sequence);}
             long[] workAfter=RtxptNative.commandWorkState(handle);
@@ -316,7 +323,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                     "Resident pose/empty packet did not execute exactly one lean native-lighting frame");
             for(int index=0;index<4;index++)require(workAfter[index]==workBefore[index],
                     "Pose/empty packet opened a native resource/structure command list at sequence="+sequence+" counter="+index);
-            require(workAfter[4]-workBefore[4]==(empty?0:1)&&workAfter[5]-workBefore[5]==(empty?0:1)
+            require(workAfter[4]-workBefore[4]==(empty||settled?0:1)&&workAfter[5]-workBefore[5]==(empty||settled?0:1)
                     &&workAfter[6]-workBefore[6]==(empty?1:0),"Pose/empty fast-path evidence was missing at sequence="+sequence);
             require(Arrays.equals(resourceBefore,RtxptNative.resourceWorkState(handle)),"Pose/empty packet did unrelated texture/reference work");
             double[] current=RtxptNative.instanceTransformState(handle,"i11");
@@ -326,9 +333,23 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 require(Math.abs(current[12+index]-previous[index])<1e-5,"Pose fast path consumed previous transform early");
             }
             previous=current;
-            String name=empty?"empty-packet-without-command-list":"resident-pose-without-command-list";
+            var snapshot=monitor.poll();
+            require(snapshot.lostEvents()==0,"Pose diagnostic events were lost");
+            final int frameSequence=sequence;
+            var instanceEvents=snapshot.events().stream().filter(event->event.sequence()==frameSequence&&event.stage().equals("SceneInstanceRows")).toList();
+            require(instanceEvents.size()==1,"Fresh pose frame omitted its explicit instance-work event");
+            var instanceEvent=instanceEvents.getFirst();
+            long[] raw=RtxptNative.boundaryDiagnostics(handle,snapshot.generation(),diagnosticBefore.nextOrdinal());
+            require(raw.length>=21&&raw[1]==27&&raw.length==21+(raw[3]+raw[7])*27,"Invalid instance-work diagnostic packet");
+            long examined=-1;
+            for(int index=21;index<raw.length;index+=27)if(raw[index+24]==instanceEvent.ordinal())examined=raw[index+9];
+            require(settled?examined==0&&instanceEvent.items()==0:examined>0&&instanceEvent.items()>0,
+                    "Native transform/previous-pose gate performed incorrect instance work at sequence="+sequence+" examined="+examined+" written="+instanceEvent.items());
+            if(settled)require(count(snapshot,"SceneTableUpload")==0,"Settled camera/idle frame uploaded unchanged native tables");
+            String name=settled?(sequence==FRAMES+4?"settled-idle-zero-instance-scan":"camera-only-zero-instance-scan")
+                    :empty?"previous-pose-converges-without-command-list":"resident-pose-without-command-list";
             rows.add(sequence+","+name+","+(System.nanoTime()-begin)/1_000_000.0+",0,0,0,0");
-            System.out.println("BRIDGE_MIGRATION sequence="+sequence+" case="+name+" PASS");
+            System.out.println("BRIDGE_MIGRATION sequence="+sequence+" case="+name+" instanceExamined="+examined+" instanceWritten="+instanceEvent.items()+" PASS");
         }
     }
 
@@ -340,12 +361,12 @@ public final class RtxptBridgeMigrationNativeSelfTest {
         float[] original=centerNormal(before);
         access.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
         var monitor=access.nativeDiagnosticMonitor();monitor.poll();
-        for(int sequence=FRAMES+4;sequence<=FRAMES+6;sequence++) {
-            boolean remove=sequence==FRAMES+5;
+        for(int sequence=FRAMES+7;sequence<=FRAMES+9;sequence++) {
+            boolean remove=sequence==FRAMES+8;
             var tx=SceneTransaction.builder(sequence);
             if(remove)tx.removeInstance(instance).removeMesh(id).removeMaterial(id).removeTexture(id);
             else {
-                int alpha=sequence==FRAMES+4?0:255;
+                int alpha=sequence==FRAMES+7?0:255;
                 var texture=TextureAsset.builder(id,1,1).colorSpace(TextureAsset.ColorSpace.SRGB)
                         .addressModes(TextureAsset.AddressMode.REPEAT,TextureAsset.AddressMode.REPEAT)
                         .filter(TextureAsset.Filter.NEAREST).pixelsRgba8(new byte[]{-1,-1,-1,(byte)alpha}).build();
@@ -367,8 +388,8 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             double elapsed=(System.nanoTime()-begin)/1_000_000.0;
             var snapshot=monitor.poll();require(snapshot.lostEvents()==0,"Material registry diagnostics lost events");
             long materials=count(snapshot,"Materials"),blas=count(snapshot,"BlasBuild"),attributes=count(snapshot,"AttributePreparation");
-            require(remove?materials==0:materials>0,
-                    "Material registry did not distinguish removal from a real new registration at sequence="+sequence);
+            require(materials==0,
+                    "Independent material registration entered the unused beauty baker at sequence="+sequence);
             if(remove) {
                 boolean retired=false;
                 try{RtxptNative.meshResourceState(handle,"i99");}catch(IllegalStateException expected){retired=true;}
@@ -380,10 +401,10 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                         "New/re-added unique material lost triangle, sampler, opacity or receiver semantics");
             }
             String name=remove?"remove-unique-material-without-reimport"
-                    :sequence==FRAMES+4?"register-transparent-unique-material":"reregister-opaque-unique-material";
+                    :sequence==FRAMES+7?"register-transparent-unique-material":"reregister-opaque-unique-material";
             Path image=output.resolve(name+".pfm");RtxptNative.nativeLightingCapture(handle,image.toString(),2);
             float[] actual=centerNormal(image);
-            if(sequence==FRAMES+6) {
+            if(sequence==FRAMES+9) {
                 require(Math.abs(actual[0])<.025&&Math.abs(actual[1]-.6)<.025&&Math.abs(actual[2]-.8)<.025,
                         "Re-added opaque texture/material did not produce its new receiver pixels");
             }else for(int component=0;component<3;component++)require(Math.abs(actual[component]-original[component])<.005,

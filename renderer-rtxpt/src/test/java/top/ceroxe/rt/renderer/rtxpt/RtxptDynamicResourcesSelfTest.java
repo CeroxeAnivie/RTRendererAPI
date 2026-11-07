@@ -67,7 +67,7 @@ public final class RtxptDynamicResourcesSelfTest {
         for(long texture:new long[]{material.baseColorTextureId(),material.normalTextureId(),material.metallicRoughnessTextureId(),material.emissiveTextureId()})
             require(packet.getLong()==texture,"Texture bindings remain aligned after float3 emission");
         require(packet.getInt()==0,"No medium boundary in emission packet");
-        for(int count=0;count<5;count++)require(packet.getInt()==0,"Emission-only packet has no geometry, removals, nodes, coverage or texture removals");
+        for(int count=0;count<6;count++)require(packet.getInt()==0,"Emission-only packet has no geometry, removals, nodes, coverage, texture removals or material removals");
         require(!packet.hasRemaining(),"Float3 packet has no legacy strength field or trailing bytes");
     }
     static void pathDecomposition(){

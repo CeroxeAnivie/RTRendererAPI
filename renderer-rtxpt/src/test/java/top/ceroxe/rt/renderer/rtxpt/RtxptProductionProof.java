@@ -173,7 +173,7 @@ public final class RtxptProductionProof {
     }
     private static ByteBuffer materialOnly(String name,int blend,float opacity,float[] emission){
         ByteBuffer b=ByteBuffer.allocateDirect(512).order(ByteOrder.LITTLE_ENDIAN);b.putInt(0x52445257).putInt(0).putInt(1);
-        proofMaterial(b,name,blend,opacity,emission);for(int i=0;i<5;i++)b.putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
+        proofMaterial(b,name,blend,opacity,emission);for(int i=0;i<6;i++)b.putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static ByteBuffer materialFixture(int mode,float opacity,float[] emission){
         boolean shadow=mode==2;ByteBuffer b=ByteBuffer.allocateDirect(4096).order(ByteOrder.LITTLE_ENDIAN);
@@ -184,7 +184,7 @@ public final class RtxptProductionProof {
         if(shadow)proofTriangle(b,"proof-blocker-mesh","proof-blocker-material",new float[]{.2f,-2,-2,1.8f,-2,-2,1,2,-2});
         b.putInt(0).putInt(shadow?2:1);proofNode(b,INSTANCE,MESH);
         if(shadow)proofNode(b,"proof-blocker-instance","proof-blocker-mesh");
-        b.putInt(0).putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
+        b.putInt(0).putInt(0).putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static void proofMaterial(ByteBuffer b,String name,int blend,float opacity,float[] emission){
         text(b,name);b.putInt(-1);b.putFloat(opacity).putFloat(1).putFloat(0).putFloat(0).putFloat(.5f).putInt(blend).putInt(1);
@@ -410,7 +410,7 @@ public final class RtxptProductionProof {
         ByteBuffer b=ByteBuffer.allocateDirect(256).order(ByteOrder.LITTLE_ENDIAN);
         b.putInt(0x52445257).putInt(0).putInt(0).putInt(0).putInt(0).putInt(1);
         text(b,INSTANCE);text(b,MESH);floats(b,1,0,0,x,0,1,0,0,0,0,1,0);
-        b.putInt(0).putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
+        b.putInt(0).putInt(0).putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static void checkImages(Path before,Path after) throws Exception {
         var a=ImageIO.read(before.toFile());var b=ImageIO.read(after.toFile());
@@ -471,7 +471,7 @@ public final class RtxptProductionProof {
             b.putInt(1);text(b,"proof-material");b.putInt(3).putInt(0).putInt(1).putInt(2);}
         b.putInt(remove?1:0);if(remove)text(b,INSTANCE);b.putInt(mesh?1:0);
         if(mesh){text(b,INSTANCE);text(b,MESH);floats(b,1,0,0,0,0,1,0,0,0,0,1,0);}
-        b.putInt(0).putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
+        b.putInt(0).putInt(0).putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static void text(ByteBuffer b,String s){byte[] v=s.getBytes(StandardCharsets.UTF_8);b.putInt(v.length).put(v);}
     private static void floats(ByteBuffer b,float... values){b.putInt(values.length);for(float value:values)b.putFloat(value);}

@@ -35,7 +35,7 @@ enum Stage : uint64_t { Frame=1, InstanceCache, SubInstances, Dispatch, Caller,
     CommandAcquire, CommandSubmit, CompletionPoll, ReclaimEnqueue, DriverRelease, IndexRebuild, TextureAllocate, TextureUpload,
     RuntimeInitialize, DeviceInitialize, SceneInitialize, LightingInitialize, PoolAcquire, TlasAllocate,
     HeapAllocate, ResourcePrebuild, AllocationInfo, PlacedBind, PoolEvict, StagingAcquire, StagingAllocate, StagingMap, StagingCopy, StagingBarrier, StagingRecord, SparseRegions, SceneGraphRefresh, SceneFullRefresh, SceneTopologyFallback, SceneMeshPreparation, SceneMaterialRows, SceneGeometryRows, SceneInstanceRows, SceneTableUpload, SparseQueryPreparation, SparseRegionInitialize, SparseHashErase, SparseHashRecover, SparseRegionPublish, SparseUpload,
-    DefaultBufferAllocate, DefaultBufferCommitted, DefaultBufferPostCreate, SceneCpuResize, SceneMaterialPrepare, SceneOmmDebugRefresh, DiagnosticMutexWait, DiagnosticMutexHold };
+    DefaultBufferAllocate, DefaultBufferCommitted, DefaultBufferPostCreate, SceneCpuResize, SceneMaterialPrepare, SceneOmmDebugRefresh, DiagnosticMutexWait, DiagnosticMutexHold, TlasBuild, MeshBufferUpload };
 enum Flag : uint64_t { QueueWaitEnqueue=1, Failed=2, CacheHit=4, CacheMiss=8,
     Active=256, Truncated=512, Cancelled=1024, EnteredNativeFrame=2048 };
 enum SubmissionKind : uint64_t { Initial=0, Update, Steady, Resized, Waited, KindCount };

@@ -20,6 +20,13 @@ add_executable(rtrenderer_jvm_host
     "${CMAKE_CURRENT_LIST_DIR}/rtxpt_jvm_host.manifest")
 target_include_directories(rtrenderer_jvm_host PRIVATE ${JNI_INCLUDE_DIRS})
 target_compile_features(rtrenderer_jvm_host PRIVATE cxx_std_20)
+add_executable(rtr_resource_protocol_selftest EXCLUDE_FROM_ALL
+    "${CMAKE_CURRENT_LIST_DIR}/rtxpt_resource_protocol_selftest.cpp")
+target_compile_features(rtr_resource_protocol_selftest PRIVATE cxx_std_20)
+target_link_libraries(rtr_resource_protocol_selftest PRIVATE d3d12 dxgi)
+set_target_properties(rtr_resource_protocol_selftest PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/adapter-tests"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/adapter-tests")
 if(RTXPT_D3D_AGILITY_SDK_VERSION)
     target_compile_definitions(rtrenderer_jvm_host PRIVATE
         RTXPT_D3D_AGILITY_SDK_VERSION=${RTXPT_D3D_AGILITY_SDK_VERSION})
