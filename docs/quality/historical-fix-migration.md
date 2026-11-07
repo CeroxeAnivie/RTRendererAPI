@@ -62,6 +62,10 @@ HUD 原来硬编码 GPU/PRESENT N/A，标题则是原生带 FG 倍率估计的�
 
 旧 Local 手工删除未完成，安全审核拒绝；本次按用户后续授权用标准 publishToMavenLocal 覆盖同版本两个模块。源码先上传 GitHub，再覆盖 Local；实际发布结果与包身份以发布后回执为准。
 
+发布回执：修复源码 752724180babb0782b8526eecf36c85a7d167cff 已先上传 GitHub main，随后两个模块 publishToMavenLocal 成功，wall128.681s、Job 提交峰值1.538GB。6个JAR、2个POM、2个module metadata与构建输出一致；包内 runtime ZIP/hash及DLL/host/解析shader身份核对通过（3.978s）。runtime ZIP SHA256=1b6829a59de6b65426d6575026a1bf6b9735b8251e09acaa2eb1b6b3a80a948a；renderer-rtxpt-8.0.0.jar SHA256=a023770fb43d87c30ce836bc6403ee33045395da28ab13426e20f098f67b0e09。发布没有重跑已通过 GPU 项。
+
+人工弹球已按默认可见窗口化单独启动，初始 GPU0%，日志 build/reports/manual-acceptance/20261107-150238-balls；不自动开介质，不接管用户。启动回执只确认进程及 ready，画面／性能是否接受等待用户，不记人工通过。
+
 ## 逐提交导航
 
 以下是历史索引导航，不是逐项行为 PASS。类别按提交标题／路径关联到上表；一个提交可能跨多类，详细文件列表全部保存在 JSON。无法由标题确定的旧逻辑明确列为逐项未证明，不强行归入“已迁移”。
