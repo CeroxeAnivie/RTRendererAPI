@@ -78,14 +78,18 @@ public final class RtxptSparseUploadNativeSelfTest {
                 var memory=r.uploadMemory();
                 require(memory.transactionLeasedBytes()==0,"Completed sparse upload lease was stranded without a new source update");
                 require(memory.createdBytes()-memory.releasedBytes()==memory.retainedBytes(),"Upload chunk lifetime accounting");
-                require(memory.fenceRetiredBytes()>0&&memory.releasedBytes()>0,"Oversized upload pool did not retire completed storage");
+                if(Boolean.getBoolean("upload.nativeManaged"))
+                    require(memory.fenceRetiredBytes()==0,"Native chunks escaped into a second retirement queue");
+                else require(memory.fenceRetiredBytes()>0&&memory.releasedBytes()>0,"Oversized upload pool did not retire completed storage");
                 System.out.println("UPLOAD_MEMORY "+memory);
             }
         }
         require(initializations==1&&uploads==24,"Actual regional initialization and every new upload were observed");
         require(maxRequest>0&&maxRequest<=1024*1024,"A sparse upload exceeded its 1MiB write bound");
         require(maxAllocation<=16*1024*1024,"An oversized staging chunk was created");
-        if(!Boolean.getBoolean("upload.baseline")){
+        if(Boolean.getBoolean("upload.nativeManaged")){
+            require(mappedBatchRequests==0&&mappedCopies==0&&stagingRequests>0,"Native upload execution or private-arena removal was not observed");
+        }else if(!Boolean.getBoolean("upload.baseline")){
             require(mappedBatchRequests==24&&mappedCopies>0,"Mapped batch planning and actual copy execution were not observed");
             require(maxMappedCopy<=1024*1024,"A persistent sparse copy exceeded its 1MiB command bound");
             long page=2L*1024*1024;

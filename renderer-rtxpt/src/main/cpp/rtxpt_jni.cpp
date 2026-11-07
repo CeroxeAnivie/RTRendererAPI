@@ -27,6 +27,7 @@
 #include RTR_RTXPT_ADVANCED_SOURCE
 #undef WinMain
 #include <Materials/MaterialsBaker.h>
+#include <donut/shaders/bindless.h>
 #include <OpacityMicroMap/OmmBaker.h>
 #include <SampleCommon/AccelerationStructureUtil.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -38,7 +39,7 @@
 #include "rtxpt_path_quality.h"
 #include "rtxpt_host_resources.h"
 #include "rtxpt_memory_diagnostics.h"
-#include "rtxpt_upload_retention.h"
+#include "rtxpt_upload_statistics.h"
 #include "rtxpt_retained_light_tree.h"
 #include "rtxpt_sparse_lighting.h"
 #include "rtxpt_native_extension.h"
@@ -52,7 +53,6 @@
 #include "rtxpt_instance_transform.h"
 #include "rtxpt_memory_resources.h"
 #include "rtxpt_resource_arena.h"
-#include "rtxpt_upload_arena.h"
 #include "rtxpt_capacity.h"
 #include <map>
 extern SampleUIData g_sampleUIData;
@@ -452,8 +452,7 @@ public:
         if(hostSurface.active)hostOutputs.Prepare(GetDevice(),*m_shaderFactory,m_commandList,m_renderSize.x,m_renderSize.y,m_displaySize.x,m_displaySize.y);
     }
     void PrepareHostLightResources() {
-        uploadArena.Prepare(GetDevice());
-        if(sparseLighting.Ensure(GetDevice(),&uploadArena)){GetBindingCache().Clear();InvalidateBindingSet();}
+        if(sparseLighting.Ensure(GetDevice())){GetBindingCache().Clear();InvalidateBindingSet();}
         if(lightStatsEnabled&&!lightStatsBuffer){
             nvrhi::BufferDesc desc;desc.byteSize=16;desc.canHaveUAVs=true;desc.canHaveRawViews=true;
             desc.initialState=nvrhi::ResourceStates::UnorderedAccess;desc.keepInitialState=true;desc.debugName="RtrLightWork";
@@ -828,7 +827,7 @@ struct Session {
         RtrMemoryDiagnostics::Checkpoint("shutdown.begin");
         if (app) {
             if(auto* pass=static_cast<HostPathTracer*>(app->HostRenderPass())){
-                pass->uploadArena.Stop();pass->resourceArena.Stop();
+                pass->resourceArena.Stop();
             }
             auto* dm=app->HostDeviceManager();
             auto* nativeDevice=dm->GetDevice()?static_cast<ID3D12Device*>(dm->GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device)):nullptr;
@@ -870,9 +869,9 @@ void indexNodes(Session& s) {
     donut::engine::SceneGraphWalker w(graph->GetRootNode().get());
     while (w) { s.nodes.emplace(w->GetName(), w.Get()); w.Next(true); }
     auto& host=*static_cast<HostPathTracer*>(s.app->HostRenderPass());
-    host.memoryTextures.clear();host.spareMemoryTextures.clear();host.spareMemoryTextureBytes=0;host.uploadPreparationPending=false;
-    host.resourceRetirement.clear();host.resourceCommandPool.clear();host.resourceComputeOrdering=nullptr;host.resourceQueryPool.clear();host.resourceBlasAllocationBytes.clear();host.resourceBufferAllocations.clear();host.preparedMeshBlases.clear();host.meshUploadScratch.clear();
-    host.spareMeshBuffers.clear();host.spareMeshBlases.clear();host.spareMeshBufferBytes=host.spareMeshBlasBytes=0;
+    host.memoryTextures.clear();host.spareMemoryTextures.clear();host.spareMemoryTextureBytes=0;
+    host.resourceRetirement.clear();host.resourceCommand=nullptr;host.resourceComputeOrdering=nullptr;host.resourceQueryPool.clear();host.resourceBufferAllocations.clear();host.preparedMeshBlases.clear();
+    host.spareMeshBuffers.clear();host.spareMeshBufferBytes=0;
     host.spareResourceTlas={};host.spareResourceTlasBytes=0;host.resourceTlasAllocationBytes=0;host.resourceTlasAllocationIdentity=nullptr;
     host.activeResourceTlas={};host.preparedResourceTlas={};host.preparedTlasTables={};host.activeTlasTableStorage={};host.preparedTlasTableStorage={};host.preparedTlasAliases=false;
     // A complete scene replacement invalidates every borrowed graph-node view.
@@ -1189,7 +1188,6 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
         auto before=s.externalPresentation?s.rendered:s.presented;
         if(s.presentationTrace)s.probeMark=Session::ProbeClock::now();
         if (!dm->HostFrame()) throw std::runtime_error("RTXPT render/present failed");
-        static_cast<HostPathTracer*>(s.app->HostRenderPass())->sparseLighting.RecordUploads(dm->GetDevice());
         if(static_cast<HostPathTracer*>(s.app->HostRenderPass())->hostSurface.active&&s.rendered==before){
             static_cast<HostPathTracer*>(s.app->HostRenderPass())->AbortHostRead();
             throw std::runtime_error("Host-surface input was not consumed; the published input remains available for retry");
@@ -1214,9 +1212,8 @@ extern "C" JNIEXPORT jint JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_
                 uint64_t retiredBytes=0;for(const auto& old:sparse.retired)retiredBytes+=bufferBytes(old.sources)+bufferBytes(old.nodes);
                 RtrMemoryDiagnostics::Capacity("sparse.buffers","device_local",sparse.records.size()*96+(sparse.queryNodes.size()+sparse.regions.packed.size())*64,bufferBytes(sparse.sourceBuffer)+bufferBytes(sparse.treeBuffer),retiredBytes);
                 RtrMemoryDiagnostics::Capacity("attributes.vertices","device_local",attributes.attributeRanges.end*sizeof(RtrNativeLightingPass::VertexAttributes),bufferBytes(attributes.baselineCoordinates));
-                const auto resource=pass.resourceArena.Snapshot();const auto upload=pass.uploadArena.Statistics();
+                const auto resource=pass.resourceArena.Snapshot();
                 RtrMemoryDiagnostics::Capacity("resource.arena","device_local",resource[2],resource[1],0,pass.resourceArena.IdlePageBytes());
-                RtrMemoryDiagnostics::Capacity("upload.arena","mapped_upload",upload[2],upload[0],0,pass.uploadArena.IdlePageBytes());
                 s.memoryReport=now;
             }
         }
@@ -1417,8 +1414,8 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
 }
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_uploadMemory(JNIEnv* e,jclass,jlong h){
     try{auto& pass=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());
-        std::array<uint64_t,12> values{};const auto pool=RtrUploadRetention::Snapshot();const auto arena=pass.uploadArena.Statistics();
-        std::copy(pool.begin(),pool.end(),values.begin());std::copy(arena.begin(),arena.end(),values.begin()+8);
+        std::array<uint64_t,12> values{};const auto pool=RtrUploadStatistics::Snapshot();
+        std::copy(pool.begin(),pool.end(),values.begin());
         auto result=e->NewLongArray(jsize(values.size()));if(result)e->SetLongArrayRegion(result,0,jsize(values.size()),reinterpret_cast<const jlong*>(values.data()));return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
@@ -1784,7 +1781,7 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
             const auto tick=p.resourceRetirement.front().createdNanos;if(tick)age=RtrDiagnostics::Now()-tick;
         }
         jlong values[]={jlong(p.resourceRetirement.size()),jlong(q.pending.load()),jlong(q.pendingBytes.load()),jlong(q.peakPending.load()),
-            jlong(q.peakBytes.load()),jlong(q.enqueueRejected.load()),jlong(p.spareMeshBufferBytes),jlong(p.spareMeshBlasBytes),jlong(q.OldestAge()),jlong(age),jlong(p.spareResourceTlasBytes)};
+            jlong(q.peakBytes.load()),jlong(q.enqueueRejected.load()),jlong(p.spareMeshBufferBytes),jlong(0),jlong(q.OldestAge()),jlong(age),jlong(p.spareResourceTlasBytes)};
         auto result=e->NewLongArray(11);if(result)e->SetLongArrayRegion(result,0,11,values);return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }
@@ -1802,7 +1799,7 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptN
 extern "C" JNIEXPORT jlongArray JNICALL Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourceArenaStatistics(JNIEnv* e,jclass,jlong h){
     try{auto& p=*static_cast<HostPathTracer*>(session(h).app->HostRenderPass());const auto arena=p.resourceArena.Snapshot();
         std::array<jlong,21> values{};std::copy(arena.begin(),arena.end(),values.begin());std::copy(p.arenaWork.begin(),p.arenaWork.end(),values.begin()+11);
-        values[19]=p.spareMeshBuffers.size();values[20]=p.spareMeshBlases.size();
+        values[19]=p.spareMeshBuffers.size();values[20]=0;
         auto result=e->NewLongArray(values.size());if(result)e->SetLongArrayRegion(result,0,values.size(),values.data());return result;
     }catch(const std::exception& x){fail(e,x);return nullptr;}
 }

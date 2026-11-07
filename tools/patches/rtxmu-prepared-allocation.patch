@@ -1,0 +1,420 @@
+--- a/include/rtxmu/D3D12Suballocator.h
++++ b/include/rtxmu/D3D12Suballocator.h
+@@ -62,6 +62,7 @@
+     private:
+ 
+         ID3D12Resource* m_resource = nullptr;
++        uint64_t m_allocationBytes = 0;
+     };
+ 
+     class D3D12ScratchBlock : public D3D12Block
+--- a/src/D3D12Suballocator.cpp
++++ b/src/D3D12Suballocator.cpp
+@@ -22,6 +22,8 @@
+ */
+ 
+ #include "rtxmu/D3D12Suballocator.h"
++#include "rtxpt_native_budget.h"
++#include <sstream>
+ 
+ namespace rtxmu
+ {
+@@ -79,18 +81,28 @@
+         heapProperties.CreationNodeMask      = 1;
+         heapProperties.VisibleNodeMask       = 1;
+ 
+-        device->CreateCommittedResource(&heapProperties,
++        const auto bytes=device->GetResourceAllocationInfo(0,1,&desc).SizeInBytes;
++        RtrNativeBudget::Acquire(RtrNativeBudget::Resource,bytes);
++        const HRESULT result=device->CreateCommittedResource(&heapProperties,
+                                         D3D12_HEAP_FLAG_NONE,
+                                         &desc,
+                                         state,
+                                         nullptr,
+                                         IID_PPV_ARGS(&m_resource));
++        if(FAILED(result)){
++            RtrNativeBudget::Release(RtrNativeBudget::Resource,bytes);
++            std::ostringstream message;message<<"RTXMU CreateCommittedResource HRESULT=0x"<<std::hex<<uint32_t(result)<<std::dec<<" requestedBytes="<<bytes;
++            throw std::runtime_error(message.str());
++        }
++        m_allocationBytes=bytes;
+     }
+ 
+     void D3D12Block::free()
+     {
++        if(!m_resource)return;
+         m_resource->Release();
+         m_resource = nullptr;
++        RtrNativeBudget::Release(RtrNativeBudget::Resource,m_allocationBytes);m_allocationBytes=0;
+     }
+ 
+     uint64_t D3D12Block::getVMA() { return static_cast<uint64_t>(m_resource->GetGPUVirtualAddress()); }
+--- a/include/rtxmu/Suballocator.h
++++ b/include/rtxmu/Suballocator.h
+@@ -23,6 +23,8 @@
+ #pragma once
+ 
+ #include <vector>
++#include <algorithm>
++#include <memory>
+ #include <mutex>
+ #include "Logger.h"
+ #include <cmath>
+@@ -36,6 +38,9 @@
+         uint64_t alignmentSavings = 0;
+         uint64_t totalResidentMemorySize = 0;
+         uint64_t unusedSize = 0;
++        uint64_t largestUnusedSize = 0;
++        uint64_t idleResidentMemorySize = 0;
++        uint64_t allocationRecords = 0;
+         double   fragmentation = 0.0;
+     };
+ 
+@@ -99,12 +104,17 @@
+             for (uint32_t blockIndex = 0; blockIndex < blockCount; blockIndex++)
+             {
+                 m_blocks[blockIndex]->block.free();
++                delete m_blocks[blockIndex];
+             }
+             m_blocks.clear();
+         }
+         SubAllocation allocate(uint64_t unalignedSize)
+         {
+             std::lock_guard<std::mutex> guard(m_threadSafeLock);
++
++            // Reserve metadata ownership before changing allocation state.
++            if(m_subBlocks.size()==m_subBlocks.capacity())
++                m_subBlocks.reserve(m_subBlocks.empty()?16:m_subBlocks.size()*2);
+ 
+             // Align allocation
+             const uint64_t sizeInBytes = align(unalignedSize, m_allocationAlignment);
+@@ -119,7 +129,8 @@
+             uint64_t numBlocks = m_blocks.size();
+ 
+             BlockDesc blockDesc = {};
+-            SubBlock* subBlock = new SubBlock{ SubBlockRef(), 0, 0, 0, 0 };
++            auto pendingSubBlock=std::make_unique<SubBlock>(SubBlock{ SubBlockRef(), 0, 0, 0, 0 });
++            SubBlock* subBlock=pendingSubBlock.get();
+ 
+             // Do not suballocate if the memory request is larger than the block size
+             if (sizeInBytes > m_blockSize)
+@@ -199,6 +210,8 @@
+             }
+ 
+             // Pass a generic SubAllocation struct back to client
++            subBlock->ownerIndex=m_subBlocks.size();
++            m_subBlocks.push_back(std::move(pendingSubBlock));
+             return {subBlock->blockDesc->block, subBlock->offset, subBlock};
+         }
+ 
+@@ -207,6 +220,7 @@
+             std::lock_guard<std::mutex> guard(m_threadSafeLock);
+ 
+             SubBlock* subBlock = reinterpret_cast<SubBlock*>(subBlockRef);
++            if(subBlock->isFree)return;
+             uint64_t blockIndex = 0;
+             for (BlockDesc* blockDesc : m_blocks)
+             {
+@@ -221,6 +235,7 @@
+                     {
+                         blockDesc->block.free();
+                         m_blocks.erase(m_blocks.begin() + blockIndex);
++                        delete blockDesc;
+ 
+                         if (Logger::isEnabled(Level::DBG))
+                         {
+@@ -247,12 +262,30 @@
+                         {
+                             blockDesc->block.free();
+                             m_blocks.erase(m_blocks.begin() + blockIndex);
++                            delete blockDesc;
+                         }
+                     }
+                     break;
+                 }
+                 blockIndex++;
+             }
++        }
++
++        // free() preserves the opaque record for existing isFree()/size readers.
++        // release() is the owner's final reference and also destroys that record.
++        void release(SubBlockRef* subBlockRef)
++        {
++            if(!subBlockRef)return;
++            free(subBlockRef);
++            std::lock_guard<std::mutex> guard(m_threadSafeLock);
++            auto* subBlock=reinterpret_cast<SubBlock*>(subBlockRef);
++            const auto index=subBlock->ownerIndex;
++            if(index+1!=m_subBlocks.size())
++            {
++                m_subBlocks[index]=std::move(m_subBlocks.back());
++                m_subBlocks[index]->ownerIndex=index;
++            }
++            m_subBlocks.pop_back();
+         }
+ 
+         uint64_t getSize()
+@@ -266,16 +299,18 @@
+         }
+ 
+         //https://asawicki.info/news_1757_a_metric_for_memory_fragmentation
+-        double getFragmentation(uint64_t& totalUnusedMemory)
++        double getFragmentation(uint64_t& totalUnusedMemory, uint64_t* largestUnused=nullptr, uint64_t* idleResident=nullptr)
+         {
+             uint64_t quality = 0;
+             totalUnusedMemory = 0;
++            uint64_t largest=0,idle=0;
+             for (auto blockDesc : m_blocks)
+             {
+                 for (SubBlock& freeSubBlock : blockDesc->freeSubBlocks)
+                 {
+                     quality       += freeSubBlock.size * freeSubBlock.size;
+                     totalUnusedMemory += freeSubBlock.size;
++                    largest=std::max(largest,freeSubBlock.size);
+                 }
+ 
+                 // Current offset free block at the tail end
+@@ -283,7 +318,11 @@
+ 
+                 quality += tailFreeSubBlock * tailFreeSubBlock;
+                 totalUnusedMemory += tailFreeSubBlock;
+-            }
++                largest=std::max(largest,tailFreeSubBlock);
++                if(blockDesc->numSubBlocks==0)idle+=blockDesc->size;
++            }
++            if(largestUnused)*largestUnused=largest;
++            if(idleResident)*idleResident=idle;
+ 
+             if (quality == 0 || totalUnusedMemory == 0)
+             {
+@@ -296,12 +335,14 @@
+ 
+         Stats const getStats()
+         {
++            std::lock_guard<std::mutex> guard(m_threadSafeLock);
+             Stats stats;
++            stats.allocationRecords=m_subBlocks.size();
+             stats.totalResidentMemorySize = getSize();
+             stats.alignmentSavings = m_stats.alignmentSavings;
+             uint64_t totalUnusedSize;
+             // Calculate fragmentation and total free blocks at the same time
+-            stats.fragmentation = getFragmentation(totalUnusedSize);
++            stats.fragmentation = getFragmentation(totalUnusedSize,&stats.largestUnusedSize,&stats.idleResidentMemorySize);
+             stats.unusedSize = totalUnusedSize;
+             return stats;
+         }
+@@ -320,10 +361,11 @@
+ 
+         void createBlock(uint64_t blockAllocationSize)
+         {
+-            BlockDesc* newBlock = new BlockDesc{};
++            auto newBlock=std::make_unique<BlockDesc>();
+             newBlock->block.allocate(blockAllocationSize, std::to_string(m_blocks.size()));
+             newBlock->size = blockAllocationSize;
+-            m_blocks.push_back(newBlock);
++            try{m_blocks.push_back(newBlock.get());}catch(...){newBlock->block.free();throw;}
++            newBlock.release();
+         }
+ 
+         bool findFreeSubBlock(BlockDesc* suballocatorBlock,
+@@ -445,6 +487,7 @@
+             uint64_t size        = 0;
+             uint64_t unusedSize  = 0;
+             bool     isFree      = false;
++            size_t   ownerIndex  = 0;
+         };
+ 
+         struct BlockDesc
+@@ -459,6 +502,7 @@
+         uint64_t                m_blockSize;
+         uint64_t                m_allocationAlignment;
+         std::vector<BlockDesc*> m_blocks;
++        std::vector<std::unique_ptr<SubBlock>> m_subBlocks;
+         Stats                   m_stats;
+         std::mutex              m_threadSafeLock;
+     };
+--- a/include/rtxmu/D3D12AccelStructManager.h
++++ b/include/rtxmu/D3D12AccelStructManager.h
+@@ -49,6 +49,13 @@
+ 
+         // Resets all queues and frees all memory in suballocators
+         void Reset();
++
++        // Prepare before the host transaction mutates its graph. No GPU command is recorded.
++        uint64_t PrepareAllocation(const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO& info,
++                                   D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags);
++        void PopulatePreparedBuildCommandList(ID3D12GraphicsCommandList4* commandList,
++            const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* inputs,
++            uint64_t count,const std::vector<uint64_t>& ids);
+ 
+         // Receives acceleration structure inputs and returns a command list with build commands
+         void PopulateUpdateCommandList(ID3D12GraphicsCommandList4*                                 commandList,
+--- a/src/D3D12AccelStructManager.cpp
++++ b/src/D3D12AccelStructManager.cpp
+@@ -165,50 +165,51 @@
+         }
+     }
+ 
+-    // Receives acceleration structure inputs and returns a command list with build commands
+-    void DxAccelStructManager::PopulateBuildCommandList(ID3D12GraphicsCommandList4*                                 commandList,
+-                                                        const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* asInputs,
+-                                                        const uint64_t                                              buildCount,
+-                                                        std::vector<uint64_t>&                                      accelStructIds)
+-    {
+-        std::lock_guard<std::mutex> guard(m_threadSafeLock);
+-
+-        accelStructIds.reserve(buildCount);
+-        for (uint32_t buildIndex = 0; buildIndex < buildCount; buildIndex++)
+-        {
+-            uint64_t asId = GetAccelStructId();
+-
+-            // Assign an id for the acceleration structure
+-            accelStructIds.push_back(asId);
+-
+-            // Request build size information and suballocate the scratch and result buffers
+-            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
+-            m_allocator.device->GetRaytracingAccelerationStructurePrebuildInfo(&asInputs[buildIndex], &prebuildInfo);
+-
+-            DxAccelerationStructure* accelStruct = m_asBufferBuildQueue[asId];
+-
+-            if (asInputs[buildIndex].Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION)
+-            {
+-                // Allocate from transient result pool because it will be deallocated post compaction
+-                accelStruct->resultGpuMemory = m_transientResultPool->allocate(prebuildInfo.ResultDataMaxSizeInBytes);
+-            }
+-            else
+-            {
+-                // Allocate from persistent result pool because it will be used from here on out
+-                accelStruct->resultGpuMemory = m_resultPool->allocate(prebuildInfo.ResultDataMaxSizeInBytes);
+-            }
+-
+-            if (asInputs[buildIndex].Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
+-            {
+-                accelStruct->updateGpuMemory = m_updatePool->allocate(prebuildInfo.UpdateScratchDataSizeInBytes);
+-            }
+-
+-            accelStruct->scratchGpuMemory = m_scratchPool->allocate(prebuildInfo.ScratchDataSizeInBytes);
+-            accelStruct->scratchSize = accelStruct->scratchGpuMemory.subBlock->getSize();
+-
+-            m_totalUncompactedMemory += accelStruct->resultGpuMemory.subBlock->getSize();
+-            accelStruct->resultSize = accelStruct->resultGpuMemory.subBlock->getSize();
+-
++    uint64_t DxAccelStructManager::PrepareAllocation(
++        const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO& info,
++        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags)
++    {
++        std::lock_guard<std::mutex> guard(m_threadSafeLock);
++        const auto id=GetAccelStructId();auto* as=m_asBufferBuildQueue[id];
++        as->requestedCompaction=(flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION)!=0;
++        try{
++            as->resultGpuMemory=(as->requestedCompaction?m_transientResultPool:m_resultPool)->allocate(info.ResultDataMaxSizeInBytes);
++            if(flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
++                as->updateGpuMemory=m_updatePool->allocate(info.UpdateScratchDataSizeInBytes);
++            as->scratchGpuMemory=m_scratchPool->allocate(info.ScratchDataSizeInBytes);
++            as->scratchSize=as->scratchGpuMemory.subBlock->getSize();
++            if(as->requestedCompaction){
++                as->compactionSizeGpuMemory=m_compactionSizeGpuPool->allocate(SizeOfCompactionDescriptor);
++                as->compactionSizeCpuMemory=m_compactionSizeCpuPool->allocate(SizeOfCompactionDescriptor);
++            }
++            as->resultSize=as->resultGpuMemory.subBlock->getSize();m_totalUncompactedMemory+=as->resultSize;
++        }catch(...){ReleaseAccelerationStructures(id);throw;}
++        return id;
++    }
++
++    void DxAccelStructManager::PopulateBuildCommandList(ID3D12GraphicsCommandList4* commandList,
++        const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* inputs,
++        const uint64_t count,std::vector<uint64_t>& ids)
++    {
++        const auto first=ids.size();ids.reserve(first+count);
++        try{for(uint64_t i=0;i<count;++i){
++            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
++            m_allocator.device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs[i],&info);
++            ids.push_back(PrepareAllocation(info,inputs[i].Flags));
++        }}catch(...){
++            std::vector<uint64_t> rollback(ids.begin()+first,ids.end());RemoveAccelerationStructures(rollback);ids.resize(first);throw;
++        }
++        const std::vector<uint64_t> prepared(ids.begin()+first,ids.end());
++        PopulatePreparedBuildCommandList(commandList,inputs,count,prepared);
++    }
++
++    void DxAccelStructManager::PopulatePreparedBuildCommandList(ID3D12GraphicsCommandList4* commandList,
++        const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* asInputs,
++        uint64_t buildCount,const std::vector<uint64_t>& ids)
++    {
++        std::lock_guard<std::mutex> guard(m_threadSafeLock);
++        for(uint64_t buildIndex=0;buildIndex<buildCount;++buildIndex){
++            const auto asId=ids[buildIndex];auto* accelStruct=m_asBufferBuildQueue[asId];
+             // Setup build desc and allocator scratch and result buffers
+             D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
+             buildDesc.Inputs                                             = asInputs[buildIndex];
+@@ -225,7 +226,6 @@
+                 accelStruct->requestedCompaction = true;
+ 
+                 // Suballocate the gpu memory that the builder will use to write the compaction size post build
+-                accelStruct->compactionSizeGpuMemory = m_compactionSizeGpuPool->allocate(SizeOfCompactionDescriptor);
+ 
+                 // Request to get compaction size post build
+                 auto gpuVA = D3D12Block::getGPUVA(accelStruct->compactionSizeGpuMemory.block,
+@@ -239,7 +239,6 @@
+                                                                   postBuildInfo);
+ 
+                 // Suballocate the readback memory
+-                accelStruct->compactionSizeCpuMemory = m_compactionSizeCpuPool->allocate(SizeOfCompactionDescriptor);
+ 
+                 if (Logger::isEnabled(Level::DBG))
+                 {
+@@ -552,38 +551,38 @@
+         m_totalUncompactedMemory -= accelStruct->resultSize;
+ 
+         // Deallocate all the buffers used for acceleration structures
+-        if ((accelStruct->scratchGpuMemory.subBlock != nullptr) &&
+-            (accelStruct->scratchGpuMemory.subBlock->isFree() == false))
+-        {
+-            m_scratchPool->free(accelStruct->scratchGpuMemory.subBlock);
++        if ((accelStruct->scratchGpuMemory.subBlock != nullptr))
++        {
++            m_scratchPool->release(accelStruct->scratchGpuMemory.subBlock);
+             accelStruct->scratchGpuMemory.subBlock = nullptr;
+         }
+-        if ((accelStruct->updateGpuMemory.subBlock != nullptr) &&
+-            (accelStruct->updateGpuMemory.subBlock->isFree() == false))
+-        {
+-            m_updatePool->free(accelStruct->updateGpuMemory.subBlock);
++        if ((accelStruct->updateGpuMemory.subBlock != nullptr))
++        {
++            m_updatePool->release(accelStruct->updateGpuMemory.subBlock);
+             accelStruct->updateGpuMemory.subBlock = nullptr;
+         }
+-        if ((accelStruct->resultGpuMemory.subBlock != nullptr) &&
+-            (accelStruct->resultGpuMemory.subBlock->isFree() == false))
++        if ((accelStruct->resultGpuMemory.subBlock != nullptr))
+         {
+             if (accelStruct->requestedCompaction)
+             {
+-                m_transientResultPool->free(accelStruct->resultGpuMemory.subBlock);
++                m_transientResultPool->release(accelStruct->resultGpuMemory.subBlock);
+             }
+             else
+             {
+-                m_resultPool->free(accelStruct->resultGpuMemory.subBlock);
++                m_resultPool->release(accelStruct->resultGpuMemory.subBlock);
+             }
+             accelStruct->resultGpuMemory.subBlock = nullptr;
+         }
+-        if ((accelStruct->compactionGpuMemory.subBlock != nullptr) &&
+-            (accelStruct->compactionGpuMemory.subBlock->isFree() == false))
+-        {
+-            m_compactionPool->free(accelStruct->compactionGpuMemory.subBlock);
++        if ((accelStruct->compactionGpuMemory.subBlock != nullptr))
++        {
++            m_compactionPool->release(accelStruct->compactionGpuMemory.subBlock);
+             accelStruct->compactionGpuMemory.subBlock = nullptr;
+         }
+ 
++        if(accelStruct->compactionSizeGpuMemory.subBlock)
++            m_compactionSizeGpuPool->release(accelStruct->compactionSizeGpuMemory.subBlock);
++        if(accelStruct->compactionSizeCpuMemory.subBlock)
++            m_compactionSizeCpuPool->release(accelStruct->compactionSizeCpuMemory.subBlock);
+         ReleaseAccelStructId(accelStructId);
+ 
+         if (Logger::isEnabled(Level::DBG))

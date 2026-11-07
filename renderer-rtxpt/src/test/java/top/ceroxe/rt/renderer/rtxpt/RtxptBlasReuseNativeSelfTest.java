@@ -130,18 +130,20 @@ public final class RtxptBlasReuseNativeSelfTest {
             renderer.apply(SceneTransaction.builder(++revision).upsert(MeshAsset.builder(1,
                 new float[]{-1,-1,0,1,-1,0,1,1,0,-1,1,0},new int[]{0,1,2,0,2,3},new long[]{1,1}).build()).build());
             submit(renderer);drain(renderer);
-            if(!baseline)require(renderer.resourceArenaStatistics().pooledBlases()==1,"Only the incompatible replacement retires its previous AS");
+            if(!baseline)require(renderer.resourceArenaStatistics().pooledBlases()==(Boolean.getBoolean("upload.nativeManaged")?0:1),"Incompatible replacement follows the selected native allocation owner");
             System.out.println("RTXPT_MANAGED_BOUNDARIES PASS outputDeferral=true retryIdentity=true activePoolExcluded=true incompatibleReplacement=true");
             var remove=SceneTransaction.builder(++revision);for(int i=1;i<=count;i++)remove.removeInstance(i).removeMesh(i);
             renderer.apply(remove.build());submit(renderer);drain(renderer);
             long available=renderer.resourceArenaStatistics().pooledBlases();
-            if(!baseline)require(available>=count,"Only actual removal releases all 128 resident BLASes: "+available);
+            if(!baseline&&Boolean.getBoolean("upload.nativeManaged"))require(available==0,"Native RTXMU ownership does not repopulate the removed external cache");
+            else if(!baseline)require(available>=count,"Only actual removal releases all 128 resident BLASes: "+available);
             long hits=renderer.resourceArenaStatistics().blasPoolHits();
             var second=SceneTransaction.builder(++revision);
             for(int i=1;i<=count;i++)second.upsert(mesh(i+1000,.02f)).upsert(RtxptTopologyPreparationNativeSelfTest.offscreen(i+1000,i+1000));
             renderer.apply(second.build());submit(renderer);drain(renderer);
             var arena=renderer.resourceArenaStatistics();long reused=arena.blasPoolHits()-hits;
-            if(!baseline)require(reused>=count,"All 128 truly retired BLAS targets are reused: "+reused);
+            if(!baseline&&Boolean.getBoolean("upload.nativeManaged"))require(reused==0&&arena.pooledBlases()==0,"Native allocation does not report fabricated external-pool hits");
+            else if(!baseline)require(reused>=count,"All 128 truly retired BLAS targets are reused: "+reused);
             System.out.printf(Locale.ROOT,"RTXPT_BLAS_REUSE PASS batch=%d available=%d poolHits=%d pooledBlases=%d pooledBytes=%d heapBytes=%d leasedBytes=%d freeBytes=%d freshFrames=%d%n",
                 count,available,reused,arena.pooledBlases(),renderer.resourcePressure().pooledBlasBytes(),arena.heapBytes(),arena.leasedBytes(),arena.freeBytes(),sequence);
         }

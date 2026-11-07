@@ -28,6 +28,36 @@ def previous_patch_baseline(evidence):
     return patch > 0 and evidence["baselineVersion"] == ".".join(map(str, (major, minor, patch - 1)))
 
 
+def check_native_managed_resources(evidence, check):
+    check("native-managed-fixed-baseline", evidence["version"] == "7.3.5"
+          and evidence["baselineVersion"] == "7.3.3"
+          and evidence.get("schema") == "native-managed-resources-release-evidence-v1")
+    collector_spec = importlib.util.spec_from_file_location(
+        "native_managed_evidence", ROOT / "tools/Collect-NativeManagedResourcesEvidence.py")
+    collector = importlib.util.module_from_spec(collector_spec)
+    collector_spec.loader.exec_module(collector)
+    for group in ("testSourceSha256", "originalEvidenceSha256", "toolFileSha256", "nativeStageSourceSha256"):
+        check("native-managed-" + group, bool(evidence[group]) and all(
+            sha((ROOT / path).read_bytes()) == value for path, value in evidence[group].items()))
+    check("native-managed-complete-source-and-class-inventories",
+          collector.current_inventories() == {name: evidence[name] for name in (
+              "productionSourceSha256", "productionClassSha256", "testSourceSha256", "testClassSha256", "nativeStageSourceSha256")})
+    cases, _ = collector.correctness(
+        ROOT / "build/reports/native-managed-resources/candidate/receipt.json",
+        ROOT / "build/reports/native-managed-resources/candidate/native-checks.json")
+    check("native-managed-affected-current-correctness", len(cases) >= 5 and evidence["correctness"] == cases)
+    check("native-managed-complete-same-fixture-streaming", evidence["streaming"] == collector.stream_pair())
+    check("native-managed-four-unchanged-fresh-captures", evidence["outputEquivalence"] == collector.equivalence())
+    check("native-managed-unchanged-hard-budget-domains", evidence["budgets"] == collector.budget_evidence()
+          and evidence["budgets"]["nativeDomains"] == {"Resource": 2 << 30, "Upload": 2 << 30}
+          and evidence["budgets"]["jobLimitBytes"] == 9_500_000_000)
+    check("native-managed-upstream-runtime-license", evidence["runtimeLicense"] == collector.license_evidence())
+    fixed = ROOT / "build/streaming-scene-load-classes/top/ceroxe/rt/renderer/rtxpt"
+    check("native-managed-executed-fixed-test-class-bytes", {
+        p.name: sha(p.read_bytes()) for p in fixed.glob("RtxptStreamingSceneLoadTest*.class")
+    } == evidence["streaming"]["candidate"]["testClasses"])
+
+
 def check_managed_resource_locality(evidence, check):
     check("managed-baseline-version", previous_patch_baseline(evidence))
     cost = evidence["updateCost"]
@@ -99,13 +129,16 @@ def main():
     managed = evidence.get("releaseKind") == "compatible-managed-resource-locality"
     continuous = evidence.get("releaseKind") == "compatible-continuous-bootstrap"
     batched = evidence.get("releaseKind") == "compatible-receiver-arena-batched-upload"
-    check("affected-checks-pass", all((c["passed"] is True if managed or continuous else c["passed"])
+    native_managed = evidence.get("releaseKind") == "compatible-native-managed-resources"
+    check("affected-checks-pass", all((c["passed"] is True if managed or continuous or native_managed else c["passed"])
           and c["exit"] == 0 for c in evidence["correctness"].values())
-          and (len(evidence["correctness"]) == 1 if continuous else len(evidence["correctness"]) >= 12 if managed else
+          and (len(evidence["correctness"]) >= 5 if native_managed else len(evidence["correctness"]) == 1 if continuous else len(evidence["correctness"]) >= 12 if managed else
                len(evidence["correctness"]) >= 6 if retained else len(evidence["correctness"]) == 4 if batched else len(evidence["correctness"]) == 3))
     for group in ("productionSourceSha256", "productionClassSha256", "testClassSha256", "evidenceFileSha256"):
         check(group, bool(evidence[group]) and all(sha((ROOT / p).read_bytes()) == h for p, h in evidence[group].items()))
-    if batched:
+    if native_managed:
+        check_native_managed_resources(evidence, check)
+    elif batched:
         check("batched-baseline-version", previous_patch_baseline(evidence))
         capacity = evidence["attributeCapacity"]
         check("real-receiver-capacity-and-limit", capacity["liveBytes"] == 3318040 * 3 * 16
@@ -214,11 +247,18 @@ def main():
                 check(module + "-module-version", metadata["component"]["version"] == version)
         modules[module] = outputs
 
-    for module in (("renderer-api", "renderer-core", "renderer-rtxpt") if continuous else ("renderer-api", "renderer-core")):
+    retained_java_modules = MODULES if native_managed else (("renderer-api", "renderer-core", "renderer-rtxpt") if continuous else ("renderer-api", "renderer-core"))
+    for module in retained_java_modules:
         with zipfile.ZipFile(local / module / evidence["baselineVersion"] / f"{module}-{evidence['baselineVersion']}.jar") as old, \
                 zipfile.ZipFile(ROOT / module / f"build/libs/{module}-{version}.jar") as new:
             old_classes = {n: sha(old.read(n)) for n in old.namelist() if n.endswith(".class")}
             check(module + "-baseline-class-bytes-retained", old_classes == {n: sha(new.read(n)) for n in new.namelist() if n.endswith(".class")})
+        if native_managed:
+            with zipfile.ZipFile(local / module / evidence["baselineVersion"] / f"{module}-{evidence['baselineVersion']}-sources.jar") as old_sources, \
+                    zipfile.ZipFile(ROOT / module / f"build/libs/{module}-{version}-sources.jar") as new_sources:
+                before = {n: sha(old_sources.read(n)) for n in old_sources.namelist() if n.endswith(".java")}
+                after = {n: sha(new_sources.read(n)) for n in new_sources.namelist() if n.endswith(".java")}
+                check(module + "-baseline-java-source-bytes-retained", bool(before) and before == after)
 
     with zipfile.ZipFile(ROOT / "renderer-nvidia" / f"build/libs/renderer-nvidia-{version}.jar") as jar, \
             zipfile.ZipFile(local / "renderer-nvidia" / evidence["baselineVersion"] / f"renderer-nvidia-{evidence['baselineVersion']}.jar") as old:
@@ -243,7 +283,21 @@ def main():
                     or n.startswith(("ShaderPrecompiled/", "ShaderDynamic/", "D3D12/", "Assets/", "ThirdPartyLicenses/"))
                     or ("/" not in n and n.startswith("sl.") and n.endswith(".json")))
             locked = sorted(n for n in previous.namelist() if executable_dependency(n))
-            check("runtime-dependency-inventory-retained", locked == sorted(n for n in runtime.namelist() if executable_dependency(n)))
+            if native_managed:
+                added_license = "ThirdPartyLicenses/RTXMU.txt"
+                check("native-managed-baseline-1621-runtime-dependencies", len(locked) == 1621)
+                previous_files = {n for n in previous.namelist() if not n.endswith("/")}
+                current_files = {n for n in runtime.namelist() if not n.endswith("/")}
+                check("native-managed-only-authorized-runtime-addition", previous_files <= current_files
+                      and current_files - previous_files <= {added_license})
+                check("runtime-dependency-inventory-retained", set(locked) <= {
+                    n for n in runtime.namelist() if executable_dependency(n)}
+                    and {n for n in runtime.namelist() if executable_dependency(n)} - set(locked) <= {added_license})
+                check("native-managed-packaged-upstream-license", added_license in current_files
+                      and runtime.read(added_license) == (ROOT / evidence["runtimeLicense"]["sourcePath"]).read_bytes()
+                      and sha(runtime.read(added_license)) == evidence["runtimeLicense"]["sourceSha256"])
+            else:
+                check("runtime-dependency-inventory-retained", locked == sorted(n for n in runtime.namelist() if executable_dependency(n)))
             check("runtime-dependency-and-shader-bytes-retained", all(runtime.read(n) == previous.read(n) for n in locked))
             sdk = json.loads(runtime.read("native-lighting-sdk.json"))
             check("sdk-version", sdk["version"] == version)

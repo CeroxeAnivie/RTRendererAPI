@@ -1,5 +1,4 @@
 #include "rtxpt_sparse_regions.h"
-#include "rtxpt_upload_retention.h"
 #include "rtxpt_upload_ranges.h"
 #include <iostream>
 #include <random>
@@ -158,16 +157,6 @@ int main(int argc,char** argv){try{
         Check(journal.dirtyNodes.size()==1,"Full upload left stale journal ownership");
         std::cout<<"SPARSE_DIRTY_JOURNAL PASS repeatedWordMarks=32 queuedNodes=1 nextTransaction=1 fullReset=1\n";
     }
-    uint64_t page=0,remaining=0,allocations=0,bytes=0;
-    for(uint64_t copied=0;copied<18*1024*1024;copied+=4096){
-        if(remaining<4096){page=RtrUploadRetention::NextChunkSize(65536,page,allocations!=0);remaining=page;++allocations;bytes+=page;}
-        remaining-=4096;
-    }
-    Check(allocations<=24&&bytes<19*1024*1024,"Adaptive upload did not amortize a long recording");
-    Check(RtrUploadRetention::NextChunkSize(65536,0,false)==65536,"Small uploads grew before exhausting a page");
-    Check(RtrUploadRetention::NextChunkSize(65536,1024*1024,false)==65536,"A new recording inherited an oversized upload page");
-    Check(RtrUploadRetention::NextChunkSize(16*1024*1024,0,true)==16*1024*1024,"Existing large default chunk changed");
-    std::cout<<"ADAPTIVE_UPLOAD_CPU PASS cold18MiBOldAllocations=288 newAllocations="<<allocations<<" allocatedBytes="<<bytes<<" maximumAdaptivePage=1048576 warmBytes="<<RtrUploadRetention::WarmBytes<<"\n";
     std::mt19937 rng(719);std::uniform_real_distribution<float> coordinate(-96,96);std::vector<Light> lights;
     for(int i=0;i<25000;i++){Light l;l.positionType={coordinate(rng),coordinate(rng)*.25f,coordinate(rng),1};l.directionRange[3]=1+float(i%15);lights.push_back(l);}
     rtr::RetainedLightTree tree;double normalization;tree.Rebuild(lights,&normalization);RtrSparseRegions regions;UploadOracle upload;

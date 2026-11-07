@@ -9,6 +9,7 @@ param(
     [string]$SdkRoot='build/rtxpt-sdk',
     [string]$CMakeExecutable='build/native-build-tools/cmake-4.1.2-windows-x86_64/bin/cmake.exe',
     [string]$StreamlineSdk=$env:STREAMLINE_SDK,
+    [string]$RtxmuRoot=$env:RTXMU_ROOT,
     [double]$MemoryLimitGB=10,
     [switch]$ConfigureOnly,
     [switch]$CheckPaths,
@@ -34,6 +35,13 @@ if($CheckPaths){
     return
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$nativeManagedPatch=Join-Path $PSScriptRoot 'patches/rtxpt-native-managed-resources.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $nativeManagedPatch 2>$null
+if($LASTEXITCODE -eq 0){
+    & git -C $sdk apply --reverse --ignore-space-change $nativeManagedPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT native-managed overlay could not be removed'}
+}
+
 [IO.File]::Copy((Join-Path $repo 'renderer-rtxpt/src/main/cpp/rtxpt_scene_delta.h'),(Join-Path $sdk 'External/Donut/include/donut/engine/rtxpt_scene_delta.h'),$true)
 $growthDiagnosticsPatch=Join-Path $PSScriptRoot 'patches/rtxpt-growth-diagnostics.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $growthDiagnosticsPatch 2>$null
@@ -47,17 +55,11 @@ if($LASTEXITCODE -eq 0){
     & git -C $sdk apply --reverse --ignore-space-change $topologyJournalPatch
     if($LASTEXITCODE -ne 0){throw 'RTXPT topology-journal overlay could not be removed'}
 }
-$adaptiveUploadPatch=Join-Path $PSScriptRoot 'patches/rtxpt-adaptive-upload.patch'
-& git -C $sdk apply --reverse --check --ignore-space-change $adaptiveUploadPatch 2>$null
+$uploadStatisticsPatch=Join-Path $PSScriptRoot 'patches/rtxpt-upload-statistics.patch'
+& git -C $sdk apply --reverse --check --ignore-space-change $uploadStatisticsPatch 2>$null
 if($LASTEXITCODE -eq 0){
-    & git -C $sdk apply --reverse --ignore-space-change $adaptiveUploadPatch
-    if($LASTEXITCODE -ne 0){throw 'RTXPT adaptive-upload overlay could not be removed'}
-}
-$uploadRetentionPatch=Join-Path $PSScriptRoot 'patches/rtxpt-upload-retention.patch'
-& git -C $sdk apply --reverse --check --ignore-space-change $uploadRetentionPatch 2>$null
-if($LASTEXITCODE -eq 0){
-    & git -C $sdk apply --reverse --ignore-space-change $uploadRetentionPatch
-    if($LASTEXITCODE -ne 0){throw 'RTXPT upload-retention overlay could not be removed'}
+    & git -C $sdk apply --reverse --ignore-space-change $uploadStatisticsPatch
+    if($LASTEXITCODE -ne 0){throw 'RTXPT upload-statistics overlay could not be removed'}
 }
 $stagingDiagnosticsPatch=Join-Path $PSScriptRoot 'patches/rtxpt-staging-diagnostics.patch'
 & git -C $sdk apply --reverse --check --ignore-space-change $stagingDiagnosticsPatch 2>$null
@@ -1733,14 +1735,10 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT TLAS capacity overlay could not be applied'
 if($LASTEXITCODE -ne 0){throw 'RTXPT staging diagnostics overlay does not match its pinned base'}
 & git -C $sdk apply --ignore-space-change $stagingDiagnosticsPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT staging diagnostics overlay could not be applied'}
-& git -C $sdk apply --check --ignore-space-change $uploadRetentionPatch
-if($LASTEXITCODE -ne 0){throw 'RTXPT upload-retention overlay does not match its pinned base'}
-& git -C $sdk apply --ignore-space-change $uploadRetentionPatch
-if($LASTEXITCODE -ne 0){throw 'RTXPT upload-retention overlay could not be applied'}
-& git -C $sdk apply --check --ignore-space-change $adaptiveUploadPatch
-if($LASTEXITCODE -ne 0){throw 'RTXPT adaptive-upload overlay does not match its pinned base'}
-& git -C $sdk apply --ignore-space-change $adaptiveUploadPatch
-if($LASTEXITCODE -ne 0){throw 'RTXPT adaptive-upload overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $uploadStatisticsPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT upload-statistics overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $uploadStatisticsPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT upload-statistics overlay could not be applied'}
 & git -C $sdk apply --check --ignore-space-change $topologyJournalPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT topology-journal overlay does not match its pinned base'}
 & git -C $sdk apply --ignore-space-change $topologyJournalPatch
@@ -1749,6 +1747,11 @@ if($LASTEXITCODE -ne 0){throw 'RTXPT topology-journal overlay could not be appli
 if($LASTEXITCODE -ne 0){throw 'RTXPT growth diagnostics overlay does not match its pinned base'}
 & git -C $sdk apply --ignore-space-change $growthDiagnosticsPatch
 if($LASTEXITCODE -ne 0){throw 'RTXPT growth diagnostics overlay could not be applied'}
+& git -C $sdk apply --check --ignore-space-change $nativeManagedPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT native-managed overlay does not match its pinned base'}
+& git -C $sdk apply --ignore-space-change $nativeManagedPatch
+if($LASTEXITCODE -ne 0){throw 'RTXPT native-managed overlay could not be applied'}
+
 
 Patch-Once 'External/Donut/nvrhi/src/d3d12/d3d12-device.cpp' "    void Device::runGarbageCollection()`r`n    {" @'
     void Device::runGarbageCollection()
@@ -1780,8 +1783,27 @@ $marker='# RTR_RTXPT_HOST_TARGET'
 if($cmakeText.Contains($marker)){$cmakeText=$cmakeText.Substring(0,$cmakeText.IndexOf($marker))}
 $hostCMake=(Join-Path $repo 'renderer-rtxpt/src/main/cpp/CMakeLists.txt').Replace('\','/')
 [IO.File]::WriteAllText($rootCMake,$cmakeText+"`n$marker`ninclude(`"$hostCMake`")`n",$utf8)
+# Stage the pinned dependency as build input; do not modify a shared SDK checkout.
+if(!$RtxmuRoot){throw 'Set RTXMU_ROOT or pass -RtxmuRoot for the pinned RTXMU v1.4 source'}
+$rtxmuSource=Resolve-ProjectPath $RtxmuRoot
+$rtxmuPin=(& git -C $rtxmuSource rev-parse HEAD) -join ''
+if($LASTEXITCODE -ne 0 -or $rtxmuPin.Trim() -ne '0c9ce1177000d5923e2cc6a35ae9cb7ff03748d2'){throw 'RTXMU source must match pinned v1.4'}
+$rtxmuStage=Join-Path $sdk 'External/Rtxmu'
+New-Item -ItemType Directory -Path $rtxmuStage -Force | Out-Null
+foreach($folder in @('include','src')){
+    $target=Join-Path $rtxmuStage $folder
+    New-Item -ItemType Directory -Path $target -Force | Out-Null
+    Copy-Item -Path (Join-Path $rtxmuSource ($folder+'/*')) -Destination $target -Recurse -Force
+}
+foreach($file in @('CMakeLists.txt','LICENSE.txt')){
+    if(Test-Path -LiteralPath (Join-Path $rtxmuSource $file)){Copy-Item -LiteralPath (Join-Path $rtxmuSource $file) -Destination $rtxmuStage -Force}
+}
+& git -C $sdk apply --directory=External/Rtxmu --check (Join-Path $PSScriptRoot 'patches/rtxmu-prepared-allocation.patch')
+if($LASTEXITCODE -ne 0){throw 'RTXMU prepared-allocation patch does not match pinned source'}
+& git -C $sdk apply --directory=External/Rtxmu (Join-Path $PSScriptRoot 'patches/rtxmu-prepared-allocation.patch')
+if($LASTEXITCODE -ne 0){throw 'RTXMU prepared-allocation patch could not be applied'}
 $build=Join-Path $sdk 'build-host'
-$localDependencies=@()
+$localDependencies=@('-DNVRHI_WITH_RTXMU=ON','-DRTXMU_WITH_D3D12=ON','-DRTXMU_WITH_VULKAN=OFF',('-DNVRHI_RTXMU_FETCH_DIR='+$rtxmuStage.Replace('\','/')),('-DFETCHCONTENT_SOURCE_DIR_RTXMU='+$rtxmuStage.Replace('\','/')))
 if($StreamlineSdk){
     $localDependencies+=('-DFETCHCONTENT_SOURCE_DIR_STREAMLINE='+$streamline.Replace('\','/'))
 }
@@ -1793,7 +1815,7 @@ if($StreamlineSdk){
 if($LASTEXITCODE -ne 0){throw 'RTXPT native configure failed'}
 if($ConfigureOnly){return}
 & (Join-Path $PSScriptRoot 'Invoke-BoundedBuild.ps1') -FilePath $cmake `
-    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','rtxpt_memory_diagnostics_selftest','rtxpt_task_batch_selftest','rtxpt_capacity_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
+    -ArgumentList @('--build',$build,'--config','Release','--target','rtrenderer_rtxpt','rtxpt_native_control','rtxpt_streamline_cache_selftest','rtxpt_memory_diagnostics_selftest','rtxpt_task_batch_selftest','rtxpt_capacity_selftest','rtxpt_upload_pool_selftest','rtxpt_sparse_regions_selftest','--parallel','1','--','/p:MultiProcessorCompilation=false',('/bl:'+(Join-Path $build 'build.binlog')),('/flp:logfile='+(Join-Path $build 'build.log')+';verbosity=normal;encoding=UTF-8')) `
     -WorkingDirectory $sdk -MemoryLimitGB $MemoryLimitGB
 if($LASTEXITCODE -ne 0){throw 'RTXPT JNI bridge build failed'}
 if(!$SkipSelfTests){
@@ -1817,6 +1839,7 @@ $noticeFiles=@{
     'External/Donut/nvrhi/LICENSE.txt'='NVRHI.txt'; 'External/Donut/nvrhi/ThirdPartyLicenses.txt'='NVRHI-ThirdParty.txt';
     'External/Donut/ShaderMake/LICENSE.txt'='ShaderMake.txt'; 'External/Donut/ShaderMake/ThirdPartyLicenses.txt'='ShaderMake-ThirdParty.txt';
     'External/Nrd/LICENSE.txt'='NRD.txt'; 'External/Rtxdi/LICENSE.txt'='RTXDI.txt';
+    'External/Rtxmu/LICENSE.txt'='RTXMU.txt';
     'External/SHARC/License.md'='SHARC.md'; 'External/Rtxtf/LICENSE.txt'='RTXTF.txt';
     'External/NVAPI/License.txt'='NVAPI.txt'; 'External/Omm/LICENSE.txt'='OMM.txt';
     'External/cxxopts/LICENSE'='cxxopts.txt'; 'External/dxc/LICENCE-MIT.txt'='DXC-MIT.txt';

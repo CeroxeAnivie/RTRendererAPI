@@ -94,9 +94,9 @@ static auto MaterialTextures(const ResidentMaterial& material) {
 }
 void IndexRetainedResources() {
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::IndexRebuild);
-    resourceArena.Prepare(GetDevice());uploadArena.Prepare(GetDevice());
-    resourceRetirement.reserve(16);resourceCommandPool.reserve(8);resourceQueryPool.reserve(16);
-    spareMeshBuffers.reserve(64);spareMeshBlases.reserve(1024);spareResourceTlas.reserve(16);resourceGpuQueries.reserve(8);
+    resourceArena.Prepare(GetDevice());
+    resourceRetirement.reserve(16);resourceQueryPool.reserve(16);
+    spareMeshBuffers.reserve(64);spareResourceTlas.reserve(16);resourceGpuQueries.reserve(8);
     candidateLayoutDirty=true;
     if(!m_scene){
         residentMeshes.clear();residentMaterials.clear();residentMaterialMeshes.clear();residentTextureUsers.clear();residentMeshNodes.clear();residentInstanceNodes.clear();return;
@@ -233,12 +233,8 @@ void PatchRetainedResourceIndex(
 }
 uint64_t resourceRevision=0;
 std::array<uint64_t,19> dynamicWork{}; // validation records/hits/failures, geometry visits, batches, staging bytes, drains, retirements, pending, peak, packet ns, index ns, migration bytes, texture uploads, geometry uploads, clear calls
-struct BlasAllocation {uint64_t bytes=0;RtrResourceArena::Storage storage;};
-using BlasAllocationIndex=std::unordered_map<nvrhi::rt::IAccelStruct*,BlasAllocation>;
 using BufferAllocationIndex=std::unordered_map<nvrhi::IBuffer*,RtrResourceArena::Storage>;
 RtrResourceArena resourceArena;
-RtrUploadArena uploadArena;
-bool uploadPreparationPending=false;
 bool memoryPreparationPending=false;
 uint64_t memoryPreparationRevision=UINT64_MAX,memoryPreparationSequence=UINT64_MAX;
 // Diagnostic counters freeze at OFF. Arena ownership/capacity is operational.
@@ -250,28 +246,22 @@ struct ResourceTlasStorage {
     std::array<RtrResourceArena::Storage,2> storage;
 };
 struct RetiredResources {
-    RtrUploadArena::Storage upload;
-    std::vector<BlasAllocationIndex::node_type> allocationEntries;
     std::vector<BufferAllocationIndex::node_type> bufferAllocationEntries;
     size_t recycleCursor=0;
     bool recycled=false,tlasRecycled=false;
-    // NVRHI owns raw upload/scratch chunks on the public command-list object.
-    // The queue's internal list tracker alone does not retain those pools.
-    std::vector<nvrhi::CommandListHandle> commands;
-    bool recycleCommands=true;
     std::vector<ResidentMesh> meshes;
     std::vector<std::shared_ptr<donut::engine::SceneGraphNode>> detachedNodes;
-    std::vector<std::shared_ptr<donut::engine::LoadedTexture>> textures;
-    std::vector<nvrhi::BufferHandle> buffers;
+    std::vector<std::shared_ptr<donut::engine::DescriptorHandle>> textureDescriptors;
     std::vector<nvrhi::rt::AccelStructHandle> acceleration;
-    std::vector<nvrhi::rt::OpacityMicromapHandle> opacityMaps;
     ResourceTlasStorage tlas;
     std::array<RtrResourceArena::Storage,3> tlasTableStorage;
     nvrhi::EventQueryHandle done,computeDone;
     uint64_t referencedBytes=0,createdNanos=0;
 };
 std::vector<RetiredResources> resourceRetirement;
-std::vector<nvrhi::CommandListHandle> resourceCommandPool;
+// Persistent public object keeps native scratch owners; NVRHI pools submitted
+// native lists and allocators by their own queue completion versions.
+nvrhi::CommandListHandle resourceCommand;
 nvrhi::CommandListHandle resourceComputeOrdering;
 std::vector<std::pair<nvrhi::EventQueryHandle,nvrhi::EventQueryHandle>> resourceQueryPool;
 struct SpareMeshBuffers {
@@ -280,15 +270,9 @@ struct SpareMeshBuffers {
     uint64_t bytes;
     RtrResourceArena::Storage vertexStorage,indexStorage;
 };
-struct SpareMeshBlas { nvrhi::rt::AccelStructHandle acceleration; uint64_t bytes;RtrResourceArena::Storage storage; };
 std::vector<SpareMeshBuffers> spareMeshBuffers;
-std::vector<SpareMeshBlas> spareMeshBlases;
-// A 64-item limit retained only ~4MiB for the common 64KiB AS, despite
-// its existing 64MiB budget. Keep the byte cap while admitting small targets.
-static constexpr size_t SpareMeshBlasLimit=1024,CompletedMeshRecycleBatch=128;
-static constexpr uint64_t SpareMeshBlasBudget=64*1024*1024;
-uint64_t spareMeshBufferBytes=0,spareMeshBlasBytes=0;
-BlasAllocationIndex resourceBlasAllocationBytes;
+static constexpr size_t CompletedMeshRecycleBatch=128;
+uint64_t spareMeshBufferBytes=0;
 BufferAllocationIndex resourceBufferAllocations;
 std::unordered_map<std::string,nvrhi::rt::AccelStructHandle> preparedMeshBlases;
 std::unordered_map<std::string,uint64_t> resourceChangeReasons;
@@ -428,7 +412,7 @@ void CreateResourceTlas(RetiredResources& retired){
     m_topLevelAS=std::move(next.acceleration);m_subInstanceBuffer=std::move(next.subInstances);
     std::array<nvrhi::BufferHandle*,3> tables{std::addressof(m_tlasInstanceBuffer),std::addressof(m_tlasInstanceDataBuffer),std::addressof(m_tlasMeshBoundsBuffer)};
     for(size_t i=0;i<3;++i)if(preparedTlasTables[i]){
-        if(*tables[i])retired.buffers.push_back(*tables[i]);retired.tlasTableStorage[i]=std::move(activeTlasTableStorage[i]);
+        retired.tlasTableStorage[i]=std::move(activeTlasTableStorage[i]);
         *tables[i]=std::move(preparedTlasTables[i]);activeTlasTableStorage[i]=std::move(preparedTlasTableStorage[i]);
         m_tlasInstanceDataDirty=true;
     }
@@ -470,33 +454,15 @@ void RecycleMesh(const ResidentMesh& mesh,RetiredResources& retired){
         spareMeshBuffers.push_back({b->vertexBuffer,b->indexBuffer,b->vertexBufferDescriptor,b->indexBufferDescriptor,bytes,storage(b->vertexBuffer),storage(b->indexBuffer)});spareMeshBufferBytes+=bytes;
     }else if(RtrDiagnostics::level.load())++arenaWork[7];
     }
-    auto as=mesh->accelStruct;
-    if(as&&!as->isCompacted()&&as->getDesc().debugName=="Retained mutable BLAS"){
-        auto allocation=std::find_if(retired.allocationEntries.begin(),retired.allocationEntries.end(),[&](const auto& entry){return !entry.empty()&&entry.key()==as.Get();});
-        if(allocation!=retired.allocationEntries.end()){
-            bytes=allocation->mapped().bytes;
-            while(!spareMeshBlases.empty()&&(spareMeshBlases.size()>=SpareMeshBlasLimit||spareMeshBlasBytes+bytes>SpareMeshBlasBudget)){
-                auto& old=spareMeshBlases.front();auto oldBytes=old.bytes;
-                RtrDiagnostics::Scope evict(RtrDiagnostics::PoolEvict,1,0,1,0,0,0,0,oldBytes);
-                if(!nativeLighting.reclaimer->Enqueue(old,oldBytes))break;
-                if(RtrDiagnostics::level.load())++arenaWork[5];
-                spareMeshBlases.erase(spareMeshBlases.begin());spareMeshBlasBytes-=oldBytes;
-            }
-            if(spareMeshBlases.size()<SpareMeshBlasLimit&&spareMeshBlasBytes+bytes<=SpareMeshBlasBudget){spareMeshBlases.push_back({as,bytes,allocation->mapped().storage});spareMeshBlasBytes+=bytes;}
-            else if(RtrDiagnostics::level.load())++arenaWork[7];
-        }
-    }
 }
 nvrhi::CommandListHandle ResourceCommand(){
     RtrDiagnostics::Scope acquire(RtrDiagnostics::CommandAcquire);
-    while(!resourceCommandPool.empty()){
-        auto command=std::move(resourceCommandPool.back());resourceCommandPool.pop_back();
-        if(command)return command;
+    if(!resourceCommand){
+        if(RtrDiagnostics::level.load()!=0)++dynamicWork[18];
+        resourceCommand=GetDevice()->createCommandList(nvrhi::CommandListParameters().setUploadChunkSize(1024*1024).setScratchChunkSize(4*1024*1024).setScratchMaxMemory(64*1024*1024));
+        if(!resourceCommand)throw std::runtime_error("Resource command-list allocation failed");
     }
-    if(RtrDiagnostics::level.load()!=0)++dynamicWork[18];
-    auto command=GetDevice()->createCommandList(nvrhi::CommandListParameters().setScratchChunkSize(4*1024*1024).setScratchMaxMemory(64*1024*1024));
-    if(!command)throw std::runtime_error("Resource command-list allocation failed");
-    return command;
+    return resourceCommand;
 }
 void PollResourceRetirement(){
     RtrDiagnostics::Scope diagnostic(RtrDiagnostics::ResourceRetirement);
@@ -505,7 +471,7 @@ void PollResourceRetirement(){
     // the background destruction queue is full. Queue order permits stopping at
     // the first incomplete generation; no in-flight resource can enter the pool.
     for(auto& retired:resourceRetirement){
-        if(retired.tlasRecycled&&!retired.upload)continue;
+        if(retired.tlasRecycled)continue;
         bool completed;{RtrDiagnostics::Scope poll(RtrDiagnostics::CompletionPoll,2);completed=GetDevice()->pollEventQuery(retired.done)&&GetDevice()->pollEventQuery(retired.computeDone);}
         if(!completed)break;
         if(retired.tlas.acceleration&&retired.tlas.subInstances){
@@ -516,7 +482,7 @@ void PollResourceRetirement(){
                     else if(spareResourceTlas.size()<16){spareResourceTlas.push_back(std::move(retired.tlas));spareResourceTlasBytes+=bytes;}
                 }
         }
-        retired.tlasRecycled=true;retired.upload.reset();
+        retired.tlasRecycled=true;
     }
     size_t budget=2;
     for(auto i=resourceRetirement.begin();i!=resourceRetirement.end()&&budget&&nativeLighting.reclaimer->Available();){
@@ -530,13 +496,6 @@ void PollResourceRetirement(){
             if(i->recycleCursor<i->meshes.size())break;
             i->recycled=true;
         }
-        if(i->recycleCommands){
-            for(auto& command:i->commands)if(command&&resourceCommandPool.size()<8)resourceCommandPool.push_back(std::move(command));
-            // RecycleMesh can fill the release queue after Available() succeeded.
-            // A rejected Enqueue leaves this generation for a later poll; its
-            // moved command handles must never be inserted into the pool again.
-            i->recycleCommands=false;
-        }
         const bool cacheQueries=resourceQueryPool.size()<16;auto done=cacheQueries?i->done:nvrhi::EventQueryHandle{};auto computeDone=cacheQueries?i->computeDone:nvrhi::EventQueryHandle{};
         {RtrDiagnostics::Scope enqueue(RtrDiagnostics::ReclaimEnqueue,1,i->referencedBytes);
             if(!nativeLighting.reclaimer->Enqueue(*i,i->referencedBytes))break;}
@@ -546,7 +505,6 @@ void PollResourceRetirement(){
     if(RtrDiagnostics::level.load()!=0)dynamicWork[8]=resourceRetirement.size();
 }
 void RetireResources(RetiredResources&& value){
-    value.allocationEntries.reserve(value.meshes.size());
     value.bufferAllocationEntries.reserve(value.meshes.size()*2);
     if(!resourceQueryPool.empty()){
         value.done=std::move(resourceQueryPool.back().first);value.computeDone=std::move(resourceQueryPool.back().second);resourceQueryPool.pop_back();
@@ -558,11 +516,9 @@ void RetireResources(RetiredResources&& value){
             value.bufferAllocationEntries.push_back(resourceBufferAllocations.extract(allocation));
         for(auto* buffer:{b->vertexBuffer.Get(),b->indexBuffer.Get()})
             if(buffer&&referencedBuffers.insert(buffer).second)value.referencedBytes+=buffer->getDesc().byteSize;
-        auto as=resourceBlasAllocationBytes.find(mesh->accelStruct.Get());if(as!=resourceBlasAllocationBytes.end()){
-            value.referencedBytes+=as->second.bytes;value.allocationEntries.push_back(resourceBlasAllocationBytes.extract(as));
-        }
+
     }
-    for(auto& buffer:value.buffers)if(buffer&&referencedBuffers.insert(buffer.Get()).second)value.referencedBytes+=buffer->getDesc().byteSize;
+    for(auto& storage:value.tlasTableStorage)if(storage)value.referencedBytes+=storage->Capacity();
     if(!value.done||!value.computeDone)throw std::runtime_error("Resource retirement event allocation failed");
     GetDevice()->setEventQuery(value.done,nvrhi::CommandQueue::Graphics);
     GetDevice()->setEventQuery(value.computeDone,nvrhi::CommandQueue::Compute);resourceRetirement.push_back(std::move(value));
@@ -703,7 +659,6 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
             if(m_ommBaker)m_ommBaker->HostInvalidateMesh(*extended);
             candidateDirtyMeshes.insert(mesh->name);
             if(extended->AccelStructOMM){retiredGeneration.acceleration.push_back(extended->AccelStructOMM);
-                retiredGeneration.opacityMaps.insert(retiredGeneration.opacityMaps.end(),extended->OpacityMicroMaps.begin(),extended->OpacityMicroMaps.end());
                 extended->AccelStructOMM=nullptr;extended->OpacityMicroMaps.clear();m_tlasInstanceDataDirty=true;nativeTlasDirty=true;}
             extended->InvalidateOmmCpuInputIdentity();
         }
@@ -723,7 +678,6 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
             mesh->accelStruct=nullptr;
             if(auto* extended=dynamic_cast<MeshInfoEx*>(mesh.get())) {
                 if(extended->AccelStructOMM)retiredGeneration.acceleration.push_back(extended->AccelStructOMM);
-                retiredGeneration.opacityMaps.insert(retiredGeneration.opacityMaps.end(),extended->OpacityMicroMaps.begin(),extended->OpacityMicroMaps.end());
                 extended->AccelStructOMM=nullptr;extended->OpacityMicroMaps.clear();extended->InvalidateOmmCpuInputIdentity();
             }
         }
@@ -773,8 +727,6 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
     failureGuard.command=command;
     nvrhi::TimerQueryHandle gpuQuery;
     if(RtrDiagnostics::level.load()!=0&&resourceGpuQueries.size()<8){gpuQuery=GetDevice()->createTimerQuery();GetDevice()->resetTimerQuery(gpuQuery);command->beginTimerQuery(gpuQuery);}
-    retiredGeneration.buffers={m_scene->GetInstanceBuffer(),m_scene->GetGeometryBuffer(),m_scene->GetMaterialBuffer(),m_subInstanceBuffer};
-    if(m_topLevelAS)retiredGeneration.acceleration.push_back(m_topLevelAS);
     if(topology){
         if(memory)m_scene->HostRefreshTopology(command,GetFrameIndex(),localMeshes,changedMaterials);
         else m_scene->Refresh(command,GetFrameIndex());
@@ -814,9 +766,6 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
     stageBegin=ResourceClock();
     commitPart.emplace(RtrDiagnostics::Acceleration);
     if(pending){
-        if(!m_blasPool)m_blasPool=std::make_unique<bvh::BlasPool>(GetDevice());
-        if(!m_blasCompactor)m_blasCompactor=std::make_unique<bvh::BlasCompactor>(GetDevice(),*m_blasPool);
-        if(m_ommBaker)m_ommBaker->SetBlasCompactor(m_blasCompactor.get());
         if(memory){
             // The compactor synchronously reads GPU sizes. Dynamic generations use
             // ordinary AS allocations and stay entirely on the graphics queue.
@@ -838,17 +787,12 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
                 const auto identity=RtrDiagnostics::Identity(mesh->name);
                 uint64_t reason=resourceChangeReasons.count(mesh->name)?resourceChangeReasons.at(mesh->name):RtrDiagnostics::BuildFlags;
                 if(auto prepared=preparedMeshBlases.find(mesh->name);prepared!=preparedMeshBlases.end()){
-                    next=prepared->second;allocationBytes=resourceBlasAllocationBytes.at(next.Get()).bytes;preparedMeshBlases.erase(prepared);
-                }
-                for(auto i=spareMeshBlases.begin();!next&&i!=spareMeshBlases.end();++i)if(CompatibleBlas(i->acceleration->getDesc(),desc)){
-                    next=i->acceleration;allocationBytes=i->bytes;resourceBlasAllocationBytes.insert_or_assign(next.Get(),BlasAllocation{allocationBytes,i->storage});spareMeshBlasBytes-=i->bytes;spareMeshBlases.erase(i);reason|=RtrDiagnostics::PoolHit;break;
+                    next=prepared->second;preparedMeshBlases.erase(prepared);
                 }
                 if(!next){
                     RtrDiagnostics::Scope allocation(RtrDiagnostics::BlasAllocate,1,mesh->totalIndices/3,1,0,identity,RtrDiagnostics::revision.load(),reason|RtrDiagnostics::CapacityGrowth);
                     next=GetDevice()->createAccelStruct(desc);if(!next)throw std::runtime_error("Dynamic BLAS allocation failed");
-                    allocationBytes=GetDevice()->getAccelStructMemoryRequirements(next).size;
                 }
-                if(!resourceBlasAllocationBytes.count(next.Get()))resourceBlasAllocationBytes.emplace(next.Get(),BlasAllocation{allocationBytes,{}});
                 auto source=refitSources.find(mesh.get());
                 RtrProtocolTrace::Record(7,0,0,0,0,RtrDiagnostics::frame.load(),resourceRevision,desc.bottomLevelGeometries.size(),
                     source!=refitSources.end()?source->second->getDesc().bottomLevelGeometries.size():0,source!=refitSources.end()&&CompatibleBlas(source->second->getDesc(),desc),source!=refitSources.end());
@@ -864,7 +808,6 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
                     command->setBufferState(triangle.indexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
                     command->setBufferState(triangle.vertexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
                 }
-                command->setAccelStructState(job.next,nvrhi::ResourceStates::AccelStructWrite);
             }
             command->commitBarriers();
             for(auto& job:jobs){
@@ -942,7 +885,6 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
         command->close();auto published=GetDevice()->executeCommandList(command);
         if(inPlaceBlases)GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,published);
     }
-    retiredGeneration.commands.push_back(command);
     commitPart.reset();commitPart.emplace(RtrDiagnostics::ResourceRetirement);
     if(gpuQuery)resourceGpuQueries.push_back(gpuQuery);
     // Material-only edits keep geometry, BLAS, TLAS and their buffer identities.
@@ -955,10 +897,15 @@ void CommitResources(const donut::engine::SceneImportResult& imported,const Json
         if(memory)PatchRetainedResourceIndex(retiredGeneration.detachedNodes,attachedIndexNodes,detachedMeshes,newIndexMeshes);
         else IndexRetainedResources();
     }
-    retiredGeneration.textures=oldTextures;
+    // DescriptorHandle frees a bindless slot immediately; NVRHI tracks the
+    // texture itself but cannot keep this independent descriptor slot leased.
+    for(auto& texture:oldTextures)if(texture)retiredGeneration.textureDescriptors.emplace_back(texture,&texture->bindlessDescriptor);
     std::unordered_set<donut::engine::LoadedTexture*> retired;
     for(auto& texture:oldTextures)if(!residentTextureUsers.count(texture.get())&&retired.insert(texture.get()).second)m_scene->HostUnloadTexture(texture);
     nativeRetirementNs+=std::chrono::duration_cast<std::chrono::nanoseconds>(ResourceClock()-stageBegin).count();
+    // Node views were only needed to patch the CPU index above. GPU readers
+    // need the mesh's slice/descriptor/indirect-BLAS ownership, not graph nodes.
+    retiredGeneration.detachedNodes.clear();
     RetireResources(std::move(retiredGeneration));
     failureGuard.armed=false;
     if(UsesBakedLighting())if(auto baker=GetLightsBaker())baker->SceneReloaded();

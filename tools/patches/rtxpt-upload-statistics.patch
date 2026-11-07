@@ -1,0 +1,39 @@
+--- a/External/Donut/nvrhi/src/d3d12/d3d12-backend.h
++++ b/External/Donut/nvrhi/src/d3d12/d3d12-backend.h
+@@ -754,6 +754,7 @@
+         void* cpuVA = nullptr;
+         D3D12_GPU_VIRTUAL_ADDRESS gpuVA = 0;
+         uint32_t identifier = 0;
++        uint64_t uploadAllocationBytes = 0;
+ 
+         ~BufferChunk();
+     };
+--- a/External/Donut/nvrhi/src/d3d12/d3d12-upload.cpp
++++ b/External/Donut/nvrhi/src/d3d12/d3d12-upload.cpp
+@@ -23,6 +23,7 @@
+ #include "d3d12-backend.h"
+ #include "rtxpt_diagnostics.h" // RTR bounded staging breakdown
+ #include "rtxpt_memory_diagnostics.h" // RTR opt-in native resource census
++#include "rtxpt_upload_statistics.h"
+ 
+ #include <nvrhi/common/misc.h>
+ #include <sstream>
+@@ -33,6 +34,7 @@
+     BufferChunk::~BufferChunk()
+     {
+         RtrMemoryDiagnostics::Released(this); // RTR retire pool census
++        RtrUploadStatistics::Released(uploadAllocationBytes);
+         if (buffer && cpuVA)
+         {
+             buffer->Unmap(0, nullptr);
+@@ -96,6 +98,10 @@
+ 
+         RtrMemoryDiagnostics::Created(chunk.get(),"pool",m_IsScratchBuffer?"DXR scratch pool":"Upload pool",m_Context.device,chunk->buffer,size); // RTR attribute internal pools
+         chunk->bufferSize = size;
++        if (!m_IsScratchBuffer) {
++            chunk->uploadAllocationBytes = m_Context.device->GetResourceAllocationInfo(0, 1, &bufferDesc).SizeInBytes;
++            RtrUploadStatistics::Created(chunk->uploadAllocationBytes);
++        }
+         chunk->gpuVA = chunk->buffer->GetGPUVirtualAddress();
+         chunk->identifier = uint32_t(m_ChunkPool.size());
+ 

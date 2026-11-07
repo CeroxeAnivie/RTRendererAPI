@@ -1,5 +1,9 @@
 # Included at the end of the pinned upstream RTXPT configure, preserving its SDK integration.
 find_package(JNI REQUIRED COMPONENTS JVM)
+
+# Native manager policy hooks contain no allocator or pool implementation.
+target_include_directories(rtxmu PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
+target_compile_features(rtxmu PRIVATE cxx_std_17)
 target_include_directories(RtxptCore PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 target_include_directories(donut_app PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 target_include_directories(donut_engine PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
@@ -52,7 +56,7 @@ set_target_properties(rtxpt_native_control PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 # Agility selection is resolved relative to the hosting process executable.
-target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore ${JNI_LIBRARIES} d3d12 dxgi bcrypt)
+target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore rtxmu ${JNI_LIBRARIES} d3d12 dxgi bcrypt)
 
 # Public extension ABI is pinned to the exact backend and transitively included headers.
 set(rtr_abi_sources
