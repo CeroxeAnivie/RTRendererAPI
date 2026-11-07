@@ -72,18 +72,38 @@ val buildAdapterShaders = tasks.register<Exec>("buildAdapterShaders") {
     outputs.dir(runtimeRoot.map { it.dir("bin/AdapterShaders") })
     commandLine("pwsh", "-NoProfile", "-File", "tools/Build-AdapterShaders.ps1")
 }
-val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
+val buildPrecompiledRuntime = tasks.register<Exec>("buildPrecompiledRuntime") {
     group = "build"
     dependsOn(buildAdapterShaders)
+    workingDir(rootProject.projectDir)
+    inputs.file(rootProject.file("tools/Build-PrecompiledRuntime.py"))
+    inputs.file(rootProject.file("tools/rtxpt-precompiled-commands.json"))
+    inputs.file(rootProject.layout.buildDirectory.file("upstream-rtxpt/source-manifest.json"))
+    outputs.dir(runtimeRoot.map { it.dir("bin/PrecompiledShaders") })
+    commandLine(providers.gradleProperty("pythonExecutable").getOrElse("python"),
+        "tools/Build-PrecompiledRuntime.py", "--runtime", runtimeRoot.get().dir("bin").asFile.absolutePath,
+        "--sdk", rootProject.file("build/upstream-rtxpt/source").absolutePath,
+        "--compiler", rootProject.file("build/upstream-rtxpt/source/External/dxc/build/native/bin/x64/dxc.exe").absolutePath,
+        "--output", rootProject.file("build/reports/precompiled-runtime").absolutePath)
+}
+val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
+    group = "build"
+    dependsOn(buildPrecompiledRuntime)
     archiveFileName.set("rtxpt-runtime.zip")
     destinationDirectory.set(layout.buildDirectory.dir("native-package"))
-    from(runtimeRoot) { include("bin/**", "Assets/**"); exclude("**/*.pdb", "bin/Rtxpt.exe", "bin/IntroSample.exe") }
+    from(runtimeRoot) {
+        include("bin/**", "Assets/**")
+        exclude("**/*.pdb", "bin/Rtxpt.exe", "bin/IntroSample.exe", "bin/ShaderDynamic/Bin/**")
+    }
     doFirst {
         val bin = runtimeRoot.get().dir("bin").asFile
         listOf("rtrenderer_rtxpt.dll", "rtrenderer_jvm_host.exe", "NRD.dll", "omm-lib.dll", "sl.interposer.dll", "D3D12/D3D12Core.dll", "ShaderDynamic/Tools/d3d12/x64/dxc.exe", "ShaderDynamic/Source/Rtxpt/PathTracer/PathTracer.hlsli").forEach {
             check(bin.resolve(it).isFile) { "Missing upstream runtime input: $it" }
         }
         check(bin.resolve("ShaderPrecompiled/Rtxpt").isDirectory)
+        check(bin.resolve("PrecompiledShaders/index.tsv").isFile)
+        check(bin.resolve("PrecompiledShaders/globals.txt").isFile)
+        check(bin.resolve("PrecompiledShaders/sources.tsv").isFile)
         rootProject.file("renderer-rtxpt/src/main/cpp/AdapterShaders.cfg").readLines().forEach { line ->
             Regex("^\\s*(Rtr\\w+)\\.hlsl\\s").find(line)?.let { shader ->
                 check(bin.resolve("AdapterShaders/app/ProcessingPasses/" + shader.groupValues[1] + ".bin").let { it.isFile && it.length() > 0 }) {

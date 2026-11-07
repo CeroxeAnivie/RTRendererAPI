@@ -11,6 +11,7 @@
 #include "rtxpt_sparse_lighting.h"
 #include "rtxpt_native_lighting.h"
 #include "rtxpt_upstream_lights.h"
+#include "rtxpt_precompiled_runtime.h"
 
 // AdvancedPathTracer is defined by NVIDIA in AdvancedSample.cpp rather than an
 // exported header. The owning translation unit includes that unchanged file.
@@ -165,6 +166,25 @@ public:
         if(m_presentationConfigured)ApplyPresentation();
         if(m_exposureConfigured)ApplyExposure();
         if(m_qualityConfigured)ApplyQuality();
+    }
+
+    void GetCustomPTPipelineGlobalMacros(std::vector<donut::engine::ShaderMacro>& macros) override {
+        // The original StandardBSDF stores material values and textures in GPU
+        // data. Only its public, explicitly non-deterministic debug export label
+        // is normalized, so a scene rename does not create a new shader binary.
+        if(m_materialsBaker) {
+            const auto& table=m_materialsBaker->GetShaderPermutationTable();
+            if(table.size()>1)throw std::runtime_error("Unsupported upstream material shader permutation table");
+            for(const auto& permutation:table) {
+                const auto& values=permutation->Macros;
+                if(permutation->IndexInTable!=0||values.size()!=2
+                    ||values[0].name!="RTXPT_MATERIAL_PERMUTATIONS_ENABLED"||values[0].definition!="1"
+                    ||values[1].name!="ActiveBSDF"||values[1].definition!="StandardBSDF")
+                    throw std::runtime_error("Upstream material shader permutation is not the precompiled StandardBSDF");
+                permutation->UniqueMaterialName="RtrStandard";
+            }
+        }
+        m_precompiledGlobals.Check(macros);
     }
 
     void ApplyLights(const std::vector<int64_t>& ids,const std::vector<float>& records,
@@ -515,6 +535,7 @@ private:
         m_ui.AccelerationStructRebuildRequested = true;
     }
     CommandLineOptions m_adapterOptions;
+    PrecompiledGlobals m_precompiledGlobals;
     bool m_managedScene = false, m_firstScene = true;
     bool m_presentationConfigured=false;
     std::array<int,4> m_presentation{};

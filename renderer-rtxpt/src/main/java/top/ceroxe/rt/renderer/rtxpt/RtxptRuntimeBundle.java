@@ -88,6 +88,7 @@ final class RtxptRuntimeBundle {
     static void verifyBin(Path bin) throws IOException {
         for (var file : new String[]{"rtrenderer_rtxpt.dll", "rtrenderer_jvm_host.exe",
                 "sl.interposer.dll", "NRD.dll", "omm-lib.dll", "D3D12/D3D12Core.dll",
+                "PrecompiledShaders/index.tsv", "PrecompiledShaders/globals.txt", "PrecompiledShaders/sources.tsv",
                 "ShaderDynamic/Tools/d3d12/x64/dxc.exe",
                 "ShaderDynamic/Source/Rtxpt/PathTracer/PathTracer.hlsli"})
             if (!Files.isRegularFile(bin.resolve(file))) throw new IOException("Missing RTXPT runtime file: " + file);

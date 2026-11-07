@@ -243,6 +243,7 @@ public final class RtxptRuntimeBundleSelfTest {
         var entries = new LinkedHashMap<String, byte[]>();
         for (var path : new String[]{"bin/rtrenderer_rtxpt.dll", "bin/rtrenderer_jvm_host.exe",
                 "bin/sl.interposer.dll", "bin/NRD.dll", "bin/omm-lib.dll", "bin/D3D12/D3D12Core.dll",
+                "bin/PrecompiledShaders/index.tsv", "bin/PrecompiledShaders/globals.txt", "bin/PrecompiledShaders/sources.tsv",
                 "bin/ShaderDynamic/Tools/d3d12/x64/dxc.exe", SOURCE, PRECOMPILED,
                 "bin/ShaderDynamic/Source/External/fixture.hlsli", "Assets/fixture.scene"})
             entries.put(path, bytes("non-executable fixture: " + path));

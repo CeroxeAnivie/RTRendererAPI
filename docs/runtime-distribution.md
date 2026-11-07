@@ -25,9 +25,16 @@
       ShaderDynamic/
       ShaderPrecompiled/
       AdapterShaders/
+      PrecompiledShaders/
     Assets/
 
 bin 中的原版依赖及资源与 Assets 同源；自有 bridge、宿主和 AdapterShaders 独立放置。AdapterShaders 不是向上游 ShaderDynamic/Source 注入的文件。
+
+本批禁止运行时调用编译器。`PrecompiledShaders` 包含构建期二进制、真实命令模板、配置摘要和源文件摘要；ZIP 排除机器运行产生的 `ShaderDynamic/Bin` 缓存。首次渲染仅校验并复制二进制，按原版公开哈希函数重建安装路径对应的缓存键。所有源文件和二进制摘要必须匹配。
+
+专用宿主和 native 会话启用 Windows `ProcessChildProcessPolicy.NoChildProcessCreation`，由操作系统禁止 DXC 等子进程启动。该进程也不能启动其它子进程；需要外部程序的消费方须在渲染进程之外启动它们。此策略没有修改或拦截上游代码、没有伪造编译成功，也不依赖环境开关。驱动加载二进制／创建 GPU pipeline 和 JVM 自身 JIT 不是离线 HLSL/native 源码编译。
+
+当前清单包括 150 条已校验命令、12 组全局宏配置；支持默认演示及已列明组合，不承诺任意数字质量排列都已预编译。未收录的配置明确失败，不能降画质或回退到运行时编译。扩充组合必须在构建期更新清单并重新发布。见[实现和验证](quality/precompiled-runtime.md)。
 
 官方 source 导出仍只读。用户允许构建工作副本保留唯一内部补丁：SampleCommon::ProgressBarStart 在 HelpersIsNonInteractive() 为真时返回 -1，不创建进度窗口；interactive 保持原版，渲染算法、shader、默认质量和编译清单不因此改变。此项按唯一预期差异审计，不能将最终构建写成“零 patch”。该构建已完成隐藏原生场景运行，具体身份见解析光路恢复报告。
 

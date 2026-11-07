@@ -140,6 +140,7 @@ private:
             // of blocking native message boxes and preserves real error text.
             donut::log::ConsoleApplicationMode();
             HelpersSetNonInteractive();
+            InstallPrecompiledShaders(donut::app::GetDirectoryWithExecutable());
             std::vector<const char*> argv;
             for (const auto& option : options) argv.push_back(option.c_str());
             Application application(options, managedScene);

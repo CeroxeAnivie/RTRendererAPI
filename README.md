@@ -2,7 +2,7 @@
 
 面向 Java 的通用渲染契约与 NVIDIA RTXPT 外部适配层。Java 25，Windows x86_64，D3D12/DXR。
 
-当前正在迁移 **8.0.0**，允许破坏性 API 调整。**尚未提交本次 8.0.0 GitHub 交付或发布 Maven Local**。历史候选的生产 29 帧、beauty 24 帧 proof 通过；本轮人工运行已退出但未获用户验收通过。最新两模块 Java 全量编译与 API 边界检查已完成，新增非交互进度控窗补丁尚未做 GPU 验证；完整负载与整体性能恢复仍未通过，不能用旧 proof 代签。
+当前版本 **8.0.0**。此前弹球与介质已由用户人工通过，本批补齐构建期着色器交付与运行时禁编译。新目录冷缓存介质、弹球与三种材质切换已通过隐藏出图；这不代表消费方整体性能已经验收。源码上传与覆盖 Maven Local 的当前身份见[禁止运行时编译](docs/quality/precompiled-runtime.md)。
 
 ## 原生优先的两模块结构
 
@@ -37,7 +37,7 @@ Renderer 核心只保留生命周期、SceneTransaction 的 apply／submit 与�
 
     implementation("top.ceroxe.rt:renderer-rtxpt:8.0.0")
 
-此坐标当前仍是未发布目标，不代表 Maven Local 已存在。8.0.0 不保留 7.x 的双后端路由、组合器或私有诊断 ABI。
+8.0.0 不保留 7.x 的双后端路由、组合器或私有诊断 ABI。本批保持相同版本覆盖 Maven Local，消费者须重新核对制品摘要。
 
 原版 RTXPT 按进程 EXE 的位置查找 DXC、shader 与资源。运行时提供 rtrenderer_jvm_host.exe，使用标准 JNI Invocation API 启动应用，不修改上游路径解析。可先调用 RtxptRuntime.jvmHostExecutable() 获取校验／提取后的宿主路径；该调用不创建设备。JVM 路径、classpath、main 和 Java 参数通过明确的进程环境字段传入；真实命令行保留给原版 RTXPT。完整契约见[启动说明](docs/runtime-distribution.md#jvm-宿主启动契约)。
 

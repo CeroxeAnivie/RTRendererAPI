@@ -12,6 +12,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include "rtxpt_process_policy.h"
 
 #if defined(RTXPT_D3D_AGILITY_SDK_VERSION)
 // D3D12 reads Agility selection from the process executable. Use the same SDK
@@ -162,6 +163,7 @@ int InvokeMain(JNIEnv* env, const Arguments& args) {
 
 int wmain() {
     try {
+        rtr::RequirePrecompiledProcess();
         const auto args = ReadEnvironment();
         const std::filesystem::path jvmPath(args.jvm);
         if (!std::filesystem::is_regular_file(jvmPath)) {
