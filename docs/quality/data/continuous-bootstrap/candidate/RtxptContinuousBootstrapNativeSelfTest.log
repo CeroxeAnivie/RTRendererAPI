@@ -1,0 +1,146 @@
+CONTINUOUS_FIRST_FRAME_STATE PathQualityStatus[quality=PathTracingQualityOptions[lighting=LightSampling[input=SCENE_ANALYTIC, sampler=AUTO, samples=1, candidates=5, localCandidateRatio=0.65, adaptiveQuality=0, exactPointLightLimit=4, directionalStrata=false], cache=RadianceCache[entries=2097152, trainingDownscale=5, maxBounces=8, diffuseBounces=4, directLightSamples=1, terminationThreshold=3.5, textureLodBias=1.0, sceneScale=35.0, accumulationFrames=10, staleFrames=64, minRoughness=0.4], denoisingLayers=3, denoisingLayerMaxDepth=9, nestedDielectricsQuality=1, subSampling=FULL, textureLodBias=-1.0, halfPrecision=false, postProcessing=PostProcessing[bloom=false, bloomRadius=8.0, bloomIntensity=0.004, toneMapping=true]], actualLightSampler=2, allocatedCacheEntries=0, maxFramesInFlight=2, workerThreads=4, shaderCompilerThreads=0, exactPointLighting=false, directionalStrata=false] RuntimeStatus[renderWidth=48, renderHeight=32, reconstruction=NONE, standaloneDenoiser=false, denoising=false, restirDi=false, restirGi=false, sharc=false, frameGeneration=false, shaderExecutionReordering=true, lowLatency=false, dlssMode=2, generatedFramesPerNativeFrame=1, maxGeneratedFrames=1, dlssSupported=true, dlssRrSupported=true, frameGenerationSupported=true, reflexSupported=true, shaderExecutionReorderingSupported=true, relaxDenoiser=false, exactOpticalInterfaces=4, sceneLighting=true]
+CONTINUOUS_BOOTSTRAP_GPU PASS firstSubmit=true emptyReset=true populatedReset=true repeatedEmptyReset=true exactCurrentLease=true compactDirect=true unchangedContinuous=true
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: RTXPT small-point policy: realtime=1 aa=0 standaloneRequested=0 standaloneActive=0 rtxdi=0 sharc=0 spp=1 eligible=0 override=default accepted=0
+INFO: Loading scene...
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: RTXPT small-point policy: realtime=1 aa=0 standaloneRequested=0 standaloneActive=0 rtxdi=0 sharc=0 spp=1 eligible=0 override=default accepted=0
+INFO: Loading scene...
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: RTXPT small-point policy: realtime=1 aa=0 standaloneRequested=0 standaloneActive=0 rtxdi=0 sharc=0 spp=1 eligible=0 override=default accepted=0
+INFO: Loading scene...
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: RTXPT small-point policy: realtime=1 aa=0 standaloneRequested=0 standaloneActive=0 rtxdi=0 sharc=0 spp=1 eligible=0 override=default accepted=0
+INFO: RTXPT Streamline shutdown result=0
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_common_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_g_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_reflex_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_d_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.common.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_common_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss_d.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_d_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss_g.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_g_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.nis.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.pcl.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.reflex.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_reflex_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_common_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_g_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_reflex_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_d_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.common.File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\sl.interposer.dll' is signed by NVIDIA and the signature was verified.
+INFO: Found adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this adapter
+INFO: DLSS_G is supported on this adapter
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is supported on this adapter
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Intel(R) Graphics, DeviceId=0x7D67, Vendor: 32902
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Found adapter: Microsoft Basic Render Driver, DeviceId=0x8C, Vendor: 5140
+INFO: DLSS is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: DLSS_G is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Reflex is supported on this adapter
+INFO: DLSS_RR is NOT supported on this adapter with error: eErrorAdapterNotSupported
+INFO: Using adapter: NVIDIA GeForce RTX 5080 Laptop GPU, DeviceId=0x2C59, Vendor: 4318
+INFO: DLSS is supported on this system.
+INFO: DLSS-G is supported on this system.
+INFO: PCL is supported on this system.
+INFO: Reflex is supported on this system.
+INFO: DLSS-RR is supported on this system.
+INFO: Initializing...
+INFO: Loading scene...
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: RTXPT small-point policy: realtime=1 aa=0 standaloneRequested=0 standaloneActive=0 rtxdi=0 sharc=0 spp=1 eligible=0 override=default accepted=0
+INFO: Initializing renderer...
+INFO: Shader compiler: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External'
+INFO: Shader binaries output: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil'
+INFO: Shader compiler: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Tools\d3d12\x64\dxc.exe'
+INFO: Shader sources: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\Rtxpt\Shaders'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Donut\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External\Rtxdi\Include'
+INFO: Shader include path: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\External'
+INFO: Shader binaries output: 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\ShaderDynamic\Bin\dxil'
+INFO: ComputePipelineBaker initialized (monitoring 0 additional paths)
+INFO: Compiling PSOs (6)...
+INFO: Successfully created compute pipeline for 'SharcResolve'
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.m1_v3f800000.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 1 materials not found in RTXPT material materials folder 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: RTXCONTINUOUS_NATIVE_FILE_GUARDS PASS managedFile=true ordinaryFileRejected=true memoryReloadEmpty=true backendInputRejected=true restoredAnalytic=true
+PT scene lighting inputs ACTIVE lights=1; analytic ambient, exact direct, analytic sky, stable metal, split first interface
+INFO: Loading scene...
+WARNING: No RTXPT material definition file found 'content.m1_v3f800000.material.json' - consider doing Scene->Materials->Advanced->Save All
+WARNING: There were 1 materials not found in RTXPT material materials folder 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\Assets\Materials'; consider doing Scene->Materials->Advanced->Save
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: Loading scene...
+INFO: RTXPT transmission denoising guides: transmissiveMaterials=0 decompositionEnabled=0 defaultedToTransmission=0 gpuMaterialsUpdated=0
+INFO: RTXPT Streamline shutdown result=0
+RTXPT_CONTINUOUS_BOOTSTRAP PASS configuration=MC-equivalent DEEP=true cases=9 noPolicyFallback=true
+dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_common_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss_d.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_d_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.dlss_g.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_dlss_g_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.nis.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.pcl.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_pcl_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.
+File 'D:\Engineering\code\APIs\RTRendererAPI\build\rtxpt-sdk\bin\/sl.reflex.dll' is signed by NVIDIA and the signature was verified.
+File 'C:\ProgramData\NVIDIA/NGX/models/sl_reflex_0\versions\134672\files\1B0_E658703.dll' is signed by NVIDIA and the signature was verified.

@@ -4,7 +4,7 @@ param(
     [string]$SkipCases='',
     [string]$Bridge='',
     [string]$RendererJar='',
-    [string[]]$Cases=@('RtxptApplicationDataSelfTest','RtxptSceneAdmissionSelfTest','RtxptAdapterSelfTest','RtxptDynamicResourcesSelfTest','RtxptBootstrapNativeSelfTest','RtxptNativeLightingApplicationPatchNativeSelfTest','RtxptBlasReuseNativeSelfTest')
+    [string[]]$Cases=@('RtxptApplicationDataSelfTest','RtxptSceneAdmissionSelfTest','RtxptAdapterSelfTest','RtxptDynamicResourcesSelfTest','RtxptBootstrapNativeSelfTest','RtxptContinuousBootstrapNativeSelfTest','RtxptNativeLightingApplicationPatchNativeSelfTest','RtxptBlasReuseNativeSelfTest')
 )
 $ErrorActionPreference='Stop'
 $OutputEncoding=[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)

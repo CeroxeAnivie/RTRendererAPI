@@ -1,0 +1,70 @@
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  EXCEPTION_ACCESS_VIOLATION (0xc0000005) at pc=0x00007ffd87e9df7f, pid=36604, tid=39240
+#
+# JRE version: Java(TM) SE Runtime Environment Oracle GraalVM 25.0.5+1.1 (25.0.5+1) (build 25.0.5.0.2+1-LTS-jvmci-b01)
+# Java VM: Java HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.0.5+1.1 (25.0.5.0.2+1-LTS-jvmci-b01, mixed mode, sharing, tiered, jvmci, jvmci compiler, compressed oops, compressed class ptrs, g1 gc, windows-amd64)
+# Problematic frame:
+# C  [jvmcicompiler.dll+0x3edf7f]
+#
+# No core dump will be written. Minidumps are not enabled by default on client versions of Windows
+#
+# If you would like to submit a bug report, please visit:
+#   https://bugreport.java.com/bugreport/crash.jsp
+#
+
+---------------  S U M M A R Y ------------
+
+Command Line: -XX:ThreadPriorityPolicy=1 -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCIProduct -XX:+EnableJVMCI -XX:-UnlockExperimentalVMOptions -Dfile.encoding=UTF-8 -Dapplication.home=C:\Program Files\Java\graalvm-jdk-25.0.5.0.2+1.1 --add-modules=ALL-DEFAULT -Xms8m -Djdk.module.main=jdk.javadoc jdk.javadoc/jdk.javadoc.internal.tool.Main @D:\Engineering\code\APIs\RTRendererAPI\renderer-nvidia\build\tmp\javadoc\javadoc.options
+
+Host: Intel(R) Core(TM) Ultra 9 275HX, 24 cores, 31G,  Windows 11 , 64 bit Build 26100 (10.0.26100.9711)
+Time: Sat Nov  7 08:16:30 2026 elapsed time: 0.559364 seconds (0d 0h 0m 0s)
+
+---------------  T H R E A D  ---------------
+
+Current thread (0x0000019c9c598040):  JavaThread "JVMCI-native CompilerThread6" daemon [_thread_in_native, id=39240, stack(0x0000005467200000,0x0000005467300000) (1024K)]
+
+
+Current CompileTask:
+JVMCI-native:559 2599   !   4       java.nio.file.FileTreeWalker::visit (176 bytes)
+
+Stack: [0x0000005467200000,0x0000005467300000],  sp=0x00000054672fc900,  free space=1010k
+Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)
+C  [jvmcicompiler.dll+0x3edf7f]  (no source info available)
+C  [jvmcicompiler.dll+0x4e71b1]  (no source info available)
+C  [jvmcicompiler.dll+0x272248]  (no source info available)
+C  [jvmcicompiler.dll+0x2eb725]  (no source info available)
+C  [jvmcicompiler.dll+0x2bdfae]  (no source info available)
+C  [jvmcicompiler.dll+0x47b36e]  (no source info available)
+C  [jvmcicompiler.dll+0x3c793b]  (no source info available)
+C  [jvmcicompiler.dll+0x32728c]  (no source info available)
+C  [jvmcicompiler.dll+0x3c73f2]  (no source info available)
+C  [jvmcicompiler.dll+0x311f95]  (no source info available)
+C  [jvmcicompiler.dll+0x31021a]  (no source info available)
+C  [jvmcicompiler.dll+0x49fcd3]  (no source info available)
+C  [jvmcicompiler.dll+0x4b6945]  (no source info available)
+C  [jvmcicompiler.dll+0x2da5d0]  (no source info available)
+C  [jvmcicompiler.dll+0x2eb636]  (no source info available)
+C  [jvmcicompiler.dll+0x2bdfae]  (no source info available)
+C  [jvmcicompiler.dll+0x47b36e]  (no source info available)
+C  [jvmcicompiler.dll+0x3c793b]  (no source info available)
+C  [jvmcicompiler.dll+0x32728c]  (no source info available)
+C  [jvmcicompiler.dll+0x3c73f2]  (no source info available)
+C  [jvmcicompiler.dll+0x311f95]  (no source info available)
+C  [jvmcicompiler.dll+0x31021a]  (no source info available)
+C  [jvmcicompiler.dll+0x540b14]  (no source info available)
+C  [jvmcicompiler.dll+0x2563a5]  (no source info available)
+C  [jvmcicompiler.dll+0x541637]  (no source info available)
+C  [jvmcicompiler.dll+0x34085e]  (no source info available)
+C  [jvmcicompiler.dll+0x5b2dbc]  (no source info available)
+C  [jvmcicompiler.dll+0x34085e]  (no source info available)
+C  [jvmcicompiler.dll+0x42cea8]  (no source info available)
+C  [jvmcicompiler.dll+0x507a87]  (no source info available)
+C  [jvmcicompiler.dll+0x4c6d7c]  (no source info available)
+C  [jvmcicompiler.dll+0x300351]  (no source info available)
+C  [jvmcicompiler.dll+0x30057e]  (no source info available)
+C  [jvmcicompiler.dll+0x3032ce]  (no source info available)
+C  [jvmcicompiler.dll+0x1c475b]  (no source info available)
+C  [jvmcicompiler.dll+0x1c3978]  (no source info available)
+C  [jvmcicompiler.dll+0x1c3725]  (no source info available)

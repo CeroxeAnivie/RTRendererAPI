@@ -23,8 +23,13 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def previous_patch_baseline(evidence):
+    major, minor, patch = map(int, evidence["version"].split("."))
+    return patch > 0 and evidence["baselineVersion"] == ".".join(map(str, (major, minor, patch - 1)))
+
+
 def check_managed_resource_locality(evidence, check):
-    check("managed-baseline-version", evidence["baselineVersion"] == "7.3.1")
+    check("managed-baseline-version", previous_patch_baseline(evidence))
     cost = evidence["updateCost"]
     cost_stages = {"tree", "prepare", "regions"}
     check("same-fixture-mixed-update-cost", cost["samples"] == 32 and cost["sources"] == 42191
@@ -92,13 +97,32 @@ def main():
     check("evidence-version", evidence["version"] == version)
     retained = evidence.get("releaseKind") == "compatible-retained-update-maintenance"
     managed = evidence.get("releaseKind") == "compatible-managed-resource-locality"
-    check("affected-checks-pass", all((c["passed"] is True if managed else c["passed"])
+    continuous = evidence.get("releaseKind") == "compatible-continuous-bootstrap"
+    check("affected-checks-pass", all((c["passed"] is True if managed or continuous else c["passed"])
           and c["exit"] == 0 for c in evidence["correctness"].values())
-          and (len(evidence["correctness"]) >= 12 if managed else
+          and (len(evidence["correctness"]) == 1 if continuous else len(evidence["correctness"]) >= 12 if managed else
                len(evidence["correctness"]) >= 6 if retained else len(evidence["correctness"]) == 3))
     for group in ("productionSourceSha256", "productionClassSha256", "testClassSha256", "evidenceFileSha256"):
         check(group, bool(evidence[group]) and all(sha((ROOT / p).read_bytes()) == h for p, h in evidence[group].items()))
-    if managed:
+    if continuous:
+        check("continuous-baseline-version", previous_patch_baseline(evidence))
+        check("current-bootstrap-test-source", bool(evidence["testSourceSha256"]) and all(
+            sha((ROOT / p).read_bytes()) == h for p, h in evidence["testSourceSha256"].items()))
+        check("continuous-first-frame-runtime-state", all(value in evidence["observedFirstFrameState"] for value in
+            ("input=SCENE_ANALYTIC", "allocatedCacheEntries=0", "restirDi=false", "restirGi=false", "sharc=false", "sceneLighting=true")))
+        failure = evidence["baselineRegression"]
+        check("first-submit-baseline-failure-preserved", failure["exit"] == 1 and failure["expected"] is True
+              and failure["error"] == "Continuous lighting requires SCENE_ANALYTIC without ReSTIR or radiance cache")
+        required = {"firstSubmit", "emptyReset", "populatedReset", "repeatedEmptyReset", "managedFile",
+                    "ordinaryFileRejected", "memoryReloadEmpty", "backendInputRejected", "restoredAnalytic"}
+        check("continuous-bootstrap-and-file-guards", set(evidence["continuousBootstrap"]) == required
+              and all(evidence["continuousBootstrap"][name] is True for name in required))
+        check("continuous-host-equivalent-policy", evidence["configuration"] == {
+            "input":"SCENE_ANALYTIC", "continuity":"CONTINUOUS", "restirDi":False, "restirGi":False,
+            "radianceCache":False, "reconstruction":"NONE", "giSamples":0, "signal":"DIRECT_GAIN",
+            "encoding":"COMPACT_RESPONSE_UNORM8", "additionMode":"HOST_RESPONSE_RATIO_V1",
+            "framesInFlight":2, "diagnostics":"DEEP"})
+    elif managed:
         check_managed_resource_locality(evidence, check)
     elif retained:
         cost = evidence["updateCost"]
@@ -166,7 +190,7 @@ def main():
                 check(module + "-module-version", metadata["component"]["version"] == version)
         modules[module] = outputs
 
-    for module in ("renderer-api", "renderer-core"):
+    for module in (("renderer-api", "renderer-core", "renderer-rtxpt") if continuous else ("renderer-api", "renderer-core")):
         with zipfile.ZipFile(local / module / evidence["baselineVersion"] / f"{module}-{evidence['baselineVersion']}.jar") as old, \
                 zipfile.ZipFile(ROOT / module / f"build/libs/{module}-{version}.jar") as new:
             old_classes = {n: sha(old.read(n)) for n in old.namelist() if n.endswith(".class")}

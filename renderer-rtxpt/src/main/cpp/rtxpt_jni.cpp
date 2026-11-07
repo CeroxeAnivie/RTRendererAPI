@@ -311,9 +311,12 @@ private:
             else baker->ClearHostConstantBackground();
         }
     }
-    bool sceneLightingActive() const {
-        return pathQuality.values[0]==1 && managedLighting && !sceneLights.empty()
+    bool supportsManagedSceneLighting() const {
+        return pathQuality.values[0]==1 && managedLighting
             && !g_sampleUIData.ActualUseRTXDIPasses() && g_sampleUIData.ActualRadianceCacheMode()==0;
+    }
+    bool sceneLightingActive() const {
+        return supportsManagedSceneLighting() && !sceneLights.empty();
     }
     std::unique_ptr<RtrPreSrHistory> preSrHistory;
     bool preSrHistoryReset=true;
@@ -426,7 +429,9 @@ public:
     #include "rtxpt_retained_lighting.inl"
     void SetLightingContinuity(int policy){
         if(policy<0||policy>1)throw std::invalid_argument("Invalid lighting continuity");
-        if(policy==1&&!sceneLightingActive())throw std::invalid_argument("Continuous lighting requires SCENE_ANALYTIC without ReSTIR or radiance cache");
+        // The policy is installed before the first light publication and after
+        // each empty bootstrap/reset. Eligibility is not a nonempty workload.
+        if(policy==1&&!supportsManagedSceneLighting())throw std::invalid_argument("Continuous lighting requires SCENE_ANALYTIC without ReSTIR or radiance cache");
         lightingContinuity=policy;
     }
     bool HostTransparentBackground() const override { return transparentBackground; }

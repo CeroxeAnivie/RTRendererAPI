@@ -660,6 +660,7 @@ listOf(
     "RtxptTopologyPreparationNativeSelfTest",
     "RtxptBlasReuseNativeSelfTest",
     "RtxptBootstrapNativeSelfTest",
+    "RtxptContinuousBootstrapNativeSelfTest",
     "RtxptManagedScaleNativeSelfTest",
     "RtxptApplicationDataSelfTest"
 ).forEach { name ->
