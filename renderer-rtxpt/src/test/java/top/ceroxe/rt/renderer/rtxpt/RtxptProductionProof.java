@@ -172,12 +172,12 @@ public final class RtxptProductionProof {
         System.out.println(path.getFileName()+" channel="+channel+" expected="+expected+" mean="+(sum/count)+" range="+min+".."+max+" samples="+count);
     }
     private static ByteBuffer materialOnly(String name,int blend,float opacity,float[] emission){
-        ByteBuffer b=ByteBuffer.allocateDirect(512).order(ByteOrder.LITTLE_ENDIAN);b.putInt(0x52445257).putInt(0).putInt(1);
+        ByteBuffer b=ByteBuffer.allocateDirect(512).order(ByteOrder.LITTLE_ENDIAN);b.putInt(0x52445259).putInt(0).putInt(1);
         proofMaterial(b,name,blend,opacity,emission);for(int i=0;i<6;i++)b.putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static ByteBuffer materialFixture(int mode,float opacity,float[] emission){
         boolean shadow=mode==2;ByteBuffer b=ByteBuffer.allocateDirect(4096).order(ByteOrder.LITTLE_ENDIAN);
-        b.putInt(0x52445257).putInt(0).putInt(shadow?2:1);
+        b.putInt(0x52445259).putInt(0).putInt(shadow?2:1);
         proofMaterial(b,"proof-material",mode==1?1:0,mode==1?opacity:1,emission);
         if(shadow)proofMaterial(b,"proof-blocker-material",1,opacity,new float[3]);
         b.putInt(shadow?2:1);proofTriangle(b,MESH,"proof-material",new float[]{-2,-2,-3,2,-2,-3,0,2,-3});
@@ -191,8 +191,8 @@ public final class RtxptProductionProof {
         for(float color:emission)b.putFloat(color);b.putFloat(1.5f).putInt(1).putInt(-1).putInt(0);for(int i=0;i<4;i++)b.putLong(-1);b.putInt(0);
     }
     private static void proofTriangle(ByteBuffer b,String mesh,String material,float[] positions){
-        text(b,mesh);floats(b,positions);floats(b,0,0,1,0,0,1,0,0,1);floats(b,1,0,0,1,1,0,0,1,1,0,0,1);floats(b,0,0,1,0,.5f,1);
-        b.putInt(1);text(b,material);b.putInt(3).putInt(0).putInt(1).putInt(2);
+        text(b,mesh);b.putInt(0);floats(b,positions);floats(b,0,0,1,0,0,1,0,0,1);floats(b,1,0,0,1,1,0,0,1,1,0,0,1);floats(b,0,0,1,0,.5f,1);
+        b.putInt(3).putInt(0).putInt(1).putInt(2);b.putInt(1);text(b,material);b.putInt(1).putInt(0);
     }
     private static void proofNode(ByteBuffer b,String instance,String mesh){
         text(b,instance);text(b,mesh);floats(b,1,0,0,0,0,1,0,0,0,0,1,0);
@@ -408,7 +408,7 @@ public final class RtxptProductionProof {
     }
     private static ByteBuffer transform(float x){
         ByteBuffer b=ByteBuffer.allocateDirect(256).order(ByteOrder.LITTLE_ENDIAN);
-        b.putInt(0x52445257).putInt(0).putInt(0).putInt(0).putInt(0).putInt(1);
+        b.putInt(0x52445259).putInt(0).putInt(0).putInt(0).putInt(0).putInt(1);
         text(b,INSTANCE);text(b,MESH);floats(b,1,0,0,x,0,1,0,0,0,0,1,0);
         b.putInt(0).putInt(0).putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);
     }
@@ -454,7 +454,7 @@ public final class RtxptProductionProof {
     }
     private static ByteBuffer packet(boolean mesh,boolean remove,boolean originalSampler){
         ByteBuffer b=ByteBuffer.allocateDirect(4096).order(ByteOrder.LITTLE_ENDIAN);
-        b.putInt(0x52445257).putInt(mesh?1:0);
+        b.putInt(0x52445259).putInt(mesh?1:0);
         if(mesh){
             b.putLong(7).putInt(2).putInt(2).putInt(1).putInt(0)
                     .putInt(originalSampler?0:1).putInt(originalSampler?0:1).putInt(originalSampler?1:0).putLong(1).putInt(0);
@@ -466,9 +466,9 @@ public final class RtxptProductionProof {
             b.putFloat(0).putFloat(0).putFloat(0).putFloat(1.5f).putInt(1).putInt(-1).putInt(0);
             b.putLong(7).putLong(-1).putLong(-1).putLong(-1).putInt(0);}
         b.putInt(mesh?1:0);
-        if(mesh){text(b,MESH);floats(b,-2,-2,-3,2,-2,-3,0,2,-3);floats(b,0,0,1,0,0,1,0,0,1);
+        if(mesh){text(b,MESH);b.putInt(0);floats(b,-2,-2,-3,2,-2,-3,0,2,-3);floats(b,0,0,1,0,0,1,0,0,1);
             floats(b,1,0,0,1,1,0,0,1,1,0,0,1);floats(b,0,0,1,0,.5f,1);
-            b.putInt(1);text(b,"proof-material");b.putInt(3).putInt(0).putInt(1).putInt(2);}
+            b.putInt(3).putInt(0).putInt(1).putInt(2);b.putInt(1);text(b,"proof-material");b.putInt(1).putInt(0);}
         b.putInt(remove?1:0);if(remove)text(b,INSTANCE);b.putInt(mesh?1:0);
         if(mesh){text(b,INSTANCE);text(b,MESH);floats(b,1,0,0,0,0,1,0,0,0,0,1,0);}
         b.putInt(0).putInt(0).putInt(0);return b.flip().slice().order(ByteOrder.LITTLE_ENDIAN);

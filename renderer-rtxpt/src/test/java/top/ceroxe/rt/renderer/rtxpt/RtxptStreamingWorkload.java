@@ -408,7 +408,7 @@ public final class RtxptStreamingWorkload {
             return map("available",true,"counters",values,"measurement","native command work counters outside frame timing");
         }
         Map<String,Object> nativeWorkSummary(){
-            var result=new TreeMap<String,Object>();nativeWork.forEach((stage,counts)->result.put(stage,map("events",counts[0],"items",counts[1],"bytes",counts[2],"cache_hit_events",counts[3],"cache_hit_items",counts[4])));return result;
+            var result=new TreeMap<String,Object>();nativeWork.forEach((stage,counts)->result.put(stage,map("events",counts[0],"items",counts[1],"bytes",counts[2],"cache_hit_events",counts[3],"cache_hit_items",counts[4],"tasks",counts[5])));return result;
         }
         void nativeEvents(RtxptDiagnostics.NativeSnapshot snapshot){
             nativePolls++;nativeLostEvents+=snapshot.lostEvents();
@@ -417,7 +417,7 @@ public final class RtxptStreamingWorkload {
                 if((event.flags()&(2L|1024L))!=0)nativeFailedEvents++;
                 require((event.flags()&512L)==0,"Native boundary diagnostic scope was truncated");
                 if((event.flags()&256L)!=0){nativeIncompleteObservations++;continue;}
-                var work=nativeWork.computeIfAbsent(event.stage(),key->new long[5]);work[0]++;work[1]+=event.items();work[2]+=event.bytes();
+                var work=nativeWork.computeIfAbsent(event.stage(),key->new long[6]);work[0]++;work[1]+=event.items();work[2]+=event.bytes();work[5]+=event.tasks();
                 if((event.flags()&4L)!=0){work[3]++;work[4]+=event.items();}
                 var frame=new NativeFrameIdentity(event.sequence(),event.sceneRevision());
                 nativeInclusive.computeIfAbsent(event.stage(),key->new Samples()).add(event.inclusiveNanos());

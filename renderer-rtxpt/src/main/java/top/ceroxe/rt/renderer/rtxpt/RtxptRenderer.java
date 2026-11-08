@@ -38,8 +38,6 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private final Map<Long,NativeLightingPublication.Instance> lightingInstances=new HashMap<>();
     private final Map<Long,float[]> lightingBaselines=new HashMap<>();
     private final Set<Long> pendingLightingInstances=new HashSet<>(),pendingLightingBaselines=new HashSet<>(),pendingLightingColors=new HashSet<>();
-    private record AttributeGroups(MeshAsset mesh,List<RtxptAttributeBatch.Group> groups) { }
-    private final Map<Long,AttributeGroups> attributeGroups=new HashMap<>();
     private List<RtxptScene.Item> pendingGeometryVariants=List.of();
     private float[] pendingBaselineLookup,lightingBaselineLookup;
     private NativeLightingHostResponse lightingHostResponse;
@@ -90,16 +88,9 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             if(old==null||!old.lightmapCoordinates().equals(mesh.lightmapCoordinates()))pendingLightingBaselines.add(mesh.id());
             if(old==null||!old.vertexColorsRgba8().equals(mesh.vertexColorsRgba8()))pendingLightingColors.add(mesh.id());
         }
-        if(tx.reset()){attributeGroups.clear();lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();lightingAttributeReset=true;}
+        if(tx.reset()){lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();lightingAttributeReset=true;}
         var removedInstances=tx.removals().instanceIds();while(removedInstances.hasRemaining()){long id=removedInstances.get();lightingInstances.remove(id);pendingLightingInstances.remove(id);}
-        var removedMeshes=tx.removals().meshIds();while(removedMeshes.hasRemaining()){long id=removedMeshes.get();lightingBaselines.remove(id);pendingLightingBaselines.remove(id);pendingLightingColors.remove(id);attributeGroups.remove(id);}
-        for(var mesh:tx.upserts().meshes()){
-            var cached=attributeGroups.get(mesh.id());
-            if(cached!=null&&cached.mesh()!=mesh){
-                if(cached.mesh().triangleMaterialIds().equals(mesh.triangleMaterialIds()))attributeGroups.put(mesh.id(),new AttributeGroups(mesh,cached.groups()));
-                else attributeGroups.remove(mesh.id());
-            }
-        }
+        var removedMeshes=tx.removals().meshIds();while(removedMeshes.hasRemaining()){long id=removedMeshes.get();lightingBaselines.remove(id);pendingLightingBaselines.remove(id);pendingLightingColors.remove(id);}
 
         scene=next;revision=tx.revision();scenePublished=true;fullReset|=tx.reset();
         return new SceneUpdateResult(revision);
@@ -289,13 +280,8 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             String name=RtxptScene.meshName(item);
             boolean baseline=reset||geometryNames.contains(name)||pendingLightingBaselines.contains(item.mesh());
             boolean color=reset||geometryNames.contains(name)||pendingLightingColors.contains(item.mesh());
-            var mesh=scene.meshes.get(item.mesh());var cached=attributeGroups.get(item.mesh());
-            if(cached==null||!cached.mesh().triangleMaterialIds().equals(mesh.triangleMaterialIds())){
-                cached=new AttributeGroups(mesh,scene.attributeGroups(mesh));attributeGroups.put(item.mesh(),cached);
-            }else if(cached.mesh()!=mesh){cached=new AttributeGroups(mesh,cached.groups());attributeGroups.put(item.mesh(),cached);}
-            int geometry=0;for(var group:cached.groups()){
-                var entry=RtxptAttributeBatch.convert(name+":"+geometry++,mesh,group,lightingBaselines.get(item.mesh()),baseline,color);batch.add(entry);
-            }
+            var mesh=scene.meshes.get(item.mesh());
+            batch.add(RtxptAttributeBatch.canonical(name+":0",mesh,lightingBaselines.get(item.mesh()),baseline,color));
         }
         RtxptAttributeBatch.submit(handle,revision,batch);
         pendingGeometryVariants=List.of();
@@ -395,7 +381,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         if(handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingConsumersRetired(handle))throw new IllegalStateException("Complete imported lighting consumers before closing");
         if(handle!=0)RtxptNative.close(handle);
         handle=0;closed=true;recorder.close();scene=new RtxptScene();residentScene=new RtxptScene();previous=List.of();memoryTextures.clear();memoryMaterialVariants.clear();resourcePackets.close();
-        attributeGroups.clear();lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingGeometryVariants=List.of();
+        lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingGeometryVariants=List.of();
         pendingBaselineLookup=null;lightingBaselineLookup=null;lightingHostResponse=null;applicationData.clear();
     }
 }

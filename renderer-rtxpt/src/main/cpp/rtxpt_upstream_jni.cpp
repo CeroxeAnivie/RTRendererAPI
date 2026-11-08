@@ -316,6 +316,21 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingMetadataState(
         return result;
     }catch(const std::exception& error){Throw(env,error);return nullptr;}
 }
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingSurfaceState(JNIEnv* env,jclass,jlong handle,jstring geometryName,jint primitive){
+    try{
+        const auto geometry=String(env,geometryName);std::array<double,9> state{};
+        Get(handle)->session->Invoke([&](auto& app){
+            const auto& pass=app.Renderer().lighting;const auto* slots=pass.surfaceSlots?pass.surfaceSlots(geometry):nullptr;
+            if(!slots||primitive<0||size_t(primitive)>=slots->size())throw std::invalid_argument("No published triangle surface");
+            const auto slot=slots->at(primitive);const auto& row=pass.surfaceRows.at(slot);state[0]=slot;
+            for(size_t i=0;i<4;++i)state[1+i]=row.policies[i];
+            state[5]=row.maskedOpacity;state[6]=row.material.domain;state[7]=row.material.opacity;state[8]=row.material.alphaCutoff;
+        });
+        auto result=env->NewDoubleArray(static_cast<jsize>(state.size()));
+        if(result)env->SetDoubleArrayRegion(result,0,static_cast<jsize>(state.size()),state.data());return result;
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesMemory(JNIEnv* env, jclass, jlong handle, jlong, jobject packet) {
@@ -395,8 +410,13 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributeBatch(JNIEn
                 if((record.hasBaseline&&record.baseline.size()!=corners)||(record.hasColors&&record.colors.size()!=corners))
                     throw std::invalid_argument("Geometry attribute layout mismatch");}
             for(const auto& record:records){
-                if(record.hasBaseline){pass.meshBaselines[record.key]=record.baseline;pass.dirtyBaselines.insert(record.key);}
-                if(record.hasColors){pass.meshColors[record.key]=record.colors;pass.dirtyColors.insert(record.key);
+                if(record.hasBaseline){auto found=pass.meshBaselines.find(record.key);
+                    if(found==pass.meshBaselines.end()||found->second.size()!=record.baseline.size()
+                        ||(!record.baseline.empty()&&std::memcmp(found->second.data(),record.baseline.data(),record.baseline.size()*sizeof(donut::math::float2))!=0)){
+                        pass.meshBaselines[record.key]=record.baseline;pass.dirtyBaselines.insert(record.key);}}
+                if(record.hasColors){auto found=pass.meshColors.find(record.key);
+                    if(found!=pass.meshColors.end()&&found->second==record.colors)continue;
+                    pass.meshColors[record.key]=record.colors;pass.dirtyColors.insert(record.key);
                     if(std::any_of(record.colors.begin(),record.colors.end(),[](auto color){return (color>>24)!=255;}))pass.alphaMeshes.insert(record.key);else pass.alphaMeshes.erase(record.key);}
             }
         });

@@ -35,8 +35,8 @@ public final class RtxptTextureInheritanceNativeSelfTest {
             require(after[0]==before[0]&&after[1]==before[1],"Inherited/no-op/sampler packets uploaded a complete image");
             require(after[2]-before[2]==1&&after[3]-before[3]==16,"Only the real local rectangle should upload pixel bytes");
             require(after[5]-before[5]==2&&after[6]-before[6]==1,"Distinct queued no-op and sampler generations were lost");
-            var metadata=RtxptNative.lightingMetadataState(handle,"i1","mesh1_v3f800000:0");
-            require(metadata[4]==1,"Inherited sampler metadata did not retain clamp/linear policy");
+            var surface=RtxptNative.lightingSurfaceState(handle,"mesh1_v3f800000:0",0);
+            require(surface[1]==1,"Inherited surface sampler did not retain clamp/linear policy");
 
             byte[] restoreRectangle=new byte[16];Arrays.fill(restoreRectangle,(byte)-1);
             var restored=finalGeneration.patched(new TexturePatch(1,0,1,1,2,2,8,ByteBuffer.wrap(restoreRectangle)));

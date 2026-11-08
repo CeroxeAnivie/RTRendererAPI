@@ -32,7 +32,7 @@ val cpuTests = listOf(
     "RtxptAdapterSelfTest", "RtxptPacketPoolSelfTest", "RtxptLightMapSelfTest",
     "NativeLightingStyleSelfTest", "RtxptRuntimeBundleSelfTest", "RtxptApplicationDataSelfTest",
     "RtxptBoundaryDiagnosticsSelfTest", "RtxptBudgetContractSelfTest", "RtxptDynamicResourcesSelfTest",
-    "RtxptHighFramerateResourcesSelfTest", "RtxptLocalPreparationSelfTest",
+    "RtxptHighFramerateResourcesSelfTest", "RtxptGeometryInheritanceSelfTest", "RtxptLocalPreparationSelfTest",
     "RtxptNativeLightingCompactContractSelfTest", "RtxptNativeLightingProjectionSelfTest",
     "RtxptRetainedDependencySelfTest", "RtxptAnalyticTransportSelfTest", "RtxptMaterialLifetimeSelfTest")
 cpuTests.forEach { name ->

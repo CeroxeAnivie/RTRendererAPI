@@ -25,6 +25,16 @@ public:
     static_assert(sizeof(VertexAttributes)==16);
     static_assert(sizeof(Constants)==320&&sizeof(InstanceAttributes)==32&&sizeof(GeometryAttributes)==28);
     std::function<std::array<uint32_t,4>(const std::string&)> texturePolicies;
+    std::function<const std::vector<uint32_t>*(const std::string&)> surfaceSlots;
+    std::function<void(std::vector<rtr::upstream::SurfaceMaterialRow>&,std::vector<uint32_t>&)> surfaceUpdates;
+    std::vector<rtr::upstream::SurfaceMaterialRow> surfaceRows;
+    std::vector<uint32_t> surfaceDirty;
+    std::vector<uint8_t> surfaceCoverage;
+    size_t surfaceCandidateCount=0;
+    nvrhi::BufferHandle surfaceMaterials;
+    nvrhi::BufferHandle surfaceIndices;
+    std::unordered_set<std::string> dirtySurfaces;
+    std::vector<uint32_t> surfaceUploadScratch;
     std::array<nvrhi::SamplerHandle,8> textureSamplers;
     Constants constants;
     RtrSceneDelta sceneDelta;
@@ -266,6 +276,7 @@ public:
         attributeWork[1]+=count;
     }
     void UploadVertexRuns(nvrhi::ICommandList* command,const std::unordered_set<std::string>& names){
+        dirtySurfaces.insert(names.begin(),names.end());
         vertexUploadRuns.clear();
         for(const auto& name:names)if(auto found=geometrySlots.find(name);found!=geometrySlots.end())
             vertexUploadRuns.push_back({&found->first,found->second});
@@ -290,6 +301,28 @@ public:
             }
             begin=end;
         }
+    }
+    void UploadSurfaceRuns(nvrhi::IDevice* device,nvrhi::ICommandList* command){
+        EnsureAttributeBuffer(device,command,surfaceIndices,std::max<size_t>(1,attributeRanges.end/3)*sizeof(uint32_t),sizeof(uint32_t),"Finite-signal triangle surfaces");
+        vertexUploadRuns.clear();
+        for(const auto& name:dirtySurfaces)if(auto found=geometrySlots.find(name);found!=geometrySlots.end())
+            vertexUploadRuns.push_back({&found->first,found->second});
+        std::sort(vertexUploadRuns.begin(),vertexUploadRuns.end(),[](const auto& a,const auto& b){return a.attributes.offset<b.attributes.offset;});
+        for(size_t begin=0;begin<vertexUploadRuns.size();){
+            const size_t offset=vertexUploadRuns[begin].attributes.offset/3;size_t end=begin;surfaceUploadScratch.clear();
+            do{
+                const auto& run=vertexUploadRuns[end];const auto* slots=surfaceSlots?surfaceSlots(*run.name):nullptr;
+                if(slots&&slots->size()!=run.attributes.triangles)throw std::invalid_argument("Surface update changes triangle layout");
+                const size_t first=surfaceUploadScratch.size();surfaceUploadScratch.resize(first+run.attributes.triangles,0);
+                if(slots)for(size_t triangle=0;triangle<slots->size();++triangle)surfaceUploadScratch[first+triangle]=slots->at(triangle)+1;
+                ++end;
+            }while(end<vertexUploadRuns.size()&&vertexUploadRuns[end].attributes.offset/3==offset+surfaceUploadScratch.size()
+                &&surfaceUploadScratch.size()+vertexUploadRuns[end].attributes.triangles<=262144);
+            const size_t bytes=surfaceUploadScratch.size()*sizeof(uint32_t);
+            RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,surfaceUploadScratch.size(),bytes,1,0,0,0,RtrDiagnostics::Material|RtrDiagnostics::Attributes,bytes);
+            command->writeBuffer(surfaceIndices,surfaceUploadScratch.data(),bytes,offset*sizeof(uint32_t));attributeWork[3]+=bytes;begin=end;
+        }
+        if(!dirtySurfaces.empty())++metadataUploads;dirtySurfaces.clear();
     }
     std::vector<uint8_t> applicationData;
     std::vector<RtrNativeApplicationRange> applicationDirtyRanges;
@@ -386,6 +419,8 @@ public:
                 nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
                 nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7),nvrhi::BindingLayoutItem::StructuredBuffer_SRV(8),
                 nvrhi::BindingLayoutItem::RawBuffer_SRV(9),nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
+                nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
+                nvrhi::BindingLayoutItem::StructuredBuffer_SRV(13),
                 nvrhi::BindingLayoutItem::Sampler(0),nvrhi::BindingLayoutItem::Texture_UAV(0),nvrhi::BindingLayoutItem::Texture_UAV(1),
                 nvrhi::BindingLayoutItem::Texture_UAV(2),nvrhi::BindingLayoutItem::Texture_UAV(3),nvrhi::BindingLayoutItem::RawBuffer_UAV(4)};
             for(uint32_t i=0;i<8;++i)desc.bindings.push_back(nvrhi::BindingLayoutItem::Sampler(i+1));
@@ -561,6 +596,7 @@ public:
         instanceAttributes.erase(name);instanceSlots.erase(name);dirtyInstances.erase(name);specialInstances.erase(name);specialRoleCount=specialInstances.size();metadataDirty=true;
     }
     void RetireGeometry(const std::string& name){
+        dirtySurfaces.erase(name);
         if(auto found=geometrySlots.find(name);found!=geometrySlots.end()){
             FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);geometrySlots.erase(found);
         }
@@ -570,6 +606,19 @@ public:
                 ForgetMetadataLayout(found->second);metadataLayouts.erase(found);
             }
         }
+    }
+    void RenameGeometry(const std::string& before,const std::string& after){
+        if(before==after)return;
+        if(geometrySlots.contains(after)||geometryIndices.contains(after))throw std::logic_error("Geometry metadata rename target is live");
+        auto rename=[&](auto& map){auto item=map.extract(before);if(!item.empty()){item.key()=after;map.insert(std::move(item));}};
+        rename(geometrySlots);rename(geometryIndices);rename(meshBaselines);rename(meshColors);
+        auto renameSet=[&](auto& values){if(values.erase(before))values.insert(after);};
+        renameSet(alphaMeshes);renameSet(dirtyBaselines);renameSet(dirtyColors);renameSet(dirtySurfaces);
+        if(const auto separator=before.rfind(':');separator!=std::string::npos)
+            if(auto found=metadataLayouts.find(before.substr(0,separator));found!=metadataLayouts.end()){
+                ForgetMetadataLayout(found->second);metadataLayouts.erase(found);
+            }
+        metadataDirty=true;
     }
     bool CollectGeometryMetadata(const std::shared_ptr<donut::engine::MeshInfo>& mesh,uint32_t group,GeometryMetadata& entry){
         if(entry.collected==metadataScan)return false;
@@ -811,11 +860,27 @@ public:
     void Dispatch(nvrhi::IDevice* device,nvrhi::ICommandList* command,const std::shared_ptr<donut::engine::Scene>& scene,
             const RtrSceneRowChanges& rows,nvrhi::rt::IAccelStruct* tlas,RtrSparseLighting& sources,nvrhi::ISampler* sampler,nvrhi::IBuffer* analytic,uint32_t lightCount,uint32_t lightRoot,uint32_t treeBase){
         const auto uploadScope=RtrGpuProfile::Begin(command,"NativeLightingUpload",-1);
-        UploadAttributes(device,command,scene,rows);sources.Upload(command);
+        if(surfaceUpdates)surfaceUpdates(surfaceRows,surfaceDirty);
+        EnsureAttributeBuffer(device,command,surfaceMaterials,std::max<size_t>(1,surfaceRows.size())*sizeof(rtr::upstream::SurfaceMaterialRow),sizeof(rtr::upstream::SurfaceMaterialRow),"Finite-signal surface materials");
+        for(size_t slot=surfaceRows.size();slot<surfaceCoverage.size();++slot)surfaceCandidateCount-=surfaceCoverage[slot];
+        surfaceCoverage.resize(surfaceRows.size());
+        for(uint32_t slot:surfaceDirty){
+            const auto& row=surfaceRows.at(slot);
+            const bool candidate=row.active&&(row.material.domain!=0||row.maskedOpacity!=1.f);
+            surfaceCandidateCount-=surfaceCoverage.at(slot);surfaceCandidateCount+=candidate;surfaceCoverage[slot]=candidate;
+        }
+        if(!surfaceDirty.empty()){
+            RtrDiagnostics::Scope rowsScope(RtrDiagnostics::SceneMaterialRows,surfaceDirty.size(),surfaceDirty.size(),1,0,0,0,
+                RtrDiagnostics::Material|RtrDiagnostics::Attributes,surfaceDirty.size()*sizeof(rtr::upstream::SurfaceMaterialRow));
+            UploadAttributeRuns(command,surfaceMaterials,surfaceRows,surfaceDirty);++metadataUploads;
+            attributeWork[3]+=surfaceDirty.size()*sizeof(rtr::upstream::SurfaceMaterialRow);
+            surfaceDirty.clear();
+        }
+        UploadAttributes(device,command,scene,rows);UploadSurfaceRuns(device,command);sources.Upload(command);
         if(sourceHistoryClear){for(auto& texture:sourceHistory)command->clearTextureUInt(texture,nvrhi::AllSubresources,0);sourceHistoryClear=false;}
         const bool seeded=sourceHistoryActive&&!workStatisticsEnabled&&!(diagnosticDecomposition&&RtrDiagnostics::level.load()==2);
         auto* words=reinterpret_cast<uint32_t*>(constants.words.data());words[72]=uint32_t(applicationData.size());words[73]=uint32_t(publication);words[74]=uint32_t(publication>>32);
-        words[75]=(workStatisticsEnabled?1:0)|((specialRoleCount||!alphaMeshes.empty())?2:0)|(instanceCandidates?4:0)|(seeded?8:0)|(maskedScalarCandidates?32:0)
+        words[75]=(workStatisticsEnabled?1:0)|((specialRoleCount||!alphaMeshes.empty())?2:0)|(instanceCandidates?4:0)|(seeded?8:0)|((maskedScalarCandidates||surfaceCandidateCount)?32:0)
             |(geometryGeneration!=lastGeometryGeneration?16:0);
         words[76]=uint32_t(timeNanos);words[77]=uint32_t(uint64_t(timeNanos)>>32);words[78]=uint32_t(deltaNanos);words[79]=uint32_t(uint64_t(deltaNanos)>>32);
         words[39]=lightCount;words[51]=lightRoot;words[59]=treeBase;
@@ -850,7 +915,9 @@ public:
             nvrhi::BindingSetItem::StructuredBuffer_SRV(4,sources.sourceBuffer),nvrhi::BindingSetItem::StructuredBuffer_SRV(5,sources.treeBuffer),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(6,instances),nvrhi::BindingSetItem::StructuredBuffer_SRV(7,baselineCoordinates),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(8,geometryBaselines),nvrhi::BindingSetItem::RawBuffer_SRV(9,application),
-            nvrhi::BindingSetItem::StructuredBuffer_SRV(10,lookup),nvrhi::BindingSetItem::StructuredBuffer_SRV(11,analytic),nvrhi::BindingSetItem::Sampler(0,sampler),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(10,lookup),nvrhi::BindingSetItem::StructuredBuffer_SRV(11,analytic),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(12,surfaceMaterials),nvrhi::BindingSetItem::Sampler(0,sampler),
+            nvrhi::BindingSetItem::StructuredBuffer_SRV(13,surfaceIndices),
             nvrhi::BindingSetItem::Texture_UAV(0,direct?direct:dummyColor),nvrhi::BindingSetItem::Texture_UAV(1,indirect?indirect:dummyColor),
             nvrhi::BindingSetItem::Texture_UAV(2,geometry?geometry:dummyColor),nvrhi::BindingSetItem::Texture_UAV(3,identity?identity:dummyIdentity),nvrhi::BindingSetItem::RawBuffer_UAV(4,work)};
         for(uint32_t i=0;i<8;++i){if(!textureSamplers[i])throw std::runtime_error("Adapter texture sampler is not configured");bindings.bindings.push_back(nvrhi::BindingSetItem::Sampler(i+1,textureSamplers[i]));}

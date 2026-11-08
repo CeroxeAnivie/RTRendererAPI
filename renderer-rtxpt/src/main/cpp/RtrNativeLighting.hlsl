@@ -12,6 +12,7 @@ struct RtrNode {float4 lower,left,upper,right;};
 struct RtrInstance {float4 rolesVisibility;float4 baseline;};
 struct RtrVertexAttributes {float2 baseline;uint color;uint reserved;};
 struct RtrGeometryAttributes {uint offset,triangles,basePolicy,normalPolicy,ormPolicy,emissivePolicy;float maskedOpacity;};
+struct RtrSurfaceMaterial {MaterialConstants material;uint4 policies;float maskedOpacity;uint active;};
 struct RtrAnalytic {float4 position,direction,color,cone;};
 struct RtrNativeConstants
 {
@@ -41,6 +42,8 @@ StructuredBuffer<RtrGeometryAttributes> t_GeometryBaselines : register(t8);
 ByteAddressBuffer t_Application : register(t9);
 StructuredBuffer<float2> t_BaselineLookup : register(t10); // baseline float2[256], packed host-response RGB[256]
 StructuredBuffer<RtrAnalytic> t_Analytic : register(t11); // resident lights followed by their exact support tree
+StructuredBuffer<RtrSurfaceMaterial> t_SurfaceMaterials : register(t12);
+StructuredBuffer<uint> t_SurfaceIndices : register(t13);
 ByteAddressBuffer t_Buffers[] : register(t0,space1);
 Texture2D<float4> t_Textures[] : register(t0,space2);
 SamplerState s_Material : register(s0);
@@ -115,6 +118,16 @@ float3 RtrPosition(ByteAddressBuffer vertices,GeometryData geometry,uint i){retu
 float2 RtrUv(ByteAddressBuffer vertices,GeometryData geometry,uint i)
 {return geometry.texCoord1Offset==0xffffffff?0:asfloat(vertices.Load2(geometry.texCoord1Offset+i*8));}
 float4 RtrVertexColor(uint packed){return float4(packed&255,(packed>>8)&255,(packed>>16)&255,packed>>24)/255.0;}
+MaterialConstants RtrMaterial(GeometryData geometry,uint primitive,inout RtrGeometryAttributes attributes){
+    uint surface=primitive<attributes.triangles?t_SurfaceIndices[attributes.offset/3+primitive]:0;
+    if(surface!=0){
+        RtrSurfaceMaterial row=t_SurfaceMaterials[surface-1];
+        attributes.basePolicy=row.policies.x;attributes.normalPolicy=row.policies.y;
+        attributes.ormPolicy=row.policies.z;attributes.emissivePolicy=row.policies.w;attributes.maskedOpacity=row.maskedOpacity;
+        return row.material;
+    }
+    return t_Materials[geometry.materialIndex];
+}
 RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes,float3 origin,float3 direction,float distance,float3x4 worldToObject)
 {
     RtrReceiver r=(RtrReceiver)0;r.instance=instance;r.geometry=geometry;r.primitive=primitive;r.distance=distance;r.barycentrics=attributes;
@@ -139,7 +152,7 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
     }
     r.position=origin+direction*distance;
     r.uv=RtrUv(vertices,geom,tri.x)*bary.x+RtrUv(vertices,geom,tri.y)*bary.y+RtrUv(vertices,geom,tri.z)*bary.z;
-    MaterialConstants mat=t_Materials[geom.materialIndex];
+    MaterialConstants mat=RtrMaterial(geom,primitive,geometryAttributes);
     bool masked=mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested;
     float4 base=float4(mat.baseOrDiffuseColor,masked?geometryAttributes.maskedOpacity:mat.opacity);
     if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)
@@ -183,7 +196,9 @@ bool RtrAccept(RtrReceiver receiver,bool frontFace,uint role)
     if((flags&role)==0)return false;
     if(role==1&&(flags&8)!=0&&!frontFace)return false;
     if(role==2&&(flags&16)==0&&!frontFace)return false;
-    GeometryData geom=t_Geometry[t_Instances[receiver.instance].firstGeometryIndex+receiver.geometry];MaterialConstants mat=t_Materials[geom.materialIndex];
+    uint geometryIndex=t_Instances[receiver.instance].firstGeometryIndex+receiver.geometry;
+    GeometryData geom=t_Geometry[geometryIndex];RtrGeometryAttributes geometryAttributes=t_GeometryBaselines[geometryIndex];
+    MaterialConstants mat=RtrMaterial(geom,receiver.primitive,geometryAttributes);
     if(mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested)return receiver.opacity>=mat.alphaCutoff;
     return receiver.opacity>0;
 }
@@ -200,9 +215,9 @@ bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attrib
     // Role-only opaque candidates need no material, UV or corner color reads.
     InstanceData inst=t_Instances[instance];uint geometryIndex=inst.firstGeometryIndex+geometry;
     GeometryData geom=t_Geometry[geometryIndex];RtrGeometryAttributes geometryAttributes=t_GeometryBaselines[geometryIndex];
-    MaterialConstants mat=t_Materials[geom.materialIndex];
+    MaterialConstants mat=RtrMaterial(geom,primitive,geometryAttributes);
     bool masked=mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested;
-    if((g.publication.w&4)!=0&&t_InstanceAttributes[instance].rolesVisibility.w==0&&(!masked||geometryAttributes.maskedOpacity==1))
+    if((g.publication.w&4)!=0&&t_InstanceAttributes[instance].rolesVisibility.w==0&&mat.domain==MaterialDomain_Opaque&&mat.opacity==1)
         {opaque=role==2;return true;}
     float4 base=float4(mat.baseOrDiffuseColor,masked?geometryAttributes.maskedOpacity:mat.opacity);
     float3 bary=float3(1-attributes.x-attributes.y,attributes);float2 uv=0;

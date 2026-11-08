@@ -24,10 +24,14 @@ final class RtxptAttributeBatch {
         }
     }
     record Entry(String name,float[] baseline,int[] colors) { }
+    static Entry canonical(String name,MeshAsset mesh,float[] override,boolean baseline,boolean colors){
+        return convert(name,mesh,null,override,baseline,colors);
+    }
     static Entry convert(String name,MeshAsset mesh,Group group,float[] override,boolean baseline,boolean colors){
         var indices=mesh.triangleIndices();var uv=mesh.lightmapCoordinates();var tint=mesh.vertexColorsRgba8();
-        var b=baseline?new float[group.corners.length*2]:null;var c=colors?new int[group.corners.length]:null;
-        for(int i=0;i<group.corners.length;i++){int vertex=indices.get(group.corners[i]);
+        int count=group==null?indices.remaining():group.corners.length;
+        var b=baseline?new float[count*2]:null;var c=colors?new int[count]:null;
+        for(int i=0;i<count;i++){int vertex=indices.get(group==null?i:group.corners[i]);
             if(b!=null){b[i*2]=override!=null?override[vertex*2]:uv.hasRemaining()?uv.get(vertex*2):0;
                 b[i*2+1]=override!=null?override[vertex*2+1]:uv.hasRemaining()?uv.get(vertex*2+1):0;}
             if(c!=null)c[i]=tint.hasRemaining()?tint.get(vertex):0xffffffff;}

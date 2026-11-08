@@ -174,6 +174,11 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                         if(noOp)require(blas==0&&count(snapshot,"SceneFullRefresh")==0,
                                 "No-op texture generation caused global resource work at sequence="+sequence);
                         if(attributeOnly)require(attributes>0,"Mixed update omitted original attribute uploader");
+                        if(sequence==6||sequence==14){
+                            var tlasEvents=snapshot.events().stream().filter(event->event.stage().equals("TlasBuild")).toList();
+                            require(tlasEvents.size()==1&&tlasEvents.getFirst().items()==0,
+                                    "Attribute-only publication dirtied unchanged instance poses/TLAS or omitted its work event at sequence="+sequence);
+                        }
                         sawAttributes|=attributes>0;sawTopology|=blas>0;
                     } else {
                         require(snapshot.events().isEmpty()&&javaSnapshot.events().isEmpty(),"OFF continued collecting diagnostics");
@@ -222,7 +227,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             var monitor=access.nativeDiagnosticMonitor();monitor.poll();
             double[] previous=RtxptNative.meshResourceState(handle,"i22");
             double[] stableMetadata=RtxptNative.lightingMetadataState(handle,"i22",meshName(2)+":0");
-            double previousPolicy=stableMetadata[4];
+            double previousPolicy=RtxptNative.lightingSurfaceState(handle,meshName(2)+":0",0)[1];
             for(int sequence=2;sequence<=11;sequence++) {
                 boolean reshaped=sequence==4||sequence==5||sequence==7;
                 boolean mixedSampler=sequence==8||sequence==9;
@@ -258,11 +263,11 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 require(metadataAfter.length==11&&metadataAfter[0]==metadataBefore[0],
                         "Stable geometry edit rebuilt its cached attribute identity keys");
                 if(mixedSampler) {
-                    require(metadataAfter[1]>metadataBefore[1]&&metadata[4]!=previousPolicy,
+                    require(RtxptNative.lightingSurfaceState(handle,meshName(2)+":0",0)[1]!=previousPolicy,
                             "Mixed sampler/deformation lost its real sampling-policy update");
                 } else require(metadataAfter[1]==metadataBefore[1],
                             "Geometry-only edit needlessly re-read unchanged material sampling policies");
-                previousPolicy=metadata[4];
+                previousPolicy=RtxptNative.lightingSurfaceState(handle,meshName(2)+":0",0)[1];
                 long[] after=RtxptNative.commandWorkState(handle);
                 require(after[7]-commandsBefore[7]==1&&after[8]==commandsBefore[8],"Geometry edit did not execute exactly one lean frame");
                 String name=sequence==4?"geometry-index-reorder":sequence==5?"geometry-grow-away":
@@ -306,7 +311,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             if(empty) {
                 // Empty native transport is legal even though Java normally elides it.
                 var packet=ByteBuffer.allocateDirect(36).order(ByteOrder.LITTLE_ENDIAN);
-                packet.putInt(0x52445257);for(int index=0;index<8;index++)packet.putInt(0);
+                packet.putInt(0x52445259);for(int index=0;index<8;index++)packet.putInt(0);
                 RtxptNative.resourcesMemory(handle,sequence,packet.flip());
             }else if(!settled)transaction.upsert(SceneInstance.builder(11,1)
                     .transform(new AffineTransform(new float[]{1,0,0,x,0,1,0,0,0,0,1,0})).build());
@@ -335,6 +340,8 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             previous=current;
             var snapshot=monitor.poll();
             require(snapshot.lostEvents()==0,"Pose diagnostic events were lost");
+            var materialEvents=snapshot.events().stream().filter(event->event.stage().equals("SceneMaterialRows")).toList();
+            require(materialEvents.stream().allMatch(event->event.items()==0),"Pose/camera frame rewrote unchanged material rows");
             final int frameSequence=sequence;
             var instanceEvents=snapshot.events().stream().filter(event->event.sequence()==frameSequence&&event.stage().equals("SceneInstanceRows")).toList();
             require(instanceEvents.size()==1,"Fresh pose frame omitted its explicit instance-work event");
@@ -342,9 +349,17 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             long[] raw=RtxptNative.boundaryDiagnostics(handle,snapshot.generation(),diagnosticBefore.nextOrdinal());
             require(raw.length>=21&&raw[1]==27&&raw.length==21+(raw[3]+raw[7])*27,"Invalid instance-work diagnostic packet");
             long examined=-1;
-            for(int index=21;index<raw.length;index+=27)if(raw[index+24]==instanceEvent.ordinal())examined=raw[index+9];
-            require(settled?examined==0&&instanceEvent.items()==0:examined>0&&instanceEvent.items()>0,
+            for(int index=21;index<raw.length;index+=27){
+                if(raw[index+24]==instanceEvent.ordinal())examined=raw[index+9];
+                for(var materialEvent:materialEvents)if(raw[index+24]==materialEvent.ordinal())
+                    require(raw[index+9]==0,"Pose/camera frame scanned unchanged material registry");
+            }
+            require(settled?examined==0&&instanceEvent.items()==0:examined==1&&instanceEvent.items()==1,
                     "Native transform/previous-pose gate performed incorrect instance work at sequence="+sequence+" examined="+examined+" written="+instanceEvent.items());
+            require(instanceEvent.tasks()==examined,"Public diagnostic check count differs from native event");
+            var tlasEvents=snapshot.events().stream().filter(event->event.stage().equals("TlasBuild")).toList();
+            require(tlasEvents.size()==1&&tlasEvents.getFirst().items()==(sequence<=FRAMES+2?1:0),
+                    "Previous-pose/camera-only frame updated unchanged current TLAS inputs");
             if(settled)require(count(snapshot,"SceneTableUpload")==0,"Settled camera/idle frame uploaded unchanged native tables");
             String name=settled?(sequence==FRAMES+4?"settled-idle-zero-instance-scan":"camera-only-zero-instance-scan")
                     :empty?"previous-pose-converges-without-command-list":"resident-pose-without-command-list";
@@ -396,8 +411,9 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 require(retired,"Removed unique instance still owns a native mesh identity");
             }else {
                 double[] metadata=RtxptNative.lightingMetadataState(handle,"i99",meshName(99)+":0");
-                require(metadata.length==17&&metadata[3]==2&&metadata[4]==4
-                        &&Math.abs(metadata[8]-192/255.0)<1e-6&&metadata[9]==23&&metadata[10]==1,
+                double[] surface=RtxptNative.lightingSurfaceState(handle,meshName(99)+":0",0);
+                require(metadata.length==17&&metadata[3]==2&&surface.length==9&&surface[1]==4
+                        &&Math.abs(surface[5]-192/255.0)<1e-6&&metadata[9]==23&&metadata[10]==1,
                         "New/re-added unique material lost triangle, sampler, opacity or receiver semantics");
             }
             String name=remove?"remove-unique-material-without-reimport"
@@ -442,8 +458,12 @@ public final class RtxptBridgeMigrationNativeSelfTest {
         int policy=(texture.addressU()==TextureAsset.AddressMode.CLAMP_TO_EDGE?1:0)
                 |(texture.addressV()==TextureAsset.AddressMode.CLAMP_TO_EDGE?2:0)
                 |(texture.filter()==TextureAsset.Filter.NEAREST?4:0);
-        require(center[3]==2&&center[4]==policy,"Dense geometry or sampler policy was stale");
-        require(Math.abs(center[8]-((masked.baseColorRgba8()>>>24)&255)/255.0)<1e-6,"Masked scalar metadata was stale");
+        require(center[3]==2,"Dense geometry triangle layout was stale");
+        for(int primitive=0;primitive<2;primitive++){
+            var surface=RtxptNative.lightingSurfaceState(handle,meshName(2)+":0",primitive);
+            require(surface.length==9&&surface[1]==policy,"Triangle surface sampler policy was stale");
+            require(Math.abs(surface[5]-((masked.baseColorRgba8()>>>24)&255)/255.0)<1e-6,"Triangle surface masked scalar was stale");
+        }
         double[] expected={23,.8,0,0,.3,.7,.1,.2};
         for(int index=0;index<8;index++)require(Math.abs(center[9+index]-expected[index])<1e-6,
                 "Surviving attributes changed during dense reindex at component="+index);

@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $runtime=[IO.Path]::GetFullPath($RuntimeDirectory,$repo)
-$java=(Get-Command java.exe -CommandType Application).Source
+$java=(Get-Command java.exe -CommandType Application | Select-Object -First 1).Source
 $variables=@{
     RTR_JVM_DLL=(Join-Path (Split-Path (Split-Path $java)) 'bin/server/jvm.dll')
     RTR_JVM_CLASSPATH=([IO.File]::ReadAllText([IO.Path]::GetFullPath($ClasspathFile,$repo))).Trim()

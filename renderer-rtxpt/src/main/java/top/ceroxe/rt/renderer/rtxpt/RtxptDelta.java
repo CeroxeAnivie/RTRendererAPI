@@ -113,14 +113,32 @@ final class RtxptDelta {
         }
         boolean hasWork=!meshItems.isEmpty()||!variants.isEmpty()||!changes.removals().isEmpty()||!updates.isEmpty()||!changedTextures.isEmpty()||!removedMaterials.isEmpty();
         boolean mappingsChanged=!meshItems.isEmpty()||!old.sameRetainedStructure(scene)||!sameDynamicStructure(old,scene,previous,items);
-        long dependencies=current.dependencies+prior.dependencies,reads=current.reads+prior.reads+changes.itemReads();
-        if(!hasWork)return new Prepared(translated,0,0,0,false,mappingsChanged,new Work(reads,dependencies,nodes,0),null,List.of(),List.of(),List.of());
+        if(!hasWork)return new Prepared(translated,0,0,0,false,mappingsChanged,
+                new Work(current.reads+prior.reads+changes.itemReads(),current.dependencies+prior.dependencies,nodes,0),null,List.of(),List.of(),List.of());
         var coverageChanged=new ArrayList<String>();
         for(var variant:variants.values()){
             var a=old.materials.get(variant.material());var b=scene.materials.get(variant.material());
             if(a==null||!alphaEquivalent(old.textures.get(a.baseColorTextureId()),scene.textures.get(b.baseColorTextureId())))coverageChanged.add(variant.name());
         }
-        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged,residentTextures,packets,removedMaterials);
+        // Only known native residents are eligible. Limit selection to changed
+        // variants and retiring users, never a complete resident geometry scan.
+        // Decode resolves all references before the packet retires any owner.
+        var inputSources=new LinkedHashMap<String,RtxptScene.Item>();
+        if(!meshItems.isEmpty()){
+            for(var item:meshItems.values())if(old.meshes.containsKey(item.mesh()))
+                for(var source:prior.variants(item.mesh()))inputSources.putIfAbsent(RtxptScene.meshName(source),source);
+            for(var name:changes.removals()){
+                if(name.startsWith("i")){
+                    var source=old.item(Long.parseLong(name,1,name.length(),10));
+                    if(source!=null)inputSources.putIfAbsent(RtxptScene.meshName(source),source);
+                }else for(int index=old.instances.size();index<previous.size();index++){
+                    var source=previous.get(index);
+                    if(source.name().equals(name))inputSources.putIfAbsent(RtxptScene.meshName(source),source);
+                }
+            }
+        }
+        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged,residentTextures,packets,removedMaterials,inputSources.values());
+        long dependencies=current.dependencies+prior.dependencies,reads=current.reads+prior.reads+changes.itemReads();
         return new Prepared(translated,meshItems.size(),variants.size(),changedTextures.size(),true,mappingsChanged,new Work(reads,dependencies,nodes,0),memory,List.copyOf(meshItems.values()),List.copyOf(variants.values()),List.copyOf(removedMaterials));
     }
     private static boolean sameDynamicStructure(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,List<RtxptScene.Item> items){
@@ -131,8 +149,11 @@ final class RtxptDelta {
     /** Only attributes consumed by the resident geometry importer participate.
      * Baseline coordinates and authored tint have independent GPU publications. */
     static boolean sameGeometry(MeshAsset a,MeshAsset b){
+        return a==b || a!=null&&b!=null&&sameInputChannels(a,b)&&a.triangleMaterialIds().equals(b.triangleMaterialIds());
+    }
+    static boolean sameInputChannels(MeshAsset a,MeshAsset b){
         return a==b || a!=null&&b!=null&&a.positions().equals(b.positions())&&a.normals().equals(b.normals())
             &&a.tangents().equals(b.tangents())&&a.textureCoordinates().equals(b.textureCoordinates())
-            &&a.triangleIndices().equals(b.triangleIndices())&&a.triangleMaterialIds().equals(b.triangleMaterialIds());
+            &&a.triangleIndices().equals(b.triangleIndices());
     }
 }

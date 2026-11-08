@@ -6,6 +6,8 @@ param(
     [string]$OutputDirectory='build/reports/streaming-scene-performance',
     [ValidateSet('medium','fast')][string[]]$Profiles=@('medium','fast'),
     [ValidateSet('OFF','DEEP')][string[]]$Diagnostics=@('OFF','DEEP'),
+    [ValidateSet('baseline-first','current-first')][string]$RunOrder='baseline-first',
+    [switch]$CollectGpuTiming,
     [ValidateRange(2,65536)][int]$Meshes=3662,
     [ValidateRange(1,65536)][int]$AdmissionBatches=1,
     [ValidateRange(1,262144)][int]$Sources=45000,
@@ -73,7 +75,7 @@ foreach($identity in $runtimes.Keys){
 }
 Save-Json (Join-Path $output 'environment.json') ([ordered]@{
     schema='streaming-scene-performance-v1';timestampUtc=[DateTime]::UtcNow.ToString('o');testClasses=$classIdentities;runtime=$runtimeIdentities
-    profiles=$Profiles;diagnostics=$Diagnostics;meshes=$Meshes;admissionBatches=$AdmissionBatches;sources=$Sources;ticks=$Ticks;sceneTickHz=20;framesPerTick=$FramesPerTick
+    profiles=$Profiles;diagnostics=$Diagnostics;runOrder=$RunOrder;collectGpuTiming=[bool]$CollectGpuTiming;meshes=$Meshes;admissionBatches=$AdmissionBatches;sources=$Sources;ticks=$Ticks;sceneTickHz=20;framesPerTick=$FramesPerTick
     workloadKey=$workloadKey;sourceModel=$SourceModel;staticSources=$effectiveStaticSources;dynamicSources=$dynamicSources;flowPerFrame=$FlowPerFrame;materialCount=$MaterialCount;exportRaw=[bool]$ExportRaw;requireTarget=[bool]$RequireTarget
     movementFrames=$Ticks*$FramesPerTick;warmupFrames=$WarmupFrames;stationaryFrames=$StationaryFrames;textureSize=$TextureSize
     outputExtent=@(2560,1600);lightingExtent=@(1280,800);jobMemoryLimitGiB=10;javaMaximumHeapMiB=512;serialRuns=$true
@@ -101,13 +103,16 @@ $performance=[Collections.Generic.List[object]]::new()
 $resourceWork=[Collections.Generic.List[object]]::new()
 $saved=@{}
 $variables=@{RTR_RTXPT_BACKGROUND_WINDOW='1';RTR_RTXPT_REQUIRE_PRECOMPILED='1'}
+if($CollectGpuTiming){$variables.RTR_RTXPT_GPU_PROFILE='';$variables.RTR_RTXPT_GPU_TIMING='1';$variables.RTR_RTXPT_GPU_PROFILE_STRIDE='1'}
 try {
     foreach($name in $variables.Keys){$saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process');[Environment]::SetEnvironmentVariable($name,$variables[$name],'Process')}
-    foreach($profile in $Profiles){foreach($level in $Diagnostics){foreach($identity in $runtimes.Keys){
+    $runIdentities=if($RunOrder -eq 'current-first' -and $runtimes.Contains('baseline')){@('current','baseline')}else{@($runtimes.Keys)}
+    foreach($profile in $Profiles){foreach($level in $Diagnostics){foreach($identity in $runIdentities){
         foreach($file in $classIdentities){if((Hash $file.path) -ne $file.sha256){throw 'Fixture class bytes changed between runs'}}
         foreach($file in $runtimeIdentities[$identity]){if((Hash (Join-Path $runtimes[$identity] $file.name)) -ne $file.sha256){throw 'Native runtime bytes changed between runs'}}
         $tag="$identity-$profile-$level-$SourceModel-s$effectiveStaticSources-d$dynamicSources-flow$FlowPerFrame-mat$MaterialCount-raw$([int][bool]$ExportRaw)";$case=Join-Path $output $tag
         [IO.Directory]::CreateDirectory($case)|Out-Null
+        if($CollectGpuTiming){$env:RTR_RTXPT_GPU_PROFILE=Join-Path $case 'gpu-stages.csv'}
         $gpu=Read-GpuBaseline
         Save-Json (Join-Path $case 'environment.json') (Add-WorkloadFields ([ordered]@{identity=$identity;profile=$profile;diagnostics=$level;initialGpu=$gpu;runtime=$runtimeIdentities[$identity];classes=$classIdentities;timestampUtc=[DateTime]::UtcNow.ToString('o')}))
         if($RequireIdle -and !$gpu.absoluteComparisonAllowed){throw "Initial GPU is busy or unknown; $tag was not started"}
@@ -194,10 +199,19 @@ foreach($current in @($performance.ToArray()|Where-Object identity -eq 'current'
     if($baseline){Add-Comparison $baseline $current 'pipeline_frames_per_second' 'rate' $baseline.pipelineFramesPerSecond $current.pipelineFramesPerSecond}
     if($baseline -and $null -ne $baseline.simulationFramesPerSecond -and $null -ne $current.simulationFramesPerSecond){Add-Comparison $baseline $current 'complete_simulation_frames_per_second' 'rate' $baseline.simulationFramesPerSecond $current.simulationFramesPerSecond}
 }
-foreach($current in @($latencies.ToArray()|Where-Object identity -eq 'current')){
-    $baseline=$latencies.ToArray()|Where-Object{$_.identity -eq 'baseline' -and $_.workloadKey -eq $current.workloadKey -and $_.profile -eq $current.profile -and $_.diagnostics -eq $current.diagnostics -and $_.phase -eq $current.phase -and $_.metric -eq $current.metric -and $_.statistic -eq $current.statistic}|Select-Object -First 1
-    if($baseline){Add-Comparison $baseline $current $current.metric $current.statistic $baseline.valueMilliseconds $current.valueMilliseconds}
+function Latency-Key($Row){
+    # All fields come from the fixed fixture, stage and statistic catalogs.
+    "$($Row.workloadKey)|$($Row.profile)|$($Row.diagnostics)|$($Row.phase)|$($Row.metric)|$($Row.statistic)"
 }
+$baselineLatencies=@{}
+foreach($row in $latencies){if($row.identity -eq 'baseline'){
+    $key=Latency-Key $row
+    if(!$baselineLatencies.ContainsKey($key)){$baselineLatencies[$key]=$row}
+}}
+if($baselineLatencies.Count){foreach($current in $latencies){if($current.identity -eq 'current'){
+    $baseline=$baselineLatencies[(Latency-Key $current)]
+    if($baseline){Add-Comparison $baseline $current $current.metric $current.statistic $baseline.valueMilliseconds $current.valueMilliseconds}
+}}}
 $comparisons.ToArray()|Export-Csv -LiteralPath (Join-Path $output 'comparison.csv') -NoTypeInformation -Encoding utf8
 $lines=[Collections.Generic.List[string]]::new()
 $lines.Add('# Generic streaming scene measurements');$lines.Add('')

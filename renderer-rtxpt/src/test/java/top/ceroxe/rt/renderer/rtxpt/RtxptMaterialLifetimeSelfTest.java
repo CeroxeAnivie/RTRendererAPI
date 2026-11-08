@@ -17,7 +17,7 @@ public final class RtxptMaterialLifetimeSelfTest {
     private static void bytes(ByteBuffer data,int stride){int count=data.getInt();data.position(Math.addExact(data.position(),Math.multiplyExact(count,stride)));}
     private static Tail decode(ByteBuffer memory){
         var data=memory.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-        require(data.getInt()==0x52445257,"Current resource protocol");
+        require(data.getInt()==0x52445259,"Current resource protocol");
         for(int count=data.getInt();count>0;count--){
             data.getLong();data.position(data.position()+7*4);data.getLong();
             if(data.getInt()!=0){data.getLong();data.position(data.position()+6*4);}
@@ -29,7 +29,8 @@ public final class RtxptMaterialLifetimeSelfTest {
             if(data.getInt()!=0)data.position(data.position()+16);
         }
         for(int count=data.getInt();count>0;count--){
-            string(data);for(int attribute=0;attribute<4;attribute++)bytes(data,4);
+            string(data);
+            if(data.getInt()==1)string(data);else for(int attribute=0;attribute<5;attribute++)bytes(data,4);
             for(int groups=data.getInt();groups>0;groups--){string(data);bytes(data,4);}
         }
         for(int count=data.getInt();count>0;count--)string(data);

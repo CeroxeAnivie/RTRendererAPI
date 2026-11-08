@@ -50,7 +50,7 @@ public final class RtxptDynamicResourcesSelfTest {
     }
     private static void materialPacket(ByteBuffer memory,MaterialAsset material,String slot,int excluded,int dominantLobe){
         var packet=memory.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-        require(packet.isDirect()&&packet.getInt()==0x52445257,"Only the float3, path-decomposition and motion-vector blocking resource protocol is emitted");
+        require(packet.isDirect()&&packet.getInt()==0x52445259,"Only the float3, path-decomposition and motion-vector blocking resource protocol is emitted");
         require(packet.getInt()==0&&packet.getInt()==1,"Emission packet contains no textures and one material");
         int length=packet.getInt();byte[] name=new byte[length];packet.get(name);
         require(new String(name,StandardCharsets.UTF_8).equals(slot),"Stable material slot does not include emission content");
@@ -171,7 +171,7 @@ public final class RtxptDynamicResourcesSelfTest {
         Path path=Files.createTempDirectory("resource-plan-");
         try{
             var result=RtxptDelta.prepare(old,scene,List.of(),items,Map.of(),PACKETS);
-            require(result.memory().isDirect()&&result.memory().getInt(0)==0x52445257,"Direct little-endian resource packet");
+            require(result.memory().isDirect()&&result.memory().getInt(0)==0x52445259,"Direct little-endian resource packet");
             require(result.work().exportedModels()==0,"No file importer path");
             try(var files=Files.list(path)){require(files.findAny().isEmpty(),"Resource planning creates no files");}
             var mesh=scene.meshes.get(1L);var groups=RtxptAttributeBatch.groups(mesh);

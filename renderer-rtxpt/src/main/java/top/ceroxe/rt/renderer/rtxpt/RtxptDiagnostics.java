@@ -23,7 +23,14 @@ public final class RtxptDiagnostics {
 
     public record NativeEvent(long ordinal,long sequence,long sceneRevision,long thread,String stage,
             long beginNanos,long inclusiveNanos,long selfNanos,long threadCpuNanos,long threadCpuSelfNanos,
-            long scopeId,long parentScopeId,long items,long bytes,long flags) { }
+            long scopeId,long parentScopeId,long items,long bytes,long flags,long tasks) {
+        public NativeEvent(long ordinal,long sequence,long sceneRevision,long thread,String stage,
+                long beginNanos,long inclusiveNanos,long selfNanos,long threadCpuNanos,long threadCpuSelfNanos,
+                long scopeId,long parentScopeId,long items,long bytes,long flags){
+            this(ordinal,sequence,sceneRevision,thread,stage,beginNanos,inclusiveNanos,selfNanos,threadCpuNanos,
+                    threadCpuSelfNanos,scopeId,parentScopeId,items,bytes,flags,0);
+        }
+    }
     public record NativeSnapshot(long generation,long nextOrdinal,long lostEvents,List<NativeEvent> events){
         public NativeSnapshot {events=List.copyOf(events);}
     }
@@ -37,7 +44,7 @@ public final class RtxptDiagnostics {
         for(int i=21;i<p.length;i+=27){
             int stage=(int)p[i+4];
             events.add(new NativeEvent(p[i+24],p[i],p[i+1],p[i+3],stage>=0&&stage<NATIVE_STAGES.length?NATIVE_STAGES[stage]:"UNKNOWN",
-                p[i+5],p[i+6],p[i+7],p[i+16],p[i+17],p[i+12],p[i+13],p[i+8],p[i+21],p[i+11]));
+                p[i+5],p[i+6],p[i+7],p[i+16],p[i+17],p[i+12],p[i+13],p[i+8],p[i+21],p[i+11],p[i+9]));
         }
         return new NativeSnapshot(p[11],p[14],Math.max(0,p[13]-next),events);
     }
