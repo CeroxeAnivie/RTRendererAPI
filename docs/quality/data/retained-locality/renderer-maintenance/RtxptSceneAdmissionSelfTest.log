@@ -1,1 +1,0 @@
-SCENE_ADMISSION_CPU PASS checks=1927 oracleGenerations=500 diagnosticLevels=3 activePayloadExact=true deletedPayloadZero=true typedBudgetAtomic=true sparseValidationAtomic=true oldMeshReleased=true closeCachesReleased=true noDevice=true

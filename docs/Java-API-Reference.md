@@ -1,6 +1,6 @@
 # Java API 参考入口
 
-8.0.0 是正在迁移、尚未发布的新 major。当前公开签名以源码和该版本 ABI 检查为准；旧 7.x 的四模块路由、Vulkan 后端和私有 native getter 不构成兼容承诺。
+本文索引 **8.0.0** 的主要公开类型；完整方法签名以链接源码和对应版本 API 为准。
 
 | 公开面 | 职责与源码 |
 | --- | --- |
@@ -18,8 +18,4 @@
 | RtxptAccess | [实际原生帧、场景、窗口与 capture 访问](../renderer-rtxpt/src/main/java/top/ceroxe/rt/renderer/rtxpt/RtxptAccess.java) |
 | RtxptDiagnosticAccess | [owner 线程上的外部边界采集](../renderer-rtxpt/src/main/java/top/ceroxe/rt/renderer/rtxpt/RtxptDiagnosticAccess.java) |
 
-renderer-api 是纯契约；renderer-rtxpt 正向依赖它，并消费未修改的 RTXPT。Renderer 不再继承 CPU FrameAccess／CommandAccess；旧 Vulkan、CPU 帧、通用 GPU command／resource、假 health 及固定无数据指标契约已退役，本轮收缩删除 188 个孤立类型，不维持兼容拒绝壳。
-
-RtxptAccess 的 presentationState／exposureState／setExposureOffset 对接原生状态和曝光；FG 激活字段不等于实际呈现帧数。通用 NativeLighting／Sparse／共享同步的真实外桥保留；宿主专属曲线与画风迁到消费方仍在进行。原生质量参数和新控制的实际效果尚待定向验证。
-
-[Java 指南](Java.md)说明调用顺序；[运行时说明](runtime-distribution.md)说明标准 JNI 宿主；[诊断说明](rtxpt-diagnostics.md)说明真实计时边界。完整生产支持和正式发布仍待本批验证，不引用历史类／方法列表冒充当前 API。
+调用顺序见[Java 指南](Java.md)，宿主启动见[运行时](runtime-distribution.md)，事件与计时说明见[诊断](rtxpt-diagnostics.md)。

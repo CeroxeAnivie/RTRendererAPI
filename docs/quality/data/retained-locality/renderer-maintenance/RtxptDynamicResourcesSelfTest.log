@@ -1,1 +1,0 @@
-DYNAMIC_RESOURCES_CPU PASS rows=true mips=true staleRejected=true snapshotIsolation=true noFiles=true primitiveGroups=true

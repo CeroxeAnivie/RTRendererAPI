@@ -37,3 +37,6 @@ hs_err_pid*.jfr
 *.bak
 *.orig
 *.rej
+
+# Local development evidence is not part of the source distribution.
+/docs/quality/

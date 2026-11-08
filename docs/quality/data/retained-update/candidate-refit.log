@@ -1,4 +1,0 @@
-SPARSE_UPDATE_COST stage=tree samples=32 meanMs=1.19083 p95Ms=1.4031
-SPARSE_UPDATE_COST stage=prepare samples=32 meanMs=0.624666 p95Ms=0.7791
-SPARSE_UPDATE_COST stage=regions samples=32 meanMs=4.68661 p95Ms=7.3488
-SPARSE_UPDATE_BENCH PASS sources=42191 upserts=4096 removeInsert=0 rawDirty=607177 queryNodes=607177 links=139365 cells=413

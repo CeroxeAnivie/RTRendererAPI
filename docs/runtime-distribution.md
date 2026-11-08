@@ -1,6 +1,6 @@
 # 运行时与 JVM 宿主
 
-本文对应已合入 GitHub main 并发布 Maven Local 的 **8.0.0 人工验收候选**。两模块制品及内嵌运行时身份已核对，见主分支收拢记录；人眼效果与介质尚未签收。不能混用 7.x 的 native DLL、私有 shader ABI 或 overlay。
+本文适用于 **8.0.0**，说明运行时目录和标准 JVM 宿主启动契约。不要混用不同版本的 JAR、native DLL 或 shader ABI。
 
 ## 两模块运行图
 
@@ -30,13 +30,11 @@
 
 bin 中的原版依赖及资源与 Assets 同源；自有 bridge、宿主和 AdapterShaders 独立放置。AdapterShaders 不是向上游 ShaderDynamic/Source 注入的文件。
 
-本批禁止运行时调用编译器。`PrecompiledShaders` 包含构建期二进制、真实命令模板、配置摘要和源文件摘要；ZIP 排除机器运行产生的 `ShaderDynamic/Bin` 缓存。首次渲染仅校验并复制二进制，按原版公开哈希函数重建安装路径对应的缓存键。所有源文件和二进制摘要必须匹配。
+运行时不调用源码编译器。`PrecompiledShaders` 包含构建期二进制、真实命令模板、配置摘要和源文件摘要；ZIP 排除机器运行产生的 `ShaderDynamic/Bin` 缓存。首次渲染仅校验并复制二进制，按原版公开哈希函数重建安装路径对应的缓存键。所有源文件和二进制摘要必须匹配。
 
 专用宿主和 native 会话启用 Windows `ProcessChildProcessPolicy.NoChildProcessCreation`，由操作系统禁止 DXC 等子进程启动。该进程也不能启动其它子进程；需要外部程序的消费方须在渲染进程之外启动它们。此策略没有修改或拦截上游代码、没有伪造编译成功，也不依赖环境开关。驱动加载二进制／创建 GPU pipeline 和 JVM 自身 JIT 不是离线 HLSL/native 源码编译。
 
-当前清单包括 150 条已校验命令、12 组全局宏配置；支持默认演示及已列明组合，不承诺任意数字质量排列都已预编译。未收录的配置明确失败，不能降画质或回退到运行时编译。扩充组合必须在构建期更新清单并重新发布。见[实现和验证](quality/precompiled-runtime.md)。
-
-官方 source 导出仍只读。用户允许构建工作副本保留唯一内部补丁：SampleCommon::ProgressBarStart 在 HelpersIsNonInteractive() 为真时返回 -1，不创建进度窗口；interactive 保持原版，渲染算法、shader、默认质量和编译清单不因此改变。此项按唯一预期差异审计，不能将最终构建写成“零 patch”。该构建已完成隐藏原生场景运行，具体身份见解析光路恢复报告。
+预编译覆盖以运行时随附清单为准。未收录的配置明确失败，不降低画质或回退运行时编译；扩充组合须在构建期更新清单并重新分发。
 
 JAR 中的 runtime ZIP 与 SHA-256 位于 META-INF/native/windows-x86_64。RtxptRuntime.binDirectory() 校验并返回 bin，RtxptRuntime.jvmHostExecutable() 返回宿主 EXE；两者不创建设备。打包提取保留摘要校验、进程间锁、安全路径检查和原子 staging；热缓存只复用完整内容。显式 top.ceroxe.rt.rtxpt.runtime 指向 bin，不完整就失败，不回退到旧 build/rtxpt-sdk。
 
@@ -60,14 +58,6 @@ JAR 中的 runtime ZIP 与 SHA-256 位于 META-INF/native/windows-x86_64。Rtxpt
 
 **宿主没有 --jvm、--classpath、--main 启动旗标。**真实 process argv 归原版 RTXPT 解析，应用 Java 参数走 RTR_JVM_ARG_*。宿主调用 main 后由标准 DestroyJavaVM 等待非 daemon 线程；异常、参数错误及 VM 创建失败返回明确退出码。
 
-native nonInteractive 属于原生 process argv／原生配置，不是 NativeSceneDemo 的 Java 参数。原版该模式只关闭需输入的错误弹框，进度窗口由前述唯一授权 guard 补齐；不能靠隐藏宿主、伪造 fullscreen 或 WinEvent 藏窗替代。原版 nonInteractive 编译失败会调用 HelpersExitProcess(1) 终止整个宿主进程，外层须保留真实日志和非零退出码，不能把它写成 JNI 可捕获的恢复异常。
+原生 nonInteractive 属于 process argv／原生配置，不是 Java main 参数。原生错误可能终止整个宿主进程；外层应保留真实日志和非零退出码，不假定所有失败都能作为 JNI 异常捕获。
 
-## 源码构建与发布
-
-官方源码位于 build/upstream-rtxpt/source，来源清单位于 build/upstream-rtxpt/source-manifest.json。tools/Assert-RtxptUpstream.ps1 对官方导出同时拒绝原文件变化及清单外新增文件。外桥构建入口是 tools/Build-RtxptBridge.ps1，自有 shader 构建入口是 tools/Build-AdapterShaders.ps1。官方导出继续只读；只有构建工作副本的 ProgressBarStart 非交互 guard 获准例外，须明确记录来源基线与这一处差异，不放宽其它源码／shader 的校验。
-
-所有构建与客户端使用有界进程树入口，合计内存上限 10 GiB；Gradle --no-daemon，重任务串行。来源／唯一补丁差异、CPU、原生出图、正式包及完整负载分别核验。历史生产 29 帧与 beauty 24 帧 proof 不为后续变更转签。最新两模块 Java 主源码和测试源码编译、演示默认值检查、独立公开消费者阴影开关三帧隐藏运行已通过；玻璃稳态完成提交 231.965 FPS、三材质切换 720 帧通过采集，具体边界见解析光路恢复报告。用户尚未人眼签收，介质未启动；最终分发和 Maven Local 身份以主分支收拢记录为准。
-
-人工[原生场景示例](../examples/native-scenes/README.md)以 top.ceroxe.rt.renderer.rtxpt.examples.NativeSceneDemo 为 Java main。先 balls，待用户关闭且进程退出后再单独 mixed；Java 场景参数的每个 flag 和 value 各占一个 RTR_JVM_ARG_n，不把整条参数串塞进一个字段。--denoising 只接受 scene、off、relax、rr；光学比较的 --native 必须带 true/false，balls 不接受 --native true，--native true 与 --denoising rr 也不能组合。不自动启动第二个窗口，也不以 FG 请求代替原生激活／实际呈现测量。
-
-验证完成后先提交并上传全部源码、正式工具与文档，再发布两模块 Maven Local；本次不发布 Maven Central。项目适配代码的 Apache-2.0 与 NVIDIA／Microsoft 等运行时许可证分别保留，不能将所有原生文件当作项目许可证授权。
+源码构建与 SDK 配置见[工具说明](../tools/README.md)，场景参数见[原生场景示例](../examples/native-scenes/README.md)。

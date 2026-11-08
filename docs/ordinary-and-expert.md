@@ -1,18 +1,19 @@
-# 直接接入与必要的专家控制
+# 普通接入与专家控制
 
-8.0.0 的方向是尽可能直接调用原生能力。当前仍是未发布的迁移候选，不提供两套后端或兼容绕行方案。
+普通消费者依赖 `renderer-rtxpt`，从[标准 JVM 宿主](runtime-distribution.md)启动，用场景事务和帧请求提交实际输入。资源、上传、加速结构与原生渲染生命周期交给 provider 和上游实现。
 
-普通消费者依赖 renderer-rtxpt，由它带入 renderer-api；按[宿主启动契约](runtime-distribution.md)启动，再用场景事务、帧请求和明确的 GPU 输出租约接入。核心资源、上传、加速结构和渲染生命周期交给官方实现。
+## 选择执行入口
 
-专家控制只暴露真实执行能力。六类原生 feature、原版公开支持的质量字段及真实资产字节准入预算通过当前 RendererConfig 表达；没有 GPU 枚举、CPU 回读、自定义 shader 等假开关。上游已有等价实现就直接调用；禁止将元数据塞入上游私有字段、修改默认算法或复制自有文件进上游树。
+- 完整原生场景使用 `Renderer` 与 RTXPT 的原生呈现路径。
+- 独立光照使用 `RtxptRenderers` 的 NativeLighting 入口，并按共享输出租约完成 GPU 消费和合成。
+- NativeLighting／Sparse 是独立外桥能力，其语义以公开计划、输入和输出契约为准。
 
-通用 NativeLighting／Sparse 和共享同步是已实现的独立外桥；宿主专属亮度曲线、画风与最终合成由消费方承担，现有宿主策略迁出尚未完成。没有真实实现的旧契约已收缩，不能用固定 REJECTED、Unsupported、假健康或全零指标假装存在能力。
+## 专家配置
 
-- 选择完整原生场景或独立光照的真实执行入口，不继续使用旧 Vulkan 组合器或场景自动路由。
-- 输入特殊采样、仿射变换和 normal map 时遵守实际支持边界，不能让适配层悄悄降低语义。
-- 共享输出按 ready/completion fence 与 lease 完成 GPU 消费；不要以提前回收或复用旧信号换吞吐。
-- 诊断只打开需要的级别，RTXPT 内部无官方数值接口时保持未展开。
+通过 `RendererConfig` 设置原生 feature、公开质量字段及资产字节准入预算。特殊纹理采样、仿射变换、法线贴图和同步行为必须满足接口支持范围。
 
-[Java 指南](Java.md)、[后端边界](backend-routing.md)及[兼容性](COMPATIBILITY.md)是当前用法。历史六档 private shader、资源池／arena／admission 专家探针不再保留。
+共享输出使用 ready/completion fence 与 lease；不得在 GPU 消费完成前回收。诊断按需选择 OFF、SUMMARY 或 DEEP，读取范围与线程要求见[诊断](rtxpt-diagnostics.md)。
 
-新控制实际效果仍待定向验证。原生 presentationState／exposureState 只报告其真实字段，FG 请求、激活与最终呈现帧数分别解释；光学示例不宣称没有对外接通的体散射。
+曝光使用 `RtxptAccess.exposureState()` 和 `setExposureOffset()`；呈现状态使用 `presentationState()`。FG 请求、激活与最终呈现帧数分别解释。
+
+8.0.0 不提供旧 Vulkan 组合器、自动场景路由、私有 shader ABI 或内部资源池探针。详见[Java 指南](Java.md)与[兼容性](COMPATIBILITY.md)。

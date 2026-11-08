@@ -1,7 +1,0 @@
-适用于 .NET Framework MSBuild 版本 17.14.10+8b8e13593
-
-  1>Checking Build System
-  Building Custom Rule D:/Engineering/code/APIs/RTRendererAPI/build/reports/retained-locality-final/baseline/source/CMakeLists.txt
-  rtxpt_sparse_regions_selftest.cpp
-  retained_update_baseline.vcxproj -> D:\Engineering\code\APIs\RTRendererAPI\build\reports\retained-locality-final\baseline\build\Release\retained_update_baseline.exe
-  Building Custom Rule D:/Engineering/code/APIs/RTRendererAPI/build/reports/retained-locality-final/baseline/source/CMakeLists.txt

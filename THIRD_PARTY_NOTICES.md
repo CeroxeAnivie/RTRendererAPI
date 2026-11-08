@@ -35,6 +35,4 @@
 
 ## 维护规则
 
-`verifyThirdPartyNotices` 会解析 `renderer-core` 的完整 runtime dependency graph。任何新增 Maven
-模块如果没有以 `group:artifact` 形式登记在本文件中，`check` 将失败。版本仍由依赖锁与 Gradle
-dependency verification 固定和校验。
+分发前核对实际运行依赖、原生组件和各制品随附的许可证文本。依赖版本由锁文件与 Gradle dependency verification 固定；本清单不能代替实际分发包的许可检查。

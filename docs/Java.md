@@ -1,6 +1,6 @@
 # Java 接入指南
 
-本文对应 **8.0.0 迁移候选**，尚未发布。生产 29 帧及原版 beauty 24 帧 proof 已通过；新控制、完整负载、正式包与人工验收尚未完成，不代表整体性能恢复。
+本文介绍 **8.0.0** 的 Java 接入、场景提交、配置和输出生命周期。
 
 ## 先选运行方式
 
@@ -24,17 +24,17 @@ Renderer 只聚合生命周期与场景／帧提交，不再聚合 CPU FrameAcce
 
 完整原生场景由 RTXPT 的原循环执行；RtxptAccess 只保留实际场景、帧、窗口和 capture 访问，以及外部边界诊断。旧内部设置／资源池探针不是 8.0.0 兼容目标。
 
-独立光照通过 RtxptRenderers 的 native-lighting 入口提供计划和必要属性。自有直接光 shader 是外部扩展，不称为原版 RTXPT 光照。其生产出帧和正式包仍在本批验证范围。
+独立光照通过 RtxptRenderers 的 native-lighting 入口提供计划和必要属性。自有直接光 shader 是外部扩展，不称为原版 RTXPT 光照。
 
 共享光照输出通过 LightingFrameLease 交接。消费方核对 sequence、scene revision、attribute generation、clock、格式与尺寸；导入后按契约排入 GPU completion 再返回租约。没有导入的包可以直接归还；已导入的包不能只调用 close 就释放仍在消费的资源。禁止重复旧帧冒充 fresh 输出。
 
-通用独立光照与 Sparse 的真实执行仍在外桥，不能称为原版 RTXPT 光照算法。宿主专属亮度曲线、画风与最终合成由消费方承担；现有宿主策略迁出尚未完成，不能写成已全量完成。
+NativeLighting／Sparse 是外部桥接能力。应用按公开输入提供宿主亮度响应，并负责自身画风与最终合成。
 
 ## 真实配置与原生控制
 
 RendererConfig 仅包含 frameReconstruction、frameGeneration、lowLatency、denoising、rayTracingOptimizations、pathTracing 六类 feature 与 resources。resources 的 geometryBytes／textureBytes／totalAssetBytes 是保留资产的字节准入限制，不是 VRAM 驻留预算或内存遥测。
 
-PathTracingQualityOptions 只保留原版公开 UI 支持并已 JNI 接线的光源采样、去噪层、嵌套介质质量、subsampling、LOD、精度及后处理等字段。exactOpticalInterfaces、SCENE_ANALYTIC、pointLimit、directionalStrata、自定义 SHaRC 容量／训练参数已删除；原生 SHaRC 启停保留。新控制的定向效果验证仍待完成。
+PathTracingQualityOptions 只保留原版公开 UI 支持并已 JNI 接线的光源采样、去噪层、嵌套介质质量、subsampling、LOD、精度及后处理等字段。exactOpticalInterfaces、SCENE_ANALYTIC、pointLimit、directionalStrata、自定义 SHaRC 容量／训练参数已删除；原生 SHaRC 启停保留。
 
 RtxptAccess.presentationState() 读取原生请求／激活状态，exposureState() 读取原生曝光字段，setExposureOffset() 对接原生曝光补偿。FG 请求、原生激活和实际呈现帧数分别报告，不能相互代替。
 
@@ -44,4 +44,4 @@ RtxptAccess.presentationState() 读取原生请求／激活状态，exposureStat
 
 诊断采用[外部调用边界](rtxpt-diagnostics.md)：OFF／SUMMARY／DEEP、固定容量环、owner 线程 snapshot 和明确覆盖计数。没有官方数值 observer 时，RTXPT 内部写“未展开”，不保留旧 private probes。
 
-8.0.0 允许破坏性变化，消费者按当前接口重接，不使用旧 getter 或 ABI 兼容壳。发布前必须验证资源增删、材质／纹理与变换、输出租约、关闭重开、诊断 OFF 及完整动态负载。编译或小场景 proof 不能代替这些检查；旧性能数字保留原制品身份。
+8.0.0 为破坏性升级。按当前公开接口重新接入，升级范围见[兼容性](COMPATIBILITY.md)。

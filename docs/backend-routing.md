@@ -1,17 +1,20 @@
 # provider 与接入边界
 
-8.0.0 正在迁移，尚未发布。工程只构建 renderer-api 和 renderer-rtxpt，旧自研 Vulkan、NVIDIA 独立后端和双后端场景路由已删除。
+8.0.0 使用 `renderer-api` 和 `renderer-rtxpt` 两个模块。消费者依赖 `top.ceroxe.rt:renderer-rtxpt:8.0.0`，由 provider 带入同版本 `renderer-api`。纯契约模块不隐式加载 provider。
 
-renderer-api 是纯契约，不隐式加载 provider。需要 RTXPT 的应用依赖 top.ceroxe.rt:renderer-rtxpt:8.0.0，由其正向带入同版本 renderer-api；不要继续列四个模块或引用 RtxptComposedRenderer。
+## 应用负责
 
-## 谁负责什么
+- 提供场景、纹理、材质、相机、时钟和变更。
+- 保持资源身份、场景 revision 与帧 sequence 合法。
+- 导入共享 GPU 输出，并在消费完成后按 fence 与 lease 契约归还。
+- 按实际公开输入提供宿主亮度响应，并完成应用自身的画风、亮度映射与最终合成。
 
-- 消费方提供已经得到的场景、纹理、相机、时钟和变更，并按 GPU 输出租约完成导入／返回。
-- API 外部桥只做必要格式适配、稳定身份映射、输入输出与同步契约、错误传播，并保留已实现的通用 NativeLighting／Sparse 扩展；它们须与原版算法区分。宿主专属曲线、画风和最终合成归消费方，现有宿主策略迁出尚未完成。
-- RTXPT／Donut／NVRHI 承担原有场景资源、上传、加速结构、原生渲染与呈现生命周期。存在上游等价实现就直接调用，不维护第二套池或调度器。
+## provider 负责
 
-官方源码和 shader 不接受本项目定制，构建时也不 patch、不拷入自有文件。没有官方等价能力或公开入口时，说明限制与成本，不能静默丢语义，也不能改原版默认行为来绕过。
+- 必要的数据适配、资源身份映射、输入检查和错误传播。
+- 接入 RTXPT／Donut／NVRHI 的场景资源、上传、加速结构及原生渲染生命周期。
+- 暴露已实现的 NativeLighting／Sparse 扩展及共享同步；这些独立扩展与原版 RTXPT 算法分别说明。
 
-Renderer 只聚合生命周期和场景／帧提交。旧 Vulkan、CPU frame、通用 GPU command／resource、假 health、GPU 枚举及无数据指标公开面已退役，本轮删除 188 个孤立类型；不保留固定拒绝的兼容壳。Config 只留六类已接线原生 feature 与实际资产字节准入预算。
+`Renderer` 提供生命周期、场景/帧提交与扩展查询。配置使用已接线的原生 feature 与资产字节准入预算。8.0.0 不提供旧双后端自动路由、Vulkan 渲染实现、CPU 帧读取或通用 GPU 命令提交。
 
-生产 29 帧和原版 beauty 24 帧 proof 已通过；新控制定向验证、完整负载、人工验收和正式包仍待完成。启动必须遵守[原版运行时布局和 JVM 宿主契约](runtime-distribution.md)。诊断按[真实边界](rtxpt-diagnostics.md)采集。
+启动方式见[运行时](runtime-distribution.md)，调用顺序见[Java 接入](Java.md)，升级范围见[兼容性](COMPATIBILITY.md)。

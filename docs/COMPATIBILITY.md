@@ -1,24 +1,28 @@
 # 兼容性与版本
 
-## 8.0.0 迁移候选
+本文适用于 **8.0.0**。当前运行平台为 Java 25、Windows x86_64、D3D12/DXR 与受支持的 NVIDIA GPU。
 
-8.0.0 是允许破坏性调整的新 major，尚未发布。当前工程只保留 renderer-api 与 renderer-rtxpt；后者正向依赖前者。Java 25、Windows x86_64 与可执行 D3D12/DXR 的受支持 NVIDIA GPU 是当前运行基线。
+## 依赖与升级
 
-不保留 7.x 兼容壳：旧自研 Vulkan 后端、独立 renderer-nvidia、旧演示、双后端路由和 RTXPT／Vulkan 组合器均不属于新运行图。旧私有 shader ABI、资源池／准入探针和内部诊断结构也不作为迁移兼容目标。保留通用互操作数据类型不表示旧渲染实现仍可使用。
+- 依赖 `renderer-rtxpt`，由它带入同版本 `renderer-api`。
+- 8.0.0 是破坏性升级；不要混用 7.x provider、原生 DLL、私有 shader ABI 或源码 overlay。
+- 旧 `renderer-core`、`renderer-nvidia`、Vulkan 后端、双后端路由和组合器不属于 8.0.0 运行图。
+- 按[运行时契约](runtime-distribution.md)从专用 JVM 宿主启动。显式选择的运行时不完整时启动失败，不回退到旧开发目录。
 
-本轮公开面收缩删除 188 个孤立类型。Renderer 只保留生命周期与 SceneTransaction／帧提交；CPU 帧读取、通用 GPU command／resource、假健康、GPU 枚举及固定假指标契约不再保留。RendererConfig 只包含六类真实原生 feature 与资产字节准入预算，不维持 CPU 回读／自定义 shader 等假开关。
+## 公开接口
 
-原生质量控制只保留原版公开设置支持且已接线的字段。exactOpticalInterfaces、SCENE_ANALYTIC、pointLimit、directionalStrata、自定义 SHaRC 容量／训练参数已删除，SHaRC 启停保留。通用 NativeLighting／Sparse／共享同步仍是已实现的外桥能力；宿主专属亮度曲线与画风迁出尚未完成。
+`Renderer` 保留生命周期、场景事务、帧提交和真实扩展查询。旧 CPU 帧读取、通用 GPU command/resource、GPU 枚举及私有资源池探针不再提供。
 
-消费者应按[模块边界](backend-routing.md)、[运行时启动契约](runtime-distribution.md)和[新诊断边界](rtxpt-diagnostics.md)重新接入，不拼用 7.x provider、native DLL 或源码 overlay。显式选择的运行时不完整时应失败，不回退到旧开发目录。
+`RendererConfig` 包含 frameReconstruction、frameGeneration、lowLatency、denoising、rayTracingOptimizations、pathTracing 和 resources。geometryBytes、textureBytes、totalAssetBytes 是资产准入限制，不是显存驻留统计。
 
-官方 RTXPT v1.9.0 的源码、核心 shader、默认算法与生命周期保持原版。本项目自有能力只能位于外部桥；存在上游等价实现时直接调用。独立扩展输出、原版输出和版本间回归分别验证。
+质量参数以 `PathTracingQualityOptions` 当前公开字段为准。旧 exactOpticalInterfaces、SCENE_ANALYTIC、pointLimit、directionalStrata 和自定义 SHaRC 容量/训练参数不再提供；原生 SHaRC 启停保留。
 
-## 验证与发布口径
+NativeLighting、Sparse 和共享同步作为外部桥接能力提供，不等同于 RTXPT 原生光照算法。共享输出须核对 sequence、scene revision、attribute generation、clock、格式与尺寸，并按 GPU completion 归还租约。
 
-- 公共契约的 ABI baseline 只覆盖受检模块的 Java 二进制表面，不能代替 native／画面／性能验证。
-- 生产 29 帧与原版 beauty 24 帧 proof 已通过；新控制定向验证、正式包、完整负载和人工验收仍未完成。此前编译、提取、符号与失败证据保持原身份，不转签后续变更。
-- 生产资源与直接光、输出租约、生命周期、诊断 OFF、完整流式负载及消费方性能未全部验证前，不发布候选。
-- 本次发布顺序是源码／工具／文档先上传 GitHub，再发布 Maven Local；不发布 Maven Central，不覆盖已发行版本。
+## 能力边界
 
-历史 release-*.md、docs/quality/ 及其数据文件记录各自版本，不代表 8.0.0 兼容性或性能承诺。
+FG 请求、原生激活状态和实际呈现帧数是不同信息。资产预算、CPU 墙钟和 GPU 查询耗时也不能相互替代。
+
+光学场景支持折射、透射、吸收与嵌套介质；没有公开接通的体散射参数不属于本版接口保证。
+
+实际签名见[API 参考入口](Java-API-Reference.md)，调用方式见[Java 指南](Java.md)。
