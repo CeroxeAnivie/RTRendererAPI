@@ -19,9 +19,11 @@ public final class RtxptDirectMaterialLifecycleNativeSelfTest {
     private record Step(String name,SceneTransaction transaction,boolean caster,float[] expected) { }
     public static void main(String[] args)throws Exception {
         boolean beautyOnly=Arrays.asList(args).contains("--beauty-entry-only");
+        boolean beautyDormantOnly=Arrays.asList(args).contains("--beauty-dormant-only");
         Path output=Path.of(Arrays.stream(args).filter(value->!value.startsWith("--")).findFirst()
                 .orElse("build/reports/direct-material-lifecycle")).toAbsolutePath();
         Files.createDirectories(output);
+        if(beautyDormantOnly){beautyDormant(output);return;}
         if(beautyOnly){beautyEntry(output);return;}
         direct(output);
     }
@@ -110,6 +112,57 @@ public final class RtxptDirectMaterialLifecycleNativeSelfTest {
     }
     private static MaterialAsset emissive(long id,Rgb color){
         return MaterialAsset.builder(id).baseColorRgba8(0xff000000).emissive(color).doubleSided(true).build();
+    }
+    /** Real beauty lifecycle, including a domain edit while the definition has no users. */
+    private static void beautyDormant(Path output)throws Exception {
+        final int beautySize=320;
+        try(var renderer=RtxptRenderers.openHiddenWindow(RtxptRenderers.nativeLightingConfiguration())){
+            var access=renderer.extension(RtxptAccess.class).orElseThrow();
+            access.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
+            var javaMonitor=access.diagnosticMonitor();
+            var instance=SceneInstance.builder(11,1).build();
+            renderer.apply(SceneTransaction.builder(1).resetScene().upsert(emissive(1,new Rgb(0,4,0)))
+                    .upsert(quad(1,0,1)).upsert(instance).build());
+            submitBeauty(renderer,access,1,beautySize);
+            assertNoFailures(javaMonitor.poll(),"beauty-dormant-initial");
+            checkBeauty(access,output,"beauty-dormant-initial",1,beautySize);
+            var monitor=access.nativeDiagnosticMonitor();monitor.poll();
+            renderer.apply(SceneTransaction.builder(2).removeInstance(11).build());
+            submitBeauty(renderer,access,2,beautySize);
+            assertNoFailures(javaMonitor.poll(),"beauty-dormant-empty");
+            checkBeautyAbsent(access,output,"beauty-dormant-empty",beautySize);
+            renderer.apply(SceneTransaction.builder(3).upsert(instance).build());
+            submitBeauty(renderer,access,3,beautySize);
+            assertNoFailures(javaMonitor.poll(),"beauty-dormant-return");
+            checkBeauty(access,output,"beauty-dormant-return",1,beautySize);
+            var masked=MaterialAsset.builder(1).baseColorRgba8(0xff000000).emissive(new Rgb(4,0,0))
+                    .blendMode(MaterialAsset.BlendMode.MASKED).baseColorTextureId(8)
+                    .alphaCutoff(.5f).doubleSided(true).build();
+            var beautyTexture=TextureAsset.builder(8,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR)
+                    .pixelsRgba8(new byte[]{-1,-1,-1,-1}).build();
+            renderer.apply(SceneTransaction.builder(4).removeInstance(11).upsert(beautyTexture).upsert(masked).build());
+            submitBeauty(renderer,access,4,beautySize);
+            assertNoFailures(javaMonitor.poll(),"beauty-dormant-domain-empty");
+            checkBeautyAbsent(access,output,"beauty-dormant-domain-empty",beautySize);
+            renderer.apply(SceneTransaction.builder(5).upsert(instance).build());
+            submitBeauty(renderer,access,5,beautySize);
+            assertNoFailures(javaMonitor.poll(),"beauty-dormant-domain-return");
+            checkBeauty(access,output,"beauty-dormant-domain-return",0,beautySize);
+            require(monitor.poll().lostEvents()==0,"Lost native beauty dormant events");
+            require(!access.renderingState().externalLighting(),"Beauty dormant fixture selected independent lighting");
+        }
+        System.out.println("BEAUTY_DORMANT_NATIVE PASS freshFrames=5 inactiveReturn=true inactiveDomainEdit=true emissivePixels=true propagatedErrors=0 completedAsyncOmmBakeTested=false");
+    }
+    private static void submitBeauty(Renderer renderer,RtxptAccess access,long sequence,int extent){
+        renderer.submit(RenderFrameRequest.builder(sequence,extent,extent,CAMERA).minimumSceneRevision(sequence).build());
+        access.awaitIdle();
+    }
+    private static void checkBeautyAbsent(RtxptAccess access,Path output,String name,int extent)throws Exception {
+        Path path=output.resolve(name+".png");access.capture(path);var image=ImageIO.read(path.toFile());
+        require(image!=null&&image.getWidth()==extent&&image.getHeight()==extent,"Missing fresh dormant beauty image");
+        int rgb=image.getRGB(extent/2,extent/2);int red=(rgb>>>16)&255,green=(rgb>>>8)&255,blue=rgb&255;
+        require(!(red>32&&red>green+20&&red>blue+20)&&!(green>32&&green>red+20&&green>blue+20),
+                "Dormant emissive geometry remained in beauty output: "+name);
     }
     private static void checkBeauty(RtxptAccess access,Path output,String name,int expectedChannel,int extent)throws Exception {
         Path path=output.resolve(name+".png");access.capture(path);var image=ImageIO.read(path.toFile());

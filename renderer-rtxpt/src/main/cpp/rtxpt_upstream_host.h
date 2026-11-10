@@ -24,6 +24,11 @@
 // exported header. The owning translation unit includes that unchanged file.
 // This is a source-level adapter, not an NVIDIA-supported binary ABI.
 namespace rtr::upstream {
+// Tags identify adapter phases without adding public stages or changing the
+// diagnostic ABI. OFF skips both hashing and all Scope clock/lock work.
+inline uint64_t HostDiagnosticIdentity(std::string_view label){
+    return RtrDiagnostics::level.load(std::memory_order_relaxed)?RtrDiagnostics::Identity(label):0;
+}
 
 // Internal backend names only. Public consumers continue to use GpuFrame and
 // feature capabilities; NVIDIA resource types never cross the Java API.
@@ -186,7 +191,7 @@ public:
         if(m_managedScene&&m_scene)static_cast<ManagedScene&>(*m_scene).ResetRowChanges();
         m_unmanagedRowChanges.Clear();m_unmanagedRowsDirty=true;
         if(m_resourceCommands||m_structureCommands||!m_resourceRetirement.empty()){
-            GetDevice()->waitForIdle();m_resourceRetirement.clear();
+            DrainResourceRetirement("scene-unload-idle",RtrDiagnostics::Removal);
             m_resourceCommands=nullptr;m_structureCommands=nullptr;
         }
         AdvancedPathTracer::SceneUnloading();
@@ -364,6 +369,7 @@ public:
         AdvancedPathTracer::BackBufferResizing();
     }
     void Render(nvrhi::IFramebuffer* framebuffer) override {
+        RtrDiagnostics::Scope renderScope(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-render"));
         // Finalize this Frame's resource packets after Animate and before any
         // renderer reads. The single native graph refresh sees the final pose.
         PollResourceRetirement();
@@ -416,7 +422,7 @@ public:
 
     void ClearResources() {
         if (!m_managedScene || !m_scene) throw std::logic_error("No managed scene");
-        GetDevice()->waitForIdle();m_resourceRetirement.clear();
+        DrainResourceRetirement("scene-clear-idle",RtrDiagnostics::Removal);
         m_pendingDirectPreparation.clear();m_pendingDirectGraphRefresh=false;
         static_cast<ManagedScene&>(*m_scene).ResetRowChanges();
         m_resources.Reset();
@@ -547,15 +553,25 @@ public:
         m_resources.SetTextureResources(GetDevice(),m_DescriptorTable);
         nvrhi::CommandListHandle commands;
         bool retainRemoved=false;
+        bool dormantOmmInvalidated=false;
         auto changed = m_resources.Apply(packet->data(), packet->size(),
             *m_scene, [&]()->nvrhi::ICommandList*{if(!commands)commands=OpenResourceCommands();return commands;},
             GetFrameIndex(),[&](bool geometryOnly){
                 retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
                 if(!retainRemoved){
                     FlushPendingDirectPreparation();
-                    RtrDiagnostics::Scope waitScope(RtrDiagnostics::Retirement);GetDevice()->waitForIdle();m_resourceRetirement.clear();
+                    DrainResourceRetirement("resource-policy-idle",RtrDiagnostics::Material|RtrDiagnostics::Coverage);
                 }
-            },CanRenderNativeLightingLean(nullptr),packet);
+            },CanRenderNativeLightingLean(nullptr),packet,[&](const MeshInfoEx&){
+                if(m_ommBaker&&!dormantOmmInvalidated){
+                    // The resource lifecycle has already waited idle. Use the
+                    // public baker lifecycle to prevent stale pending writes,
+                    // then let the original rebuild republish live OMMs.
+                    m_ommBaker->SceneUnloading();
+                    m_ommBaker->UIData().TriggerRebuild=true;
+                    dormantOmmInvalidated=true;
+                }
+            });
         if(changed.topology||changed.transforms||changed.materialDomainsChanged||changed.requiresCoverageRebuild
             ||!changed.deformedMeshes.empty()||!changed.reshapedMeshes.empty())m_directTlasDirty=true;
         if(lighting.active)m_resources.ConfigureMaterials(m_importedMaterials,false,true);
@@ -565,7 +581,7 @@ public:
             RefreshDeformedDirectStructures(changed,commands);
         if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty()
             ||!changed.retiredStructures.empty()||!changed.retiredTextures.empty())){
-            if(m_resourceRetirement.size()>=64){GetDevice()->waitForIdle();m_resourceRetirement.clear();}
+            if(m_resourceRetirement.size()>=64)DrainResourceRetirement("retirement-limit-idle",RtrDiagnostics::Removal);
             RetiredResources retired;
             retired.graphics=GetDevice()->createEventQuery();retired.compute=GetDevice()->createEventQuery();
             GetDevice()->setEventQuery(retired.graphics,nvrhi::CommandQueue::Graphics);
@@ -620,7 +636,7 @@ public:
             // Keep policy edits on the original complete rebuild path.
             if(changed.topology&&!changed.pendingTopologyRefresh&&!changed.materialDomainsChanged&&!changed.requiresCoverageRebuild) {
                 if(!RefreshRetainedDirectStructures(changed)){
-                    GetDevice()->waitForIdle();m_resourceRetirement.clear();
+                    DrainResourceRetirement("retained-structures-fallback-idle",RtrDiagnostics::Topology|RtrDiagnostics::BuildFlags);
                 }
             }
         }
@@ -700,15 +716,18 @@ private:
         m_displayAspectRatio=float(size.width)/float(size.height);
         if(!m_view){m_view=std::make_shared<PlanarView>();m_viewPrevious=std::make_shared<PlanarView>();}
         m_viewPrevious->SetViewport(nvrhi::Viewport(float(size.width),float(size.height)));
-        PreRender();
-        RAII_SCOPE(;,PostRender(););
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-pre-render"));PreRender();}
+        RAII_SCOPE(;,PostRenderWithDiagnostics(););
         m_commandList=m_graphicsCommandList;
         if(!m_topLevelAS)m_ui.AccelerationStructRebuildRequested=true;
         if(m_ui.AccelerationStructRebuildRequested)m_directTlasDirty=true;
         // Original material/coverage rules and BLAS/TLAS construction remain
         // authoritative, including genuine rebuilds after policy changes.
-        RecreateAccelStructs(m_commandList);
-        m_commandList->open();
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::Acceleration,m_ui.AccelerationStructRebuildRequested?1:0,
+            m_scene->GetSceneGraph()->GetMeshes().size(),1,0,HostDiagnosticIdentity("native-complete-as-recreate"),0,RtrDiagnostics::BuildFlags);
+            RecreateAccelStructs(m_commandList);}
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::CommandAcquire,1,0,1,0,HostDiagnosticIdentity("native-frame-command-open"));
+            m_commandList->open();}
         GpuProfiler::BeginFrameZone(m_commandList);
         const auto graph=m_scene->GetSceneGraph();
         // Previous-pose convergence changes motion data, not the current TLAS
@@ -720,16 +739,21 @@ private:
             &&(root->GetDirtyFlags()&(Dirty::LocalTransform|Dirty::SubgraphTransforms))!=0;
         const bool sceneTlasChanged=graph->HasPendingStructureChanges()||currentTransformChanged
             ||!graph->GetSkinnedMeshInstances().empty();
-        if(!static_cast<ManagedScene&>(*m_scene).RefreshPreparedTransforms(m_commandList,GetFrameIndex())) {
-            RtrDiagnostics::Scope fullRefresh(RtrDiagnostics::SceneFullRefresh);
-            m_scene->Refresh(m_commandList,GetFrameIndex());SyncManagedSceneRows();
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,graph->GetMeshInstances().size(),1,0,HostDiagnosticIdentity("native-frame-scene-refresh"));
+            if(!static_cast<ManagedScene&>(*m_scene).RefreshPreparedTransforms(m_commandList,GetFrameIndex())) {
+                RtrDiagnostics::Scope fullRefresh(RtrDiagnostics::SceneFullRefresh);
+                m_scene->Refresh(m_commandList,GetFrameIndex());SyncManagedSceneRows();
+            }
         }
-        m_sceneRenderCache.Open(m_scene,&m_frameWorkerPool);
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::InstanceCache,1,graph->GetMeshInstances().size(),1,0,HostDiagnosticIdentity("native-scene-cache-open"));
+            m_sceneRenderCache.Open(m_scene,&m_frameWorkerPool);}
         // The independent shader reads native Donut scene tables, not PT GPU
         // material/sub-instance rows. Keep the native node cache for UpdateTLAS;
         // a complete renderer transition performs the real bake before use.
-        UpdateSkinnedBLASs(m_commandList,GetFrameIndex());
-        TransitionMeshBuffersToReadOnly(m_commandList);
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::Acceleration,graph->GetSkinnedMeshInstances().size(),0,1,0,HostDiagnosticIdentity("native-skinned-blas-update"));
+            UpdateSkinnedBLASs(m_commandList,GetFrameIndex());}
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,graph->GetMeshes().size(),1,0,HostDiagnosticIdentity("native-mesh-read-transitions"));
+            TransitionMeshBuffersToReadOnly(m_commandList);}
         // No view-dependent culling or OMM can enter this lean path. Camera,
         // lighting and metadata-only changes do not alter the native TLAS.
         // Keep the original builder for every real geometry/pose/policy change.
@@ -743,18 +767,33 @@ private:
             RtrGpuProfile::End(m_commandList,tlasTiming);}
         // Dispatch binds the live Scene buffers and its descriptor table itself;
         // Sample's global beauty bindings and accumulation/debug setup are unused.
-        SampleRenderCode(framebuffer,m_commandList,SampleConstants{},false);
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-sample-render-code"));
+            SampleRenderCode(framebuffer,m_commandList,SampleConstants{},false);}
         const auto& attachments=framebuffer->getDesc().colorAttachments;
         if(!attachments.empty())m_commandList->clearTextureFloat(attachments[0].texture,
             nvrhi::AllSubresources,nvrhi::Color(0));
         GpuProfiler::End(m_commandList);
-        m_commandList->close();
-        m_lastGraphicsSubmit=GetDevice()->executeCommandList(m_commandList);
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::CommandSubmit,1,0,1,0,HostDiagnosticIdentity("native-frame-submit"));
+            m_commandList->close();
+            m_lastGraphicsSubmit=GetDevice()->executeCommandList(m_commandList);}
         m_directTlasDirty=false;m_directTlasIdentity=m_topLevelAS.Get();m_directTlasPolicy=tlasPolicy;
         m_lastFrameAsyncPrefix=false;
         GetDeviceManager()->SetVsyncEnabled(m_ui.ActualEnableVsync());
-        PostUpdatePathTracing();
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-post-update"));PostUpdatePathTracing();}
         ++m_nativeFrameWork[0];
+    }
+    void PostRenderWithDiagnostics(){
+        RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-post-render"));
+        PostRender();
+    }
+    void WaitForIdleWithDiagnostics(std::string_view label,uint64_t reason){
+        RtrDiagnostics::Scope wait(RtrDiagnostics::Retirement,m_resourceRetirement.size(),0,1,0,HostDiagnosticIdentity(label),0,reason);
+        GetDevice()->waitForIdle();
+    }
+    void DrainResourceRetirement(std::string_view label,uint64_t reason){
+        WaitForIdleWithDiagnostics(label,reason);
+        RtrDiagnostics::Scope release(RtrDiagnostics::DriverRelease,m_resourceRetirement.size(),0,1,0,HostDiagnosticIdentity(label),0,reason);
+        m_resourceRetirement.clear();
     }
     nvrhi::CommandListHandle OpenResourceCommands(){
         RtrDiagnostics::Scope acquire(RtrDiagnostics::CommandAcquire);
@@ -841,18 +880,19 @@ private:
         }
         if(!structuresPrepared){
             m_ui.AccelerationStructRebuildRequested=true;
-            GetDevice()->waitForIdle();m_resourceRetirement.clear();
+            DrainResourceRetirement("final-preparation-fallback-idle",RtrDiagnostics::Topology|RtrDiagnostics::BuildFlags);
         }
         {RtrDiagnostics::Scope release(RtrDiagnostics::DriverRelease);
             m_pendingDirectPreparation.clear();}
         m_pendingDirectGraphRefresh=false;
     }
     void PollResourceRetirement(){
+        RtrDiagnostics::Scope poll(RtrDiagnostics::ResourceRetirement,m_resourceRetirement.size(),0,1,0,HostDiagnosticIdentity("resource-retirement-poll"));
         for(auto i=m_resourceRetirement.begin();i!=m_resourceRetirement.end();)
             if(GetDevice()->pollEventQuery(i->graphics)&&GetDevice()->pollEventQuery(i->compute)){
                 for(const auto& mesh:i->meshes)m_blasStorage.Retain(GetDevice(),mesh->accelStruct);
                 for(const auto& structure:i->structures)m_blasStorage.Retain(GetDevice(),structure);
-                i=m_resourceRetirement.erase(i);
+                i=m_resourceRetirement.erase(i);++poll.event[9];
             }else ++i;
     }
     void RefreshDeformedDirectStructures(Resources::Changes& changed,nvrhi::ICommandList* commands){
@@ -966,10 +1006,10 @@ private:
         commands->commitBarriers();
         size_t subInstances=0;
         for(const auto& instance:instances)subInstances+=instance->GetMesh()->geometries.size();
-        // Native descriptors state maximum capacity, not the previous live count.
-        // Keep the original exact-size allocation across shrink/regrowth; growth
-        // past either allocation still uses the original factory, with no spare
-        // capacity policy, pool or second index table in the adapter.
+        // These native descriptors state capacity, while the original builders
+        // consume the live graph counts. Keep the same 1024-row growth boundary
+        // as ManagedScene's native tables, instead of replacing both allocations
+        // for every incoming instance. No extra graph rows or AS instances exist.
         const bool capacityFits=m_topLevelAS&&m_subInstanceBuffer
             &&m_topLevelAS->getDesc().topLevelMaxInstances>=instances.size()
             &&m_subInstanceBuffer->getDesc().byteSize/sizeof(SubInstanceData)>=subInstances;
@@ -978,7 +1018,7 @@ private:
             // Only replacement of the sub-instance allocation invalidates
             // those cached bindings (Sample::RecreateAccelStructs).
             InvalidateBindingSet();m_bindingCache->Clear();
-            RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasAllocate);CreateTlas(commands);}
+            CreateRetainedDirectTlas(instances.size(),subInstances);}
         else {
             m_subInstanceCount=static_cast<uint32_t>(subInstances);
             m_subInstanceData.assign(subInstances,SubInstanceData::Default());
@@ -998,6 +1038,39 @@ private:
         // record per batch, govern reuse while previous builds are in flight.
         m_ui.AccelerationStructRebuildRequested=false;
         return true;
+    }
+    void CreateRetainedDirectTlas(size_t instances,size_t subInstances){
+        // Preserve Sample::CreateTlas's live-domain limits and resource flags.
+        // The backing allocations may hold extra capacity; native dense IDs,
+        // SubInstanceData defaults and UpdateTLAS remain unchanged.
+        if(instances>=(size_t(1)<<19)||subInstances>=(size_t(1)<<24))
+            throw std::overflow_error("Native scene exceeds TLAS instance limits");
+        const bool growTlas=!m_topLevelAS||m_topLevelAS->getDesc().topLevelMaxInstances<instances;
+        const bool growSub=!m_subInstanceBuffer||m_subInstanceBuffer->getDesc().byteSize/sizeof(SubInstanceData)<subInstances;
+        RtrDiagnostics::Scope allocation(RtrDiagnostics::TlasAllocate);
+        allocation.event[8]=uint64_t(growTlas)+uint64_t(growSub);
+        allocation.event[20]=RtrDiagnostics::CapacityGrowth;
+        if(growTlas){
+            nvrhi::rt::AccelStructDesc desc;
+            desc.isTopLevel=true;
+            desc.topLevelMaxInstances=nvrhi::align<size_t>(std::max<size_t>(1,instances),1024);
+            desc.buildFlags=nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+            auto next=GetDevice()->createAccelStruct(desc);
+            if(!next)throw std::runtime_error("Native retained TLAS allocation failed");
+            m_topLevelAS=std::move(next);
+        }
+        if(growSub){
+            nvrhi::BufferDesc desc;
+            desc.byteSize=sizeof(SubInstanceData)*nvrhi::align<size_t>(std::max<size_t>(1,subInstances),1024);
+            desc.debugName="Instances";desc.structStride=sizeof(SubInstanceData);
+            desc.canHaveRawViews=false;desc.canHaveUAVs=true;desc.isVertexBuffer=false;
+            desc.initialState=nvrhi::ResourceStates::Common;desc.keepInitialState=true;
+            auto next=GetDevice()->createBuffer(desc);
+            if(!next)throw std::runtime_error("Native retained sub-instance allocation failed");
+            allocation.event[21]=desc.byteSize;m_subInstanceBuffer=std::move(next);
+        }
+        m_subInstanceCount=static_cast<uint32_t>(subInstances);
+        m_subInstanceData.assign(subInstances,SubInstanceData::Default());
     }
     void RenderAnalyticBeauty(nvrhi::ICommandList* commands){
         if(!m_adapterShaders){
@@ -1109,7 +1182,7 @@ private:
     }
     void PrepareCompleteMaterials() {
         if(!m_completeMaterialBakeDirty)return;
-        GetDevice()->waitForIdle();
+        WaitForIdleWithDiagnostics("complete-material-bake-idle",RtrDiagnostics::Material);
         ReimportMaterials();
         m_ui.ShaderReloadRequested=true;
     }

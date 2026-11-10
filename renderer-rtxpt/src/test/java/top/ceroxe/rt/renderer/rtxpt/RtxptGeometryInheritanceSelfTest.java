@@ -16,7 +16,7 @@ public final class RtxptGeometryInheritanceSelfTest {
     }
     private static List<Input> inputs(ByteBuffer memory){
         var data=memory.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-        require(data.getInt()==0x52445259&&data.getInt()==0,"Geometry fixture has no texture transport");
+        require(data.getInt()==RtxptMemoryResources.PROTOCOL&&data.getInt()==0,"Geometry fixture has no texture transport");
         for(int count=data.getInt();count>0;count--){
             string(data);data.position(data.position()+92);if(data.getInt()!=0)data.position(data.position()+16);
         }

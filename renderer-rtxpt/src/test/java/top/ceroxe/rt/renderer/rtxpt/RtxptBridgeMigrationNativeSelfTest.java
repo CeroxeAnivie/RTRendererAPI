@@ -25,6 +25,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
         if(args.length>1&&args[1].equals("--deformation-only")) {checkDeformationContract(output);return;}
         if(args.length>1&&args[1].equals("--packed-light-only")) {checkPackedLightContract(output);return;}
         if(args.length>1&&args[1].equals("--primitive-history-only")) {checkPrimitiveHistoryContract(output);return;}
+        if(args.length>1&&args[1].equals("--tlas-capacity-only")) {checkTlasCapacityContract(output);return;}
         var rows=new ArrayList<String>();
         rows.add("sequence,case,apply_to_fresh_ms,materials_events,blas_events,attribute_events,native_events");
         var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.NORMAL_DISTANCE),
@@ -441,6 +442,53 @@ public final class RtxptBridgeMigrationNativeSelfTest {
         }
     }
 
+    private static void checkTlasCapacityContract(Path output) throws Exception {
+        var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.NORMAL_DISTANCE),
+            0,6,0,NativeLightingStyle.defaults());
+        var camera=CameraState.lookAt(0,0,3,0,0,0).build();
+        // Start exactly at a native capacity boundary, including original bootstrap.
+        int[] counts={1024,1025,2048,2049,7,2049};
+        try(var renderer=RtxptRenderers.openNativeLighting(RtxptRenderers.nativeLightingConfiguration(),plan)) {
+            var access=renderer.extension(RtxptAccess.class).orElseThrow();
+            var lighting=renderer.extension(NativeLightingControl.class).orElseThrow();
+            access.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
+            RtxptDiagnostics.NativeMonitor monitor=null;
+            var handleField=RtxptRenderer.class.getDeclaredField("handle");handleField.setAccessible(true);
+            int previousCount=0;
+            for(int index=0;index<counts.length;index++) {
+                int sequence=index+1,count=counts[index];
+                var tx=SceneTransaction.builder(sequence);
+                if(index==0)tx.resetScene().upsert(MaterialAsset.builder(1).doubleSided(true).build()).upsert(mesh(1,0,0,0));
+                for(int id=previousCount+1;id<=count;id++)
+                    tx.upsert(SceneInstance.builder(id,1).transform(translated(id==1?0:10)).build());
+                for(int id=count+1;id<=previousCount;id++)tx.removeInstance(id);
+                renderer.apply(tx.build());
+                renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,camera).minimumSceneRevision(sequence).build());
+                access.awaitIdle();
+                try(var lease=lighting.acquireLightingFrame().orElseThrow()) {
+                    require(lease.frame().sequence()==sequence&&lease.frame().sceneRevision()==sequence,
+                        "TLAS capacity change published a stale frame");
+                }
+                if(monitor==null)monitor=access.nativeDiagnosticMonitor();
+                var snapshot=monitor.poll();require(snapshot.lostEvents()==0,"TLAS capacity diagnostics lost events");
+                if(index>0) {
+                    boolean growth=index==1||index==3;
+                    require(count(snapshot,"TlasAllocate")== (growth?1:0),
+                        "TLAS/sub-instance capacity changed unnecessarily or failed to grow at count="+count);
+                    require(count(snapshot,"BlasBuild")==0,"Instance-only capacity change rebuilt shared geometry");
+                    var builds=snapshot.events().stream().filter(event->event.stage().equals("TlasBuild")).toList();
+                    require(builds.size()==1&&builds.getFirst().items()==1,"Current instance set did not rebuild its TLAS");
+                }
+                Path image=output.resolve("tlas-capacity-"+count+"-"+sequence+".pfm");
+                RtxptNative.nativeLightingCapture(handleField.getLong(renderer),image.toString(),2);
+                var normal=centerNormal(image);
+                require(Math.abs(normal[0])<.001&&Math.abs(normal[1])<.001&&Math.abs(normal[2]-1)<.001,
+                    "TLAS growth/shrink changed the surviving receiver: "+Arrays.toString(normal));
+                previousCount=count;
+            }
+        }
+        System.out.println("TLAS_CAPACITY_NATIVE PASS frames=6 growAcrossBoundary=true shrinkRegrow=true sharedBlas=true freshPixels=true");
+    }
     private static void checkPrimitiveHistoryContract(Path output) throws Exception {
         var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.INDIRECT_DIFFUSE),1,6,.35f,
             NativeLightingStyle.defaults(),new NativeLightingPlan.Directional(0,1,0,0,1,1,1),null);

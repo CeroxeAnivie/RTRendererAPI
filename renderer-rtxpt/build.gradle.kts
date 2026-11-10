@@ -34,7 +34,8 @@ val cpuTests = listOf(
     "RtxptBoundaryDiagnosticsSelfTest", "RtxptBudgetContractSelfTest", "RtxptDynamicResourcesSelfTest",
     "RtxptHighFramerateResourcesSelfTest", "RtxptGeometryInheritanceSelfTest", "RtxptLocalPreparationSelfTest",
     "RtxptNativeLightingCompactContractSelfTest", "RtxptNativeLightingProjectionSelfTest",
-    "RtxptRetainedDependencySelfTest", "RtxptAnalyticTransportSelfTest", "RtxptMaterialLifetimeSelfTest")
+    "RtxptRetainedDependencySelfTest", "RtxptAnalyticTransportSelfTest", "RtxptMaterialLifetimeSelfTest",
+    "RtxptMeshDefinitionLifetimeSelfTest")
 cpuTests.forEach { name ->
     tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
         group = "verification"

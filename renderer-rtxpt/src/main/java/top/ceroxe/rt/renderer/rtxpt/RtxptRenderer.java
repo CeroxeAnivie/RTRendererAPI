@@ -23,6 +23,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     // Only semantic variant declarations, not GPU ownership or a second scene.
     // A temporary lack of geometry users does not delete a MaterialAsset.
     private final Map<Long,Map<String,RtxptScene.Variant>> memoryMaterialVariants=new HashMap<>();
+    private final Map<Long,Map<String,RtxptScene.Item>> memoryMeshVariants=new HashMap<>();
     private RtxptScene scene=new RtxptScene(),residentScene=new RtxptScene();
     private List<RtxptScene.Item> previous=List.of();
     private long handle,revision,submitted=-1,completed=-1;
@@ -145,12 +146,13 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             // Select the external direct pass before importing materials with explicit sampler policies.
             if(nativeLightingPlan!=null)RtxptNative.nativeLighting(handle,RtxptNativeLightingParameters.pack(nativeLightingPlan,frame));
             var before=reset?new RtxptScene():residentScene;
+            RtxptDelta.Prepared pendingMeshImport=null;
             var items=nativeScene==null?scene.items(frame):List.<RtxptScene.Item>of();
             boolean resourcesChanged=nativeScene==null&&(reset||!scene.meshes.sameSnapshot(before.meshes)||!scene.materials.sameSnapshot(before.materials)||!scene.textures.sameSnapshot(before.textures)||!RtxptScene.sameItems(items,previous));
             if(resourcesChanged){
                 begin=recorder.clock();
-                if(reset){memoryTextures.clear();memoryMaterialVariants.clear();}
-                var delta=RtxptDelta.prepare(before,scene,reset?List.of():previous,items,memoryTextures,memoryMaterialVariants,resourcePackets);
+                if(reset){memoryTextures.clear();memoryMaterialVariants.clear();memoryMeshVariants.clear();}
+                var delta=RtxptDelta.prepare(before,scene,reset?List.of():previous,items,memoryTextures,memoryMaterialVariants,memoryMeshVariants,resourcePackets);
                 recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.TRANSLATION,begin,delta.work().itemReads(),delta.memory()==null?0:delta.memory().remaining(),false);
                 pendingGeometryVariants=delta.changedVariants();
                 if(delta.hasWork()){
@@ -161,6 +163,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
                     scene.textures.forEachChanged(before.textures,(id,value)->{if(value==null)memoryTextures.remove(id);});
                     scene.materials.forEachChanged(before.materials,(id,value)->{if(value==null)memoryMaterialVariants.remove(id);});
                     for(var variant:delta.materialVariants())memoryMaterialVariants.computeIfAbsent(variant.material(),id->new LinkedHashMap<>()).put(variant.name(),variant);
+                    pendingMeshImport=delta;
                 }
                 if(reset)resourcePackets.clear();
             }
@@ -178,6 +181,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             begin=recorder.clock();failed=true;
             try{if(RtxptNative.frame(handle)==0){windowClosed=true;throw new IllegalStateException("RTXPT window closed before frame completion");}failed=false;}
             finally{recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.RTXPT_FRAME,begin,1,0,failed);}
+            if(pendingMeshImport!=null)RtxptDelta.commitMeshVariants(memoryMeshVariants,pendingMeshImport);
             submitted=completed=frame.sequence();residentScene=scene;previous=items;fullReset=false;
             var reasons=EnumSet.noneOf(HistoryInvalidationReason.class);
             if(first)reasons.add(HistoryInvalidationReason.FIRST_FRAME);
@@ -401,7 +405,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         if(closed)return;ready();
         if(handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingConsumersRetired(handle))throw new IllegalStateException("Complete imported lighting consumers before closing");
         if(handle!=0)RtxptNative.close(handle);
-        handle=0;closed=true;recorder.close();scene=new RtxptScene();residentScene=new RtxptScene();previous=List.of();memoryTextures.clear();memoryMaterialVariants.clear();resourcePackets.close();
+        handle=0;closed=true;recorder.close();scene=new RtxptScene();residentScene=new RtxptScene();previous=List.of();memoryTextures.clear();memoryMaterialVariants.clear();memoryMeshVariants.clear();resourcePackets.close();
         lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingGeometryVariants=List.of();
         pendingBaselineLookup=null;lightingBaselineLookup=null;lightingHostResponse=null;applicationData.clear();
     }

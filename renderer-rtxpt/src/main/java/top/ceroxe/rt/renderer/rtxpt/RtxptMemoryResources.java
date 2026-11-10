@@ -7,8 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
-/** Synchronous borrowed memory packet. Native staging copies finish before JNI returns. */
+/** JNI copies the borrowed packet before return; its queued native owner is independent. */
 final class RtxptMemoryResources {
+    static final int PROTOCOL=0x5244525a; // Explicit mesh-definition lifetime; legacy 0x52445259 remains readable.
     static final class PacketPool implements AutoCloseable {
         private Arena arena;
         private ByteBuffer buffer;
@@ -110,6 +111,12 @@ final class RtxptMemoryResources {
             Collection<RtxptScene.Variant> materials,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,
             Map<Long,TextureAsset> resident,PacketPool pool,List<String> removedMaterials,
             Collection<RtxptScene.Item> inheritedCandidates){
+        return pack(old,scene,meshes,materials,nodes,removals,coverage,resident,pool,removedMaterials,inheritedCandidates,List.of());
+    }
+    static ByteBuffer pack(RtxptScene old,RtxptScene scene,Collection<RtxptScene.Item> meshes,
+            Collection<RtxptScene.Variant> materials,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,
+            Map<Long,TextureAsset> resident,PacketPool pool,List<String> removedMaterials,
+            Collection<RtxptScene.Item> inheritedCandidates,List<String> removedMeshes){
         var textures=new LinkedHashMap<Long,TextureAsset>();
         for(var variant:materials){var material=scene.materials.get(variant.material());
             for(long id:new long[]{material.baseColorTextureId(),material.normalTextureId(),material.metallicRoughnessTextureId(),material.emissiveTextureId()})
@@ -150,14 +157,15 @@ final class RtxptMemoryResources {
         var removedNames=removals.stream().map(RtxptMemoryResources::name).toList();
         var coverageNames=coverage.stream().map(RtxptMemoryResources::name).toList();
         var removedMaterialNames=removedMaterials.stream().map(RtxptMemoryResources::name).toList();
-        var size=new Writer(null);write(size,transfers,materialTransfers,geometry,nodeTransfers,removedNames,coverageNames,removedTextures,removedMaterialNames);
+        var removedMeshNames=removedMeshes.stream().map(RtxptMemoryResources::name).toList();
+        var size=new Writer(null);write(size,transfers,materialTransfers,geometry,nodeTransfers,removedNames,coverageNames,removedTextures,removedMaterialNames,removedMeshNames);
         if(size.offset>512L*1024*1024)throw new IllegalArgumentException("Dynamic resource packet exceeds 512 MiB staging capacity; split the transaction");
         var packet=pool.acquire(Math.toIntExact(size.offset));
-        write(new Writer(packet),transfers,materialTransfers,geometry,nodeTransfers,removedNames,coverageNames,removedTextures,removedMaterialNames);pool.packed();return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        write(new Writer(packet),transfers,materialTransfers,geometry,nodeTransfers,removedNames,coverageNames,removedTextures,removedMaterialNames,removedMeshNames);pool.packed();return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
     private static void write(Writer w,List<TextureTransfer> textures,List<MaterialTransfer> materials,
-            List<Geometry> meshes,List<NodeTransfer> nodes,List<byte[]> removals,List<byte[]> coverage,List<Long> removedTextures,List<byte[]> removedMaterials){
-        w.i(0x52445259);w.i(textures.size());
+            List<Geometry> meshes,List<NodeTransfer> nodes,List<byte[]> removals,List<byte[]> coverage,List<Long> removedTextures,List<byte[]> removedMaterials,List<byte[]> removedMeshes){
+        w.i(PROTOCOL);w.i(textures.size());
         for(var transfer:textures){var t=transfer.texture();w.l(t.id());w.i(t.width());w.i(t.height());w.i(t.mipLevelCount());w.i(t.colorSpace().ordinal());
             w.i(t.addressU().ordinal());w.i(t.addressV().ordinal());w.i(t.filter().ordinal());w.l(t.generation());
             var patch=transfer.patch();w.i(transfer.transport());
@@ -188,6 +196,7 @@ final class RtxptMemoryResources {
         w.i(coverage.size());for(var name:coverage)w.s(name);
         w.i(removedTextures.size());for(long id:removedTextures)w.l(id);
         w.i(removedMaterials.size());for(var name:removedMaterials)w.s(name);
+        w.i(removedMeshes.size());for(var name:removedMeshes)w.s(name);
     }
     private static final class Writer {
         final ByteBuffer data;long offset;

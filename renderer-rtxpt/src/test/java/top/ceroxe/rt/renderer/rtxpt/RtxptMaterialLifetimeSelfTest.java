@@ -17,7 +17,7 @@ public final class RtxptMaterialLifetimeSelfTest {
     private static void bytes(ByteBuffer data,int stride){int count=data.getInt();data.position(Math.addExact(data.position(),Math.multiplyExact(count,stride)));}
     private static Tail decode(ByteBuffer memory){
         var data=memory.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-        require(data.getInt()==0x52445259,"Current resource protocol");
+        require(data.getInt()==RtxptMemoryResources.PROTOCOL,"Current resource protocol");
         for(int count=data.getInt();count>0;count--){
             data.getLong();data.position(data.position()+7*4);data.getLong();
             if(data.getInt()!=0){data.getLong();data.position(data.position()+6*4);}
@@ -40,7 +40,8 @@ public final class RtxptMaterialLifetimeSelfTest {
         for(int count=data.getInt();count>0;count--)texturesRemoved.add(data.getLong());
         var materialsRemoved=new ArrayList<String>();
         for(int count=data.getInt();count>0;count--)materialsRemoved.add(string(data));
-        require(!data.hasRemaining(),"Material removal tail ends the exact packet");
+        for(int count=data.getInt();count>0;count--)string(data);
+        require(!data.hasRemaining(),"Explicit definition-removal tail ends the exact packet");
         return new Tail(List.copyOf(materials),List.copyOf(texturesRemoved),List.copyOf(materialsRemoved));
     }
     private static RtxptScene next(RtxptScene before,SceneTransaction transaction){

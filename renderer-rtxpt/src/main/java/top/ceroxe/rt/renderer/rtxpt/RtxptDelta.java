@@ -8,7 +8,19 @@ final class RtxptDelta {
     record Work(long itemReads,long dependencyVisits,long inspectedMapNodes,int exportedModels) { }
     record Prepared(RtxptScene translated,int meshes,int materials,int textures,boolean hasWork,boolean mappingsChanged,Work work,
                     java.nio.ByteBuffer memory,List<RtxptScene.Item> changedVariants,
-                    List<RtxptScene.Variant> materialVariants,List<String> removedMaterials) { }
+                    List<RtxptScene.Variant> materialVariants,List<String> removedMaterials,
+                    List<RtxptScene.Item> removedMeshVariants) { }
+    static void commitMeshVariants(Map<Long,Map<String,RtxptScene.Item>> resident,Prepared delta){
+        for(var item:delta.removedMeshVariants()){
+            var variants=resident.get(item.mesh());if(variants==null)continue;
+            variants.remove(RtxptScene.meshName(item));if(variants.isEmpty())resident.remove(item.mesh());
+        }
+        for(var item:delta.changedVariants())resident.computeIfAbsent(item.mesh(),id->new LinkedHashMap<>())
+                .put(RtxptScene.meshName(item),item);
+    }
+    private static boolean imported(Map<Long,Map<String,RtxptScene.Item>> resident,RtxptScene.Item item){
+        var variants=resident.get(item.mesh());return variants!=null&&variants.containsKey(RtxptScene.meshName(item));
+    }
     static boolean alphaEquivalent(TextureAsset a,TextureAsset b){
         if(a==b)return true;if(a==null||b==null)return false;
         if(a.width()!=b.width()||a.height()!=b.height()||a.mipLevelCount()!=b.mipLevelCount()||a.filter()!=b.filter()||a.addressU()!=b.addressU()||a.addressV()!=b.addressV())return false;
@@ -27,6 +39,7 @@ final class RtxptDelta {
     private static final class Selection {
         final RtxptScene scene;final List<RtxptScene.Item> items;
         final Map<Long,List<RtxptScene.Item>> cache=new HashMap<>();
+        final Map<Long,Map<String,RtxptScene.Item>> importedCache=new HashMap<>();
         private Map<Long,List<RtxptScene.Item>> transientByMesh;
         private Map<String,RtxptScene.Item> transientByName;
         long reads,dependencies;
@@ -36,6 +49,11 @@ final class RtxptDelta {
             for(long instance:scene.instancesUsingMesh(id)){dependencies++;var item=scene.item(instance);variants.putIfAbsent(RtxptScene.meshName(item),item);}
             for(var item:transientUsers(id)){dependencies++;variants.putIfAbsent(RtxptScene.meshName(item),item);}
             return List.copyOf(variants.values());
+        });}
+        Map<String,RtxptScene.Item> importedVariants(long mesh){return importedCache.computeIfAbsent(mesh,id->{
+            var result=new LinkedHashMap<String,RtxptScene.Item>();
+            for(var item:variants(id))result.put(RtxptScene.meshName(item),item);
+            return result;
         });}
         // A transaction can change many meshes used by frame primitives. Index
         // the immutable transient tail once rather than reading all P entries
@@ -68,19 +86,61 @@ final class RtxptDelta {
     static Prepared prepare(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
             List<RtxptScene.Item> items,Map<Long,TextureAsset> residentTextures,
             Map<Long,Map<String,RtxptScene.Variant>> residentMaterials,RtxptMemoryResources.PacketPool packets) {
+        return prepare(old,scene,previous,items,residentTextures,residentMaterials,null,packets);
+    }
+    static Prepared prepare(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
+            List<RtxptScene.Item> items,Map<Long,TextureAsset> residentTextures,
+            Map<Long,Map<String,RtxptScene.Variant>> residentMaterials,
+            Map<Long,Map<String,RtxptScene.Item>> residentMeshes,RtxptMemoryResources.PacketPool packets) {
         var changedTextures=new HashSet<Long>();var changedMaterials=new HashSet<Long>();var changedGeometry=new HashSet<Long>();
         long nodes=scene.textures.forEachChanged(old.textures,(id,value)->{if(!Objects.equals(value,old.textures.get(id)))changedTextures.add(id);});
         nodes+=scene.materials.forEachChanged(old.materials,(id,value)->{if(!Objects.equals(value,old.materials.get(id)))changedMaterials.add(id);});
         nodes+=scene.meshes.forEachChanged(old.meshes,(id,value)->{if(!sameGeometry(value,old.meshes.get(id)))changedGeometry.add(id);});
         var current=new Selection(scene,items);var prior=new Selection(old,previous);
+        // Snapshot-only callers have no persistent native registry. Resolve
+        // only requested mesh dependencies; an independent scalar/pose edit
+        // must not read or index the complete previous frame.
+        java.util.function.LongFunction<Map<String,RtxptScene.Item>> importedMeshes=residentMeshes==null
+                ?prior::importedVariants:residentMeshes::get;
+        java.util.function.Predicate<RtxptScene.Item> isImported=residentMeshes==null
+                ?prior::contains:item->imported(residentMeshes,item);
         for(long texture:changedTextures)for(long material:scene.materialsUsingTexture(texture)){current.dependencies++;changedMaterials.add(material);}
         var changes=RtxptScene.changedItems(old,scene,previous,items);nodes+=changes.inspectedNodes();
+        var lifetimeMeshes=new HashSet<Long>(changedGeometry);
+        for(var item:changes.upserts()){
+            var before=item.name().startsWith("i")?old.item(Long.parseLong(item.name(),1,item.name().length(),10)):prior.transientItem(item.name());
+            if(!RtxptScene.sameStructure(before,item)){lifetimeMeshes.add(item.mesh());if(before!=null)lifetimeMeshes.add(before.mesh());}
+        }
+        for(var name:changes.removals()){
+            var before=name.startsWith("i")?old.item(Long.parseLong(name,1,name.length(),10)):prior.transientItem(name);
+            if(before!=null)lifetimeMeshes.add(before.mesh());
+        }
+        // Keep every active semantic variant and at most one dormant variant
+        // per still-declared mesh. Arbitrary visibility/boundary history cannot
+        // grow a permanent native cache; the last representation survives a
+        // no-instance interval until explicit public mesh removal/reset.
+        var removedMeshItems=new LinkedHashMap<String,RtxptScene.Item>();
+        for(long mesh:lifetimeMeshes){
+            var known=importedMeshes.apply(mesh);if(known==null)continue;
+            var active=new HashSet<String>();
+            if(scene.meshes.containsKey(mesh))for(var item:current.variants(mesh))active.add(RtxptScene.meshName(item));
+            boolean dormantKept=false;
+            for(var entry:known.entrySet()){
+                if(active.contains(entry.getKey()))continue;
+                if(scene.meshes.containsKey(mesh)&&!dormantKept){dormantKept=true;continue;}
+                removedMeshItems.put(entry.getKey(),entry.getValue());
+            }
+        }
         var meshItems=new LinkedHashMap<String,RtxptScene.Item>();var updates=new LinkedHashMap<String,RtxptScene.Item>();
         for(var item:changes.upserts()){
             updates.put(item.name(),item);
-            if(!prior.contains(item))meshItems.putIfAbsent(RtxptScene.meshName(item),item);
+            if(!isImported.test(item))meshItems.putIfAbsent(RtxptScene.meshName(item),item);
         }
-        for(long mesh:changedGeometry)for(var item:current.variants(mesh))meshItems.putIfAbsent(RtxptScene.meshName(item),item);
+        for(long mesh:changedGeometry)if(scene.meshes.containsKey(mesh)){
+            for(var item:current.variants(mesh))meshItems.putIfAbsent(RtxptScene.meshName(item),item);
+            var known=importedMeshes.apply(mesh);if(known!=null)for(var entry:known.entrySet())
+                if(!removedMeshItems.containsKey(entry.getKey()))meshItems.putIfAbsent(entry.getKey(),entry.getValue());
+        }
         // Native memory meshes omit unused tangent storage. A later normal-map
         // enable prepares only this material's immutable mesh variants before
         // publishing the material; no CPU copy of every imported mesh is kept.
@@ -88,7 +148,9 @@ final class RtxptDelta {
             var material=scene.materials.get(id);var before=old.materials.get(id);
             if(material==null||material.normalTextureId()<0||(before!=null&&before.normalTextureId()>=0))continue;
             for(long mesh:scene.meshesUsingMaterial(id)){current.dependencies++;
-                for(var item:current.variants(mesh))meshItems.putIfAbsent(RtxptScene.meshName(item),item);}
+                for(var item:current.variants(mesh))meshItems.putIfAbsent(RtxptScene.meshName(item),item);
+                var known=importedMeshes.apply(mesh);if(known!=null)for(var entry:known.entrySet())
+                    if(!removedMeshItems.containsKey(entry.getKey()))meshItems.putIfAbsent(entry.getKey(),entry.getValue());}
         }
         // Geometry replacement must reattach exactly its users, including frame primitives.
         for(var item:meshItems.values()){
@@ -97,7 +159,7 @@ final class RtxptDelta {
         }
         var variants=new LinkedHashMap<String,RtxptScene.Variant>();
         for(var item:meshItems.values()){
-            var previousMesh=old.meshes.get(item.mesh());boolean resident=previousMesh!=null&&prior.contains(item);
+            var previousMesh=old.meshes.get(item.mesh());boolean resident=previousMesh!=null&&isImported.test(item);
             var previousMaterials=resident?old.materialIds(previousMesh):Set.<Long>of();
             for(long id:scene.materialIds(scene.meshes.get(item.mesh()))){current.dependencies++;
                 if(resident&&previousMaterials.contains(id)&&!changedMaterials.contains(id))continue;
@@ -127,10 +189,10 @@ final class RtxptDelta {
                 current.dependencies++;if(id>=0)translated.textures.put(id,scene.textures.get(id));
             }
         }
-        boolean hasWork=!meshItems.isEmpty()||!variants.isEmpty()||!changes.removals().isEmpty()||!updates.isEmpty()||!changedTextures.isEmpty()||!removedMaterials.isEmpty();
+        boolean hasWork=!meshItems.isEmpty()||!variants.isEmpty()||!changes.removals().isEmpty()||!updates.isEmpty()||!changedTextures.isEmpty()||!removedMaterials.isEmpty()||!removedMeshItems.isEmpty();
         boolean mappingsChanged=!meshItems.isEmpty()||!old.sameRetainedStructure(scene)||!sameDynamicStructure(old,scene,previous,items);
         if(!hasWork)return new Prepared(translated,0,0,0,false,mappingsChanged,
-                new Work(current.reads+prior.reads+changes.itemReads(),current.dependencies+prior.dependencies,nodes,0),null,List.of(),List.of(),List.of());
+                new Work(current.reads+prior.reads+changes.itemReads(),current.dependencies+prior.dependencies,nodes,0),null,List.of(),List.of(),List.of(),List.of());
         var coverageChanged=new ArrayList<String>();
         for(var variant:variants.values()){
             var a=old.materials.get(variant.material());var b=scene.materials.get(variant.material());
@@ -142,7 +204,8 @@ final class RtxptDelta {
         var inputSources=new LinkedHashMap<String,RtxptScene.Item>();
         if(!meshItems.isEmpty()){
             for(var item:meshItems.values())if(old.meshes.containsKey(item.mesh()))
-                for(var source:prior.variants(item.mesh()))inputSources.putIfAbsent(RtxptScene.meshName(source),source);
+                {var known=importedMeshes.apply(item.mesh());if(known!=null)for(var source:known.values())inputSources.putIfAbsent(RtxptScene.meshName(source),source);}
+            for(var source:removedMeshItems.values())if(old.meshes.containsKey(source.mesh()))inputSources.putIfAbsent(RtxptScene.meshName(source),source);
             for(var name:changes.removals()){
                 if(name.startsWith("i")){
                     var source=old.item(Long.parseLong(name,1,name.length(),10));
@@ -153,9 +216,9 @@ final class RtxptDelta {
                 }
             }
         }
-        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged,residentTextures,packets,removedMaterials,inputSources.values());
+        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged,residentTextures,packets,removedMaterials,inputSources.values(),List.copyOf(removedMeshItems.keySet()));
         long dependencies=current.dependencies+prior.dependencies,reads=current.reads+prior.reads+changes.itemReads();
-        return new Prepared(translated,meshItems.size(),variants.size(),changedTextures.size(),true,mappingsChanged,new Work(reads,dependencies,nodes,0),memory,List.copyOf(meshItems.values()),List.copyOf(variants.values()),List.copyOf(removedMaterials));
+        return new Prepared(translated,meshItems.size(),variants.size(),changedTextures.size(),true,mappingsChanged,new Work(reads,dependencies,nodes,0),memory,List.copyOf(meshItems.values()),List.copyOf(variants.values()),List.copyOf(removedMaterials),List.copyOf(removedMeshItems.values()));
     }
     private static boolean sameDynamicStructure(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,List<RtxptScene.Item> items){
         int before=previous.size()-old.instances.size(),after=items.size()-scene.instances.size();if(before!=after)return false;

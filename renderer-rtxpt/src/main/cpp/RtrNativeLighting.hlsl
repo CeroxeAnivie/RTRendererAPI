@@ -322,11 +322,17 @@ float3 RtrShadowRay(RayDesc ray,float lightDistance=0)
 }
 float3 RtrShadow(RtrReceiver receiver,float3 direction,float distance)
 {
-    RayDesc ray;ray.Origin=receiver.position+receiver.geometricNormal*g.gi.z;ray.Direction=direction;ray.TMin=g.gi.z;ray.TMax=max(g.gi.z,distance-g.gi.z*2);
+    RayDesc ray;ray.Origin=receiver.position+receiver.geometricNormal*g.gi.z;
+    // Preserve a finite emitter's endpoint after offsetting the ray origin.
+    // Otherwise projectively coincident cutouts sample different texels.
+    if(distance<1e19){float3 delta=receiver.position+direction*distance-ray.Origin;distance=length(delta);direction=delta/distance;}
+    ray.Direction=direction;ray.TMin=g.gi.z;ray.TMax=max(g.gi.z,distance-g.gi.z*2);
     return RtrShadowRay(ray,distance<1e19?distance:0);
 }
 float3 RtrSupportShadow(RtrReceiver receiver,RtrSource source,float3 direction,float distance,uint visibilityMode)
 {
+    float3 origin=receiver.position+receiver.normal*.003;
+    float3 delta=source.position.xyz-origin;distance=length(delta);direction=delta/distance;
     float end;
     float radius=(uint(source.identity.w)&16)!=0?source.cone.x:source.extent.x;
     if(visibilityMode==2)end=max(.002,distance-radius-.004);
@@ -336,7 +342,7 @@ float3 RtrSupportShadow(RtrReceiver receiver,RtrSource source,float3 direction,f
         end=distance-min(slab.x,min(slab.y,slab.z))-.004;
         if(end<=.005)return 1;
     }
-    RayDesc ray;ray.Origin=receiver.position+receiver.normal*.003;ray.Direction=direction;
+    RayDesc ray;ray.Origin=origin;ray.Direction=direction;
     ray.TMin=.001;ray.TMax=end;return RtrShadowRay(ray,distance);
 }
 bool RtrSupport(RtrNode node,float3 position,bool linearL1)

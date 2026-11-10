@@ -13,6 +13,7 @@ param(
     [string]$DxcExecutable='build/upstream-rtxpt/source/External/dxc/build/native/bin/x64/dxc.exe',
     [string]$RuntimeDirectory='build/upstream-rtxpt/runtime/rtxpt_v.1.9.0_binaries/bin',
     [string]$ShaderName='',
+    [ValidateRange(1,16)][int]$Jobs=4,
     [ValidateRange(1,10)][double]$MemoryLimitGB=10,
     [switch]$CheckPaths
 )
@@ -57,7 +58,7 @@ if($shaderLines.Count -eq 0){throw 'The adapter shader config has no shaders.'}
 if($ShaderName -and !$shaderLines.Contains($ShaderName)){throw ('Unknown adapter shader: '+$ShaderName)}
 $commonArguments=@('--out',$output,'--platform','DXIL',
     '--binaryBlob','--outputExt','.bin','--compiler',$compiler,'--shaderModel','6_9',
-    '--hlsl2021','--matrixRowMajor','--serial','--retryCount','0',
+    '--hlsl2021','--matrixRowMajor','--jobs',([string]$Jobs),'--retryCount','0',
     '--project','AdapterShaders','-D','TARGET_D3D12','-D','ENABLE_DEBUG_PRINT')
 foreach($include in $includes){$commonArguments+=@('-I',$include)}
 # ShaderMake keys its signature by config path, invalidates it before compiling,

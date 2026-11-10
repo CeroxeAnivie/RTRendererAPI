@@ -392,9 +392,9 @@ public final class RtxptStreamingWorkload {
                     "end",meshInputRetentionEnd==null?null:meshInputRetentionEnd[index]));
             boolean available=meshInputRetentionBegin!=null&&meshInputRetentionEnd!=null;
             return map("available",available,"reason",available?null:meshInputRetentionUnavailable==null?"phase-end-not-reached":meshInputRetentionUnavailable,
-                    "gauges",gauges,"measurement","phase-boundary gauges; no accumulated-counter subtraction; owned backing packets counted once",
+                    "gauges",gauges,"measurement","phase-boundary gauges; no accumulated-counter subtraction; immutable canonical mesh backing segments counted once; live_packets is backing segment count",
                     "peak_scope","native retention tracker lifetime; endpoint readings do not isolate a phase-local peak",
-                    "memory_domain","retained owned input packet bytes; not process working set, commit, or GPU residency");
+                    "memory_domain","retained canonical mesh channel bytes; not complete JNI packet bytes, process working set, commit, or GPU residency");
         }
         private static Map<String,Object> workSummary(long[] begin,long[] end,String[] names,String unavailable){
             if(begin==null||end==null)return map("available",false,"reason",unavailable==null?"phase-end-not-reached":unavailable);

@@ -50,7 +50,7 @@ public final class RtxptDynamicResourcesSelfTest {
     }
     private static void materialPacket(ByteBuffer memory,MaterialAsset material,String slot,int excluded,int dominantLobe){
         var packet=memory.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-        require(packet.isDirect()&&packet.getInt()==0x52445259,"Only the float3, path-decomposition and motion-vector blocking resource protocol is emitted");
+        require(packet.isDirect()&&packet.getInt()==RtxptMemoryResources.PROTOCOL,"The explicit mesh-definition lifetime resource protocol is emitted");
         require(packet.getInt()==0&&packet.getInt()==1,"Emission packet contains no textures and one material");
         int length=packet.getInt();byte[] name=new byte[length];packet.get(name);
         require(new String(name,StandardCharsets.UTF_8).equals(slot),"Stable material slot does not include emission content");
@@ -67,7 +67,7 @@ public final class RtxptDynamicResourcesSelfTest {
         for(long texture:new long[]{material.baseColorTextureId(),material.normalTextureId(),material.metallicRoughnessTextureId(),material.emissiveTextureId()})
             require(packet.getLong()==texture,"Texture bindings remain aligned after float3 emission");
         require(packet.getInt()==0,"No medium boundary in emission packet");
-        for(int count=0;count<6;count++)require(packet.getInt()==0,"Emission-only packet has no geometry, removals, nodes, coverage, texture removals or material removals");
+        for(int count=0;count<7;count++)require(packet.getInt()==0,"Emission-only packet has no geometry, node edits, coverage or explicit definition removals");
         require(!packet.hasRemaining(),"Float3 packet has no legacy strength field or trailing bytes");
     }
     static void pathDecomposition(){
@@ -171,7 +171,7 @@ public final class RtxptDynamicResourcesSelfTest {
         Path path=Files.createTempDirectory("resource-plan-");
         try{
             var result=RtxptDelta.prepare(old,scene,List.of(),items,Map.of(),PACKETS);
-            require(result.memory().isDirect()&&result.memory().getInt(0)==0x52445259,"Direct little-endian resource packet");
+            require(result.memory().isDirect()&&result.memory().getInt(0)==RtxptMemoryResources.PROTOCOL,"Direct little-endian resource packet");
             require(result.work().exportedModels()==0,"No file importer path");
             try(var files=Files.list(path)){require(files.findAny().isEmpty(),"Resource planning creates no files");}
             var mesh=scene.meshes.get(1L);var groups=RtxptAttributeBatch.groups(mesh);
