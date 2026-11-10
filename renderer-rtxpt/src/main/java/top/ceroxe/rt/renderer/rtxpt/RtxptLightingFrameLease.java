@@ -4,7 +4,7 @@ import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
 final class RtxptLightingFrameLease implements LightingFrameLease {
-    private final Thread owner=Thread.currentThread();
+    private volatile Thread owner=Thread.currentThread();
     private final long handle;
     private final int slot;
     private final Frame frame;
@@ -25,9 +25,15 @@ final class RtxptLightingFrameLease implements LightingFrameLease {
         frame=new Frame(data[2],data[3],data[4],data[5],Math.toIntExact(data[6]),Math.toIntExact(data[7]),data[9],data[10],data[11],data[12],FrameClock.of(data[13],data[14]),planes,
             NativeLightingPlan.Encoding.values()[encoding],maximumGi);
     }
-    private void owner(){if(Thread.currentThread()!=owner)throw new IllegalStateException("Return lighting leases on the renderer owner thread");}
+    private void owner(){if(Thread.currentThread()!=owner)throw new IllegalStateException("Access lighting leases on their current owner thread");}
     private void active(){owner();if(closed||returned)throw new IllegalStateException("Lighting lease is no longer active");}
     @Override public Frame frame(){owner();if(closed)throw new IllegalStateException("Lighting lease closed");return frame;}
+    @Override public void transferTo(Thread nextOwner){
+        active();Objects.requireNonNull(nextOwner,"nextOwner");
+        if(imported)throw new IllegalStateException("Transfer lighting ownership before importing the packet");
+        // The volatile owner publication also publishes all prior lease state.
+        owner=nextOwner;
+    }
     @Override public void markImported(){active();if(imported)throw new IllegalStateException("Lighting lease already imported");imported=true;}
     @Override public void completionSignalEnqueued(){active();if(!imported)throw new IllegalStateException("Import the packet before publishing consumer completion");
         RtxptNative.nativeLightingRelease(handle,slot,frame.generation(),frame.sequence(),true);returned=true;}

@@ -22,6 +22,24 @@ public final class RtxptNativeLightingCompactContractSelfTest {
         require(new RtxptLightingFrameLease(0,response).frame().encoding()==NativeLightingPlan.Encoding.COMPACT_RESPONSE_UNORM8,"Response encoding retains its exact packet identity");
         var invalid=v2.clone();invalid[20]=3;reject(()->new RtxptLightingFrameLease(0,invalid));
         reject(()->new RtxptLightingFrameLease(0,Arrays.copyOf(v2,21)));
+        var lease=new RtxptLightingFrameLease(0,v2);
+        Thread initialOwner=Thread.currentThread();
+        var failure=new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        Thread consumer=new Thread(()->{try{
+            require(lease.frame().sequence()==12,"Transferred packet identity is unchanged");
+            lease.transferTo(initialOwner);
+            reject(lease::frame);
+        }catch(Throwable error){failure.set(error);}},"lighting-lease-consumer");
+        reject(()->lease.transferTo(null));
+        lease.transferTo(consumer);
+        reject(lease::frame);reject(lease::markImported);reject(lease::completionSignalEnqueued);reject(lease::close);
+        reject(()->lease.transferTo(initialOwner));
+        consumer.start();
+        try{consumer.join();}catch(InterruptedException error){Thread.currentThread().interrupt();throw new AssertionError(error);}
+        if(failure.get()!=null)throw new AssertionError("Transferred consumer failed",failure.get());
+        require(lease.frame().sequence()==12,"Ownership can be explicitly returned before import");
+        lease.markImported();reject(()->lease.transferTo(consumer));
+        // The synthetic handle is intentionally never released through JNI.
         System.out.println("NATIVE_LIGHTING_COMPACT_CONTRACT PASS legacyHDR=true v1=true v2=true maxGi=2.5 format=RGBA8_UNORM");
     }
 }
