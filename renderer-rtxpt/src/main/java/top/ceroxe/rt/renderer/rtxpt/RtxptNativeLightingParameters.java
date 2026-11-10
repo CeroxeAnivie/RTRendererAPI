@@ -5,7 +5,7 @@ import top.ceroxe.rt.renderer.api.*;
 /** Canonical row-major matrices and dynamic shader ABI v1 parameter publication. */
 final class RtxptNativeLightingParameters {
     static float[] pack(NativeLightingPlan plan,RenderFrameRequest frame) {
-        float[] values=new float[80];var camera=frame.camera();
+        float[] values=new float[88];var camera=frame.camera();
         if(camera.hasExactProjection()) {
             var exact=camera.exactProjection();
             if(!exact.hasPerspectiveProjection())
@@ -40,6 +40,9 @@ final class RtxptNativeLightingParameters {
         var style=plan.style();values[60]=style.localDimming();values[61]=style.localBoost();values[62]=style.daylightDimming();values[63]=style.moonlightDimming();
         values[64]=style.moonRed();values[65]=style.moonGreen();values[66]=style.moonBlue();values[67]=style.additionMode().ordinal();
         if(plan.moon()!=null){values[64]=plan.moon().red();values[65]=plan.moon().green();values[66]=plan.moon().blue();}
-        values[68]=style.minimumGain();values[69]=style.maximumGain();values[70]=style.maximumGi();values[71]=plan.opaqueFastPath()?0:1;return values;
+        values[68]=style.minimumGain();values[69]=style.maximumGain();values[70]=style.maximumGi();
+        values[71]=(plan.opaqueFastPath()?0:1)|(plan.directAlphaMode()==NativeLightingPlan.DirectAlphaMode.RECONSTRUCTION_COVERAGE_V1?2:0);
+        var fog=frame.fog();values[80]=fog.sphericalStart();values[81]=fog.sphericalEnd();
+        values[82]=fog.cylindricalStart();values[83]=fog.cylindricalEnd();values[84]=fog.opacity();return values;
     }
 }

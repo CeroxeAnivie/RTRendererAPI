@@ -13,7 +13,7 @@ final class RtxptInputContract {
     static void validateFrame(RenderFrameRequest frame,boolean nativeLighting) {
         Objects.requireNonNull(frame, "frame");
         if ((!nativeLighting&&frame.camera().hasExactProjection()) || !frame.shaderData().isEmpty()
-                || frame.fog().opacity() > 0 || frame.caustics().enabled())
+                || (!nativeLighting&&frame.fog().opacity() > 0) || frame.caustics().enabled())
             throw new IllegalArgumentException("Exact Vulkan projections, custom shaders, screen fog and photon-map budgets are not native RTXPT controls");
         if (frame.antiAliasing().samplesPerPixel() != 1)
             throw new IllegalArgumentException("RTXPT samples are configured with PathTracingOptions, not per-frame deterministic AntiAliasingState");

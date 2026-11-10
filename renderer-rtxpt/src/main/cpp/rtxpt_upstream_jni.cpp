@@ -357,24 +357,27 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributes(JNIEnv* e
     jobjectArray names, jfloatArray attributes, jfloatArray lookup, jbyteArray application) {
     try {
         auto keys = Strings(env, names); auto values = Floats(env, attributes);
-        if (generation < 0 || values.size() != keys.size()*8) throw std::invalid_argument("Invalid instance attribute publication");
+        const size_t stride=values.size()==keys.size()*8?8:20;
+        if (generation < 0 || values.size() != keys.size()*stride) throw std::invalid_argument("Invalid instance attribute publication");
         auto table = lookup ? Floats(env, lookup) : std::vector<float>();
         if (lookup && table.size()!=512 && table.size()!=1280) throw std::invalid_argument("Invalid host response lookup size");
         for (auto value : table) if (value<0 || value>1) throw std::invalid_argument("Host response outside [0,1]");
         auto bytes = application ? Bytes(env, application) : std::vector<uint8_t>();
-        Get(handle)->session->Enqueue([keys=std::move(keys), values=std::move(values), table=std::move(table), bytes=std::move(bytes), generation,
+        Get(handle)->session->Enqueue([keys=std::move(keys), values=std::move(values), table=std::move(table), bytes=std::move(bytes), generation,stride,
                 hasLookup=lookup!=nullptr, hasApplication=application!=nullptr](auto& app) {
             auto& renderer=app.Renderer(); auto& pass=renderer.lighting;
             if (uint64_t(generation)<pass.publication) throw std::invalid_argument("Stale attribute publication");
             std::unordered_set<std::string> seen;
             for(size_t i=0;i<keys.size();++i) {
                 if(!seen.insert(keys[i]).second || !renderer.HasInstance(keys[i])) throw std::invalid_argument("Unknown or duplicate instance attribute");
-                const auto* words=values.data()+i*8;
+                const auto* words=values.data()+i*stride;
                 if(words[0]<0 || words[0]>31 || words[0]!=float(uint32_t(words[0])) || words[1]<0 || words[1]>1 || words[2]<0 || words[2]>1)
                     throw std::invalid_argument("Invalid role or visibility attribute");
+                if(words[3]<0||words[3]>3||words[3]!=float(uint32_t(words[3]))||(stride==8&&(uint32_t(words[3])&2)!=0))
+                    throw std::invalid_argument("Invalid explicit previous-transform flags");
             }
             for(size_t i=0;i<keys.size();++i) {
-                RtrNativeLightingPass::InstanceAttributes value; std::memcpy(&value,values.data()+i*8,sizeof(value));
+                RtrNativeLightingPass::InstanceAttributes value; std::memcpy(&value,values.data()+i*stride,stride*sizeof(float));
                 pass.instanceAttributes.insert_or_assign(keys[i],value); pass.dirtyInstances.insert(keys[i]); pass.TrackInstanceRole(keys[i],value);
             }
             if(hasLookup) { std::memcpy(pass.baselineLookup.data(),table.data(),table.size()*sizeof(float)); pass.lookupDirty=true; }

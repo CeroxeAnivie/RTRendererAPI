@@ -9,7 +9,7 @@
 
 struct RtrSource {float4 position,direction,color,extent,cone,identity;};
 struct RtrNode {float4 lower,left,upper,right;};
-struct RtrInstance {float4 rolesVisibility;float4 baseline;};
+struct RtrInstance {float4 rolesVisibility;float4 baseline;row_major float3x4 explicitPrevious;};
 struct RtrVertexAttributes {float2 baseline;uint color;uint reserved;};
 struct RtrGeometryAttributes {uint offset,triangles,basePolicy,normalPolicy,ormPolicy,emissivePolicy;float maskedOpacity;};
 struct RtrSurfaceMaterial {MaterialConstants material;uint4 policies;float maskedOpacity;uint active;};
@@ -28,6 +28,8 @@ struct RtrNativeConstants
     RtrLightingStyle style;
     uint4 publication; // app-data bytes,generation low/high,diagnostic counts enabled
     uint4 clock; // time nanos low/high, delta nanos low/high
+    float4 fogRanges; // spherical start/end, cylindrical start/end
+    float4 fogControl; // opacity, reserved
 };
 ConstantBuffer<RtrNativeConstants> g : register(b0);
 RaytracingAccelerationStructure t_Scene : register(t0);
@@ -113,7 +115,7 @@ void RtrFlushWork(){
     }
 #endif
 }
-uint RtrQueryFlags(){return (g.publication.w&32)!=0?RAY_FLAG_FORCE_NON_OPAQUE:((g.publication.w&4)!=0?RAY_FLAG_NONE:((g.publication.w&2)!=0||g.style.limits.w!=0?RAY_FLAG_FORCE_NON_OPAQUE:RAY_FLAG_NONE));}
+uint RtrQueryFlags(){return g.style.limits.w>=2||(g.publication.w&32)!=0?RAY_FLAG_FORCE_NON_OPAQUE:((g.publication.w&4)!=0?RAY_FLAG_NONE:((g.publication.w&2)!=0||g.style.limits.w!=0?RAY_FLAG_FORCE_NON_OPAQUE:RAY_FLAG_NONE));}
 float3 RtrPosition(ByteAddressBuffer vertices,GeometryData geometry,uint i){return asfloat(vertices.Load3(geometry.positionOffset+i*12));}
 float2 RtrUv(ByteAddressBuffer vertices,GeometryData geometry,uint i)
 {return geometry.texCoord1Offset==0xffffffff?0:asfloat(vertices.Load2(geometry.texCoord1Offset+i*8));}
@@ -181,6 +183,13 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
         if(dot(r.normal,r.geometricNormal)<0)r.normal=-r.normal;
     }
     RtrInstance data=t_InstanceAttributes[instance];r.visibility=data.rolesVisibility.y;r.fog=data.rolesVisibility.z;
+    if(g.fogControl.x>0){
+        float3 delta=r.position-g.cameraNear.xyz;
+        float spherical=length(delta),cylindrical=length(delta.xz);
+        float sf=spherical<=g.fogRanges.x?0:spherical>=g.fogRanges.y?1:(spherical-g.fogRanges.x)/(g.fogRanges.y-g.fogRanges.x);
+        float cf=cylindrical<=g.fogRanges.z?0:cylindrical>=g.fogRanges.w?1:(cylindrical-g.fogRanges.z)/(g.fogRanges.w-g.fogRanges.z);
+        r.fog=max(r.fog,max(sf,cf)*g.fogControl.x);
+    }
     float2 coordinates=0;
     if(primitive<geometryAttributes.triangles){uint offset=geometryAttributes.offset+primitive*3;
         coordinates=t_Baselines[offset].baseline*bary.x+t_Baselines[offset+1].baseline*bary.y+t_Baselines[offset+2].baseline*bary.z;}
@@ -246,6 +255,7 @@ bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attrib
     }
     return true;
 }
+#include "RtrNativeCoverage.hlsli"
 bool RtrTrace(float3 origin,float3 direction,float distance,uint role,out RtrReceiver receiver)
 {
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=g.gi.z;ray.TMax=distance;
@@ -261,24 +271,59 @@ bool RtrTrace(float3 origin,float3 direction,float distance,uint role,out RtrRec
     receiver=RtrLoad(query.CommittedInstanceIndex(),query.CommittedGeometryIndex(),query.CommittedPrimitiveIndex(),
         query.CommittedTriangleBarycentrics(),origin,direction,query.CommittedRayT(),query.CommittedWorldToObject3x4());return true;
 }
-float3 RtrShadowRay(RayDesc ray)
+float3 RtrShadowRaySample(RayDesc ray,float lightDistance,bool filtering,out uint partialCount)
 {
     RtrCount(2);
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),1,ray);float3 visibility=1;
+    partialCount=0;float partialCoverage=0;
     while(query.Proceed())if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE)
     {
+        if(filtering){
+            uint role=uint(t_InstanceAttributes[query.CandidateInstanceIndex()].rolesVisibility.x);
+            if((role&2)==0||((role&16)==0&&!query.CandidateTriangleFrontFace()))continue;
+            float coverage=RtrCandidateCoverage(ray,query.CandidateInstanceIndex(),query.CandidateGeometryIndex(),query.CandidatePrimitiveIndex(),
+                query.CandidateTriangleBarycentrics(),query.CandidateTriangleRayT(),lightDistance,true);
+            if(coverage>=0){
+                if(coverage==0)continue;
+                if(coverage==1){visibility=0;query.Abort();break;}
+                if(coverage>1||++partialCount>=2){partialCount=2;query.Abort();break;}
+                partialCoverage=coverage;continue;
+            }
+        }
         float3 transmission;bool opaque;
         if(!RtrAcceptCandidate(query.CandidateInstanceIndex(),query.CandidateGeometryIndex(),query.CandidatePrimitiveIndex(),
             query.CandidateTriangleBarycentrics(),query.CandidateTriangleFrontFace(),2,transmission,opaque))continue;
+        if(rtrCoverageFiltering){
+            uint index=t_Instances[query.CandidateInstanceIndex()].firstGeometryIndex+query.CandidateGeometryIndex();
+            GeometryData geometry=t_Geometry[index];RtrGeometryAttributes attributes=t_GeometryBaselines[index];
+            MaterialConstants material=RtrMaterial(geometry,query.CandidatePrimitiveIndex(),attributes);
+            rtrMovingCoverage|=t_InstanceAttributes[query.CandidateInstanceIndex()].rolesVisibility.w!=0
+                ||material.domain==MaterialDomain_AlphaTested||material.domain==MaterialDomain_TransmissiveAlphaTested;
+        }
         if(opaque){visibility=0;query.Abort();}else visibility*=transmission;
     }
     if(query.CommittedStatus()==COMMITTED_TRIANGLE_HIT)return 0;
-    return visibility;
+    return visibility*(1-partialCoverage);
+}
+float3 RtrShadowRay(RayDesc ray,float lightDistance=0)
+{
+    uint partial;float3 center=RtrShadowRaySample(ray,lightDistance,rtrCoverageFiltering,partial);
+    if(partial<2)return center;
+    rtrUnresolvedCoverage=true;
+    const float2 offsets[4]={float2(.125,.375),float2(-.125,-.375),float2(.375,-.125),float2(-.375,.125)};
+    float3 sum=0;
+    [unroll]for(uint i=0;i<4;i++){
+        float3 offset=rtrReceiverDx*offsets[i].x+rtrReceiverDy*offsets[i].y;RayDesc sample=ray;sample.Origin+=offset;
+        if(lightDistance>0){float3 delta=ray.Direction*lightDistance-offset;sample.Direction=RtrNormalize(delta);
+            sample.TMax=max(.002,length(delta)-(lightDistance-ray.TMax));}
+        uint ignored;sum+=RtrShadowRaySample(sample,lightDistance,false,ignored);
+    }
+    return sum*.25;
 }
 float3 RtrShadow(RtrReceiver receiver,float3 direction,float distance)
 {
     RayDesc ray;ray.Origin=receiver.position+receiver.geometricNormal*g.gi.z;ray.Direction=direction;ray.TMin=g.gi.z;ray.TMax=max(g.gi.z,distance-g.gi.z*2);
-    return RtrShadowRay(ray);
+    return RtrShadowRay(ray,distance<1e19?distance:0);
 }
 float3 RtrSupportShadow(RtrReceiver receiver,RtrSource source,float3 direction,float distance,uint visibilityMode)
 {
@@ -292,7 +337,7 @@ float3 RtrSupportShadow(RtrReceiver receiver,RtrSource source,float3 direction,f
         if(end<=.005)return 1;
     }
     RayDesc ray;ray.Origin=receiver.position+receiver.normal*.003;ray.Direction=direction;
-    ray.TMin=.001;ray.TMax=end;return RtrShadowRay(ray);
+    ray.TMin=.001;ray.TMax=end;return RtrShadowRay(ray,distance);
 }
 bool RtrSupport(RtrNode node,float3 position,bool linearL1)
 {
@@ -666,10 +711,15 @@ float3 RtrHostResponseGain(RtrReceiver receiver,float3 local,float3 dynamic,bool
     float weight=g.sun.w>0?saturate(g.sun.w):saturate(g.moon.w);
     float3 directionalVisibility=g.sun.w>0?sunVisibility:moonVisibility;
     float3 targetSky=receiver.baseline.y*lerp(1,directionalVisibility,weight),gain=1;
+    if(g.style.moonAndMode.w==3){
+        float3 blocked=g.style.correction.z*g.sun.w*(1-sunVisibility)
+            +g.style.correction.w*g.moon.w*g.style.moonAndMode.rgb*(1-moonVisibility);
+        targetSky=receiver.baseline.y*(1-saturate((1-receiver.baseline.x)*blocked));
+    }
     [unroll]for(uint channel=0;channel<3;channel++){
         float before=RtrHostResponseSample(channel,receiver.baseline);
         float after=RtrHostResponseSample(channel,float2(targetLocal[channel],targetSky[channel]));
-        gain[channel]=before>0?after/before:after==0?1:g.style.limits.y;
+        gain[channel]=before>0?after/before:(g.style.moonAndMode.w==3||after==0?1:g.style.limits.y);
     }
     float influence=saturate(receiver.visibility)*(1-saturate(receiver.fog));
     return clamp(lerp(1,gain,influence),g.style.limits.x,g.style.limits.y);
@@ -703,13 +753,14 @@ float3 RtrDirectGain(RtrReceiver receiver)
     float3 gain=1;
     if((g.grid.z&1)!=0)
     {
-        bool response=g.style.moonAndMode.w==2,staticCovered;
+        bool response=g.style.moonAndMode.w>=2,staticCovered;
         float3 local,dynamic;RtrLocalWithCoverage(receiver,local,dynamic,staticCovered,true,true,response);float3 sunVisibility=1,moonVisibility=1;
         if(g.sun.w>0&&dot(receiver.normal,g.sun.xyz)>0)sunVisibility=RtrShadow(receiver,g.sun.xyz,1e20);
         if(g.moon.w>0&&dot(receiver.normal,g.moon.xyz)>0)moonVisibility=RtrShadow(receiver,g.moon.xyz,1e20);
         gain=response?RtrHostResponseGain(receiver,local,dynamic,staticCovered,sunVisibility,moonVisibility)
             :RtrStyleGain(g.style,receiver.baseline,receiver.visibility,receiver.fog,local,dynamic,g.sun.w,sunVisibility,g.moon.w,moonVisibility);
     }
+    rtrCoverageFiltering=false;
     return gain;
 }
 void RtrEvaluateReceiver(RtrReceiver receiver,out float3 gain,out float3 indirect)
@@ -730,10 +781,10 @@ void main(uint2 pixel:SV_DispatchThreadID)
     RtrReceiver receiver;float3 gain=1,indirect=0;bool valid=RtrTrace(g.cameraNear.xyz,direction,1e20,1,receiver);
     if((g.grid.z&4)!=0)u_Geometry[pixel]=valid?float4(receiver.normal,receiver.distance):0;
     if((g.grid.z&8)!=0)u_Identity[pixel]=valid?uint4(receiver.instance,receiver.geometry,receiver.primitive,1):uint4(0xffffffff,0xffffffff,0xffffffff,0);
-    if(valid){RtrCount(1);RtrEvaluateReceiver(receiver,gain,indirect);}
+    if(valid){RtrCount(1);RtrPrepareCoverage(receiver,pixel);RtrEvaluateReceiver(receiver,gain,indirect);}
     gain=float3(isfinite(gain.x)?clamp(gain.x,0,65504):1,isfinite(gain.y)?clamp(gain.y,0,65504):1,isfinite(gain.z)?clamp(gain.z,0,65504):1);
     indirect=float3(isfinite(indirect.x)?clamp(indirect.x,0,65504):0,isfinite(indirect.y)?clamp(indirect.y,0,65504):0,isfinite(indirect.z)?clamp(indirect.z,0,65504):0);
-    if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,valid?receiver.opacity:0);
+    if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,RtrDirectAlpha(valid,receiver.opacity));
     if((g.grid.z&2)!=0)u_Indirect[pixel]=float4(indirect,valid?receiver.opacity:0);
     RtrFlushWork();
 }

@@ -114,9 +114,33 @@ public final class RtxptLocalPreparationSelfTest {
         catch(IllegalArgumentException expected){ }
         System.out.println("LOCAL_PREPARATION_SHARED PASS users=256 mixedDependencies="+mixedDelta.work().dependencyVisits());
     }
+    private static void transientDependencies(){
+        int count=128;
+        var original=new RtxptScene();original.retain(fixture(count));
+        var primitives=FramePrimitiveBatch.builder();
+        for(long id=1;id<=count;id++)primitives.add(PrimitiveInstance.builder(id).build());
+        var frame=RtxptAdapterSelfTest.frame(0).toBuilder().primitiveBatch(primitives.build()).build();
+        var changed=new RtxptScene(original);var edits=SceneTransaction.builder(2);
+        for(long id=1;id<=count;id++)edits.upsert(MeshAsset.builder(id,
+                new float[]{0,0,0,2,0,0,0,2,0},new int[]{0,1,2},new long[]{id}).build());
+        changed.retain(edits.build());
+        var before=new Reads(original.items(frame));var after=new Reads(changed.items(frame));
+        var delta=RtxptDelta.prepare(original,changed,before,after,Map.of(),PACKETS);
+        require(delta.meshes()==count,"Every changed mesh shared by resident and transient users is prepared");
+        require(before.reads+after.reads<=count*8L,"Many changed meshes must not rescan the complete transient tail");
+        require(delta.work().itemReads()<=count*8L,"Transient dependency work grows with the tail, not mesh count times tail");
+        var bytes=new byte[delta.memory().remaining()];delta.memory().duplicate().get(bytes);
+        var payload=new String(bytes,java.nio.charset.StandardCharsets.ISO_8859_1);
+        for(int i=0;i<count;i++)require(payload.contains("p"+i),"Changed geometry reattaches every transient user");
+        var emptyFrame=frame.toBuilder().primitiveBatch(FramePrimitiveBatch.empty()).build();
+        var retired=RtxptDelta.prepare(original,changed,original.items(frame),changed.items(emptyFrame),Map.of(),PACKETS);
+        require(retired.meshes()==count,"Retiring transient users preserve all resident geometry updates");
+        require(retired.work().itemReads()<=count*8L,"Retired transient names share the same bounded index");
+        System.out.println("LOCAL_PREPARATION_TRANSIENT PASS meshes="+count+" reads="+(before.reads+after.reads));
+    }
     public static void main(String[] arguments)throws Exception{try{
         Path output=Path.of(System.getProperty("localPreparation.output","build/reports/local-scene-preparation"));Files.createDirectories(output);
-        if(!OBSERVE){persistentDiff();sharedResources(output);}var results=new ArrayList<Object>();for(int count:new int[]{256,4096})results.add(observe(count,output));
+        if(!OBSERVE){persistentDiff();sharedResources(output);transientDependencies();}var results=new ArrayList<Object>();for(int count:new int[]{256,4096})results.add(observe(count,output));
         Files.writeString(output.resolve("result.json"),RtxptJson.encode(RtxptJson.object("observationOnly",OBSERVE,"cases",results)));
         System.out.println("LOCAL_PREPARATION_ALL PASS observationOnly="+OBSERVE+" noGpu=true");
     }finally{PACKETS.close();}}

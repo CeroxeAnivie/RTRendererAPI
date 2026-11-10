@@ -5,8 +5,22 @@ import java.util.Set;
 
 /** Requested independent receiver grid and style signal budget. Grid extent never changes camera projection. */
 public record NativeLightingPlan(int width,int height,Set<Signal> signals,int giSamples,float giDistance,
-        float giStrength,NativeLightingStyle style,Directional sun,Directional moon,boolean opaqueFastPath,Encoding encoding) {
+        float giStrength,NativeLightingStyle style,Directional sun,Directional moon,boolean opaqueFastPath,Encoding encoding,DirectAlphaMode directAlphaMode) {
     public enum Signal { DIRECT_GAIN, INDIRECT_DIFFUSE, NORMAL_DISTANCE, RECEIVER_IDENTITY }
+    public enum DirectAlphaMode {
+        /** Alpha is receiver opacity, zero for a missing receiver. */
+        OPACITY,
+        /**
+         * Alpha is reconstruction metadata: ordinary=255, integrated coverage=64,
+         * unresolved coverage=0, and non-reusable dynamic coverage=128.
+         * Every masked texture with multiple mips must publish coverage bounds:
+         * every level stores coverage at the material cutoff in R, binary-alpha
+         * validity in G, and the layout-valid marker in B; level zero retains
+         * original alpha in A. G and B must both be one for integrated coverage.
+         * Ordinary color mip chains must not opt into this contract.
+         */
+        RECONSTRUCTION_COVERAGE_V1
+    }
     /** Compact response extends the upper range to 255: neutral is code 128,
      * low codes are 128*gain and high codes are 128+127*log(gain)/log(255).
      * COMPACT_UNORM8 retains its original 15.65 maximum and 32*log2 slope. */
@@ -21,7 +35,7 @@ public record NativeLightingPlan(int width,int height,Set<Signal> signals,int gi
     }
     public NativeLightingPlan {
         if(width<1||height<1||width>16384||height>16384)throw new IllegalArgumentException("Lighting grid must be in [1,16384] on each axis");
-        signals=Set.copyOf(Objects.requireNonNull(signals));Objects.requireNonNull(style);Objects.requireNonNull(encoding);
+        signals=Set.copyOf(Objects.requireNonNull(signals));Objects.requireNonNull(style);Objects.requireNonNull(encoding);Objects.requireNonNull(directAlphaMode);
         if(style.maximumGain()>65504)throw new IllegalArgumentException("Native gain must fit the declared RGBA16_FLOAT output range");
         if(encoding==Encoding.COMPACT_UNORM8&&style.maximumGain()>15.65f)
             throw new IllegalArgumentException("Compact gain supports a declared maximum of 15.65");
@@ -32,11 +46,18 @@ public record NativeLightingPlan(int width,int height,Set<Signal> signals,int gi
             throw new IllegalArgumentException("GI requires 0..8 samples, positive finite distance and nonnegative finite strength");
     }
     public NativeLightingPlan(int width,int height,Set<Signal> signals,int giSamples,float giDistance,float giStrength,
+            NativeLightingStyle style,Directional sun,Directional moon,boolean opaqueFastPath,Encoding encoding){
+        this(width,height,signals,giSamples,giDistance,giStrength,style,sun,moon,opaqueFastPath,encoding,DirectAlphaMode.OPACITY);
+    }
+    public NativeLightingPlan(int width,int height,Set<Signal> signals,int giSamples,float giDistance,float giStrength,
             NativeLightingStyle style,Directional sun,Directional moon,boolean opaqueFastPath){
         this(width,height,signals,giSamples,giDistance,giStrength,style,sun,moon,opaqueFastPath,Encoding.HDR_FLOAT16);
     }
     public NativeLightingPlan withEncoding(Encoding value){
-        return new NativeLightingPlan(width,height,signals,giSamples,giDistance,giStrength,style,sun,moon,opaqueFastPath,value);
+        return new NativeLightingPlan(width,height,signals,giSamples,giDistance,giStrength,style,sun,moon,opaqueFastPath,value,directAlphaMode);
+    }
+    public NativeLightingPlan withDirectAlphaMode(DirectAlphaMode value){
+        return new NativeLightingPlan(width,height,signals,giSamples,giDistance,giStrength,style,sun,moon,opaqueFastPath,encoding,value);
     }
     /** Null sun uses the frame environment (whose style intensity must be in [0,1]); null moon is disabled. */
     public NativeLightingPlan(int width,int height,Set<Signal> signals,int giSamples,float giDistance,float giStrength,NativeLightingStyle style) {

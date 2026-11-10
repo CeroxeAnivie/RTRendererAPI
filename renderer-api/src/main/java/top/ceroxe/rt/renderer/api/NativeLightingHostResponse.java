@@ -10,7 +10,8 @@ import java.util.Objects;
  * exposure and display controls. This table is independent of application data.
  * A multiplicative gain cannot recover nonzero color from an exactly black
  * host image. A zero-to-positive response uses the declared finite maximum gain;
- * zero-to-zero is neutral. Hosts requiring exact recovery must retain a nonzero
+ * zero-to-zero is neutral. PARTIAL_SKY instead keeps every zero denominator
+ * neutral, including zero-to-positive. Hosts requiring exact recovery must retain a nonzero
  * base response or use an additive/full-color output contract.
  */
 public record NativeLightingHostResponse(float[] values) {
@@ -41,6 +42,23 @@ public record NativeLightingHostResponse(float[] values) {
         float targetSky=baselineSky*(1-directionalWeight*(1-directionalVisibility));
         float before=sample(channel,baselineLocal,baselineSky),after=sample(channel,targetLocal,targetSky);
         float ratio=before>0?after/before:after==0?1:style.maximumGain();
+        return Math.clamp(1+(ratio-1)*visibility*(1-fog),style.minimumGain(),style.maximumGain());
+    }
+    /** Partial replacement of directional sky response; static-support and dynamic-source rules remain unchanged. */
+    public float directGainPartialSky(NativeLightingStyle style,int channel,float baselineLocal,float baselineSky,
+            float visibility,float fog,float local,float dynamic,boolean staticCovered,
+            float daylight,float sunVisibility,float moonlight,float moonVisibility) {
+        Objects.requireNonNull(style,"style");
+        unit(baselineLocal);unit(baselineSky);unit(visibility);unit(fog);unit(daylight);unit(sunVisibility);unit(moonlight);unit(moonVisibility);
+        if(!Float.isFinite(local)||local<0||!Float.isFinite(dynamic)||dynamic<0)
+            throw new IllegalArgumentException("Local contributions must be finite and nonnegative");
+        float targetLocal=staticCovered?Math.clamp(local,0,1):Math.max(baselineLocal,Math.clamp(dynamic,0,1));
+        float moonColor=channel==0?style.moonRed():channel==1?style.moonGreen():style.moonBlue();
+        float blocked=(1-baselineLocal)*(style.daylightDimming()*daylight*(1-sunVisibility)
+            +style.moonlightDimming()*moonlight*moonColor*(1-moonVisibility));
+        float targetSky=baselineSky*(1-Math.clamp(blocked,0,1));
+        float before=sample(channel,baselineLocal,baselineSky),after=sample(channel,targetLocal,targetSky);
+        float ratio=before>0?after/before:1;
         return Math.clamp(1+(ratio-1)*visibility*(1-fog),style.minimumGain(),style.maximumGain());
     }
     private static float unit(float value) {

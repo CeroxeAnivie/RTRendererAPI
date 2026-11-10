@@ -27,14 +27,30 @@ final class RtxptDelta {
     private static final class Selection {
         final RtxptScene scene;final List<RtxptScene.Item> items;
         final Map<Long,List<RtxptScene.Item>> cache=new HashMap<>();
+        private Map<Long,List<RtxptScene.Item>> transientByMesh;
+        private Map<String,RtxptScene.Item> transientByName;
         long reads,dependencies;
         Selection(RtxptScene scene,List<RtxptScene.Item> items){this.scene=scene;this.items=items;}
         List<RtxptScene.Item> variants(long mesh){return cache.computeIfAbsent(mesh,id->{
             var variants=new LinkedHashMap<String,RtxptScene.Item>();
             for(long instance:scene.instancesUsingMesh(id)){dependencies++;var item=scene.item(instance);variants.putIfAbsent(RtxptScene.meshName(item),item);}
-            for(int index=scene.instances.size();index<items.size();index++){var item=items.get(index);reads++;if(item.mesh()==id)variants.putIfAbsent(RtxptScene.meshName(item),item);}
+            for(var item:transientUsers(id)){dependencies++;variants.putIfAbsent(RtxptScene.meshName(item),item);}
             return List.copyOf(variants.values());
         });}
+        // A transaction can change many meshes used by frame primitives. Index
+        // the immutable transient tail once rather than reading all P entries
+        // for each of M changed meshes, variants and retiring node names.
+        private void indexTransient(){
+            if(transientByMesh!=null)return;
+            transientByMesh=new HashMap<>();transientByName=new HashMap<>();
+            for(int index=scene.instances.size();index<items.size();index++){
+                var item=items.get(index);reads++;
+                transientByMesh.computeIfAbsent(item.mesh(),id->new ArrayList<>()).add(item);
+                transientByName.put(item.name(),item);
+            }
+        }
+        List<RtxptScene.Item> transientUsers(long mesh){indexTransient();return transientByMesh.getOrDefault(mesh,List.of());}
+        RtxptScene.Item transientItem(String name){indexTransient();return transientByName.get(name);}
         boolean contains(RtxptScene.Item item){
             // A pose in a mixed resource transaction keeps its existing variant;
             // do not enumerate every other instance sharing that mesh.
@@ -77,7 +93,7 @@ final class RtxptDelta {
         // Geometry replacement must reattach exactly its users, including frame primitives.
         for(var item:meshItems.values()){
             for(long id:scene.instancesUsingMesh(item.mesh())){current.dependencies++;var user=scene.item(id);if(RtxptScene.meshName(user).equals(RtxptScene.meshName(item)))updates.put(user.name(),user);}
-            for(int index=scene.instances.size();index<items.size();index++){var user=items.get(index);current.reads++;if(RtxptScene.meshName(user).equals(RtxptScene.meshName(item)))updates.put(user.name(),user);}
+            for(var user:current.transientUsers(item.mesh())){current.dependencies++;if(RtxptScene.meshName(user).equals(RtxptScene.meshName(item)))updates.put(user.name(),user);}
         }
         var variants=new LinkedHashMap<String,RtxptScene.Variant>();
         for(var item:meshItems.values()){
@@ -131,9 +147,9 @@ final class RtxptDelta {
                 if(name.startsWith("i")){
                     var source=old.item(Long.parseLong(name,1,name.length(),10));
                     if(source!=null)inputSources.putIfAbsent(RtxptScene.meshName(source),source);
-                }else for(int index=old.instances.size();index<previous.size();index++){
-                    var source=previous.get(index);
-                    if(source.name().equals(name))inputSources.putIfAbsent(RtxptScene.meshName(source),source);
+                }else{
+                    var source=prior.transientItem(name);
+                    if(source!=null)inputSources.putIfAbsent(RtxptScene.meshName(source),source);
                 }
             }
         }

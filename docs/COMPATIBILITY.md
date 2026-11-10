@@ -21,6 +21,10 @@ NativeLighting、Sparse 和共享同步作为外部桥接能力提供，不等�
 
 ## 能力边界
 
+5.0.0 的输入尚未全量对齐。有限光照已接通实例角色、帧雾、packedLight 回退、临时几何显式上一姿态，以及宿主覆盖率重建信号；这些能力不代表普通 beauty 路径具备同样语义。
+
+当前仍拒绝自定义 shaderData、旧帧 lightmap、非单样本 AntiAliasingState、非默认纹理 footprint，以及非默认 InstanceRenderState、overlay 和非闭合介质。普通 beauty 还不支持精确投影、帧雾、自定义实例角色与最近邻／clamp 纹理策略。beauty 的顶点颜色、网格 UV2、packedLight、临时几何显式上一姿态和共有 DepthProjectionState 尚未接通，调用方不能依赖这些输入产生效果。
+
 FG 请求、原生激活状态和实际呈现帧数是不同信息。资产预算、CPU 墙钟和 GPU 查询耗时也不能相互替代。
 
 光学场景支持折射、透射、吸收与嵌套介质；没有公开接通的体散射参数不属于本版接口保证。

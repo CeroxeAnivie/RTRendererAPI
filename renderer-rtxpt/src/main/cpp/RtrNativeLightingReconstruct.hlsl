@@ -18,9 +18,10 @@ float3 RtrPreviousPosition(RtrReceiver r) {
     ByteAddressBuffer indices=t_Buffers[NonUniformResourceIndex(geom.indexBufferIndex)];
     ByteAddressBuffer vertices=t_Buffers[NonUniformResourceIndex(geom.vertexBufferIndex)];
     uint3 tri=indices.Load3(geom.indexOffset+r.primitive*12);float3 bary=float3(1-r.barycentrics.x-r.barycentrics.y,r.barycentrics);
-    uint offset=geom.prevPositionOffset==0xffffffff?geom.positionOffset:geom.prevPositionOffset;
+    RtrInstance attributes=t_InstanceAttributes[r.instance];bool explicitPrevious=(uint(attributes.rolesVisibility.w)&2)!=0;
+    uint offset=explicitPrevious||geom.prevPositionOffset==0xffffffff?geom.positionOffset:geom.prevPositionOffset;
     float3 local=asfloat(vertices.Load3(offset+tri.x*12))*bary.x+asfloat(vertices.Load3(offset+tri.y*12))*bary.y+asfloat(vertices.Load3(offset+tri.z*12))*bary.z;
-    return mul(inst.prevTransform,float4(local,1));
+    return explicitPrevious?mul(attributes.explicitPrevious,float4(local,1)):mul(inst.prevTransform,float4(local,1));
 }
 [numthreads(8,8,1)]
 void main(uint2 pixel:SV_DispatchThreadID) {
@@ -42,14 +43,15 @@ void main(uint2 pixel:SV_DispatchThreadID) {
     float4 clip=mul(rtrWorldToClip,float4(valid?r.position:g.cameraNear.xyz+direction*1e7,1));
     // Retained scene buffers keep their previous deformation until the next
     // resource update. Consume that motion once, then project current positions.
-    float3 previousPosition=valid?((g.publication.w&16)!=0?RtrPreviousPosition(r):r.position):g.cameraNear.xyz+direction*1e7;
+    bool objectMotion=valid&&((g.publication.w&16)!=0||(uint(t_InstanceAttributes[r.instance].rolesVisibility.w)&2)!=0);
+    float3 previousPosition=valid?(objectMotion?RtrPreviousPosition(r):r.position):g.cameraNear.xyz+direction*1e7;
     float4 previous=mul(rtrPreviousWorldToClip,float4(previousPosition,1));
     float2 motion=(previous.xy/previous.w-clip.xy/clip.w)*float2(.5,-.5);
     u_Motion[pixel]=all(isfinite(motion))?motion:0;
     u_Depth[pixel]=saturate(clip.z/clip.w*rtrDepth.x+rtrDepth.y);
-    if(valid){RtrCount(1);RtrEvaluateReceiver(r,gain,indirect);}
+    if(valid){RtrCount(1);RtrPrepareCoverage(r,pixel);RtrEvaluateReceiver(r,gain,indirect);}
     gain=clamp(gain,0,65504);indirect=clamp(indirect,0,65504);
-    if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,valid?r.opacity:0);
+    if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,RtrDirectAlpha(valid,r.opacity));
     u_Indirect[pixel]=float4(indirect,valid?r.opacity:0);
     RtrFlushWork();
 }

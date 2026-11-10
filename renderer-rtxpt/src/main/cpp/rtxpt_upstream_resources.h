@@ -31,6 +31,7 @@
 #include "rtxpt_memory_resources.h"
 #include "rtxpt_diagnostics.h"
 #include "rtxpt_scene_delta.h"
+#include "rtxpt_scene_table_upload.h"
 
 namespace rtr::upstream {
 // Surface transport for the independent finite-signal pass. The embedded
@@ -288,6 +289,8 @@ private:
     std::vector<GeometryJournal> m_geometryJournal;
     std::vector<std::weak_ptr<donut::engine::Material>> m_materialJournal;
     std::vector<InstanceJournal> m_instanceJournal;
+    std::vector<uint32_t> m_dirtyInstanceRows;
+    nvrhi::RefCountPtr<scene_upload::SceneTableUploadCommands> m_instanceUploadCommands;
     std::vector<std::weak_ptr<donut::engine::MeshInstance>> m_dirtyInstanceInputs,m_convergingInstances;
     bool m_tableJournalReady=false;
     bool m_materialRowsPending=true;
@@ -396,7 +399,7 @@ private:
         m_materialRowsPending=false;
     }
     void RefreshInstanceRows(nvrhi::ICommandList* commands,bool transformsPending=true,bool structureChanged=false){
-        bool changed=false;uint64_t written=0;
+        uint64_t written=0;m_dirtyInstanceRows.clear();
         RtrDiagnostics::Scope rows(RtrDiagnostics::SceneInstanceRows);
         rows.event[11]|=RtrDiagnostics::CacheHit;
         // Keep an explicit zero-work event: no rows examined is distinguishable
@@ -425,11 +428,19 @@ private:
             const bool ownerChanged=!SameOwner(old.owner,instance);
             if(ownerChanged)RecordChangedInstance(instance);
             if(ownerChanged||old.pose!=row.pose||old.geometry!=row.geometry) {
-                UpdateInstance(instance);old=std::move(row);changed=true;++written;
+                UpdateInstance(instance);old=std::move(row);++written;
+                m_dirtyInstanceRows.push_back(uint32_t(instance->GetInstanceIndex()));
             }
         }
         rows.event[8]=written;rows.event[9]=candidates.size();
-        if(changed){RtrDiagnostics::Scope upload(RtrDiagnostics::SceneTableUpload,1);WriteInstanceBuffer(commands);}
+        if(!m_dirtyInstanceRows.empty()){
+            if(!m_instanceUploadCommands)m_instanceUploadCommands.Attach(new scene_upload::SceneTableUploadCommands());
+            RtrDiagnostics::Scope upload(RtrDiagnostics::SceneTableUpload);
+            const auto transferred=m_instanceUploadCommands->Record(commands,m_InstanceBuffer,sizeof(InstanceData),
+                m_dirtyInstanceRows,m_tableJournalReady,[this](nvrhi::ICommandList* target){WriteInstanceBuffer(target);});
+            upload.event[8]=transferred.rows;upload.event[9]=transferred.writes;upload.event[21]=transferred.bytes;
+            upload.event[11]|=transferred.full?RtrDiagnostics::CacheMiss:RtrDiagnostics::CacheHit;
+        }
     }
     void UploadMeshes(nvrhi::ICommandList* commands,
         const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
@@ -648,6 +659,7 @@ public:
             MaterialEntry entry;entry.material=m_factory.CreateMaterial();
             entry.material->name=SurfaceCarrierName;entry.textures.fill(-1);
             m_materials.emplace(SurfaceCarrierName,std::move(entry));
+            m_pendingIndependentMaterials.insert(SurfaceCarrierName);
         }
     }
     const std::vector<uint32_t>* SurfaceSlots(const std::string& geometry)const{
@@ -694,6 +706,7 @@ public:
         m_meshes.clear();
         m_meshSources.clear();
         m_materials.clear();
+        m_pendingIndependentMaterials.clear();
         m_surfaceNames.clear();m_surfaceFree.clear();m_surfaceDirty.clear();
         SetExternalTextureSampling(m_externalTextureSampling);
         m_textures.clear();
@@ -766,28 +779,39 @@ public:
             target.GPUDataDirty = true;
         };
         if(independentLighting) {
-            if(auto graph=m_graph.lock())for(const auto& source:graph->GetMaterials()) {
-                auto found=m_materials.find(source->name);
-                if(found==m_materials.end())throw std::logic_error("Managed graph material has no declared definition");
-                auto material=std::dynamic_pointer_cast<MaterialEx>(source);
+            // CPU PTMaterial controls are needed for original AS flags. Prepare
+            // each authored definition once, including definitions that acquire
+            // their first graph user in a later packet. No GPU row is registered.
+            // Pose/empty packets must never walk the complete graph registry.
+            RtrDiagnostics::Scope candidates(RtrDiagnostics::SceneMaterialRows);
+            candidates.event[9]=m_pendingIndependentMaterials.size();
+            candidates.event[11]|=RtrDiagnostics::CacheHit;
+            for(const auto& name:m_pendingIndependentMaterials) {
+                auto found=m_materials.find(name);
+                if(found==m_materials.end())continue;
+                auto material=std::dynamic_pointer_cast<MaterialEx>(found->second.material);
                 if(!material)throw std::logic_error("Managed graph requires the original material type");
-                const bool created=!material->PTMaterial;
-                if(created) {
+                if(!material->PTMaterial) {
                     // Public CPU data for the original AS flags. No GPU material
                     // row, shader permutation or invented GPUDataIndex is created.
                     material->PTMaterial=std::make_shared<PTMaterial>();
-                    material->PTMaterial->Name=source->name;
+                    material->PTMaterial->Name=name;
                     material->PTMaterial->DonutCounterpart=material.get();
                 }
-                if(created||m_pendingMaterials.contains(source->name))configure(source->name,found->second);
+                configure(name,found->second);
             }
+            m_pendingIndependentMaterials.clear();
         } else if (sceneReloaded) {
             // A complete original bake replaces every PTMaterial; reapply only
             // the transport fields unavailable on Donut Material in that case.
             for (auto& [name, entry] : m_materials) {
                 if(registered.contains(entry.material))configure(name,entry);
-                else if(auto material=std::dynamic_pointer_cast<MaterialEx>(entry.material))
+                else if(auto material=std::dynamic_pointer_cast<MaterialEx>(entry.material)){
                     material->PTMaterial.reset();
+                    // A later direct transition must restore these CPU-only
+                    // definitions before their first native graph attachment.
+                    m_pendingIndependentMaterials.insert(name);
+                }
             }
         } else {
             for (const auto& name : m_pendingMaterials)
@@ -1033,6 +1057,7 @@ public:
             }
             LinkMaterialTextures(name, entry);
             m_pendingMaterials.insert(name);
+            m_pendingIndependentMaterials.insert(name);
             m_pendingTextureMaterials.insert(name);
             m_materials.insert_or_assign(name, std::move(entry));
         }
@@ -1216,6 +1241,7 @@ public:
                 m_materials.erase(material);
             }
             m_pendingMaterials.erase(name);
+            m_pendingIndependentMaterials.erase(name);
             m_pendingTextureMaterials.erase(name);
         }
         m_graph = graph;
@@ -2012,6 +2038,7 @@ private:
     std::unordered_map<std::string, std::unordered_set<std::string>> m_materialMeshes;
     std::unordered_map<int64_t, std::unordered_set<std::string>> m_textureMaterials;
     std::unordered_set<std::string> m_pendingMaterials;
+    std::unordered_set<std::string> m_pendingIndependentMaterials;
     std::unordered_set<std::string> m_pendingTextureMaterials;
     std::unordered_map<std::string,NodeInput> m_pendingTransforms;
 };

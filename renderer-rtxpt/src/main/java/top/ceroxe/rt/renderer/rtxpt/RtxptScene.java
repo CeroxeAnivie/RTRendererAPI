@@ -6,6 +6,7 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Retained memory resources. No tracing, file export, denoising or scheduling. */
 final class RtxptScene {
+    boolean nativeLighting;
     final RtxptPersistentMap<TextureAsset> textures;
     final RtxptPersistentMap<MaterialAsset> materials;
     final RtxptPersistentMap<MeshAsset> meshes;
@@ -30,6 +31,10 @@ final class RtxptScene {
     List<RtxptAttributeBatch.Group> attributeGroups(MeshAsset mesh){materialIds(mesh);return meshMaterials.get(mesh.id()).groups();}
     private List<SceneLight> sortedLights;
     private List<Item> residentItems;
+    private FramePrimitiveBatch cachedPrimitiveBatch;
+    private List<Item> cachedFrameItems;
+    private Object cachedResidentItems;
+    private RtxptPersistentMap<MeshAsset> cachedPrimitiveMeshes;
     List<SceneLight> sortedLights(){if(sortedLights==null)sortedLights=List.copyOf(lights.values());return sortedLights;}
     final Map<String,MediumBoundary> interiors=new LinkedHashMap<>();
     final Map<String,Float> materialIors=new LinkedHashMap<>();
@@ -40,6 +45,7 @@ final class RtxptScene {
         lights=new RtxptLightMap();sparseSources=new RtxptPersistentMap<>();
     }
     RtxptScene(RtxptScene src) {
+        nativeLighting=src.nativeLighting;
         textures=new RtxptPersistentMap<>(src.textures);materials=new RtxptPersistentMap<>(src.materials);meshes=new RtxptPersistentMap<>(src.meshes);
         instances=new RtxptPersistentMap<>(src.instances);residentItems=src.residentItems;lights=new RtxptLightMap(src.lights);sortedLights=src.sortedLights;meshMaterials=new RtxptPersistentMap<>(src.meshMaterials);
         textureUsers=new RtxptPersistentMap<>(src.textureUsers);materialUsers=new RtxptPersistentMap<>(src.materialUsers);meshUsers=new RtxptPersistentMap<>(src.meshUsers);referenceChecks=src.referenceChecks;
@@ -137,8 +143,10 @@ final class RtxptScene {
     void validateInstance(long id,AffineTransform transform,MediumBoundary b,InstanceRenderState state,boolean shadow,int mask) {
         var m=meshes.get(id);if(m==null)throw new IllegalArgumentException("Missing mesh "+id);
         if(b!=null && !m.isClosedManifold())throw new IllegalArgumentException("Medium requires a closed outward-wound manifold mesh");
-        if(!state.equals(InstanceRenderState.defaults()) || !shadow || mask!=255)
+        if(!state.equals(InstanceRenderState.defaults()) || (!nativeLighting&&(!shadow||mask!=255)))
             throw new IllegalArgumentException("Custom ray masks, no-shadow instances and game surface overrides belong to Vulkan");
+        if(nativeLighting&&mask!=255&&(mask&~7)!=0)
+            throw new IllegalArgumentException("Native lighting supports receiver=1, shadow=2 and bounce=4 ray roles");
         // AffineTransform already enforces finite, invertible input. The native
         // adapter composes two original TRS nodes when a shear needs both.
     }
@@ -155,12 +163,16 @@ final class RtxptScene {
     List<Item> items(RenderFrameRequest f) {
         if(residentItems==null)residentItems=new Items(itemTable,itemStructure);
         if(f.primitiveBatch().primitives().isEmpty())return residentItems;
+        if(cachedPrimitiveBatch==f.primitiveBatch()&&cachedResidentItems==residentItems
+                &&cachedPrimitiveMeshes!=null&&cachedPrimitiveMeshes.sameSnapshot(meshes))return cachedFrameItems;
         var a=new ArrayList<Item>(f.primitiveBatch().primitives().size());
         int k=0;for(var i:f.primitiveBatch().primitives()) {
             validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.renderState(),i.castsShadow(),i.visibilityMask());
             a.add(new Item("p"+k++,i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.surfaceVisibility()));
         }
-        return new Items((Items)residentItems,a);
+        cachedPrimitiveBatch=f.primitiveBatch();cachedResidentItems=residentItems;
+        cachedPrimitiveMeshes=new RtxptPersistentMap<>(meshes);
+        return cachedFrameItems=new Items((Items)residentItems,a);
     }
     static boolean sameStructure(List<Item> a,List<Item> b) {
         if(a==b)return true;

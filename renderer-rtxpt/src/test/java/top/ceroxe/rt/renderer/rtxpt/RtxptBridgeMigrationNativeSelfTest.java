@@ -23,6 +23,8 @@ public final class RtxptBridgeMigrationNativeSelfTest {
         Path output=Path.of(args.length==0?"build/reports/bridge-migration-contract":args[0]).toAbsolutePath();
         Files.createDirectories(output);
         if(args.length>1&&args[1].equals("--deformation-only")) {checkDeformationContract(output);return;}
+        if(args.length>1&&args[1].equals("--packed-light-only")) {checkPackedLightContract(output);return;}
+        if(args.length>1&&args[1].equals("--primitive-history-only")) {checkPrimitiveHistoryContract(output);return;}
         var rows=new ArrayList<String>();
         rows.add("sequence,case,apply_to_fresh_ms,materials_events,blas_events,attribute_events,native_events");
         var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.NORMAL_DISTANCE),
@@ -349,14 +351,23 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             long[] raw=RtxptNative.boundaryDiagnostics(handle,snapshot.generation(),diagnosticBefore.nextOrdinal());
             require(raw.length>=21&&raw[1]==27&&raw.length==21+(raw[3]+raw[7])*27,"Invalid instance-work diagnostic packet");
             long examined=-1;
+            long instanceUploadRows=0,instanceUploadWrites=0,instanceUploadBytes=0;
+            var tableEvents=snapshot.events().stream().filter(event->event.sequence()==frameSequence&&event.stage().equals("SceneTableUpload")).toList();
             for(int index=21;index<raw.length;index+=27){
                 if(raw[index+24]==instanceEvent.ordinal())examined=raw[index+9];
+                for(var tableEvent:tableEvents)if(raw[index+24]==tableEvent.ordinal()){
+                    instanceUploadRows+=raw[index+8];instanceUploadWrites+=raw[index+9];instanceUploadBytes+=raw[index+21];
+                }
                 for(var materialEvent:materialEvents)if(raw[index+24]==materialEvent.ordinal())
                     require(raw[index+9]==0,"Pose/camera frame scanned unchanged material registry");
             }
             require(settled?examined==0&&instanceEvent.items()==0:examined==1&&instanceEvent.items()==1,
                     "Native transform/previous-pose gate performed incorrect instance work at sequence="+sequence+" examined="+examined+" written="+instanceEvent.items());
             require(instanceEvent.tasks()==examined,"Public diagnostic check count differs from native event");
+            require(settled?instanceUploadRows==0&&instanceUploadWrites==0&&instanceUploadBytes==0
+                    :instanceUploadRows==1&&instanceUploadWrites==1&&instanceUploadBytes==112,
+                    "A single current/previous-pose row uploaded unrelated native instance capacity at sequence="+sequence
+                            +" rows="+instanceUploadRows+" writes="+instanceUploadWrites+" bytes="+instanceUploadBytes);
             var tlasEvents=snapshot.events().stream().filter(event->event.stage().equals("TlasBuild")).toList();
             require(tlasEvents.size()==1&&tlasEvents.getFirst().items()==(sequence<=FRAMES+2?1:0),
                     "Previous-pose/camera-only frame updated unchanged current TLAS inputs");
@@ -364,7 +375,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             String name=settled?(sequence==FRAMES+4?"settled-idle-zero-instance-scan":"camera-only-zero-instance-scan")
                     :empty?"previous-pose-converges-without-command-list":"resident-pose-without-command-list";
             rows.add(sequence+","+name+","+(System.nanoTime()-begin)/1_000_000.0+",0,0,0,0");
-            System.out.println("BRIDGE_MIGRATION sequence="+sequence+" case="+name+" instanceExamined="+examined+" instanceWritten="+instanceEvent.items()+" PASS");
+            System.out.println("BRIDGE_MIGRATION sequence="+sequence+" case="+name+" instanceExamined="+examined+" instanceWritten="+instanceEvent.items()+" instanceUploadBytes="+instanceUploadBytes+" PASS");
         }
     }
 
@@ -430,6 +441,100 @@ public final class RtxptBridgeMigrationNativeSelfTest {
         }
     }
 
+    private static void checkPrimitiveHistoryContract(Path output) throws Exception {
+        var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,NativeLightingPlan.Signal.INDIRECT_DIFFUSE),1,6,.35f,
+            NativeLightingStyle.defaults(),new NativeLightingPlan.Directional(0,1,0,0,1,1,1),null);
+        var camera=CameraState.lookAt(0,0,3,0,0,0).aspectRatio(1).build();
+        float[] current={0,.1f,.1f,.1f,0,0,.2f,.2f};
+        float[] previous={0,-.2f,.1f,.4f,-.1f,0,.2f,.1f};
+        try(var renderer=RtxptRenderers.openNativeLighting(RtxptRenderers.nativeLightingConfiguration(),plan)) {
+            var access=renderer.extension(RtxptAccess.class).orElseThrow();var lighting=renderer.extension(NativeLightingControl.class).orElseThrow();
+            lighting.lightingReconstruction(NativeLightingReconstruction.DLSS_RR);
+            var handleField=RtxptRenderer.class.getDeclaredField("handle");handleField.setAccessible(true);
+            renderer.apply(SceneTransaction.builder(1).resetScene().upsert(MaterialAsset.builder(1).doubleSided(true).build())
+                .upsert(MaterialAsset.builder(2).doubleSided(true).build()).upsert(mesh(1,0,0,0)).upsert(mesh(2,0,0,0))
+                // Keep real receiver guides available while the temporary primitive is removed in frame 6.
+                .upsert(mesh(3,0,-.5f,0)).upsert(SceneInstance.builder(3,3).build()).build());
+            double[] retained=null;
+            for(int sequence=1;sequence<=current.length;sequence++) {
+                var frame=RenderFrameRequest.builder(sequence,SIZE,SIZE,camera).minimumSceneRevision(1);
+                if(sequence!=6) {
+                    int i=sequence-1;frame.primitiveBatch(FramePrimitiveBatch.of(List.of(PrimitiveInstance.builder(sequence<5?1:2)
+                        .transform(translated(current[i])).previousTransform(translated(previous[i])).build())));
+                }
+                renderer.submit(frame.build());access.awaitIdle();long handle=handleField.getLong(renderer);
+                try(var lease=lighting.acquireLightingFrame().orElseThrow()) {
+                    require(lease.frame().sequence()==sequence&&lease.frame().sceneRevision()==1,"Primitive history output used stale input identity");
+                }
+                var rr=lighting.lightingReconstruction();
+                require(rr.actual()==NativeLightingReconstruction.DLSS_RR&&rr.guidesValid()&&rr.evaluatedFrames()==sequence,
+                    "Explicit previous-pose contract requires real current-frame RR guides");
+                Path motion=output.resolve("primitive-history-"+sequence+".pfm");RtxptNative.nativeLightingCapture(handle,motion.toString(),6);
+                var values=centerNormal(motion);float expected=sequence==6?0:(previous[sequence-1]-current[sequence-1])/(6*camera.tanHalfFovX());
+                require(Math.abs(values[0]-expected)<.0001&&Math.abs(values[1])<.00001,
+                    "Explicit previous-pose motion mismatch at sequence="+sequence+": "+Arrays.toString(values)+" expected="+expected);
+                if(sequence!=6) {
+                    var resources=RtxptNative.meshResourceState(handle,"p0");
+                    if(sequence==3||sequence==4||sequence==8)require(resources[0]==retained[0]&&resources[1]==retained[1],
+                        "A previous-pose-only edit replaced geometry or BLAS");
+                    retained=resources;
+                }
+            }
+        }
+        System.out.println("PRIMITIVE_HISTORY_NATIVE PASS frames=8 explicitPose=true previousOnly=true defaultStill=true identityReplace=true removeReadd=true realRR=true");
+    }
+    private static AffineTransform translated(float x) {
+        return new AffineTransform(new float[]{1,0,0,x,0,1,0,0,0,0,1,0});
+    }
+    private static void checkPackedLightContract(Path output) throws Exception {
+        var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN),0,6,0,
+            NativeLightingStyle.defaults(),new NativeLightingPlan.Directional(0,1,0,0,1,1,1),null);
+        var camera=CameraState.lookAt(0,0,3,0,0,0).build();
+        var base=mesh(1,0,0,0);float[] expected={.625f,1,.8125f,1,.925f,.8125f,.25f,1,.625f};
+        try(var renderer=RtxptRenderers.openNativeLighting(RtxptRenderers.nativeLightingConfiguration(),plan)) {
+            var access=renderer.extension(RtxptAccess.class).orElseThrow();var lighting=renderer.extension(NativeLightingControl.class).orElseThrow();
+            var handleField=RtxptRenderer.class.getDeclaredField("handle");handleField.setAccessible(true);
+            long handle=0;double[] retained=null;
+            for(int sequence=1;sequence<=expected.length;sequence++) {
+                var tx=SceneTransaction.builder(sequence);
+                if(sequence==1)tx.resetScene().upsert(MaterialAsset.builder(1).doubleSided(true).build()).upsert(base);
+                if(sequence<=2)tx.upsert(SceneInstance.builder(11,1).packedLight(sequence==1?120|(60<<16):0).build());
+                if(sequence==3){float[] uv=new float[8];for(int i=0;i<8;i+=2){uv[i]=.25f;uv[i+1]=.75f;}tx.upsert(base.toBuilder().lightmapCoordinates(uv).build());}
+                if(sequence==4)tx.upsert(base);
+                if(sequence==6)tx.removeInstance(11);
+                if(sequence==8)tx.upsert(base.toBuilder().lightmapCoordinates(new float[8]).build());
+                renderer.apply(tx.build());
+                List<NativeLightingPublication.Instance> instances=sequence==5
+                    ?List.of(new NativeLightingPublication.Instance(11,23,1,0,1,1,.1f,.2f)):List.of();
+                List<NativeLightingPublication.MeshBaseline> baselines=sequence==9
+                    ?List.of(new NativeLightingPublication.MeshBaseline(1,new float[]{.5f,.25f,.5f,.25f,.5f,.25f,.5f,.25f})):List.of();
+                lighting.publishLightingAttributes(new NativeLightingPublication(sequence,instances,baselines,null,null));
+                var frame=RenderFrameRequest.builder(sequence,SIZE,SIZE,camera).minimumSceneRevision(sequence);
+                if(sequence>=6)frame.primitiveBatch(FramePrimitiveBatch.of(List.of(PrimitiveInstance.builder(1)
+                    .packedLight(sequence==6?60|(180<<16):SceneInstance.FULL_BRIGHT_PACKED_LIGHT).build())));
+                renderer.submit(frame.build());access.awaitIdle();handle=handleField.getLong(renderer);
+                try(var lease=lighting.acquireLightingFrame().orElseThrow()) {
+                    require(lease.frame().sequence()==sequence&&lease.frame().sceneRevision()==sequence&&lease.frame().attributeGeneration()==sequence,
+                        "Packed-light output used stale frame or attribute identity");
+                }
+                String identity=sequence<6?"i11":"p0";
+                var metadata=RtxptNative.lightingMetadataState(handle,identity,meshName(1)+":0");
+                double[] transform=sequence==1?new double[]{0,0,.5,.25}:sequence==2||sequence==4?new double[]{0,0,0,0}
+                    :sequence==5?new double[]{1,1,.1,.2}:sequence==6?new double[]{0,0,.25,.75}
+                    :sequence==7?new double[]{0,0,1,1}:new double[]{1,1,0,0};
+                for(int i=0;i<4;i++)require(Math.abs(metadata[13+i]-transform[i])<1e-6,
+                    "Packed-light/mesh/explicit publication precedence failed at sequence="+sequence+" component="+i);
+                var resources=RtxptNative.meshResourceState(handle,identity);
+                if(sequence==2||sequence==7)require(resources[0]==retained[0]&&resources[1]==retained[1],
+                    "A packed-light-only edit replaced geometry or BLAS");
+                retained=resources;
+                Path image=output.resolve("packed-light-"+sequence+".pfm");RtxptNative.nativeLightingCapture(handle,image.toString(),0);
+                for(float gain:centerNormal(image))require(Math.abs(gain-expected[sequence-1])<.001,
+                    "Packed-light GPU gain mismatch at sequence="+sequence+": "+gain+" expected="+expected[sequence-1]);
+            }
+        }
+        System.out.println("PACKED_LIGHT_NATIVE PASS frames=9 persistent=true framePrimitive=true vertexPrecedence=true explicitOverride=true noGeometryReplacement=true");
+    }
     private static float[] centerNormal(Path file) throws Exception {
         byte[] bytes=Files.readAllBytes(file);int start=0;
         for(int line=0;line<3;line++){while(start<bytes.length&&bytes[start++]!='\n'){}}

@@ -18,9 +18,9 @@ void main(uint2 pixel:SV_DispatchThreadID)
         if((g.grid.z&8)!=0)u_Identity[pixel]=value.valid?uint4(value.receiver.instance,value.receiver.geometry,value.receiver.primitive,1):uint4(0xffffffff,0xffffffff,0xffffffff,0);
     }else{
         RtrDeepReceiver value=u_Receivers[index];float coverage=value.valid?value.receiver.opacity:0;
-        if(phase==2){float3 gain=value.valid?RtrDirectGain(value.receiver):1;
+        if(phase==2){if(value.valid)RtrPrepareCoverage(value.receiver,pixel);float3 gain=value.valid?RtrDirectGain(value.receiver):1;
             gain=float3(isfinite(gain.x)?clamp(gain.x,0,65504):1,isfinite(gain.y)?clamp(gain.y,0,65504):1,isfinite(gain.z)?clamp(gain.z,0,65504):1);
-            u_Direct[pixel]=float4(gain,coverage);
+            u_Direct[pixel]=float4(gain,RtrDirectAlpha(value.valid!=0,value.receiver.opacity));
         }else if(phase==3){float3 gi=value.valid?RtrOneBounce(value.receiver):0;
             gi=float3(isfinite(gi.x)?clamp(gi.x,0,65504):0,isfinite(gi.y)?clamp(gi.y,0,65504):0,isfinite(gi.z)?clamp(gi.z,0,65504):0);
             u_Indirect[pixel]=float4(gi,coverage);

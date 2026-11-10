@@ -66,8 +66,12 @@ final class RtxptMemoryResources {
             @Override public void close(){if(owner!=null){var pool=owner;owner=null;pool.release();}}
         }
     }
-    private record Geometry(RtxptScene.Item item,RtxptScene.ExportGeometry data,
-                            List<RtxptAttributeBatch.Group> groups,String inheritedFrom) { }
+    private record MaterialTransfer(byte[] name,RtxptScene.Variant variant,MaterialAsset material) { }
+    private record NodeTransfer(byte[] name,byte[] mesh,FloatBuffer transform) { }
+    private record GroupTransfer(byte[] material,int[] corners) { }
+    private record Geometry(byte[] name,RtxptScene.ExportGeometry data,
+                            List<GroupTransfer> groups,byte[] inheritedFrom) { }
+    private static byte[] name(String value){return value.getBytes(StandardCharsets.UTF_8);}
     private record Channel(Object heap,long address,long bytes) {
         private static final Channel EMPTY=new Channel(null,0,0);
         static Channel of(Buffer buffer){
@@ -112,6 +116,13 @@ final class RtxptMemoryResources {
                 if(id>=0&&resident.get(id)!=scene.textures.get(id))textures.put(id,scene.textures.get(id));}
         var transfers=new ArrayList<TextureTransfer>(textures.size());
         for(var texture:textures.values())transfers.add(TextureTransfer.prepare(texture,resident.get(texture.id())));
+        // Sizing and writing use one immutable transport view. Native names,
+        // UTF-8 bytes and read-only transform views are prepared once, rather
+        // than reconstructed while walking the same packet a second time.
+        var materialTransfers=new ArrayList<MaterialTransfer>(materials.size());
+        for(var variant:materials)materialTransfers.add(new MaterialTransfer(name(variant.name()),variant,scene.materials.get(variant.material())));
+        var nodeTransfers=new ArrayList<NodeTransfer>(nodes.size());
+        for(var node:nodes)nodeTransfers.add(new NodeTransfer(name(node.name()),name(RtxptScene.meshName(node)),node.transform().elements()));
         var byStorage=new HashMap<Channels,RtxptScene.Item>();
         var byName=new HashMap<String,RtxptScene.Item>();
         var byPose=new HashMap<AffineTransform,RtxptScene.Item>();
@@ -129,17 +140,23 @@ final class RtxptMemoryResources {
             // can be inherited, including callers using independent buffers.
             if(source!=null&&RtxptDelta.sameInputChannels(old.meshes.get(source.mesh()),mesh))
                 inheritedFrom=RtxptScene.meshName(source);
-            geometry.add(new Geometry(item,inheritedFrom==null?RtxptScene.ExportGeometry.from(mesh):null,
-                    scene.attributeGroups(mesh),inheritedFrom));
+            var groups=new ArrayList<GroupTransfer>();
+            for(var group:scene.attributeGroups(mesh))groups.add(new GroupTransfer(
+                    name(new RtxptScene.Variant(group.material(),item.boundary(),item.visibility()).name()),group.corners()));
+            geometry.add(new Geometry(name(RtxptScene.meshName(item)),inheritedFrom==null?RtxptScene.ExportGeometry.from(mesh):null,
+                    groups,inheritedFrom==null?null:name(inheritedFrom)));
         }
         var removedTextures=new ArrayList<Long>();scene.textures.forEachChanged(old.textures,(id,value)->{if(value==null)removedTextures.add(id);});
-        var size=new Writer(null);write(size,transfers,materials,geometry,nodes,removals,coverage,scene,removedTextures,removedMaterials);
+        var removedNames=removals.stream().map(RtxptMemoryResources::name).toList();
+        var coverageNames=coverage.stream().map(RtxptMemoryResources::name).toList();
+        var removedMaterialNames=removedMaterials.stream().map(RtxptMemoryResources::name).toList();
+        var size=new Writer(null);write(size,transfers,materialTransfers,geometry,nodeTransfers,removedNames,coverageNames,removedTextures,removedMaterialNames);
         if(size.offset>512L*1024*1024)throw new IllegalArgumentException("Dynamic resource packet exceeds 512 MiB staging capacity; split the transaction");
         var packet=pool.acquire(Math.toIntExact(size.offset));
-        write(new Writer(packet),transfers,materials,geometry,nodes,removals,coverage,scene,removedTextures,removedMaterials);pool.packed();return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        write(new Writer(packet),transfers,materialTransfers,geometry,nodeTransfers,removedNames,coverageNames,removedTextures,removedMaterialNames);pool.packed();return packet.flip().slice().asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
-    private static void write(Writer w,List<TextureTransfer> textures,Collection<RtxptScene.Variant> materials,
-            List<Geometry> meshes,Collection<RtxptScene.Item> nodes,List<String> removals,List<String> coverage,RtxptScene scene,List<Long> removedTextures,List<String> removedMaterials){
+    private static void write(Writer w,List<TextureTransfer> textures,List<MaterialTransfer> materials,
+            List<Geometry> meshes,List<NodeTransfer> nodes,List<byte[]> removals,List<byte[]> coverage,List<Long> removedTextures,List<byte[]> removedMaterials){
         w.i(0x52445259);w.i(textures.size());
         for(var transfer:textures){var t=transfer.texture();w.l(t.id());w.i(t.width());w.i(t.height());w.i(t.mipLevelCount());w.i(t.colorSpace().ordinal());
             w.i(t.addressU().ordinal());w.i(t.addressV().ordinal());w.i(t.filter().ordinal());w.l(t.generation());
@@ -147,7 +164,7 @@ final class RtxptMemoryResources {
             if(transfer.inheritedGeneration()!=0)w.l(transfer.inheritedGeneration());
             else if(patch==null)w.bytes(t.rgba8());
             else{w.l(t.parentGeneration());w.i(patch.mipLevel());w.i(patch.x());w.i(patch.y());w.i(patch.width());w.i(patch.height());w.i(patch.rowPitch());w.bytes(patch.rgba8());}}
-        w.i(materials.size());for(var v:materials){var m=scene.materials.get(v.material());w.s(v.name());w.i(m.baseColorRgba8());
+        w.i(materials.size());for(var transfer:materials){var v=transfer.variant();var m=transfer.material();w.s(transfer.name());w.i(m.baseColorRgba8());
             w.f(v.visibility());w.f(m.roughness());w.f(m.metallic());w.f(m.transmission());w.f(m.alphaCutoff());w.i(m.blendMode().ordinal());w.i(m.doubleSided()?1:0);
             var emission=m.emissiveRadiance();w.f(emission.red());w.f(emission.green());w.f(emission.blue());
             w.f(v.boundary()==null?m.indexOfRefraction():v.boundary().medium().indexOfRefraction());
@@ -156,18 +173,18 @@ final class RtxptMemoryResources {
             w.i(switch(m.motionVectorBlocking()){case OFF->0;case AUTO_LOW->1;case AUTO_HIGH->2;case FULL->3;});
             w.l(m.baseColorTextureId());w.l(m.normalTextureId());w.l(m.metallicRoughnessTextureId());w.l(m.emissiveTextureId());
             w.i(v.boundary()==null?0:1);if(v.boundary()!=null){var b=v.boundary();w.f(b.medium().absorption().red());w.f(b.medium().absorption().green());w.f(b.medium().absorption().blue());w.i(b.priority());}}
-        w.i(meshes.size());for(var g:meshes){w.s(RtxptScene.meshName(g.item));w.i(g.inheritedFrom==null?0:1);
+        w.i(meshes.size());for(var g:meshes){w.s(g.name);w.i(g.inheritedFrom==null?0:1);
             if(g.inheritedFrom!=null)w.s(g.inheritedFrom);
             else{w.floats(g.data.positions());w.floats(g.data.normals());w.floats(g.data.tangents());w.floats(g.data.uvs());
             // Triangle identity and winding are independent of surface grouping.
             // The finite-signal adapter consumes this order directly; the native
             // beauty importer builds its ordinary material groups from the map.
             w.ints(g.data.indices());}
-            w.i(g.groups.size());for(var group:g.groups){w.s(new RtxptScene.Variant(group.material(),g.item.boundary(),g.item.visibility()).name());w.i(group.corners().length/3);
+            w.i(g.groups.size());for(var group:g.groups){w.s(group.material());w.i(group.corners().length/3);
                 if(w.data==null)w.offset+=(long)group.corners().length/3*4;
                 else for(int i=0;i<group.corners().length;i+=3)w.i(group.corners()[i]/3);}}
         w.i(removals.size());for(var name:removals)w.s(name);
-        w.i(nodes.size());for(var node:nodes){w.s(node.name());w.s(RtxptScene.meshName(node));w.floats(node.transform().elements());}
+        w.i(nodes.size());for(var node:nodes){w.s(node.name());w.s(node.mesh());w.floats(node.transform());}
         w.i(coverage.size());for(var name:coverage)w.s(name);
         w.i(removedTextures.size());for(long id:removedTextures)w.l(id);
         w.i(removedMaterials.size());for(var name:removedMaterials)w.s(name);
@@ -178,7 +195,7 @@ final class RtxptMemoryResources {
         void i(int v){offset+=4;if(data!=null)data.putInt(v);}
         void l(long v){offset+=8;if(data!=null)data.putLong(v);}
         void f(float v){i(Float.floatToRawIntBits(v));}
-        void s(String value){byte[] bytes=value.getBytes(StandardCharsets.UTF_8);i(bytes.length);offset+=bytes.length;if(data!=null)data.put(bytes);}
+        void s(byte[] bytes){i(bytes.length);offset+=bytes.length;if(data!=null)data.put(bytes);}
         void bytes(ByteBuffer value){i(value.remaining());offset+=value.remaining();if(data!=null)data.put(value);}
         void floats(FloatBuffer value){i(value.remaining());offset+=(long)value.remaining()*4;if(data!=null){int bytes=value.remaining()*4;data.asFloatBuffer().put(value);data.position(data.position()+bytes);}}
         void ints(IntBuffer value){i(value.remaining());offset+=(long)value.remaining()*4;if(data!=null){int bytes=value.remaining()*4;data.asIntBuffer().put(value);data.position(data.position()+bytes);}}

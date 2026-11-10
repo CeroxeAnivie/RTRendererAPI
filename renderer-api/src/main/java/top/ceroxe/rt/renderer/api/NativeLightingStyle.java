@@ -21,13 +21,16 @@ import java.util.Objects;
  * {@link NativeLightingHostResponse}. Covered static sources replace the baked
  * local level; without static support the original level is preserved and raised
  * only by dynamic sources. The final response ratio receives visibility/fog
- * once. The legacy correction coefficients are not applied in that mode.</p>
+ * once. The legacy correction coefficients are not applied in that mode.
+ * HOST_RESPONSE_PARTIAL_SKY_V1 keeps those local-source rules, dims sky using
+ * daylight/moonlight coefficients and the remaining local baseline, and keeps
+ * an exactly zero host denominator neutral.</p>
  */
 public record NativeLightingStyle(AdditionMode additionMode,float localDimming,float localBoost,
         float daylightDimming,float moonlightDimming,float moonRed,float moonGreen,float moonBlue,
         float minimumGain,float maximumGain,float maximumGi) {
     public static final int ABI_VERSION=1;
-    public enum AdditionMode { DYNAMIC_ONLY_V1, CLASSIC_ALL_LOCAL_V1, HOST_RESPONSE_RATIO_V1 }
+    public enum AdditionMode { DYNAMIC_ONLY_V1, CLASSIC_ALL_LOCAL_V1, HOST_RESPONSE_RATIO_V1, HOST_RESPONSE_PARTIAL_SKY_V1 }
     public NativeLightingStyle {
         Objects.requireNonNull(additionMode,"additionMode");
         for(float v:new float[]{localDimming,localBoost,daylightDimming,moonlightDimming,moonRed,moonGreen,moonBlue,
@@ -46,8 +49,8 @@ public record NativeLightingStyle(AdditionMode additionMode,float localDimming,f
     /** CPU reference, one RGB channel. All values are linear numerical values in the declared host domain. */
     public float directGain(int channel,float baselineLocal,float baselineSky,float visibility,float fog,
             float local,float dynamic,float daylight,float sunVisibility,float moonlight,float moonVisibility) {
-        if(additionMode==AdditionMode.HOST_RESPONSE_RATIO_V1)
-            throw new IllegalStateException("HOST_RESPONSE_RATIO_V1 requires NativeLightingHostResponse.directGain");
+        if(additionMode==AdditionMode.HOST_RESPONSE_RATIO_V1||additionMode==AdditionMode.HOST_RESPONSE_PARTIAL_SKY_V1)
+            throw new IllegalStateException("Host-response modes require NativeLightingHostResponse");
         if(channel<0||channel>2)throw new IllegalArgumentException("RGB channel must be 0, 1 or 2");
         for(float v:new float[]{baselineLocal,baselineSky,visibility,fog,daylight,sunVisibility,moonlight,moonVisibility})
             if(!Float.isFinite(v)||v<0||v>1)throw new IllegalArgumentException("Baseline, visibility, fog and directional weights must be in [0,1]");

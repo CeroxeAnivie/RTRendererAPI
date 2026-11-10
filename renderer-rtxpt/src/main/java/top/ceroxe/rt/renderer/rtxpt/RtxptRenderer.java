@@ -45,6 +45,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private int lightingApplicationBytes,lightingReconstructionDivisor=1;
     private NativeLightingReconstruction lightingReconstruction=NativeLightingReconstruction.NONE;
     private NativeLightingPlan appliedLightingPlan;
+    private FramePrimitiveBatch appliedLightingPrimitives=FramePrimitiveBatch.empty();
     private NativeLightingReconstruction appliedReconstruction;
     private int appliedReconstructionDivisor;
 
@@ -89,6 +90,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             if(old==null||!old.vertexColorsRgba8().equals(mesh.vertexColorsRgba8()))pendingLightingColors.add(mesh.id());
         }
         if(tx.reset()){lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();lightingAttributeReset=true;}
+        for(var instance:tx.upserts().instances())pendingLightingInstances.add(instance.id());
         var removedInstances=tx.removals().instanceIds();while(removedInstances.hasRemaining()){long id=removedInstances.get();lightingInstances.remove(id);pendingLightingInstances.remove(id);}
         var removedMeshes=tx.removals().meshIds();while(removedMeshes.hasRemaining()){long id=removedMeshes.get();lightingBaselines.remove(id);pendingLightingBaselines.remove(id);pendingLightingColors.remove(id);}
 
@@ -109,7 +111,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         RtxptInputContract.validateFrame(frame,nativeLightingPlan!=null);
         if(frame.sequence()<=submitted||frame.minimumSceneRevision()>revision)throw new IllegalArgumentException("Frame sequence or resident revision mismatch");
         if(frame.width()>16384||frame.height()>16384)throw new IllegalArgumentException("Output extent exceeds the D3D12 limit");
-        if(nativeLightingPlan!=null&&nativeLightingPlan.style().additionMode()==NativeLightingStyle.AdditionMode.HOST_RESPONSE_RATIO_V1&&lightingHostResponse==null)
+        if(nativeLightingPlan!=null&&nativeLightingPlan.style().additionMode().ordinal()>=NativeLightingStyle.AdditionMode.HOST_RESPONSE_RATIO_V1.ordinal()&&lightingHostResponse==null)
             throw new IllegalStateException("Publish the host response before HOST_RESPONSE_RATIO_V1");
         // trySubmit already checked this renderer-thread admission. No other
         // frame can be submitted between that check and this call; lease
@@ -208,6 +210,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             throw new IllegalArgumentException("Analytic beauty and independent lighting signals are separate output modes");
         if(!externalPresentation||nativeScene!=null||options.reconstruction()!=Reconstruction.NONE||options.standaloneDenoiser()||options.restirDi()||options.restirGi()||options.sharc())throw new IllegalArgumentException("Native lighting requires an external finite-signal configuration");
         nativeLightingPlan=plan;
+        scene.nativeLighting=true;residentScene.nativeLighting=true;
     }
     @Override public void publishLightingAttributes(NativeLightingPublication publication){
         ready();Objects.requireNonNull(publication);lightingPublicationPlan();
@@ -286,16 +289,34 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         RtxptAttributeBatch.submit(handle,revision,batch);
         pendingGeometryVariants=List.of();
         applicationData.flushPatches(lightingAttributeGeneration,(generation,offset,bytes)->RtxptNative.nativeLightingApplicationPatch(handle,generation,offset,bytes));
-        if(reset||appliedLightingAttributeGeneration!=lightingAttributeGeneration){
-            var instanceIds=reset?lightingInstances.keySet():pendingLightingInstances;
-            var names=new ArrayList<String>();float[] packed=new float[Math.multiplyExact(instanceIds.size(),8)];int offset=0;
-            for(long id:instanceIds){if(!scene.instances.containsKey(id))continue;var value=lightingInstances.get(id);names.add("i"+id);
-                packed[offset++]=value.roles();packed[offset++]=value.visibility();packed[offset++]=value.fog();packed[offset++]=0;
-                packed[offset++]=value.localScale();packed[offset++]=value.skyScale();packed[offset++]=value.localBias();packed[offset++]=value.skyBias();}
+        var primitiveBatch=frame.primitiveBatch();
+        for(long mesh:pendingLightingBaselines)pendingLightingInstances.addAll(scene.instancesUsingMesh(mesh));
+        var primitiveRoleChanges=new ArrayList<Integer>();
+        if(reset||primitiveBatch!=appliedLightingPrimitives||!pendingLightingBaselines.isEmpty())for(int i=0;i<primitiveBatch.size();i++){
+            if(reset||i>=appliedLightingPrimitives.size()||pendingLightingBaselines.contains(primitiveBatch.primitives().get(i).meshAssetId())
+                    ||!RtxptLightingRoles.same(primitiveBatch.primitives().get(i),appliedLightingPrimitives.primitives().get(i)))
+                primitiveRoleChanges.add(i);
+        }
+        if(reset||appliedLightingAttributeGeneration!=lightingAttributeGeneration||!pendingLightingInstances.isEmpty()
+                ||!primitiveRoleChanges.isEmpty()){
+            var instanceIds=reset?scene.instances.keySet():pendingLightingInstances;
+            var names=new ArrayList<String>();float[] packed=new float[Math.multiplyExact(instanceIds.size()+primitiveRoleChanges.size(),20)];int offset=0;
+            for(long id:instanceIds){var instance=scene.instances.get(id);if(instance==null)continue;
+                var value=lightingInstances.get(id);if(value==null)value=RtxptLightingRoles.defaults(id,instance.packedLight(),instance.surfaceVisibility(),
+                    scene.meshes.get(instance.meshAssetId()),lightingBaselines.containsKey(instance.meshAssetId()));
+                names.add("i"+id);RtxptLightingRoles.pack(packed,offset,value,instance.visibilityMask(),instance.castsShadow());offset+=20;}
+            for(int i:primitiveRoleChanges){
+                var primitive=primitiveBatch.primitives().get(i);
+                names.add("p"+i);var value=RtxptLightingRoles.defaults(i,primitive.packedLight(),primitive.surfaceVisibility(),
+                    scene.meshes.get(primitive.meshAssetId()),lightingBaselines.containsKey(primitive.meshAssetId()));
+                RtxptLightingRoles.pack(packed,offset,value,primitive.visibilityMask(),primitive.castsShadow());
+                RtxptLightingRoles.packHistory(packed,offset,primitive);offset+=20;
+            }
             RtxptNative.nativeLightingAttributes(handle,lightingAttributeGeneration,names.toArray(String[]::new),offset==packed.length?packed:Arrays.copyOf(packed,offset),pendingBaselineLookup,applicationData.fullPublication());
             appliedLightingAttributeGeneration=lightingAttributeGeneration;
             applicationData.publicationApplied();
         }
+        appliedLightingPrimitives=primitiveBatch;
 
         pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingBaselineLookup=null;
         lightingAttributeReset=false;

@@ -18,12 +18,12 @@
 class RtrNativeLightingPass {
 public:
     static constexpr uint32_t AbiVersion=1;
-    struct alignas(16) Constants {std::array<float,80> words{};};
-    struct InstanceAttributes {float4 rolesVisibility={23,1,0,0};float4 baseline={1,1,0,0};};
+    struct alignas(16) Constants {std::array<float,88> words{};};
+    struct InstanceAttributes {float4 rolesVisibility={23,1,0,0};float4 baseline={1,1,0,0};std::array<float4,3> explicitPrevious{};};
     struct GeometryAttributes {uint32_t offset=0,triangles=0;std::array<uint32_t,4> texturePolicies{};float maskedOpacity=1.f;};
     struct VertexAttributes {float2 baseline={0,0};uint32_t color=0xffffffff,reserved=0;};
     static_assert(sizeof(VertexAttributes)==16);
-    static_assert(sizeof(Constants)==320&&sizeof(InstanceAttributes)==32&&sizeof(GeometryAttributes)==28);
+    static_assert(sizeof(Constants)==352&&sizeof(InstanceAttributes)==80&&sizeof(GeometryAttributes)==28);
     std::function<std::array<uint32_t,4>(const std::string&)> texturePolicies;
     std::function<const std::vector<uint32_t>*(const std::string&)> surfaceSlots;
     std::function<void(std::vector<rtr::upstream::SurfaceMaterialRow>&,std::vector<uint32_t>&)> surfaceUpdates;
@@ -358,7 +358,7 @@ public:
         }
     }
     void Configure(const std::vector<float>& parameters){
-        if(parameters.size()!=80)throw std::invalid_argument("Native-lighting ABI v1 requires 80 parameter words");
+        if(parameters.size()!=80&&parameters.size()!=88)throw std::invalid_argument("Native-lighting parameters require 80 legacy or 88 extended words");
         for(auto v:parameters)if(!std::isfinite(v))throw std::invalid_argument("Non-finite native-lighting parameter");
         auto integer=[&](size_t i,uint32_t minimum,uint32_t maximum){float value=parameters[i];
             if(value<float(minimum)||value>float(maximum)||float(uint32_t(value))!=value)throw std::invalid_argument("Invalid native-lighting integer parameter");return uint32_t(value);};
@@ -891,6 +891,7 @@ public:
             &&retainedAnalyticGeneration==analyticGeneration
             &&retainedSourceGeneration==sources.work[1]&&retainedMetadata==metadataUploads
             &&std::memcmp(constants.words.data(),retainedConstants.words.data(),72*sizeof(float))==0
+            &&std::memcmp(constants.words.data()+80,retainedConstants.words.data()+80,8*sizeof(float))==0
             &&(words[75]&~16u)==(reinterpret_cast<const uint32_t*>(retainedConstants.words.data())[75]&~16u);
         if(reuse){
             RtrGpuProfile::End(command,uploadScope);

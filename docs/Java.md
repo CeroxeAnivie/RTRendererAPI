@@ -36,6 +36,14 @@ Renderer 只聚合生命周期与场景／帧提交，不再聚合 CPU FrameAcce
 
 NativeLighting／Sparse 是外部桥接能力。应用按公开输入提供宿主亮度响应，并负责自身画风与最终合成。
 
+有限光照模式支持实例及帧临时几何的 visibilityMask：低三位依次表示接收表面、投影遮挡、间接反弹，255 表示全部参与；castsShadow=false 只去掉遮挡角色。原生角色与显式发布的 NativeLightingPublication.Instance.roles 取交集，显式 roles=0 可以保留驻留资源而暂停参与。普通 beauty 模式仍拒绝自定义角色，避免把这些语义静默忽略。
+
+有限光照的基线坐标优先使用显式 MeshBaseline，其次使用 MeshAsset.lightmapCoordinates；两者均未提供时，实例的 packedLight 两个无符号 16 位坐标分别除以 240。显式 Instance 基线变换优先于自动回退。临时几何遵循同一规则，光照坐标变化只更新属性。PrimitiveInstance.previousTransform 直接参与有限光照 RR 的物体运动计算，默认值等于当前 transform；列表位置复用、新增或重新加入的几何不会自动借用同位置的旧姿态。该自有属性行目前由 32 字节扩展为 80 字节以携带矩阵，容量与变化行上传代价相应增加。
+
+NativeLightingPlan 默认的 DIRECT_GAIN alpha 仍是表面透明度。宿主只有在提供专用覆盖率 mip 链时才选择 RECONSTRUCTION_COVERAGE_V1：所有多 mip 的 masked 纹理各层 R 存对应材质 cutoff 的覆盖率，G 存二值 alpha 有效性，B 存布局有效标志，mip 0 的 A 保留原 alpha。G/B 都为 1 时才允许面积积分，普通颜色 mip 链不能启用该模式；单 mip、复杂轮廓或多层半覆盖会回退真实相关射线。输出 alpha 的字节值 255／64／0／128 分别表示普通、已积分、未解决和不可复用的动态覆盖，宿主按这个契约重建，不能再把它当透明度。GI 不改变直接光覆盖标记。
+
+HOST_RESPONSE_PARTIAL_SKY_V1 使用与 HOST_RESPONSE_RATIO_V1 相同的静态支持范围和动态光源规则，同时按昼夜遮挡系数及剩余局部基线降低天空响应。新模式在宿主响应分母为零时保持增益 1；旧 RATIO_V1 的零到正值仍采用 maximumGain。两种模式都必须发布 16×16 RGB 宿主响应表。有限光照还支持帧内 DistanceFogState：球形距离与水平柱形距离取较大雾权重，再与实例 fog 取最大值；可见度与雾只对修正和 GI 各应用一次，雾颜色由宿主最终合成负责。
+
 ## 真实配置与原生控制
 
 RendererConfig 仅包含 frameReconstruction、frameGeneration、lowLatency、denoising、rayTracingOptimizations、pathTracing 六类 feature 与 resources。resources 的 geometryBytes／textureBytes／totalAssetBytes 是保留资产的字节准入限制，不是 VRAM 驻留预算或内存遥测。

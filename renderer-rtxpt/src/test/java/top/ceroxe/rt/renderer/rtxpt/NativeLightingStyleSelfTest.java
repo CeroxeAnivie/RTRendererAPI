@@ -68,6 +68,25 @@ public final class NativeLightingStyleSelfTest {
         var black=new NativeLightingHostResponse(new float[768]);near(black.directGain(style,0,0,0,1,0,0,0,false,0,1),1);
         float[] zeroBase=new float[768];zeroBase[45]=1;var zero=new NativeLightingHostResponse(zeroBase);
         near(zero.directGain(style,0,0,0,1,0,1,1,false,0,1),255);
+        var partial=style.withAdditionMode(NativeLightingStyle.AdditionMode.HOST_RESPONSE_PARTIAL_SKY_V1);
+        near(zero.directGainPartialSky(partial,0,0,0,1,0,1,1,false,1,0,1,0),1);
+        near(black.directGainPartialSky(partial,0,0,0,1,0,0,0,false,1,0,1,0),1);
+        for(int c=0;c<3;c++) {
+            float moonColor=c==0?.8f:c==1?.9f:1;
+            float blocked=(1-.25f)*(.55f*.7f*(1-.2f)+.18f*.3f*moonColor*(1-.4f));
+            float expected=response.sample(c,.25f,.8f*(1-blocked))/response.sample(c,.25f,.8f);
+            near(response.directGainPartialSky(partial,c,.25f,.8f,1,0,0,0,false,.7f,.2f,.3f,.4f),expected);
+            near(response.directGainPartialSky(partial,c,.25f,.8f,.5f,.25f,0,0,false,.7f,.2f,.3f,.4f),1+(expected-1)*.375f);
+            near(response.directGainPartialSky(partial,c,1,.8f,1,0,0,0,false,1,0,1,0),1);
+            require(response.directGainPartialSky(partial,c,.5f,.4f,1,0,0,0,true,0,1,0,1)<1,
+                "Partial-sky mode retains covered static-source shadowing");
+            float held=response.directGainPartialSky(partial,c,0,.6f,1,0,.5f,.5f,false,0,1,0,1);
+            float placed=response.directGainPartialSky(partial,c,.5f,.6f,1,0,.5f,0,true,0,1,0,1);
+            near(response.sample(c,0,.6f)*held,response.sample(c,.5f,.6f)*placed);
+        }
+        boolean rejected=false;
+        try {partial.directGain(0,0,0,1,0,0,0,0,1,0,1);}catch(IllegalStateException expected){rejected=true;}
+        require(rejected,"Partial-sky mode requires a published host response");
         System.out.println("HOST_RESPONSE_CPU PASS equality=768 missingStatic=true coveredShadow=true fog=true neutral=128 maxGain=255 zeroFinite=true");
     }
 }
