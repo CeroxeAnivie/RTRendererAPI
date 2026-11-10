@@ -858,16 +858,16 @@ private:
     void RefreshDeformedDirectStructures(Resources::Changes& changed,nvrhi::ICommandList* commands){
         if(!lighting.active||m_ommBaker||!commands)
             throw std::logic_error("Stable geometry updates require the native direct command list");
-        auto rebuild=[&](const std::shared_ptr<donut::engine::MeshInfo>& mesh,bool immutableTopology) {
+        auto rebuild=[&](const std::shared_ptr<donut::engine::MeshInfo>& mesh) {
             auto description=bvh::GetMeshBlasDesc(
                 bvh::Config{.excludeTransmissive=m_ui.AS.ExcludeTransmissive},*mesh,nullptr,false);
             description.buildFlags=description.buildFlags&~nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
             auto structure=mesh->accelStruct;
-            // Only an ordinary, uncompressed NVRHI allocation of the same
-            // immutable topology can be rebuilt in place. Pooled handles are
-            // address-only and must never be passed into NVRHI build methods.
-            bool reusable=immutableTopology&&structure&&!m_lastFrameAsyncPrefix&&!bvh::PooledAccelStruct::IsPooled(structure)
-                &&!structure->isCompacted()&&structure->getDesc().buildFlags==description.buildFlags;
+            // Ordinary native storage can hold a complete smaller build even
+            // when authored counts/index ranges change. Capacity is checked per
+            // original geometry; this never requests an update/refit with changed
+            // topology. Pooled/compacted handles remain excluded.
+            bool reusable=!m_lastFrameAsyncPrefix&&BlasStorage::CanRebuild(structure,description);
             // An earlier complete frame can have a compute prefix in flight.
             // Give that case a new BLAS and retire its predecessor with both
             // native queues instead of assuming a completed CPU future fences it.
@@ -893,10 +893,10 @@ private:
             // just as in UpdateSkinnedBLASs, explicitly order the preceding build.
             commands->setAccelStructState(structure,nvrhi::ResourceStates::AccelStructBuildBlas);
         };
-        for(const auto& mesh:changed.deformedMeshes)rebuild(mesh,true);
-        // A changed index/range/count can require a larger native allocation.
-        // Preserve graph identities, never reuse an AS sized for old geometry.
-        for(const auto& mesh:changed.reshapedMeshes)rebuild(mesh,false);
+        for(const auto& mesh:changed.deformedMeshes)rebuild(mesh);
+        // Growth beyond the original allocation still selects a fitting retired
+        // native handle or creates one through the original device factory.
+        for(const auto& mesh:changed.reshapedMeshes)rebuild(mesh);
         commands->commitBarriers();
         // Bounds changed even when BLAS addresses did not. Reuse the original
         // table refresh/UpdateTLAS, not CreateTlas's new TLAS and sub-instance pair.

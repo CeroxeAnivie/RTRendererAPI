@@ -26,28 +26,43 @@ class BlasStorage {
             const auto& t=g.geometryData.triangles;
             if(t.opacityMicromap||t.ommIndexBuffer||t.ommIndexBufferOffset
                 ||t.ommIndexFormat!=nvrhi::Format::UNKNOWN||t.pOmmUsageCounts||t.numOmmUsageCounts)return false;
-            add(uint64_t(g.flags));add(g.useTransform);add(uint64_t(t.indexFormat));add(t.indexCount);
-            add(uint64_t(t.vertexFormat));add(t.vertexCount);add(t.vertexStride);
+            add(uint64_t(g.flags));add(g.useTransform);add(uint64_t(t.indexFormat));
+            add(uint64_t(t.vertexFormat));add(t.vertexStride);
         }return true;
     }
-    static bool Same(const nvrhi::rt::AccelStructDesc& a,const nvrhi::rt::AccelStructDesc& b){
+    static bool Fits(const nvrhi::rt::AccelStructDesc& a,const nvrhi::rt::AccelStructDesc& b){
         if(a.buildFlags!=b.buildFlags||a.bottomLevelGeometries.size()!=b.bottomLevelGeometries.size())return false;
         for(size_t i=0;i<a.bottomLevelGeometries.size();++i){
             const auto& x=a.bottomLevelGeometries[i];const auto& y=b.bottomLevelGeometries[i];
             const auto& u=x.geometryData.triangles;const auto& v=y.geometryData.triangles;
             if(x.geometryType!=y.geometryType||x.flags!=y.flags||x.useTransform!=y.useTransform
-                ||u.indexFormat!=v.indexFormat||u.indexCount!=v.indexCount||u.vertexFormat!=v.vertexFormat
-                ||u.vertexCount!=v.vertexCount||u.vertexStride!=v.vertexStride)return false;
+                ||u.indexFormat!=v.indexFormat||u.indexCount<v.indexCount||u.vertexFormat!=v.vertexFormat
+                ||u.vertexCount<v.vertexCount||u.vertexStride!=v.vertexStride)return false;
         }return true;
     }
 public:
     struct Result {nvrhi::rt::AccelStructHandle structure;bool reused=false;};
+    static bool CanRebuild(nvrhi::rt::IAccelStruct* structure,const nvrhi::rt::AccelStructDesc& desc){
+        if(!structure||bvh::PooledAccelStruct::IsPooled(structure)||structure->isCompacted())return false;
+        uint64_t capacityShape=0,inputShape=0;
+        return Shape(structure->getDesc(),capacityShape)&&Shape(desc,inputShape)
+            &&capacityShape==inputShape&&Fits(structure->getDesc(),desc);
+    }
     Result Create(nvrhi::IDevice* device,nvrhi::ICommandList*,const nvrhi::rt::AccelStructDesc& desc){
         uint64_t hash=0;
         if(Shape(desc,hash)){
             auto [first,last]=m_ready.equal_range(hash);
-            for(auto i=first;i!=last;++i)if(Same(i->second.structure->getDesc(),desc)){
-                Result result{std::move(i->second.structure),true};m_bytes-=i->second.bytes;m_ready.erase(i);return result;
+            auto best=last;
+            for(auto i=first;i!=last;++i)if(Fits(i->second.structure->getDesc(),desc)
+                &&(best==last||i->second.bytes<best->second.bytes))best=i;
+            if(best!=last){
+                // Allocation inputs bound native storage capacity. This is a
+                // complete rebuild with the caller's actual geometry, never an
+                // update/refit with changed primitive counts. Keep each original
+                // geometry's type, flags and formats and stay within both of its
+                // count limits; no larger allocation or native descriptor packing
+                // is invented here. Native build/scratch validation stays enabled.
+                Result result{std::move(best->second.structure),true};m_bytes-=best->second.bytes;m_ready.erase(best);return result;
             }
         }
         RtrDiagnostics::Scope allocate(RtrDiagnostics::BlasAllocate,1);
