@@ -196,8 +196,87 @@ public final class RtxptMeshInputLifetimeNativeSelfTest {
             var explicitRelease=monitor.poll();exactRetention(handle,0,0);pixels(handle,output,18,Float.NaN);
             require(uploadObjects(explicitRelease)==0&&blasBuilds(explicitRelease)==0,"Explicit dormant definition release created geometry work");
             row(rows,18,"explicit-final-dormant-definition-release",explicitRelease,handle);
+
+            // One public mesh, three semantic native variants: only the first
+            // packet entry owns canonical bytes; later entries share that owner.
+            renderer.apply(SceneTransaction.builder(19).upsert(MaterialAsset.builder(1).doubleSided(true).build())
+                    .upsert(quad(30,0,.35f))
+                    .upsert(SceneInstance.builder(301,30).surfaceVisibility(.25f).build())
+                    .upsert(SceneInstance.builder(302,30).surfaceVisibility(.5f).build())
+                    .upsert(SceneInstance.builder(303,30).surfaceVisibility(.75f).build()).build());
+            render(renderer,access,lighting,19,301,302,303);var variantAdmission=monitor.poll();
+            exactRetention(handle,meshInputBytes,1);pixels(handle,output,19,.35f);
+            require(blasBuilds(variantAdmission)==3,"Semantic variants lost their actual native geometry builds");
+            row(rows,19,"packet-local-variants-share-canonical-owner",variantAdmission,handle);
+            renderer.apply(SceneTransaction.builder(20).build());render(renderer,access,lighting,20,301,302,303);
+            var variantIdle=monitor.poll();exactRetention(handle,meshInputBytes,1);pixels(handle,output,20,.35f);
+            require(uploadObjects(variantIdle)==0&&blasBuilds(variantIdle)==0,"Unchanged aliases replayed geometry work");
+            var tlas=variantIdle.events().stream().filter(event->event.stage().equals("TlasBuild")).toList();
+            require(tlas.size()==1&&tlas.getFirst().items()==0&&(tlas.getFirst().flags()&4)!=0,
+                    "Packet-local input sharing changed idle native TLAS reuse");
+            row(rows,20,"packet-local-variants-idle-tlas-reuse",variantIdle,handle);
+            long[] variantIds={301,302,303};var variantResources=new double[variantIds.length][];
+            for(int i=0;i<variantIds.length;i++)variantResources[i]=RtxptNative.meshResourceState(handle,"i"+variantIds[i]);
+            renderer.apply(SceneTransaction.builder(21).upsert(quad(30,0,-.35f)).build());
+            render(renderer,access,lighting,21,301,302,303);var variantEdit=monitor.poll();
+            exactRetention(handle,meshInputBytes,1);pixels(handle,output,21,-.35f);
+            require(blasBuilds(variantEdit)==0&&uploadObjects(variantEdit)==2&&uploadBytes(variantEdit)==3*singleBytes,
+                    "Shared normal edit must upload all variants in one batch without rebuilding geometry");
+            for(int i=0;i<variantIds.length;i++){
+                var current=RtxptNative.meshResourceState(handle,"i"+variantIds[i]);
+                require(current[0]==variantResources[i][0]&&current[1]!=variantResources[i][1],
+                        "A shared normal edit failed to replace one variant input or rebuilt its BLAS");
+            }
+            row(rows,21,"packet-local-variants-edit-current-generation",variantEdit,handle);
+            renderer.apply(SceneTransaction.builder(22).removeInstances(301,302,303).removeMesh(30).removeMaterial(1).build());
+            render(renderer,access,lighting,22);var variantsReleased=monitor.poll();
+            exactRetention(handle,0,0);pixels(handle,output,22,Float.NaN);
+            row(rows,22,"packet-local-variants-final-owner-release",variantsReleased,handle);
         } finally {Files.write(output.resolve("mesh-input-lifetime-cases.csv"),rows,StandardCharsets.UTF_8);}
-        System.out.println("MESH_INPUT_LIFETIME_NATIVE PASS samePacketLiveOnlyUpload=true exactCanonicalOwnership=true finalAttributesABA=true finalPositionsABA=true blasIdentity=true noPendingReplay=true deleteRelease=true resetRelease=true actualPeak=true freshPixels=true dormantRetains=true noDeadTrace=true dormantEdits=true dormantTextureReferences=true explicitDormantRelease=true");
+        rejectForwardInput(plan);
+        System.out.println("MESH_INPUT_LIFETIME_NATIVE PASS samePacketLiveOnlyUpload=true exactCanonicalOwnership=true finalAttributesABA=true finalPositionsABA=true blasIdentity=true noPendingReplay=true deleteRelease=true resetRelease=true actualPeak=true freshPixels=true dormantRetains=true noDeadTrace=true dormantEdits=true dormantTextureReferences=true explicitDormantRelease=true packetLocalCanonicalOnce=true variantEditPixels=true idleVariantTlasReuse=true");
+    }
+    private static void rejectForwardInput(NativeLightingPlan plan)throws Exception {
+        try(var packets=new RtxptMemoryResources.PacketPool();
+            var renderer=RtxptRenderers.openNativeLighting(RtxptRenderers.nativeLightingConfiguration(),plan)){
+            var access=renderer.extension(RtxptAccess.class).orElseThrow();
+            var lighting=renderer.extension(NativeLightingControl.class).orElseThrow();
+            lighting.lightingReconstruction(NativeLightingReconstruction.NONE);
+            renderer.apply(SceneTransaction.builder(1).resetScene().upsert(MaterialAsset.builder(1).doubleSided(true).build())
+                    .upsert(quad(99,0,.2f)).upsert(SceneInstance.builder(991,99).build()).build());
+            render(renderer,access,lighting,1,991);
+            var field=RtxptRenderer.class.getDeclaredField("handle");field.setAccessible(true);
+            long handle=field.getLong(renderer);
+            var empty=new RtxptScene();var scene=new RtxptScene();
+            scene.retain(SceneTransaction.builder(2).upsert(MaterialAsset.builder(1).doubleSided(true).build())
+                    .upsert(quad(44,0,.2f)).upsert(SceneInstance.builder(441,44).surfaceVisibility(.5f).build())
+                    .upsert(SceneInstance.builder(442,44).surfaceVisibility(.75f).build()).build());
+            var request=RenderFrameRequest.builder(2,SIZE,SIZE,CAMERA).build();
+            var original=RtxptDelta.prepare(empty,scene,empty.items(request),scene.items(request),Map.of(),packets).memory();
+            var scan=original.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+            require(scan.getInt()==RtxptMemoryResources.PROTOCOL&&scan.getInt()==0,"Forward-source fixture must use the current texture-free protocol");
+            for(int materials=scan.getInt();materials>0;--materials){skipName(scan);scan.position(scan.position()+92);if(scan.getInt()!=0)scan.position(scan.position()+16);}
+            require(scan.getInt()==2,"Forward-source fixture requires two semantic variants");
+            int first=scan.position();require(skipGeometry(scan)==0,"First valid packet entry must own its input");
+            int second=scan.position();require(skipGeometry(scan)==1,"Second valid packet entry must inherit the first");int end=scan.position();
+            var invalid=ByteBuffer.allocateDirect(original.remaining()).order(ByteOrder.LITTLE_ENDIAN);
+            invalid.put(original.slice(0,first)).put(original.slice(second,end-second))
+                    .put(original.slice(first,second-first)).put(original.slice(end,original.remaining()-end)).flip();
+            RtxptNative.resourcesMemory(handle,2,invalid);renderer.apply(SceneTransaction.builder(2).build());
+            boolean rejected=false;
+            try{render(renderer,access,lighting,2,991);}
+            catch(IllegalStateException expected){rejected=String.valueOf(expected.getMessage()).contains("Inherited geometry input is neither preceding nor resident");}
+            require(rejected,"Future packet geometry input was accepted or its exact error was hidden");
+        }
+        System.out.println("MESH_INPUT_ORDER_NATIVE PASS futureSourceRejected=true realPacketReordered=true");
+    }
+    private static void skipName(ByteBuffer packet){int length=packet.getInt();packet.position(packet.position()+length);}
+    private static int skipGeometry(ByteBuffer packet){
+        skipName(packet);int inherited=packet.getInt();
+        if(inherited==1)skipName(packet);
+        else for(int channel=0;channel<5;channel++){int words=packet.getInt();packet.position(packet.position()+Math.multiplyExact(words,4));}
+        for(int groups=packet.getInt();groups>0;--groups){skipName(packet);int triangles=packet.getInt();packet.position(packet.position()+Math.multiplyExact(triangles,4));}
+        return inherited;
     }
 
     private static Queued queue(long handle,RtxptScene previous,SceneTransaction transaction,RtxptMemoryResources.PacketPool packets) {

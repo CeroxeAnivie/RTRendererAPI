@@ -9,7 +9,7 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** JNI copies the borrowed packet before return; its queued native owner is independent. */
 final class RtxptMemoryResources {
-    static final int PROTOCOL=0x5244525a; // Explicit mesh-definition lifetime; legacy 0x52445259 remains readable.
+    static final int PROTOCOL=0x5244525b; // Ordered packet input inheritance; 0x52445259/5a remain readable.
     static final class PacketPool implements AutoCloseable {
         private Arena arena;
         private ByteBuffer buffer;
@@ -72,6 +72,7 @@ final class RtxptMemoryResources {
     private record GroupTransfer(byte[] material,int[] corners) { }
     private record Geometry(byte[] name,RtxptScene.ExportGeometry data,
                             List<GroupTransfer> groups,byte[] inheritedFrom) { }
+    private record InputSource(String name,MeshAsset mesh) { }
     private static byte[] name(String value){return value.getBytes(StandardCharsets.UTF_8);}
     private record Channel(Object heap,long address,long bytes) {
         private static final Channel EMPTY=new Channel(null,0,0);
@@ -130,28 +131,36 @@ final class RtxptMemoryResources {
         for(var variant:materials)materialTransfers.add(new MaterialTransfer(name(variant.name()),variant,scene.materials.get(variant.material())));
         var nodeTransfers=new ArrayList<NodeTransfer>(nodes.size());
         for(var node:nodes)nodeTransfers.add(new NodeTransfer(name(node.name()),name(RtxptScene.meshName(node)),node.transform().elements()));
-        var byStorage=new HashMap<Channels,RtxptScene.Item>();
-        var byName=new HashMap<String,RtxptScene.Item>();
-        var byPose=new HashMap<AffineTransform,RtxptScene.Item>();
+        var byStorage=new HashMap<Channels,InputSource>();
+        var byName=new HashMap<String,InputSource>();
+        var byPose=new HashMap<AffineTransform,InputSource>();
         for(var source:inheritedCandidates){
-            byStorage.putIfAbsent(Channels.of(old.meshes.get(source.mesh())),source);
-            byName.putIfAbsent(RtxptScene.meshName(source),source);byPose.putIfAbsent(source.transform(),source);
+            var input=new InputSource(RtxptScene.meshName(source),old.meshes.get(source.mesh()));
+            byStorage.putIfAbsent(Channels.of(input.mesh()),input);
+            byName.putIfAbsent(input.name(),input);byPose.putIfAbsent(source.transform(),input);
         }
         var geometry=new ArrayList<Geometry>();
+        var writtenInputs=new HashMap<String,MeshAsset>();
         for(var item:meshes){
             var mesh=scene.meshes.get(item.mesh());String inheritedFrom=null;
-            var source=byStorage.get(Channels.of(mesh));
+            var channels=Channels.of(mesh);
+            var source=byStorage.get(channels);
             if(source==null)source=byName.get(RtxptScene.meshName(item));
             if(source==null)source=byPose.get(item.transform());
             // Storage is only a lookup key. Exact equality still decides what
             // can be inherited, including callers using independent buffers.
-            if(source!=null&&RtxptDelta.sameInputChannels(old.meshes.get(source.mesh()),mesh))
-                inheritedFrom=RtxptScene.meshName(source);
+            // A prior packet entry shadows the resident name in the new wire.
+            // Compare that actual generation, never the stale resident lookup.
+            if(source!=null&&RtxptDelta.sameInputChannels(writtenInputs.getOrDefault(source.name(),source.mesh()),mesh))
+                inheritedFrom=source.name();
             var groups=new ArrayList<GroupTransfer>();
             for(var group:scene.attributeGroups(mesh))groups.add(new GroupTransfer(
                     name(new RtxptScene.Variant(group.material(),item.boundary(),item.visibility()).name()),group.corners()));
             geometry.add(new Geometry(name(RtxptScene.meshName(item)),inheritedFrom==null?RtxptScene.ExportGeometry.from(mesh):null,
                     groups,inheritedFrom==null?null:name(inheritedFrom)));
+            var written=new InputSource(RtxptScene.meshName(item),mesh);
+            writtenInputs.put(written.name(),mesh);
+            byStorage.put(channels,written);byName.put(written.name(),written);
         }
         var removedTextures=new ArrayList<Long>();scene.textures.forEachChanged(old.textures,(id,value)->{if(value==null)removedTextures.add(id);});
         var removedNames=removals.stream().map(RtxptMemoryResources::name).toList();

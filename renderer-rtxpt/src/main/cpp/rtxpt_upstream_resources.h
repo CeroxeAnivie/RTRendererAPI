@@ -184,6 +184,14 @@ public:
         const auto root=GetSceneGraph()->GetRootNode();
         const bool rootTransformPending=root&&(root->GetDirtyFlags()&donut::engine::SceneGraphNode::DirtyFlags::LocalTransform)!=0;
         {RtrDiagnostics::Scope graphScope(RtrDiagnostics::SceneGraphRefresh);RefreshSceneGraph(frameIndex);}
+        // A light-only initial graph has no native table rows. Donut does not
+        // allocate zero-sized tables, so its full structure upload would pass
+        // null buffers to writeBuffer. Publish the empty journals directly;
+        // the first real mesh still takes the ordinary native allocation path.
+        const auto graph=GetSceneGraph();
+        if(graph->GetGeometryCount()==0&&graph->GetMaterials().empty()&&graph->GetMeshInstances().empty()) {
+            RememberNativeRows();m_preparedFrameIndex=frameIndex;m_preparedFrameValid=finalFramePreparation;return;
+        }
         // Native RefreshBuffers remains the CPU-array allocation authority. Its
         // factories allocate matching native CPU/GPU capacities in 1024 rows.
         // Reuse only proven existing capacity; never mirror/resize Resources.
@@ -480,6 +488,22 @@ private:
         using Buffers=donut::engine::BufferGroup;
         constexpr size_t byteBudget=1024*1024,maxMeshes=32;
         struct Segment {Mesh* mesh;std::shared_ptr<const AuthoredMeshInputs> inputs;};
+        // Group only this call's pending input. An interleaved optional channel
+        // must not flush an otherwise compatible immutable upload generation.
+        // Layout has exactly the normal/tangent/UV bits; graph order is untouched.
+        std::array<std::vector<Segment>,8> layouts;
+        std::unordered_set<Mesh*> selected;
+        for(const auto& mesh:meshes){
+            const auto input=PendingMeshInputs(*mesh);if(!input||!selected.insert(mesh.get()).second)continue;
+            const auto& b=mesh->buffers;
+            if(!b||b->indexBuffer||b->vertexBuffer||mesh->type!=donut::engine::MeshType::Triangles
+                ||mesh->isSkinPrototype||mesh->skinPrototype.use_count()
+                ||!b->positionData.empty()||!b->indexData.empty())
+                throw std::logic_error("Pending authored mesh must have empty native upload channels");
+            const auto layout=input->Layout();
+            if(layout>=layouts.size())throw std::logic_error("Unknown authored mesh input layout");
+            layouts[layout].push_back({mesh.get(),input});
+        }
         std::vector<Segment> batch;batch.reserve(maxMeshes);
         size_t bytes=0,vertices=0,indices=0;uint32_t layout=0;
         auto flush=[&](){
@@ -512,23 +536,19 @@ private:
             }
             batch.clear();bytes=vertices=indices=0;
         };
-        for(const auto& mesh:meshes) {
-            const auto input=PendingMeshInputs(*mesh);if(!input)continue;
-            const auto& b=mesh->buffers;
-            if(!b||b->indexBuffer||b->vertexBuffer||mesh->type!=donut::engine::MeshType::Triangles
-                ||mesh->isSkinPrototype||mesh->skinPrototype.use_count()
-                ||!b->positionData.empty()||!b->indexData.empty())
-                throw std::logic_error("Pending authored mesh must have empty native upload channels");
-            if(std::any_of(batch.begin(),batch.end(),[&](const auto& segment){return segment.mesh==mesh.get();}))continue;
-            const uint32_t mask=input->Layout();const auto sizes=input->AttributeSizes();
-            const size_t size=size_t(mesh->totalIndices)*sizeof(uint32_t)+sizes[0]+sizes[1]+sizes[2]+sizes[3];
-            if(!batch.empty()&&(layout!=mask||batch.size()>=maxMeshes||bytes+size>byteBudget))flush();
-            layout=mask;batch.push_back({mesh.get(),input});bytes+=size;vertices+=mesh->totalVertices;indices+=mesh->totalIndices;
-            // A single oversized authored mesh stays intact, as in the original
-            // importer; it is never coalesced with a neighbour or quality-reduced.
-            if(size>byteBudget)flush();
+        for(uint32_t mask=0;mask<layouts.size();++mask){
+            layout=mask;
+            for(const auto& segment:layouts[mask]){
+                const auto* mesh=segment.mesh;const auto sizes=segment.inputs->AttributeSizes();
+                const size_t size=size_t(mesh->totalIndices)*sizeof(uint32_t)+sizes[0]+sizes[1]+sizes[2]+sizes[3];
+                if(!batch.empty()&&(batch.size()>=maxMeshes||bytes+size>byteBudget))flush();
+                batch.push_back(segment);bytes+=size;vertices+=mesh->totalVertices;indices+=mesh->totalIndices;
+                // A single oversized authored mesh stays intact, as in the original
+                // importer; it is never coalesced with a neighbour or quality-reduced.
+                if(size>byteBudget)flush();
+            }
+            flush();
         }
-        flush();
     }
     // Original RefreshBuffers owns CPU capacities, dense indices and uploads.
     // Its factories run only after the corresponding public graph count has
@@ -994,8 +1014,12 @@ public:
         if(structural&&beforeStructural)beforeStructural(!requiresMaterialLifecycle&&!changes.requiresCoverageRebuild);
         // A lifecycle boundary may finalize an earlier packet using the same
         // retained native list. Acquire this packet's version only afterward.
-        auto* commands=structural?acquireCommands():nullptr;
-        if(structural&&!commands)throw std::runtime_error("Resource command-list acquisition failed");
+        nvrhi::ICommandList* commands=nullptr;
+        const auto gpuCommands=[&](){
+            if(!commands)commands=acquireCommands();
+            if(!commands)throw std::runtime_error("Resource command-list acquisition failed");
+            return commands;
+        };
         if(changes.materials||changes.textures)dynamic_cast<ManagedScene&>(scene).MarkMaterialRowsDirty();
         RebindContainers(packet,containerReuses,changes,dynamic_cast<ManagedScene&>(scene));
 
@@ -1008,7 +1032,7 @@ public:
                 texture.loaded=previous->loaded;
                 ++m_textureWork[previous->SameLayout(texture)?5:6];
             } else
-                texture.loaded=UploadTexture(id,texture,previous,commands);
+                texture.loaded=UploadTexture(id,texture,previous,gpuCommands());
         }
 
         auto findTexture = [&](int64_t id) -> std::shared_ptr<donut::engine::LoadedTexture> {
@@ -1312,10 +1336,10 @@ public:
                     if(deferTopologyRefresh&&!requiresMaterialLifecycle&&!changes.requiresCoverageRebuild
                         &&graph->GetSkinnedMeshInstances().empty()){
                         changes.pendingTopologyRefresh=true;changes.pendingUploadMeshes=std::move(pending);
-                    }else dynamic_cast<ManagedScene&>(scene).RefreshTopology(commands,frameIndex,pending);
+                    }else dynamic_cast<ManagedScene&>(scene).RefreshTopology(gpuCommands(),frameIndex,pending);
                 } else {
                     dynamic_cast<ManagedScene&>(scene).PrepareMeshInputs(pending);
-                    RtrDiagnostics::Scope refreshScope(RtrDiagnostics::SceneFullRefresh);scene.Refresh(commands,frameIndex);
+                    RtrDiagnostics::Scope refreshScope(RtrDiagnostics::SceneFullRefresh);scene.Refresh(gpuCommands(),frameIndex);
                 }
                 }
         // A texture/material refresh need not have a structural dirty flag, so the original
@@ -1329,7 +1353,7 @@ public:
                 // topology: later packets can replace or remove these inputs.
                 changes.pendingTopologyRefresh=true;changes.pendingUploadMeshes=std::move(attributeUpdates);
             }else {RtrDiagnostics::Scope attributeScope(RtrDiagnostics::AttributePreparation,attributeUpdates.size());
-                dynamic_cast<ManagedScene&>(scene).RefreshAttributes(commands,attributeUpdates);}
+                dynamic_cast<ManagedScene&>(scene).RefreshAttributes(gpuCommands(),attributeUpdates);}
         }
         return changes;
     }
@@ -1716,10 +1740,11 @@ private:
     Packet Decode(const void* bytes, size_t size) {
         RtrResourceReader reader(bytes, size);
         const auto protocol=reader.value<uint32_t>();
-        if (protocol != 0x52445259&&protocol != 0x5244525a)
+        if (protocol != 0x52445259&&protocol != 0x5244525a&&protocol != 0x5244525b)
             throw std::invalid_argument("Unknown resource transport");
         Packet packet;
-        packet.retainedDefinitions=protocol==0x5244525a;
+        packet.retainedDefinitions=protocol!=0x52445259;
+        const bool packetInputSources=protocol==0x5244525b;
         for (uint32_t n = reader.count(); n; --n) {
             const auto id = reader.value<int64_t>();
             Texture texture;
@@ -1863,15 +1888,26 @@ private:
             if(inherited>1)throw std::invalid_argument("Invalid geometry input transport");
             if(inherited){
                 const auto source=Name(reader);
-                const auto found=m_meshSources.find(source);
-                if(found==m_meshSources.end()||!found->second.inputs)
-                    throw std::invalid_argument("Inherited geometry input is not resident");
-                const auto& base=*found->second.inputs;
+                std::shared_ptr<const AuthoredMeshInputs> baseInputs;
+                std::shared_ptr<Mesh> sourceMesh;
+                // Only preceding entries have decoded and validated owned
+                // input. Never resolve a future name or trust packet metadata.
+                if(packetInputSources)if(auto prior=packet.meshes.find(source);prior!=packet.meshes.end()){
+                    sourceMesh=prior->second;baseInputs=PendingMeshInputs(*sourceMesh);
+                }
+                if(!sourceMesh)if(auto found=m_meshSources.find(source);found!=m_meshSources.end()){
+                    baseInputs=found->second.inputs;sourceMesh=m_meshes.at(source);
+                }
+                if(!baseInputs||!sourceMesh)
+                    throw std::invalid_argument(packetInputSources
+                        ?"Inherited geometry input is neither preceding nor resident"
+                        :"Inherited geometry input is not resident");
+                const auto& base=*baseInputs;
                 // Retain the original byte owner directly, never a chain of
                 // replacement MeshInfo objects or borrowed JVM addresses.
                 inputs->lease=base.lease;positions=base.positions;normals=base.normals;
                 tangents=base.tangents;uv=base.uv;inputs->canonicalIndices=base.canonicalIndices;
-                mesh->objectSpaceBounds=m_meshes.at(source)->objectSpaceBounds;
+                mesh->objectSpaceBounds=sourceMesh->objectSpaceBounds;
             }else{
                 positions=reader.floatView();normals=reader.floatView();
                 tangents=reader.floatView();uv=reader.floatView();

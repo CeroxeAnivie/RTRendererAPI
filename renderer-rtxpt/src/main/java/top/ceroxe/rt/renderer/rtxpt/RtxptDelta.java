@@ -36,6 +36,17 @@ final class RtxptDelta {
         if(x.equals(y))return true;
         for(int i=3;i<x.remaining();i+=4)if(x.get(i)!=y.get(i))return false;return true;
     }
+    /** One prepare only: immutable generations are keyed by object identity. */
+    static final class AlphaPairs {
+        private final IdentityHashMap<TextureAsset,IdentityHashMap<TextureAsset,Boolean>> pairs=new IdentityHashMap<>();
+        int comparisons;
+        boolean equivalent(TextureAsset a,TextureAsset b){
+            if(a==b||a==null||b==null)return a==b;
+            var next=pairs.computeIfAbsent(a,key->new IdentityHashMap<>());
+            var known=next.get(b);if(known!=null)return known;
+            boolean equal=alphaEquivalent(a,b);++comparisons;next.put(b,equal);return equal;
+        }
+    }
     private static final class Selection {
         final RtxptScene scene;final List<RtxptScene.Item> items;
         final Map<Long,List<RtxptScene.Item>> cache=new HashMap<>();
@@ -194,9 +205,10 @@ final class RtxptDelta {
         if(!hasWork)return new Prepared(translated,0,0,0,false,mappingsChanged,
                 new Work(current.reads+prior.reads+changes.itemReads(),current.dependencies+prior.dependencies,nodes,0),null,List.of(),List.of(),List.of(),List.of());
         var coverageChanged=new ArrayList<String>();
+        var alphaPairs=new AlphaPairs();
         for(var variant:variants.values()){
             var a=old.materials.get(variant.material());var b=scene.materials.get(variant.material());
-            if(a==null||!alphaEquivalent(old.textures.get(a.baseColorTextureId()),scene.textures.get(b.baseColorTextureId())))coverageChanged.add(variant.name());
+            if(a==null||!alphaPairs.equivalent(old.textures.get(a.baseColorTextureId()),scene.textures.get(b.baseColorTextureId())))coverageChanged.add(variant.name());
         }
         // Only known native residents are eligible. Limit selection to changed
         // variants and retiring users, never a complete resident geometry scan.

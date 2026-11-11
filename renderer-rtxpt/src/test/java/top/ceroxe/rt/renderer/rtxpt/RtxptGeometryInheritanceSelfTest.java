@@ -43,6 +43,48 @@ public final class RtxptGeometryInheritanceSelfTest {
         if(edit==7)builder.vertexColorsRgba8(new int[]{-1,0xff00ff00,-1});
         return builder.build();
     }
+    private static MeshAsset tetra(float edit){
+        return MeshAsset.builder(8,new float[]{edit,0,0,1,0,0,0,1,0,0,0,1},
+                new int[]{0,2,1,0,1,3,0,3,2,1,2,3},new long[]{1,1,1,1})
+                .normals(new float[]{0,0,1,0,0,1,0,0,1,0,0,1}).build();
+    }
+    private static void orderedVariants(RtxptMemoryResources.PacketPool packets){
+        var empty=new RtxptScene();var scene=new RtxptScene();var mesh=tetra(0);
+        var tx=SceneTransaction.builder(1).upsert(MaterialAsset.builder(1).build()).upsert(mesh);
+        for(int i=0;i<6;i++){
+            var instance=SceneInstance.builder(80+i,8).surfaceVisibility((i%3+1)/4f);
+            if(i>=3)instance.mediumBoundary(MediumBoundary.surface(new Medium(Rgb.ZERO,1.5f)));
+            tx.upsert(instance.build());
+        }
+        scene.retain(tx.build());
+        var first=RtxptDelta.prepare(empty,scene,empty.items(REQUEST),scene.items(REQUEST),Map.of(),packets);
+        var initial=inputs(first.memory());
+        require(initial.size()==6,"One public mesh supplies all visibility and boundary variants");
+        long canonical=4L*(mesh.positions().remaining()+mesh.normals().remaining()+mesh.tangents().remaining()
+                +mesh.textureCoordinates().remaining()+mesh.triangleIndices().remaining());
+        require(initial.stream().mapToLong(Input::fullBytes).sum()==canonical,"First packet multiplied canonical bytes by semantic variant count");
+        require(initial.stream().filter(input->input.source()==null).count()==1,"First packet must own canonical geometry exactly once");
+        var written=new HashSet<String>();
+        for(var input:initial){
+            require(input.source()==null||written.contains(input.source()),"Packet inheritance must name a preceding mesh");
+            written.add(input.name());
+        }
+        var changed=new RtxptScene(scene);changed.retain(SceneTransaction.builder(2).upsert(tetra(.125f)).build());
+        var edited=inputs(RtxptDelta.prepare(scene,changed,scene.items(REQUEST),changed.items(REQUEST),Map.of(),packets).memory());
+        require(edited.stream().mapToLong(Input::fullBytes).sum()==canonical&&edited.getFirst().source()==null,
+                "A real geometry edit needs one fresh canonical owner before packet-local aliases");
+        // Replacing A first shadows resident A. B still has the old coordinates:
+        // it cannot inherit A's newly decoded inputs just because the name matches.
+        var old=new RtxptScene();old.retain(SceneTransaction.builder(1).upsert(MaterialAsset.builder(1).build())
+                .upsert(mesh(1,0)).upsert(SceneInstance.builder(1,1).build()).build());
+        var next=new RtxptScene(old);next.retain(SceneTransaction.builder(2).upsert(mesh(1,1))
+                .upsert(mesh(2,0)).upsert(SceneInstance.builder(2,2).build()).build());
+        var ordered=List.of(next.item(1),next.item(2));
+        var guarded=inputs(RtxptMemoryResources.pack(old,next,ordered,List.of(),ordered,List.of(),List.of(),Map.of(),
+                packets,List.of(),List.of(old.item(1))));
+        require(guarded.stream().allMatch(input->input.source()==null&&input.fullBytes()>0),
+                "A replaced source name must not alias the wrong generation");
+    }
     public static void main(String[] args){
         try(var packets=new RtxptMemoryResources.PacketPool()){
             var empty=new RtxptScene();var resident=new RtxptScene();
@@ -67,7 +109,8 @@ public final class RtxptGeometryInheritanceSelfTest {
                     .upsert(mesh(2,6)).upsert(SceneInstance.builder(2,2).build()).build());
             var inheritedFlat=RtxptDelta.prepare(flat,flatNext,flat.items(REQUEST),flatNext.items(REQUEST),Map.of(),packets);
             require(inputs(inheritedFlat.memory()).getFirst().source()!=null,"Generated flat-normal inputs inherit without regeneration");
+            orderedVariants(packets);
         }
-        System.out.println("GEOMETRY_INHERITANCE_CPU PASS identity=true surfaces=true tint=true realChannelsFull=true flatNormals=true");
+        System.out.println("GEOMETRY_INHERITANCE_CPU PASS identity=true surfaces=true tint=true realChannelsFull=true flatNormals=true orderedPacketSources=true multiVariantCanonicalOnce=true shadowedGenerationRejected=true");
     }
 }

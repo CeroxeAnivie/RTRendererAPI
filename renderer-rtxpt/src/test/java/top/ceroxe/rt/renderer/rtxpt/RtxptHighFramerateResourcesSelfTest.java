@@ -30,10 +30,25 @@ public final class RtxptHighFramerateResourcesSelfTest {
         require(RtxptDelta.alphaEquivalent(base,next),"RGB rectangle scans only changed alpha bytes");
         var transparent=next.patched(new TexturePatch(1,0,3,5,1,1,4,ByteBuffer.wrap(new byte[]{1,2,3,0})));
         require(!RtxptDelta.alphaEquivalent(next,transparent),"Coverage delta detects current patch alpha");
+        alphaPairs(base,next,transparent,pixels);
         resident.clear();var full=packet(old,scene,resident,pool);require(full.getInt(52)==0&&full.getInt(56)==pixels.length,"Missing resident parent falls back to a complete generation");
         inheritance(old,base,pixels,pool);
-        System.out.println("HIGH_FRAMERATE_RESOURCES_CPU PASS residentPayload=0 sharedDeduplicated=true patchParent=true packetReuse=true imageInheritance=true samplerMetadata=true layoutFallback=true exactPixels=true");
+        System.out.println("HIGH_FRAMERATE_RESOURCES_CPU PASS residentPayload=0 sharedDeduplicated=true patchParent=true packetReuse=true imageInheritance=true samplerMetadata=true layoutFallback=true exactPixels=true identityPairMemo=true alphaMemoLocal=true");
     }finally{PACKETS.close();}}
+    private static void alphaPairs(TextureAsset base,TextureAsset next,TextureAsset transparent,byte[] pixels){
+        var memo=new RtxptDelta.AlphaPairs();
+        for(int variant=0;variant<256;variant++)require(memo.equivalent(base,next),"Shared RGB patch changed alpha");
+        require(memo.comparisons==1,"Shared material variants repeatedly scanned one exact texture pair");
+        require(!memo.equivalent(next,transparent)&&!memo.equivalent(next,transparent)&&memo.comparisons==2,
+                "Cached false must preserve a real alpha change without rescanning");
+        var distinct=TextureAsset.color(1,16,16,pixels.clone());
+        require(memo.equivalent(base,distinct)&&memo.comparisons==3,"Distinct immutable generations need their own exact comparison");
+        require(memo.equivalent(distinct,base)&&memo.comparisons==4,"Pair identities and direction must remain distinct");
+        require(memo.equivalent(base,base)&&memo.equivalent(null,null)&&!memo.equivalent(base,null)&&memo.comparisons==4,
+                "Identity/null shortcuts must preserve coverage semantics");
+        var fresh=new RtxptDelta.AlphaPairs();
+        require(fresh.equivalent(base,next)&&fresh.comparisons==1,"Alpha results must not escape their prepare invocation");
+    }
     private static void inheritance(RtxptScene old,TextureAsset base,byte[] pixels,RtxptMemoryResources.PacketPool pool){
         var resident=new HashMap<Long,TextureAsset>();resident.put(1L,base);
         var same=TextureAsset.color(1,16,16,pixels.clone());var scene=new RtxptScene(old);

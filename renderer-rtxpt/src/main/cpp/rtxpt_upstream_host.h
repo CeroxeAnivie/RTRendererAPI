@@ -198,6 +198,7 @@ public:
         m_blasStorage.Clear();
         m_importedMaterials.clear();
         m_completeMaterialBakeDirty=false;
+        m_beautyOmmPrimed=false;m_beautyOmmAdmissionPending=false;
         m_directTlasDirty=true;m_directTlasIdentity=nullptr;
     }
     std::array<double,2> MeshResourceState(const std::string& name)const{return m_resources.MeshResourceState(name);}
@@ -217,6 +218,7 @@ public:
     }
     void SceneLoaded() override {
         AdvancedPathTracer::SceneLoaded();
+        m_beautyOmmAdmissionPending=true;
         // Sample sets ShaderReloadRequested for its initial PT hit tables.
         // An independent-lighting scene has no such tables; its own shaders
         // are loaded fresh by Prepare. Later explicit reload requests retain
@@ -398,6 +400,7 @@ public:
             if(lighting.active)++m_nativeFrameWork[1];
             m_directTlasDirty=true;
             PrepareCompleteMaterials();
+            PrimeBeautyOmmForFirstLiveMasked();
             AdvancedPathTracer::Render(framebuffer);SyncManagedSceneRows();
             m_nativeSceneBootstrapPending=false;
             return;
@@ -430,6 +433,10 @@ public:
         m_lights.clear();
         m_scene->GetSceneGraph()->SetRootNode(
             std::make_shared<donut::engine::SceneGraphNode>());
+        // Finalize the empty CPU structure before Scene::Refresh. Zero graph
+        // counts allocate no GPU tables, while a dirty structure would make
+        // Donut unconditionally upload those still-null tables on first reset.
+        m_scene->GetSceneGraph()->Refresh(GetFrameIndex());
         auto commands=OpenResourceCommands();
         m_scene->Refresh(commands, GetFrameIndex());SyncManagedSceneRows();
         commands->close();
@@ -617,6 +624,11 @@ public:
                     if(!m_importedMaterials.contains(material)){hasUnregisteredMaterial=true;break;}
                 if(hasUnregisteredMaterial)ReimportMaterials();
                 else if(changed.materials)m_resources.ConfigureMaterials(m_importedMaterials);
+                // Alpha testing changes the PT hit group's any-hit export. A
+                // retained material keeps its permutation, so updating its GPU
+                // data or rebuilding ASes alone cannot refresh that hit group.
+                // Use the sample's public reload lifecycle only for domain edits.
+                if(changed.materialDomainsChanged)m_ui.ShaderReloadRequested=true;
             }
             if((lighting.active||!hasUnregisteredMaterial)&&changed.topology) {
                 InvalidateBindingSet();
@@ -626,6 +638,7 @@ public:
             // These original scene consumers cache geometry-sized state. A
             // host graph edit does not pass through Sample::SceneLoaded again.
             if(!lighting.active) {
+                if(!m_beautyOmmPrimed)m_beautyOmmAdmissionPending=true;
                 if(m_ommBaker){m_ommBaker->SceneLoaded(*m_scene);m_ui.AccelerationStructRebuildRequested=true;}
                 if(m_lightsBaker)m_lightsBaker->SceneReloaded();
                 if(auto* sharc=GetSharc())sharc->NotifySceneReloaded();
@@ -1180,11 +1193,50 @@ private:
         // ColorMultiplier; unit UI intensity preserves this DDS radiance.
         m_ui.EnvironmentMapParams.Intensity=1.f;
     }
+    void PrimeBeautyOmmForFirstLiveMasked() {
+        if(lighting.active||!m_ommBaker||m_beautyOmmPrimed||!m_beautyOmmAdmissionPending)return;
+        m_beautyOmmAdmissionPending=false;
+        // Match the original OMM admission conditions, restricted to final live
+        // instances. A dormant definition must not prime an empty build queue.
+        bool hasLiveMasked=false;
+        for(const auto& instance:m_scene->GetSceneGraph()->GetMeshInstances()) {
+            const auto& mesh=instance->GetMesh();
+            if(mesh->isSkinPrototype||mesh->skinPrototype)continue;
+            for(const auto& geometry:mesh->geometries) {
+                const auto material=static_cast<const MaterialEx*>(geometry->material.get())->PTMaterial;
+                if(material&&material->EnableAlphaTesting&&material->EnableBaseTexture
+                    &&material->BaseTexture.Loaded&&material->BaseTexture.Loaded->texture) {
+                    hasLiveMasked=true;break;
+                }
+            }
+            if(hasLiveMasked)break;
+        }
+        if(!hasLiveMasked)return;
+        // The original queue creates its event query even while empty. An
+        // opaque frame leaves that query unarmed (submission ID zero), which
+        // Vulkan can never report complete when the first masked work arrives.
+        // Re-enter the public baker lifecycle once, before its first real work;
+        // all subsequent OMM builds keep the same, now armed original queue.
+        WaitForIdleWithDiagnostics("beauty-omm-first-live-idle",RtrDiagnostics::Material|RtrDiagnostics::Coverage);
+        const auto settings=m_ommBaker->UIData();
+        m_ommBaker->SceneUnloading();
+        auto baker=std::make_shared<OmmBaker>(GetDevice(),m_DescriptorTable,m_TextureCache,m_shaderFactory);
+        baker->UIData()=settings;
+        baker->SceneLoaded(*m_scene);
+        baker->CreateRenderPasses(m_bindlessLayout,m_CommonPasses);
+        baker->SetBlasCompactor(m_blasCompactor.get());
+        m_ommBaker=std::move(baker);
+        InvalidateBindingSet();m_bindingCache->Clear();
+        // The unchanged sample now repopulates live OMM work before its first
+        // Update, and rebuilds the PT hit groups against the current materials.
+        m_ui.AccelerationStructRebuildRequested=true;
+        m_ui.ShaderReloadRequested=true;
+        m_beautyOmmPrimed=true;
+    }
     void PrepareCompleteMaterials() {
         if(!m_completeMaterialBakeDirty)return;
         WaitForIdleWithDiagnostics("complete-material-bake-idle",RtrDiagnostics::Material);
         ReimportMaterials();
-        m_ui.ShaderReloadRequested=true;
     }
     void ReimportMaterials() {
         RtrDiagnostics::Scope importScope(RtrDiagnostics::Materials);
@@ -1198,11 +1250,16 @@ private:
         m_completeMaterialBakeDirty=false;
         InvalidateBindingSet();
         m_ui.AccelerationStructRebuildRequested = true;
+        // A new registered material can add the first alpha-tested hit group
+        // without changing the StandardBSDF permutation/global macro profile.
+        // All material import callers need the same original PT/SBT lifecycle.
+        m_ui.ShaderReloadRequested = true;
     }
     CommandLineOptions m_adapterOptions;
     PrecompiledGlobals m_precompiledGlobals;
     bool m_managedScene = false, m_firstScene = true;
     bool m_completeMaterialBakeDirty=false;
+    bool m_beautyOmmPrimed=false,m_beautyOmmAdmissionPending=false;
     bool m_presentationConfigured=false;
     std::array<int,4> m_presentation{};
     bool m_exposureConfigured=false;
