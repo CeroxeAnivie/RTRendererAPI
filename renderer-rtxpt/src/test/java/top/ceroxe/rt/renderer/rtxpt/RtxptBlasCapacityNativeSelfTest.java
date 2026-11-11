@@ -65,22 +65,8 @@ public final class RtxptBlasCapacityNativeSelfTest {
                     "Live regrowth lost the original allocation capacity");
             require(Arrays.equals(liveRegrown.pixels(),oversizeReference),"Live regrowth differs from fresh pixels");
             rows.add("live-regrowth,0,1,true,true");
-        }
-        byte[] nearbyReference;
-        try(var reference=new Fixture(output)) {
-            nearbyReference=reference.step(initial(1,40),1,100,"fresh-nearby").pixels();
-        }
-        try(var fixture=new Fixture(output)) {
-            fixture.step(initial(1,0),1,-1,"nearby-bootstrap");
-            var initial=fixture.step(add(2,36),2,100,"nearby-initial");
-            fixture.step(SceneTransaction.builder(3).removeInstance(100).removeMesh(100).build(),3,-1,"nearby-retired");
-            var grown=fixture.step(add(4,40),4,100,"nearby-grown");
-            require(grown.allocations()==0&&grown.builds()==1&&grown.address()==initial.address(),
-                    "Nearby larger geometry failed to reuse its native capacity class");
-            require(Arrays.equals(grown.pixels(),nearbyReference),"Capacity-class growth differs from fresh native pixels");
-            rows.add("nearby-growth,0,1,true,true");
         } finally { Files.write(output.resolve("cases.csv"),rows); }
-        System.out.println("BLAS_CAPACITY PASS smallerRebuilds=4 regrowths=4 zeroReuseAllocations=true oversizeRejected=true liveShrinkAndRegrowth=true freshPixels=true nearbyGrowth=true");
+        System.out.println("BLAS_CAPACITY PASS smallerRebuilds=4 regrowths=4 zeroReuseAllocations=true oversizeRejected=true liveShrinkAndRegrowth=true freshPixels=true");
     }
 
     private static SceneTransaction initial(long revision,int cells) {

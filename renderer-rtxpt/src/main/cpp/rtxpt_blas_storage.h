@@ -1,7 +1,5 @@
 #pragma once
 #include <nvrhi/nvrhi.h>
-#include <bit>
-#include <limits>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
@@ -17,25 +15,6 @@ class BlasStorage {
     struct Entry {nvrhi::rt::AccelStructHandle structure;uint64_t bytes=0;};
     std::unordered_multimap<uint64_t,Entry> m_ready;
     uint64_t m_bytes=0;
-    static nvrhi::rt::AccelStructDesc Capacity(const nvrhi::rt::AccelStructDesc& source){
-        auto result=source;
-        // Prebuild counts size storage only; actual builds still use their
-        // exact authored counts. Stable size classes let completed native
-        // allocations serve nearby geometries rather than miss by one vertex.
-        const auto rounded=[](uint32_t count){
-            return count>0x80000000u?count:std::bit_ceil(count);
-        };
-        for(auto& geometry:result.bottomLevelGeometries){
-            auto& triangles=geometry.geometryData.triangles;
-            triangles.vertexCount=rounded(triangles.vertexCount);
-            if(triangles.indexCount){
-                const auto primitives=rounded(triangles.indexCount/3);
-                if(primitives<=std::numeric_limits<uint32_t>::max()/3)
-                    triangles.indexCount=primitives*3;
-            }
-        }
-        return result;
-    }
     static bool Shape(const nvrhi::rt::AccelStructDesc& desc,uint64_t& hash){
         using namespace nvrhi::rt;
         if(desc.isTopLevel||desc.isVirtual||!desc.trackLiveness
@@ -87,9 +66,7 @@ public:
             }
         }
         RtrDiagnostics::Scope allocate(RtrDiagnostics::BlasAllocate,1);
-        // Keep the original committed native resource path and its enhanced
-        // barrier flags. No virtual resource, aliasing, or heap replacement.
-        auto structure=device->createAccelStruct(Shape(desc,hash)?Capacity(desc):desc);
+        auto structure=device->createAccelStruct(desc);
         if(!structure)throw std::runtime_error("Native streaming BLAS allocation failed");
         return {std::move(structure),false};
     }
