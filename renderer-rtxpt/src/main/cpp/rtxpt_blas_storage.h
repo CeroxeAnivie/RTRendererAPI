@@ -4,8 +4,12 @@
 #include <map>
 #include <stdexcept>
 #include <vector>
+#include <exception>
+#include <span>
+#include <donut/engine/ThreadPool.h>
 #include "SampleCommon/BlasPool.h"
 #include "rtxpt_diagnostics.h"
+#include "rtxpt_frame_batch.h"
 
 namespace rtr::upstream {
 // Cache of completed ordinary native AS objects, not a GPU allocator.
@@ -56,7 +60,7 @@ public:
         return Shape(structure->getDesc(),capacityShape)&&Shape(desc,inputShape)
             &&capacityShape==inputShape&&Fits(structure->getDesc(),desc);
     }
-    Result Create(nvrhi::IDevice* device,nvrhi::ICommandList*,const nvrhi::rt::AccelStructDesc& desc){
+    Result Take(const nvrhi::rt::AccelStructDesc& desc){
         uint64_t hash=0;
         if(Shape(desc,hash)){
             auto [first,last]=m_ready.equal_range(hash);
@@ -75,10 +79,38 @@ public:
                 m_ready.erase(best);m_retained.erase(retained);return result;
             }
         }
-        RtrDiagnostics::Scope allocate(RtrDiagnostics::BlasAllocate,1);
+        return {};
+    }
+    static Result Allocate(nvrhi::IDevice* device,const nvrhi::rt::AccelStructDesc& desc,uint64_t batch=0){
+        RtrDiagnostics::Scope allocate(RtrDiagnostics::BlasAllocate,1,0,1,batch);
         auto structure=device->createAccelStruct(desc);
         if(!structure)throw std::runtime_error("Native streaming BLAS allocation failed");
         return {std::move(structure),false};
+    }
+    Result Create(nvrhi::IDevice* device,nvrhi::ICommandList*,const nvrhi::rt::AccelStructDesc& desc){
+        auto result=Take(desc);return result.structure?std::move(result):Allocate(device,desc);
+    }
+    std::vector<Result> CreateBatch(nvrhi::IDevice* device,donut::engine::ThreadPool& workers,
+            std::span<const nvrhi::rt::AccelStructDesc> descriptions){
+        std::vector<Result> results(descriptions.size());std::vector<size_t> missing;
+        missing.reserve(descriptions.size());
+        // Cache ownership stays serial. Workers only create independent ordinary
+        // committed objects; no graph, cache, command list or GPU queue access.
+        for(size_t i=0;i<descriptions.size();++i){
+            results[i]=Take(descriptions[i]);if(!results[i].structure)missing.push_back(i);
+        }
+        const auto batch=RtrDiagnostics::parentId;
+#ifdef NVRHI_WITH_RTXMU
+        auto* allocationWorkers=static_cast<donut::engine::ThreadPool*>(nullptr);
+#else
+        auto* allocationWorkers=&workers;
+#endif
+        RunFrameBatch(allocationWorkers,missing.size(),[&](size_t at){
+            const auto i=missing[at];results[i]=Allocate(device,descriptions[i],batch);
+        });
+        // All jobs have joined before descriptors/resources or errors escape.
+        // Report the first input failure, never a partial batch to the graph.
+        return results;
     }
     void Retain(nvrhi::IDevice* device,const nvrhi::rt::AccelStructHandle& structure){
         uint64_t hash=0;

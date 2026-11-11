@@ -145,6 +145,11 @@ public final class RtxptBlasCapacityNativeSelfTest {
             }
             if(monitor==null)monitor=access.nativeDiagnosticMonitor();
             var snapshot=monitor.poll();
+            if(name.equals("pressure-small-live")) {
+                long threads=snapshot.events().stream().filter(e->e.stage().equals("BlasAllocate"))
+                        .map(e->e.thread()).distinct().count();
+                require(threads>1,"Streaming batch still serializes all native BLAS allocations");
+            }
             require(snapshot.lostEvents()==0&&snapshot.events().stream().noneMatch(e->(e.flags()&(2L|512L|1024L))!=0),
                     "Incomplete native diagnostics");
             var field=RtxptRenderer.class.getDeclaredField("handle");field.setAccessible(true);long handle=field.getLong(renderer);

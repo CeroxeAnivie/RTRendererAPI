@@ -1,4 +1,5 @@
 #pragma once
+#include "rtxpt_frame_batch.h"
 
 #include <algorithm>
 #include <array>
@@ -169,6 +170,7 @@ public:
     void RecordMeshIdentityChange(const std::shared_ptr<donut::engine::MeshInfo>& mesh){
         RecordChangedMesh(mesh);m_rowChangesNeedDedup=true;
     }
+    void SetFrameWorkers(donut::engine::ThreadPool* workers){m_frameWorkers=workers;}
     void PrepareMeshInputs(const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){BatchMeshInputs(meshes);}
     void RefreshAttributes(nvrhi::ICommandList* commands,
         const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
@@ -298,6 +300,7 @@ private:
     std::vector<uint32_t> m_dirtyInstanceRows;
     nvrhi::RefCountPtr<scene_upload::SceneTableUploadCommands> m_instanceUploadCommands;
     std::vector<std::weak_ptr<donut::engine::MeshInstance>> m_dirtyInstanceInputs,m_convergingInstances;
+    donut::engine::ThreadPool* m_frameWorkers=nullptr;
     bool m_tableJournalReady=false;
     bool m_materialRowsPending=true;
     uint32_t m_preparedFrameIndex=0;
@@ -483,7 +486,7 @@ private:
         }
         m_SceneGraph=restore.original;
     }
-    static void BatchMeshInputs(const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
+    void BatchMeshInputs(const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
         using Mesh=donut::engine::MeshInfo;
         using Buffers=donut::engine::BufferGroup;
         constexpr size_t byteBudget=1024*1024,maxMeshes=32;
@@ -516,13 +519,20 @@ private:
             if(layout&1)shared->normalData.resize(vertices);
             if(layout&2)shared->tangentData.resize(vertices);
             if(layout&4)shared->texcoord1Data.resize(vertices);
+            std::vector<std::pair<size_t,size_t>> offsets;offsets.reserve(batch.size());
             size_t vertexOffset=0,indexOffset=0;
             for(const auto& segment:batch){
-                auto& mesh=*segment.mesh;const auto& input=*segment.inputs;
-                mesh.vertexOffset=uint32_t(vertexOffset);mesh.indexOffset=uint32_t(indexOffset);
+                offsets.emplace_back(vertexOffset,indexOffset);
+                vertexOffset+=segment.mesh->totalVertices;indexOffset+=segment.mesh->totalIndices;
+            }
+            // Final channels have one allocation. Workers fill disjoint ranges;
+            // shared ownership and native graph metadata publish only after join.
+            RunFrameBatch(m_frameWorkers,batch.size(),[&](size_t at){
+                const auto& segment=batch[at];const auto& mesh=*segment.mesh;const auto& input=*segment.inputs;
+                const auto [vertexOffset,indexOffset]=offsets[at];
                 for(size_t v=0;v<mesh.totalVertices;++v){
                     shared->positionData[vertexOffset+v]=donut::math::float3(input.positions[v*3],input.positions[v*3+1],input.positions[v*3+2]);
-                    shared->normalData[vertexOffset+v]=donut::math::vectorToSnorm8(donut::math::float3(input.normals[v*3],input.normals[v*3+1],input.normals[v*3+2]));
+                    if(layout&1)shared->normalData[vertexOffset+v]=donut::math::vectorToSnorm8(donut::math::float3(input.normals[v*3],input.normals[v*3+1],input.normals[v*3+2]));
                     if(layout&2)shared->tangentData[vertexOffset+v]=donut::math::vectorToSnorm8(donut::math::float4(input.tangents[v*4],input.tangents[v*4+1],input.tangents[v*4+2],input.tangents[v*4+3]));
                     if(layout&4)shared->texcoord1Data[vertexOffset+v]=donut::math::float2(input.uv[v*2],input.uv[v*2+1]);
                 }
@@ -530,9 +540,10 @@ private:
                 for(const auto& part:input.indices){
                     std::memcpy(shared->indexData.data()+indexOffset+localIndex,part.data,size_t(part.count)*sizeof(uint32_t));localIndex+=part.count;
                 }
-                mesh.buffers=shared;
-                static_cast<AuthoredMeshInfo&>(mesh).pendingInputs.reset();
-                vertexOffset+=mesh.totalVertices;indexOffset+=mesh.totalIndices;
+            });
+            for(size_t at=0;at<batch.size();++at){
+                auto& mesh=*batch[at].mesh;mesh.vertexOffset=uint32_t(offsets[at].first);mesh.indexOffset=uint32_t(offsets[at].second);
+                mesh.buffers=shared;static_cast<AuthoredMeshInfo&>(mesh).pendingInputs.reset();
             }
             batch.clear();bytes=vertices=indices=0;
         };

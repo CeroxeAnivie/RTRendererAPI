@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <deque>
 #include <cstdio>
 #include <d3d12sdklayers.h>
 #include <dxgi1_6.h>
@@ -546,6 +547,7 @@ public:
         m_scene = std::make_shared<ManagedScene>(GetDevice(), *m_shaderFactory,
             std::move(fs), m_TextureCache, m_DescriptorTable,
             std::make_shared<ExtendedSceneTypeFactory>());
+        static_cast<ManagedScene&>(*m_scene).SetFrameWorkers(&m_frameWorkerPool);
         auto graph = m_scene->CreateSceneGraph();
         graph->SetRootNode(std::make_shared<donut::engine::SceneGraphNode>());
         // A newly attached empty root is structurally dirty, but Donut's
@@ -595,7 +597,7 @@ public:
             RefreshDeformedDirectStructures(changed,commands);
         if(retainRemoved&&(!changed.retiredMeshes.empty()||!changed.retiredBuffers.empty()
             ||!changed.retiredStructures.empty()||!changed.retiredTextures.empty())){
-            if(m_resourceRetirement.size()>=64)DrainResourceRetirement("retirement-limit-idle",RtrDiagnostics::Removal);
+            LimitResourceRetirement();
             RetiredResources retired;
             retired.graphics=GetDevice()->createEventQuery();retired.compute=GetDevice()->createEventQuery();
             GetDevice()->setEventQuery(retired.graphics,nvrhi::CommandQueue::Graphics);
@@ -831,7 +833,7 @@ private:
         std::vector<nvrhi::rt::AccelStructHandle> structures;
         std::vector<std::shared_ptr<donut::engine::LoadedTexture>> textures;
     };
-    std::vector<RetiredResources> m_resourceRetirement;
+    std::deque<RetiredResources> m_resourceRetirement;
     // These records never cross a completed Frame. They keep authored resources
     // alive while all packets are collected; only the final live graph is packed.
     std::vector<Resources::Changes> m_pendingDirectPreparation;
@@ -891,6 +893,7 @@ private:
             const auto submitted=GetDevice()->executeCommandList(commands);
             GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,submitted);}
         if(!merged.retiredStructures.empty()){
+            LimitResourceRetirement();
             RetiredResources retired;
             retired.graphics=GetDevice()->createEventQuery();retired.compute=GetDevice()->createEventQuery();
             GetDevice()->setEventQuery(retired.graphics,nvrhi::CommandQueue::Graphics);
@@ -908,61 +911,87 @@ private:
     }
     void PollResourceRetirement(){
         RtrDiagnostics::Scope poll(RtrDiagnostics::ResourceRetirement,m_resourceRetirement.size(),0,1,0,HostDiagnosticIdentity("resource-retirement-poll"));
-        for(auto i=m_resourceRetirement.begin();i!=m_resourceRetirement.end();)
-            if(GetDevice()->pollEventQuery(i->graphics)&&GetDevice()->pollEventQuery(i->compute)){
-                for(const auto& mesh:i->meshes)m_blasStorage.Retain(GetDevice(),mesh->accelStruct);
-                for(const auto& structure:i->structures)m_blasStorage.Retain(GetDevice(),structure);
-                i=m_resourceRetirement.erase(i);++poll.event[9];
-            }else ++i;
+        // Both event streams are recorded in owner submission order. A newer
+        // record cannot retire before an incomplete front record on either queue.
+        while(!m_resourceRetirement.empty()){
+            auto& first=m_resourceRetirement.front();
+            if(!GetDevice()->pollEventQuery(first.graphics)||!GetDevice()->pollEventQuery(first.compute))break;
+            for(const auto& mesh:first.meshes)m_blasStorage.Retain(GetDevice(),mesh->accelStruct);
+            for(const auto& structure:first.structures)m_blasStorage.Retain(GetDevice(),structure);
+            m_resourceRetirement.pop_front();++poll.event[9];
+        }
+    }
+    void LimitResourceRetirement(){
+        if(m_resourceRetirement.size()<64)return;
+        // Bound retained resources without draining unrelated newer GPU work.
+        // Lifecycle and policy changes still use the original device-idle path.
+        auto& first=m_resourceRetirement.front();
+        {RtrDiagnostics::Scope wait(RtrDiagnostics::Retirement,1,0,1,0,HostDiagnosticIdentity("retirement-oldest-fences"));
+            GetDevice()->waitEventQuery(first.graphics);GetDevice()->waitEventQuery(first.compute);}
+        PollResourceRetirement();
     }
     void RefreshDeformedDirectStructures(Resources::Changes& changed,nvrhi::ICommandList* commands){
+        BuildDirectMeshes(changed,commands,true);
+    }
+    void BuildDirectMeshes(Resources::Changes& changed,nvrhi::ICommandList* commands,bool includeDeformations){
         if(!lighting.active||m_ommBaker||!commands)
-            throw std::logic_error("Stable geometry updates require the native direct command list");
-        auto rebuild=[&](const std::shared_ptr<donut::engine::MeshInfo>& mesh) {
+            throw std::logic_error("Direct geometry builds require the native direct command list");
+        struct Build {
+            std::shared_ptr<donut::engine::MeshInfo> mesh;
+            nvrhi::rt::AccelStructDesc description;
+            nvrhi::rt::AccelStructHandle previous,structure;
+            bool reused=false,poolHit=false;
+        };
+        std::vector<Build> builds;
+        builds.reserve(changed.buildMeshes.size()+changed.deformedMeshes.size()+changed.reshapedMeshes.size());
+        std::unordered_set<donut::engine::MeshInfo*> planned;
+        const auto add=[&](const auto& mesh,bool replacement){
+            if(mesh->isSkinPrototype||(!replacement&&mesh->accelStruct)||!planned.insert(mesh.get()).second)return;
             auto description=bvh::GetMeshBlasDesc(
                 bvh::Config{.excludeTransmissive=m_ui.AS.ExcludeTransmissive},*mesh,nullptr,false);
             description.buildFlags=description.buildFlags&~nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
-            auto structure=mesh->accelStruct;
-            // Ordinary native storage can hold a complete smaller build even
-            // when authored counts/index ranges change. Capacity is checked per
-            // original geometry; this never requests an update/refit with changed
-            // topology. Pooled/compacted handles remain excluded.
-            bool reusable=!m_lastFrameAsyncPrefix&&BlasStorage::CanRebuild(structure,description);
-            // An earlier complete frame can have a compute prefix in flight.
-            // Give that case a new BLAS and retire its predecessor with both
-            // native queues instead of assuming a completed CPU future fences it.
+            bool reusable=replacement&&!m_lastFrameAsyncPrefix&&BlasStorage::CanRebuild(mesh->accelStruct,description);
 #ifdef NVRHI_WITH_RTXMU
-            // Its update entry point requires separately authored update-capable
-            // builds; retain the ordinary allocation path for this build policy.
             reusable=false;
 #endif
-            bool storageReused=reusable,poolHit=false;
-            if(!reusable) {
-                auto allocated=m_blasStorage.Create(GetDevice(),commands,description);
-                storageReused=poolHit=allocated.reused;
-                structure=std::move(allocated.structure);
-                if(mesh->accelStruct)changed.retiredStructures.push_back(mesh->accelStruct);
-                mesh->accelStruct=structure;
-            }
-            RtrDiagnostics::Scope blasScope(RtrDiagnostics::BlasBuild,1);
-            if(storageReused)blasScope.event[11]|=RtrDiagnostics::CacheHit;
-            if(poolHit)blasScope.event[20]|=RtrDiagnostics::PoolHit;
-            commands->setAccelStructState(structure,nvrhi::ResourceStates::AccelStructWrite);
-            nvrhi::utils::BuildBottomLevelAccelStruct(commands,structure,description);
-            // The native TLAS builder reads device addresses through its table;
-            // just as in UpdateSkinnedBLASs, explicitly order the preceding build.
-            commands->setAccelStructState(structure,nvrhi::ResourceStates::AccelStructBuildBlas);
+            builds.push_back({mesh,std::move(description),mesh->accelStruct,reusable?mesh->accelStruct:nvrhi::rt::AccelStructHandle{},reusable,false});
         };
-        for(const auto& mesh:changed.deformedMeshes)rebuild(mesh);
-        // Growth beyond the original allocation still selects a fitting retired
-        // native handle or creates one through the original device factory.
-        for(const auto& mesh:changed.reshapedMeshes)rebuild(mesh);
+        for(const auto& mesh:changed.buildMeshes)add(mesh,false);
+        if(includeDeformations){
+            for(const auto& mesh:changed.deformedMeshes)add(mesh,true);
+            for(const auto& mesh:changed.reshapedMeshes)add(mesh,true);
+        }
+        std::vector<nvrhi::rt::AccelStructDesc> descriptions;std::vector<size_t> missing;
+        descriptions.reserve(builds.size());missing.reserve(builds.size());
+        for(size_t i=0;i<builds.size();++i)if(!builds[i].structure){descriptions.push_back(builds[i].description);missing.push_back(i);}
+        auto allocated=m_blasStorage.CreateBatch(GetDevice(),m_frameWorkerPool,descriptions);
+        for(size_t i=0;i<missing.size();++i){auto& build=builds[missing[i]];
+            build.structure=std::move(allocated[i].structure);build.reused=build.poolHit=allocated[i].reused;
+        }
+        // New, deformed and reshaped geometry share one allocation/preparation
+        // boundary. Original native builds and scratch dependencies are unchanged.
+        for(const auto& build:builds){
+            for(const auto& geometry:build.description.bottomLevelGeometries){
+                const auto& triangles=geometry.geometryData.triangles;
+                commands->setBufferState(triangles.indexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
+                commands->setBufferState(triangles.vertexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
+            }
+            commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructWrite);
+        }
         commands->commitBarriers();
-        // Bounds changed even when BLAS addresses did not. Reuse the original
-        // table refresh/UpdateTLAS, not CreateTlas's new TLAS and sub-instance pair.
-        m_tlasInstanceDataDirty=true;
+        for(auto& build:builds){
+            RtrDiagnostics::Scope scope(RtrDiagnostics::BlasBuild,1);
+            if(build.reused)scope.event[11]|=RtrDiagnostics::CacheHit;
+            if(build.poolHit)scope.event[20]|=RtrDiagnostics::PoolHit;
+            nvrhi::utils::BuildBottomLevelAccelStruct(commands,build.structure,build.description);
+            if(build.previous&&build.previous!=build.structure)changed.retiredStructures.push_back(build.previous);
+            build.mesh->accelStruct=build.structure;
+        }
+        for(const auto& build:builds)commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructBuildBlas);
+        commands->commitBarriers();
+        if(!builds.empty())m_tlasInstanceDataDirty=true;
     }
-    bool RefreshRetainedDirectStructures(const Resources::Changes& changed,nvrhi::ICommandList* preparedCommands=nullptr) {
+    bool RefreshRetainedDirectStructures(Resources::Changes& changed,nvrhi::ICommandList* preparedCommands=nullptr) {
         RtrDiagnostics::Scope structureScope(RtrDiagnostics::Acceleration);
         if(!lighting.active||m_ommBaker||!m_blasPool)return false;
         const auto& instances=m_scene->GetSceneGraph()->GetMeshInstances();
@@ -979,51 +1008,7 @@ private:
         auto* commands=preparedCommands?preparedCommands:m_structureCommands.Get();
         if(!preparedCommands){RtrDiagnostics::Scope acquire(RtrDiagnostics::CommandAcquire);commands->open();}
         const auto structureTiming=RtrGpuProfile::Begin(commands,"NativeStructures",-1);
-        struct PlannedBuild {
-            std::shared_ptr<donut::engine::MeshInfo> mesh;
-            nvrhi::rt::AccelStructDesc description;
-            nvrhi::rt::AccelStructHandle structure;
-            bool reused=false;
-        };
-        std::vector<PlannedBuild> builds;builds.reserve(changed.buildMeshes.size());
-        for(const auto& mesh:changed.buildMeshes){
-            if(mesh->isSkinPrototype||mesh->accelStruct)continue;
-            auto description=bvh::GetMeshBlasDesc(
-                bvh::Config{.excludeTransmissive=m_ui.AS.ExcludeTransmissive},*mesh,nullptr,false);
-            // The native load-time compactor documents two GPU round trips per
-            // batch. Streaming uses the sample's ordinary NVRHI build path,
-            // avoiding those CPU readbacks. Existing BLASes are not rebuilt.
-            description.buildFlags=description.buildFlags&~nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
-            auto allocated=m_blasStorage.Create(GetDevice(),commands,description);
-            auto structure=std::move(allocated.structure);
-            const bool reused=allocated.reused;
-            builds.push_back({mesh,std::move(description),std::move(structure),reused});
-        }
-        // Independent builds share one preparation phase and one final read
-        // dependency. A per-mesh Write -> BuildBlas transition is committed by
-        // the next native Build and unnecessarily serializes the whole batch.
-        // Automatic barriers and native scratch reuse barriers remain enabled.
-        for(const auto& build:builds){
-            for(const auto& geometry:build.description.bottomLevelGeometries){
-                const auto& triangles=geometry.geometryData.triangles;
-                commands->setBufferState(triangles.indexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
-                commands->setBufferState(triangles.vertexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
-            }
-            commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructWrite);
-        }
-        commands->commitBarriers();
-        for(auto& build:builds){
-            RtrDiagnostics::Scope blasScope(RtrDiagnostics::BlasBuild,1);
-            if(build.reused){
-                blasScope.event[11]|=RtrDiagnostics::CacheHit;
-                blasScope.event[20]|=RtrDiagnostics::PoolHit;
-            }
-            nvrhi::utils::BuildBottomLevelAccelStruct(commands,build.structure,build.description);
-            build.mesh->accelStruct=build.structure;
-        }
-        for(const auto& build:builds)
-            commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructBuildBlas);
-        commands->commitBarriers();
+        BuildDirectMeshes(changed,commands,false);
         size_t subInstances=0;
         for(const auto& instance:instances)subInstances+=instance->GetMesh()->geometries.size();
         // These native descriptors state capacity, while the original builders

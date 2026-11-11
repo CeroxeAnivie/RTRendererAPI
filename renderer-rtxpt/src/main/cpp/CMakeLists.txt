@@ -24,6 +24,13 @@ add_executable(rtr_resource_protocol_selftest EXCLUDE_FROM_ALL
     "${CMAKE_CURRENT_LIST_DIR}/rtxpt_resource_protocol_selftest.cpp")
 target_compile_features(rtr_resource_protocol_selftest PRIVATE cxx_std_20)
 target_link_libraries(rtr_resource_protocol_selftest PRIVATE d3d12 dxgi)
+add_executable(rtr_frame_batch_selftest EXCLUDE_FROM_ALL
+    "${CMAKE_CURRENT_LIST_DIR}/rtxpt_frame_batch_selftest.cpp")
+target_compile_features(rtr_frame_batch_selftest PRIVATE cxx_std_20)
+target_link_libraries(rtr_frame_batch_selftest PRIVATE RtxptCore)
+set_target_properties(rtr_frame_batch_selftest PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/adapter-tests"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/adapter-tests")
 set_target_properties(rtr_resource_protocol_selftest PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/adapter-tests"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/adapter-tests")

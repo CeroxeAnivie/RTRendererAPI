@@ -257,7 +257,13 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 require(previous[1]!=current[1],"Geometry edit omitted its new immutable vertex input");
                 if(sequence==3||sequence==6||mixedSampler||sequence>=10)
                     require(previous[0]==current[0],"Same-layout deformation failed to reuse the ordinary native BLAS");
-                if(reshaped)require(previous[0]!=current[0],"Changed geometry input retained an incompatible BLAS");
+                if(reshaped) {
+                    // These are complete builds, not topology-changing refits.
+                    // Sequence 5 outgrows the original native capacity; index
+                    // reorder and shrink fit it, as in the capacity contract.
+                    if(sequence==5)require(previous[0]!=current[0],"Geometry growth retained insufficient native BLAS capacity");
+                    else require(previous[0]==current[0],"Compatible full rebuild replaced its ordinary native capacity");
+                }
                 double[] metadata=RtxptNative.lightingMetadataState(handle,"i22",meshName(2)+":0");
                 require(metadata[0]==stableMetadata[0]&&metadata[1]==stableMetadata[1],
                         "Stable mesh/instance changed its original dense graph indices");
