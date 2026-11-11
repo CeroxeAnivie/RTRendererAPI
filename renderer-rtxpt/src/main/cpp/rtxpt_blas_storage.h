@@ -1,7 +1,8 @@
 #pragma once
 #include <nvrhi/nvrhi.h>
+#include <list>
+#include <map>
 #include <stdexcept>
-#include <unordered_map>
 #include <vector>
 #include "SampleCommon/BlasPool.h"
 #include "rtxpt_diagnostics.h"
@@ -12,8 +13,12 @@ namespace rtr::upstream {
 // them. Only the dual-queue retirement owner calls Retain. No AS wrappers,
 // copied build algorithms, byte allocation, or upstream default changes.
 class BlasStorage {
-    struct Entry {nvrhi::rt::AccelStructHandle structure;uint64_t bytes=0;};
-    std::unordered_multimap<uint64_t,Entry> m_ready;
+    struct Entry;
+    using Retained=std::list<Entry>;
+    using Index=std::multimap<uint64_t,Retained::iterator>;
+    struct Entry {nvrhi::rt::AccelStructHandle structure;uint64_t bytes=0;Index::iterator index;};
+    Retained m_retained;
+    Index m_ready;
     uint64_t m_bytes=0;
     static bool Shape(const nvrhi::rt::AccelStructDesc& desc,uint64_t& hash){
         using namespace nvrhi::rt;
@@ -41,6 +46,9 @@ class BlasStorage {
         }return true;
     }
 public:
+    BlasStorage()=default;
+    BlasStorage(const BlasStorage&)=delete;
+    BlasStorage& operator=(const BlasStorage&)=delete;
     struct Result {nvrhi::rt::AccelStructHandle structure;bool reused=false;};
     static bool CanRebuild(nvrhi::rt::IAccelStruct* structure,const nvrhi::rt::AccelStructDesc& desc){
         if(!structure||bvh::PooledAccelStruct::IsPooled(structure)||structure->isCompacted())return false;
@@ -53,8 +61,8 @@ public:
         if(Shape(desc,hash)){
             auto [first,last]=m_ready.equal_range(hash);
             auto best=last;
-            for(auto i=first;i!=last;++i)if(Fits(i->second.structure->getDesc(),desc)
-                &&(best==last||i->second.bytes<best->second.bytes))best=i;
+            for(auto i=first;i!=last;++i)if(Fits(i->second->structure->getDesc(),desc)
+                &&(best==last||i->second->bytes<best->second->bytes))best=i;
             if(best!=last){
                 // Allocation inputs bound native storage capacity. This is a
                 // complete rebuild with the caller's actual geometry, never an
@@ -62,7 +70,9 @@ public:
                 // geometry's type, flags and formats and stay within both of its
                 // count limits; no larger allocation or native descriptor packing
                 // is invented here. Native build/scratch validation stays enabled.
-                Result result{std::move(best->second.structure),true};m_bytes-=best->second.bytes;m_ready.erase(best);return result;
+                const auto retained=best->second;
+                Result result{std::move(retained->structure),true};m_bytes-=retained->bytes;
+                m_ready.erase(best);m_retained.erase(retained);return result;
             }
         }
         RtrDiagnostics::Scope allocate(RtrDiagnostics::BlasAllocate,1);
@@ -74,12 +84,24 @@ public:
         uint64_t hash=0;
         if(!structure||bvh::PooledAccelStruct::IsPooled(structure)||structure->isCompacted()||!Shape(structure->getDesc(),hash))return;
         auto [first,last]=m_ready.equal_range(hash);
-        for(auto i=first;i!=last;++i)if(i->second.structure.Get()==structure.Get())return;
+        for(auto i=first;i!=last;++i)if(i->second->structure.Get()==structure.Get())return;
         const auto bytes=device->getAccelStructMemoryRequirements(structure).size;
         constexpr uint64_t limit=64ull<<20;constexpr size_t handles=1024;
-        if(!bytes||bytes>limit||m_ready.size()>=handles||m_bytes+bytes>limit)return;
-        m_ready.emplace(hash,Entry{structure,bytes});m_bytes+=bytes;
+        if(!bytes||bytes>limit)return;
+        // A full cache must not permanently keep its first small allocations
+        // while rejecting every newly retired larger one. Evict the oldest
+        // completed handles; the caller has already retired both native queues.
+        // Native allocation sizes and the original byte/handle bounds stay exact.
+        while(m_ready.size()>=handles||m_bytes+bytes>limit){
+            auto& oldest=m_retained.front();m_bytes-=oldest.bytes;
+            m_ready.erase(oldest.index);m_retained.pop_front();
+        }
+        m_retained.push_back({structure,bytes,{}});
+        const auto retained=std::prev(m_retained.end());
+        try{retained->index=m_ready.emplace(hash,retained);}
+        catch(...){m_retained.erase(retained);throw;}
+        m_bytes+=bytes;
     }
-    void Clear(){m_ready.clear();m_bytes=0;}
+    void Clear(){m_ready.clear();m_retained.clear();m_bytes=0;}
 };
 }

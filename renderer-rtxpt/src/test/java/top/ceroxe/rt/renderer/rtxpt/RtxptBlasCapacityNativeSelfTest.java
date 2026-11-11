@@ -65,8 +65,30 @@ public final class RtxptBlasCapacityNativeSelfTest {
                     "Live regrowth lost the original allocation capacity");
             require(Arrays.equals(liveRegrown.pixels(),oversizeReference),"Live regrowth differs from fresh pixels");
             rows.add("live-regrowth,0,1,true,true");
+        }
+        try(var fixture=new Fixture(output)) {
+            fixture.step(initial(1,0),1,-1,"pressure-bootstrap");
+            fixture.step(pressure(2,false),2,-1,"pressure-small-live");
+            fixture.step(pressure(3,true),3,-1,"pressure-small-retired");
+            Result large=fixture.step(add(4,64),4,100,"pressure-large");
+            require(large.allocations()==1&&large.builds()==1,"Small cached allocations incorrectly fit larger geometry");
+            fixture.step(SceneTransaction.builder(5).removeInstance(100).removeMesh(100).build(),5,-1,"pressure-large-retired");
+            Result reused=fixture.step(add(6,64),6,100,"pressure-large-returned");
+            require(reused.allocations()==0&&reused.builds()==1&&reused.address()==large.address(),
+                    "Full cache rejected the recently retired allocation: "+reused);
+            require(Arrays.equals(reused.pixels(),oversizeReference),"Cache eviction changed fresh native pixels");
+            rows.add("full-cache-recent-reuse,0,1,true,true");
         } finally { Files.write(output.resolve("cases.csv"),rows); }
-        System.out.println("BLAS_CAPACITY PASS smallerRebuilds=4 regrowths=4 zeroReuseAllocations=true oversizeRejected=true liveShrinkAndRegrowth=true freshPixels=true");
+        System.out.println("BLAS_CAPACITY PASS smallerRebuilds=4 regrowths=4 zeroReuseAllocations=true oversizeRejected=true liveShrinkAndRegrowth=true freshPixels=true fullCacheRecentReuse=true");
+    }
+
+    private static SceneTransaction pressure(long revision,boolean remove) {
+        var tx=SceneTransaction.builder(revision);
+        for(long id=1000;id<2024;id++) {
+            if(remove)tx.removeInstance(id).removeMesh(id);
+            else tx.upsert(grid(id,1,5)).upsert(SceneInstance.builder(id,id).build());
+        }
+        return tx.build();
     }
 
     private static SceneTransaction initial(long revision,int cells) {
