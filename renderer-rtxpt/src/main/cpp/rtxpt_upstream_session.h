@@ -91,6 +91,7 @@ public:
     }
 
     Statistics Snapshot() { std::lock_guard lock(m_mutex); return m_statistics; }
+    void RequireRunning() { std::lock_guard lock(m_mutex); Check(); }
 
     bool StoppedNormally() {
         std::lock_guard lock(m_mutex);

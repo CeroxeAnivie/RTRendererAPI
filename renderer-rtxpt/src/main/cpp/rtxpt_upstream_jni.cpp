@@ -546,30 +546,30 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frame(JNIEnv* env, jclass, jlong h
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCanPublish(JNIEnv* env, jclass, jlong handle) {
-    try { auto renderer = Get(handle); bool result = false; renderer->session->Invoke([&](auto&) { result = renderer->signals.CanPublish(); }); return result;
+    try { auto renderer = Get(handle); renderer->session->RequireRunning(); return renderer->signals.CanPublish();
     } catch (const std::exception& error) { Throw(env, error); return false; }
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingConsumersRetired(JNIEnv* env, jclass, jlong handle) {
-    try { auto renderer = Get(handle); bool result = false;
-        try {renderer->session->Invoke([&](auto&) { result = renderer->signals.ConsumersRetired(); });}
-        catch (...) {
-            if(!renderer->session->Stopped())throw;
-            // No owner can mutate the ring after Run has finished. Preserve the
-            // external completion fence contract even when rendering failed.
-            result=renderer->signals.ConsumersRetired();
-        }
-        return result;
+    try { return Get(handle)->signals.ConsumersRetired();
     } catch (const std::exception& error) { Throw(env, error); return false; }
 }
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingFrame(JNIEnv* env, jclass, jlong handle) {
-    try { auto renderer = Get(handle); std::vector<jlong> result; renderer->session->Invoke([&](auto&) { result = renderer->signals.Acquire(); }); return LongArray(env, result);
+    try { auto renderer = Get(handle); renderer->session->RequireRunning(); return LongArray(env, renderer->signals.Acquire());
     } catch (const std::exception& error) { Throw(env, error); return nullptr; }
 }
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingRelease(JNIEnv* env, jclass, jlong handle, jint slot, jlong generation, jlong sequence, jboolean imported) {
-    try { auto renderer = Get(handle); renderer->session->Invoke([&](auto& app) { renderer->signals.Release(app.DeviceManager().GetDevice(), slot, uint64_t(generation), uint64_t(sequence), imported != 0); });
+    try { auto renderer = Get(handle);
+        if(imported){
+            // The consumer already enqueued its completion. This changes only
+            // bridge lease state; Available still checks the actual GPU fence.
+            renderer->session->RequireRunning();
+            renderer->signals.Release(nullptr,slot,uint64_t(generation),uint64_t(sequence),true);
+        }else renderer->session->Invoke([&](auto& app) {
+            renderer->signals.Release(app.DeviceManager().GetDevice(),slot,uint64_t(generation),uint64_t(sequence),false);
+        });
     } catch (const std::exception& error) { Throw(env, error); }
 }
 extern "C" JNIEXPORT void JNICALL

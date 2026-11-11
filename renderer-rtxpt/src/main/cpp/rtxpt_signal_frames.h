@@ -1,6 +1,7 @@
 #pragma once
 #include <nvrhi/d3d12.h>
 #include <wrl/client.h>
+#include <mutex>
 #include "rtxpt_fence.h"
 #include "rtxpt_gpu_profile.h"
 
@@ -11,6 +12,8 @@ class RtrSignalFrameRing {
     struct Slot {
         std::array<nvrhi::TextureHandle,PlaneCount> textures;
         std::array<uint64_t,PlaneCount> allocation{};
+        std::array<jlong,PlaneCount> handles{};
+        std::array<int,PlaneCount> formats{};
         Microsoft::WRL::ComPtr<ID3D12Fence> fence;
         HANDLE fenceHandle=nullptr;
         uint64_t generation=0,completion=0,sequence=0,revision=0;
@@ -22,6 +25,7 @@ class RtrSignalFrameRing {
         ~Slot(){if(fenceHandle)CloseHandle(fenceHandle);}
     };
     std::array<Slot,3> slots;
+    mutable std::mutex mutex;
     nvrhi::CommandListHandle copy;
     uint64_t adapter=0;
     inline static std::atomic<uint64_t> identities{1};
@@ -41,11 +45,13 @@ class RtrSignalFrameRing {
         }
         return false;
     }
+    void RequireRetiredLocked(){for(auto& slot:slots)if(!Available(slot))throw std::runtime_error("Return native signal leases and complete consumer GPU work before closing");}
 public:
-    bool CanPublish(){RtrRequireHealthy();for(auto& slot:slots)if(Available(slot))return true;return false;}
-    bool Outstanding() const {for(auto& slot:slots)if(slot.published)return true;return false;}
-    bool ConsumersRetired(){for(auto& slot:slots)if(slot.leased&&(!slot.returned||(slot.consumerImported&&RtrCompletedFence(slot.fence.Get())<slot.completion)))return false;return true;}
+    bool CanPublish(){std::lock_guard lock(mutex);RtrRequireHealthy();for(auto& slot:slots)if(Available(slot))return true;return false;}
+    bool Outstanding() const {std::lock_guard lock(mutex);for(auto& slot:slots)if(slot.published)return true;return false;}
+    bool ConsumersRetired(){std::lock_guard lock(mutex);for(auto& slot:slots)if(slot.leased&&(!slot.returned||(slot.consumerImported&&RtrCompletedFence(slot.fence.Get())<slot.completion)))return false;return true;}
     void Publish(nvrhi::IDevice* device,const std::array<nvrhi::TextureHandle,PlaneCount>& sources,uint64_t sequence,uint64_t revision,uint64_t attributes,int64_t time,int64_t delta,uint32_t encoding=0,float maximumGi=1,const std::array<jlong,4>& provenance={}){
+        std::lock_guard lock(mutex);
         RtrRequireHealthy();
         int index=-1;for(int i=0;i<3;i++)if(Available(slots[i])){index=i;break;}
         if(index<0)throw std::runtime_error("All native signal slots are awaiting consumer completion");
@@ -61,6 +67,7 @@ public:
         }
         if(slot.width!=width||slot.height!=height||slot.mask!=mask||formatsChanged){
             std::array<nvrhi::TextureHandle,PlaneCount> prepared{};std::array<uint64_t,PlaneCount> sizes{};
+            std::array<jlong,PlaneCount> handles{};std::array<int,PlaneCount> formats{};
             for(unsigned i=0;i<PlaneCount;i++)if(sources[i]){
                 auto desc=sources[i]->getDesc();desc.isUAV=false;desc.isShaderResource=true;
                 desc.sharedResourceFlags=nvrhi::SharedResourceFlags::Shared;desc.initialState=nvrhi::ResourceStates::Common;desc.keepInitialState=true;
@@ -68,10 +75,19 @@ public:
                 if(!prepared[i])throw std::runtime_error("Could not allocate shared HDR signal");
                 auto* resource=static_cast<ID3D12Resource*>(prepared[i]->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource).pointer);
                 auto allocation=resource->GetDesc();sizes[i]=native->GetResourceAllocationInfo(0,1,&allocation).SizeInBytes;
+                // Export immutable descriptors on the native owner. Acquiring a
+                // packet later only copies bridge state, never queries NVRHI.
+                auto handle=prepared[i]->getNativeObject(nvrhi::ObjectTypes::SharedHandle).pointer;
+                if(!handle)throw std::runtime_error("Shared signal resource has no Win32 handle");
+                handles[i]=jlong(reinterpret_cast<uintptr_t>(handle));
+                const auto format=desc.format;
+                formats[i]=format==nvrhi::Format::RGBA16_FLOAT?1:format==nvrhi::Format::RGBA32_UINT?2:format==nvrhi::Format::RGBA32_FLOAT?3:format==nvrhi::Format::RGBA8_UNORM?4:0;
+                if(!formats[i])throw std::runtime_error("Unsupported shared HDR plane format");
             }
             // This slot has no in-flight consumer; the previous producer copy is
             // ordered before its completion fence. Other slots remain untouched.
             slot.textures=std::move(prepared);slot.allocation=sizes;slot.width=width;slot.height=height;slot.mask=mask;
+            slot.handles=handles;slot.formats=formats;
             slot.generation=identities.fetch_add(1);auto luid=native->GetAdapterLuid();std::memcpy(&adapter,&luid,8);
         }
         if(!slot.fence){
@@ -101,24 +117,21 @@ public:
     // [abi,slot,generation,sequence,revision,LUID,width,height,mask,fence,ready,done,
     //  attributes,time,delta,count,{signal,format(1=RGBA16F/2=RGBA32UI),allocation,resource}...]
     std::vector<jlong> Acquire(){
+        std::lock_guard lock(mutex);
         RtrRequireHealthy();
         if(latest<0||!slots[latest].published||slots[latest].leased)return {};
         auto& slot=slots[latest];
         std::vector<jlong> result={1,latest,jlong(slot.generation),jlong(slot.sequence),jlong(slot.revision),jlong(adapter),slot.width,slot.height,slot.mask,
             jlong(reinterpret_cast<uintptr_t>(slot.fenceHandle)),jlong(slot.completion-1),jlong(slot.completion),jlong(slot.attributes),slot.time,slot.delta,0};
         for(unsigned i=0;i<PlaneCount;i++)if(slot.textures[i]){
-            auto handle=slot.textures[i]->getNativeObject(nvrhi::ObjectTypes::SharedHandle).pointer;
-            if(!handle)throw std::runtime_error("Shared signal resource has no Win32 handle");
-            const auto format=slot.textures[i]->getDesc().format;
-            int encoding=format==nvrhi::Format::RGBA16_FLOAT?1:format==nvrhi::Format::RGBA32_UINT?2:format==nvrhi::Format::RGBA32_FLOAT?3:format==nvrhi::Format::RGBA8_UNORM?4:0;
-            if(!encoding)throw std::runtime_error("Unsupported shared HDR plane format");
-            result.insert(result.end(),{jlong(i),encoding,jlong(slot.allocation[i]),jlong(reinterpret_cast<uintptr_t>(handle))});++result[15];
+            result.insert(result.end(),{jlong(i),slot.formats[i],jlong(slot.allocation[i]),slot.handles[i]});++result[15];
         }
         if constexpr(PlaneCount==4){result[0]=2;result.push_back(slot.encoding);result.push_back(slot.maximumGiBits);}
         if constexpr(PlaneCount==8)result.insert(result.end(),slot.provenance.begin(),slot.provenance.end());
         slot.leased=true;RtrProtocolTrace::Record(5,adapter,0,latest,slot.generation,slot.sequence,slot.revision,slot.completion-1,slot.completion,0,3);return result;
     }
     void Release(nvrhi::IDevice* device,int index,uint64_t generation,uint64_t sequence,bool imported){
+        std::lock_guard lock(mutex);
         if(index<0||index>=3)throw std::invalid_argument("Invalid signal slot");auto& slot=slots[index];
         if(!slot.published||!slot.leased||slot.returned||slot.generation!=generation||slot.sequence!=sequence)
             throw std::invalid_argument("Signal lease identity does not match the active packet");
@@ -127,8 +140,8 @@ public:
         slot.returned=true;slot.consumerImported=imported;
         RtrProtocolTrace::Record(3,adapter,0,index,slot.generation,sequence,slot.revision,slot.completion-1,slot.completion,0,1|2|4|(imported?8:0));
     }
-    void RequireRetired(){for(auto& slot:slots)if(!Available(slot))throw std::runtime_error("Return native signal leases and complete consumer GPU work before closing");}
-    void Clear(bool deviceRemoved=false){if(!deviceRemoved)RequireRetired();for(auto& slot:slots){slot.textures={};slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=-1;}
+    void RequireRetired(){std::lock_guard lock(mutex);RequireRetiredLocked();}
+    void Clear(bool deviceRemoved=false){std::lock_guard lock(mutex);if(!deviceRemoved)RequireRetiredLocked();for(auto& slot:slots){slot.textures={};slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=-1;}
 };
 
 using RtrSignalFrames=RtrSignalFrameRing<4>;
