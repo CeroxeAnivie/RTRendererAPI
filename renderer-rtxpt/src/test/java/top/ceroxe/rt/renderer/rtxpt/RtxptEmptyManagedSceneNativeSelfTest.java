@@ -10,12 +10,19 @@ import top.ceroxe.rt.renderer.api.*;
 public final class RtxptEmptyManagedSceneNativeSelfTest {
     private static final int SIZE=32;
     private static final CameraState CAMERA=CameraState.lookAt(0,0,4,0,0,0).aspectRatio(1).build();
+    private static Path lifecycle;
+    private static void mark(String phase) {
+        try {Files.writeString(lifecycle,phase+"\n",StandardCharsets.UTF_8,StandardOpenOption.CREATE,StandardOpenOption.APPEND);}
+        catch(java.io.IOException failure){throw new java.io.UncheckedIOException(failure);}
+    }
     public static void main(String[] args)throws Exception {
         Path output=Path.of(args.length==0?"build/reports/empty-managed-scene-contract":args[0]).toAbsolutePath();
         Files.createDirectories(output);
+        lifecycle=output.resolve("lifecycle.txt");mark("start");
         var plan=new NativeLightingPlan(SIZE,SIZE,Set.of(NativeLightingPlan.Signal.DIRECT_GAIN,
                 NativeLightingPlan.Signal.NORMAL_DISTANCE),0,6,0,NativeLightingStyle.defaults());
         try(var renderer=RtxptRenderers.openNativeLighting(RtxptRenderers.nativeLightingConfiguration(),plan)) {
+            mark("renderer-opened");
             var access=renderer.extension(RtxptAccess.class).orElseThrow();
             var lighting=renderer.extension(NativeLightingControl.class).orElseThrow();
             lighting.lightingReconstruction(NativeLightingReconstruction.NONE);
@@ -44,10 +51,12 @@ public final class RtxptEmptyManagedSceneNativeSelfTest {
     private static void render(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,long sequence,boolean mesh) {
         lighting.publishLightingAttributes(new NativeLightingPublication(sequence,mesh
                 ?List.of(NativeLightingPublication.Instance.receiver(3)):List.of(),List.of(),null,null));
+        mark("submit-enter-"+sequence);
         renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,CAMERA).minimumSceneRevision(sequence).build());
-        access.awaitIdle();
+        mark("submit-exit-"+sequence);access.awaitIdle();mark("idle-exit-"+sequence);
         try(var lease=lighting.acquireLightingFrame().orElseThrow()) {
             var frame=lease.frame();
+            mark("adapter-luid-"+Long.toUnsignedString(frame.adapterLuid()));
             require(frame.sequence()==sequence&&frame.sceneRevision()==sequence&&frame.attributeGeneration()==sequence
                     &&frame.width()==SIZE&&frame.height()==SIZE,"Empty scene returned a stale or mismatched packet");
         }

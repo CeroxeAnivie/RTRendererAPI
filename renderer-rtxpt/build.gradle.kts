@@ -1,5 +1,6 @@
 import java.security.MessageDigest
 import java.util.HexFormat
+import java.util.zip.ZipFile
 import org.gradle.api.tasks.bundling.Zip
 
 plugins { `java-library` }
@@ -89,20 +90,57 @@ val buildPrecompiledRuntime = tasks.register<Exec>("buildPrecompiledRuntime") {
         "--compiler", rootProject.file("build/upstream-rtxpt/source/External/dxc/build/native/bin/x64/dxc.exe").absolutePath,
         "--output", rootProject.file("build/reports/precompiled-runtime").absolutePath)
 }
+// These are runtime support assets, not the upstream demonstration scenes.
+val proceduralSkyAssets = listOf(
+    "Assets/StandaloneTextures/RGBANoiseMedium.png",
+    "Assets/StandaloneTextures/q2rtx_env/clouds.dds",
+    "Assets/StandaloneTextures/q2rtx_env/inscatter_earth.dds",
+    "Assets/StandaloneTextures/q2rtx_env/irradiance_earth.dds",
+    "Assets/StandaloneTextures/q2rtx_env/transmittance_earth.dds"
+)
+val coreRuntimeAssets = listOf(
+    "Assets/Fonts/**",
+    "Assets/loading_splash.png", "Assets/ArtLicenses.txt"
+) + proceduralSkyAssets
+val coreRuntimeFiles = listOf(
+    "bin/rtrenderer_jvm_host.exe", "bin/rtrenderer_rtxpt.dll",
+    "bin/NRD.dll", "bin/omm-lib.dll",
+    "bin/nvngx_dlss.dll", "bin/nvngx_dlssd.dll", "bin/nvngx_dlssg.dll",
+    "bin/sl.common.dll", "bin/sl.interposer.dll", "bin/sl.pcl.dll",
+    "bin/sl.reflex.dll", "bin/sl.dlss.dll", "bin/sl.dlss_d.dll", "bin/sl.dlss_g.dll",
+    "bin/D3D12/**", "bin/ShaderPrecompiled/**", "bin/AdapterShaders/**",
+    "bin/PrecompiledShaders/**", "bin/ShaderDynamic/Source/**",
+    // The unmodified ShaderCompilerConfig::Initialize checks this real path.
+    // Compilation remains prohibited; compiler DLLs are build-time inputs only.
+    "bin/ShaderDynamic/Tools/d3d12/x64/dxc.exe"
+)
+val coreRuntimeLayout = layout.buildDirectory.dir("core-runtime-layout")
+val prepareCoreRuntimeLayout = tasks.register("prepareCoreRuntimeLayout") {
+    outputs.dir(coreRuntimeLayout)
+    doLast {
+        // The unchanged sample enumerates this directory during initialization.
+        // Preserve the empty directory, without any demonstration HDR textures.
+        coreRuntimeLayout.get().dir("Assets/EnvironmentMaps").asFile.mkdirs()
+    }
+}
 val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
     group = "build"
     // GPU binaries and textures are already encoded. Avoid serial deflation
     // of the complete runtime on every bridge release; contents stay identical.
     entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
-    dependsOn(buildPrecompiledRuntime)
+    dependsOn(buildPrecompiledRuntime, prepareCoreRuntimeLayout)
     archiveFileName.set("rtxpt-runtime.zip")
     destinationDirectory.set(layout.buildDirectory.dir("native-package"))
     from(runtimeRoot) {
-        include("bin/**", "Assets/**")
+        (coreRuntimeFiles + coreRuntimeAssets).forEach { include(it) }
         exclude("**/*.pdb", "bin/Rtxpt.exe", "bin/IntroSample.exe", "bin/ShaderDynamic/Bin/**")
     }
+    from(coreRuntimeLayout) { includeEmptyDirs = true }
     doFirst {
         val bin = runtimeRoot.get().dir("bin").asFile
+        (coreRuntimeFiles + coreRuntimeAssets).filterNot { it.contains('*') }.forEach {
+            check(runtimeRoot.get().file(it).asFile.isFile) { "Missing core runtime input: $it" }
+        }
         listOf("rtrenderer_rtxpt.dll", "rtrenderer_jvm_host.exe", "NRD.dll", "omm-lib.dll", "sl.interposer.dll", "D3D12/D3D12Core.dll", "ShaderDynamic/Tools/d3d12/x64/dxc.exe", "ShaderDynamic/Source/Rtxpt/PathTracer/PathTracer.hlsli").forEach {
             check(bin.resolve(it).isFile) { "Missing upstream runtime input: $it" }
         }
@@ -119,6 +157,41 @@ val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
         }
         check(runtimeRoot.get().dir("Assets").asFile.isDirectory)
     }
+    doLast {
+        ZipFile(archiveFile.get().asFile).use { zip ->
+            check(zip.getEntry("Assets/EnvironmentMaps/")?.isDirectory == true) {
+                "The original runtime requires an empty EnvironmentMaps directory"
+            }
+            val entries = zip.entries().asSequence().filterNot { it.isDirectory }.toList()
+            check(entries.none { it.name.startsWith("Assets/Models/")
+                || it.name.startsWith("Assets/Materials/")
+                || it.name.startsWith("Assets/EnvironmentMaps/")
+                || (it.name.startsWith("Assets/StandaloneTextures/") && it.name !in proceduralSkyAssets)
+                || it.name.startsWith("Assets/SampleGame/")
+                || it.name.endsWith(".scene.json")
+                || it.name.endsWith(".pdb")
+                || it.name.endsWith("/dxcompiler.dll")
+                || it.name.endsWith("/dxil.dll") }) {
+                "Demonstration assets must not enter the core renderer runtime"
+            }
+            check(entries.sumOf { it.size } <= 512L * 1024 * 1024) {
+                "Core runtime exceeds 512 MiB; review the package manifest instead of bundling sample assets"
+            }
+        }
+    }
+}
+// Explicit opt-in only: neither jar nor publication depends on this archive.
+tasks.register<Zip>("packageRtxptExampleAssets") {
+    group = "distribution"
+    description = "Package optional upstream demonstration scenes and their assets"
+    entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+    archiveFileName.set("rtxpt-example-assets.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("example-package"))
+    from(runtimeRoot) {
+        include("Assets/**")
+        coreRuntimeAssets.forEach { exclude(it) }
+    }
+    from(runtimeRoot) { include("Assets/ArtLicenses.txt") }
 }
 val runtimeDigest = tasks.register("hashRtxptRuntime") {
     dependsOn(runtimeArchive)

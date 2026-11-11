@@ -83,6 +83,8 @@ final class RtxptRuntimeBundle {
     private static void verify(Path root) throws IOException {
         verifyBin(root.resolve("bin"));
         if (!Files.isDirectory(root.resolve("Assets"))) throw new IOException("Missing official RTXPT Assets directory");
+        if (!Files.isDirectory(root.resolve("Assets/EnvironmentMaps")))
+            throw new IOException("Missing RTXPT EnvironmentMaps directory (it may be empty)");
     }
 
     static void verifyBin(Path bin) throws IOException {

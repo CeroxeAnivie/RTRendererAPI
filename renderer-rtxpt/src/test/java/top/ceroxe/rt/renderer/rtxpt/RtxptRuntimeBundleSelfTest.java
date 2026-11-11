@@ -65,6 +65,11 @@ public final class RtxptRuntimeBundleSelfTest {
             require(bin.isAbsolute() && bin.getFileName().toString().equals("bin"), "Public path must return the absolute bin directory");
             require(bin.startsWith(fixture.cache()), "Extraction escaped the configured cache");
             require(Files.isDirectory(bin.resolve("../Assets").normalize()), "Official Assets must be beside bin");
+            Path environmentMaps = bin.resolve("../Assets/EnvironmentMaps").normalize();
+            require(Files.isDirectory(environmentMaps), "An empty EnvironmentMaps ZIP directory must be extracted");
+            try (var contents = Files.list(environmentMaps)) {
+                require(contents.findAny().isEmpty(), "EnvironmentMaps fixture must not require an example HDR");
+            }
             require(Files.readString(bin.resolve("../.complete").normalize()).equals(fixture.digest()), "Completion marker must identify the verified archive");
             require(Files.getLastModifiedTime(bin.resolve(SOURCE.substring(4))).equals(ARCHIVE_TIME), "Dynamic shader source timestamp changed on extraction");
             require(Files.getLastModifiedTime(bin.resolve(PRECOMPILED.substring(4))).equals(ARCHIVE_TIME), "Precompiled shader timestamp changed on extraction");
@@ -90,14 +95,23 @@ public final class RtxptRuntimeBundleSelfTest {
             noInstall(fixture.cache());
         }
         var noAssets = runtimeEntries();
-        noAssets.remove("Assets/fixture.scene");
+        noAssets.remove("Assets/EnvironmentMaps/");
         fixture = fixture(root.resolve("no-assets"), noAssets, null);
         System.setProperty(CACHE, fixture.cache().toString());
         try (var loader = fixture.open()) {
             rejected(loader, "Missing official RTXPT Assets");
             noInstall(fixture.cache());
         }
-        passed("fixed-shader-path-and-sibling-assets");
+        var noEnvironmentMaps = runtimeEntries();
+        noEnvironmentMaps.remove("Assets/EnvironmentMaps/");
+        noEnvironmentMaps.put("Assets/fixture.txt", bytes("Assets exists without EnvironmentMaps"));
+        fixture = fixture(root.resolve("no-environment-maps"), noEnvironmentMaps, null);
+        System.setProperty(CACHE, fixture.cache().toString());
+        try (var loader = fixture.open()) {
+            rejected(loader, "Missing RTXPT EnvironmentMaps directory");
+            noInstall(fixture.cache());
+        }
+        passed("fixed-shader-path-sibling-assets-and-empty-environment-directory");
     }
 
     private static void digestMismatch(Path root) throws Exception {
@@ -139,6 +153,7 @@ public final class RtxptRuntimeBundleSelfTest {
             Path flatDirectory = Files.createDirectories(root.resolve("legacy-flat-directory"));
             for (var entry : flat.entrySet()) {
                 Path file = flatDirectory.resolve(entry.getKey());
+                if (entry.getKey().endsWith("/")) { Files.createDirectories(file); continue; }
                 Files.createDirectories(file.getParent());
                 Files.write(file, entry.getValue());
             }
@@ -167,6 +182,11 @@ public final class RtxptRuntimeBundleSelfTest {
             rejected(loader, "RTXPT runtime is incomplete");
             noInstall(fallback.cache());
             System.setProperty(OVERRIDE, validBin.toString());
+            Path environmentMaps = validBin.resolve("../Assets/EnvironmentMaps").normalize();
+            Files.delete(environmentMaps);
+            rejected(loader, "Missing RTXPT EnvironmentMaps directory");
+            noInstall(fallback.cache());
+            Files.createDirectories(environmentMaps);
             deleteTree(validBin.resolve("../Assets").normalize());
             rejected(loader, "Missing official RTXPT Assets beside runtime bin");
             noInstall(fallback.cache());
@@ -245,8 +265,9 @@ public final class RtxptRuntimeBundleSelfTest {
                 "bin/sl.interposer.dll", "bin/NRD.dll", "bin/omm-lib.dll", "bin/D3D12/D3D12Core.dll",
                 "bin/PrecompiledShaders/index.tsv", "bin/PrecompiledShaders/globals.txt", "bin/PrecompiledShaders/sources.tsv",
                 "bin/ShaderDynamic/Tools/d3d12/x64/dxc.exe", SOURCE, PRECOMPILED,
-                "bin/ShaderDynamic/Source/External/fixture.hlsli", "Assets/fixture.scene"})
+                "bin/ShaderDynamic/Source/External/fixture.hlsli"})
             entries.put(path, bytes("non-executable fixture: " + path));
+        entries.put("Assets/EnvironmentMaps/", new byte[0]);
         for (var shader : new String[]{"RtrNativeLighting", "RtrNativeLightingReconstruct",
                 "RtrNativeDynamicLighting", "RtrNativeDynamicLightingReconstruct",
                 "RtrNativeLightingDeep", "RtrNativeLightingEncode", "RtrNativeLightingResolve",

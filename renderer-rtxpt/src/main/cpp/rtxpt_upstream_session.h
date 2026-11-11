@@ -154,7 +154,7 @@ private:
             // DeviceManager::Shutdown and drains Streamline destruction callbacks.
             StreamlineSessionPolicy streamlinePolicy(requiresStreamline);
             std::optional<ShutdownModuleReference> retainedModules;
-            Application application(options, managedScene);
+            Application application(options, managedScene, requiresStreamline);
             // The pinned sample reads the CRT arguments instead of Init's parameters.
             // Scope the embedding arguments to its synchronous initialization and restore
             // the host immediately. The lifecycle mutex above excludes another sample.

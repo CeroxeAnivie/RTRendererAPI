@@ -23,6 +23,8 @@ public final class RtxptRuntime {
             RtxptRuntimeBundle.verifyBin(bin);
             if (!java.nio.file.Files.isDirectory(bin.resolve("../Assets").normalize()))
                 throw new IOException("Missing official RTXPT Assets beside runtime bin");
+            if (!java.nio.file.Files.isDirectory(bin.resolve("../Assets/EnvironmentMaps").normalize()))
+                throw new IOException("Missing RTXPT EnvironmentMaps directory (it may be empty)");
         } catch (IOException failure) {
             throw new IllegalStateException("RTXPT runtime is incomplete: " + bin, failure);
         }

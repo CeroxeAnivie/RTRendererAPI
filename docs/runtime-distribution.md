@@ -12,6 +12,8 @@
 
 当前平台是 Windows x86_64、Java 25、D3D12/DXR 与受支持的 NVIDIA GPU。普通 CPU 帧、旧 Vulkan presenter 和旧 RTXPT／Vulkan 组合器不是本版 provider 的输出承诺。
 
+原生光照会话不需要 Streamline 时，默认按系统高性能顺序选择满足 D3D12 要求的硬件显卡；旧系统按专用显存选择。显式指定显卡仍优先，启用 Streamline 的会话继续使用其原版选卡流程。
+
 ## 官方布局
 
 锁定上游为 RTXPT v1.9.0，commit 303b408ab81790a5051abd7573830b7a4112eb8e。官方二进制包 SHA-256 为 d03749c06c4b89befebf1a8938ed88a4aca714ef1053649a6c32f4e7947380dc。
@@ -29,6 +31,11 @@
     Assets/
 
 bin 中的原版依赖及资源与 Assets 同源；自有 bridge、宿主和 AdapterShaders 独立放置。AdapterShaders 不是向上游 ShaderDynamic/Source 注入的文件。
+
+默认核心包只携带运行时所需的 Fonts、loading_splash.png、许可说明，以及物理天空使用的 5 张固定查找表／云层／噪声贴图；不携带官方示例模型、示例场景、示例材质覆盖文件、大型 HDR 环境示例或 SampleGame。StandaloneTextures 仅允许这 5 个明确文件，不通配收录。Assets/Materials 中的预置覆盖随可选示例包提供；没有覆盖文件时，官方 MaterialsBaker 从实际场景材质导入，不依赖该目录。消费者自己的网格、纹理和环境仍由公开 API 提供，预编译着色器、降噪、DLSS 和画质功能保持完整。构建会检查核心包内容，禁止示例资产重新混入。
+原版初始化会枚举 EnvironmentMaps，因此核心包保留该空目录。ShaderDynamic/Source 用于预编译源码摘要校验；原版初始化仍检查真实 dxc.exe 路径，因此保留该可执行文件，但不携带仅供构建期编译的 dxcompiler.dll／dxil.dll。宿主禁止创建编译器子进程，发行包没有运行时编译回退。
+
+需要运行官方示例时，显式执行 `:renderer-rtxpt:packageRtxptExampleAssets`，将生成的 `renderer-rtxpt/build/example-package/rtxpt-example-assets.zip` 解压到外部运行时根目录，使其 Assets 与 bin 同级；再通过 `top.ceroxe.rt.rtxpt.runtime` 指向该外部 bin。此可选任务不属于默认 jar 或 Maven 发布依赖。
 
 运行时不调用源码编译器。`PrecompiledShaders` 包含构建期二进制、真实命令模板、配置摘要和源文件摘要；ZIP 排除机器运行产生的 `ShaderDynamic/Bin` 缓存。首次渲染仅校验并复制二进制，按原版公开哈希函数重建安装路径对应的缓存键。所有源文件和二进制摘要必须匹配。
 

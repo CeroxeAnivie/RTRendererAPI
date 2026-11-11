@@ -113,6 +113,10 @@ public final class RtxptEnvironmentMapNativeSelfTest {
     }
 
     public static void main(String[] args) throws Exception {
+        if (args.length == 2 && args[1].equals("--procedural-sky")) {
+            proceduralSky(Path.of(args[0]).toAbsolutePath());
+            return;
+        }
         if (args.length != 1) throw new IllegalArgumentException("Usage: RtxptEnvironmentMapNativeSelfTest <output-directory>");
         Path output = Path.of(args[0]).toAbsolutePath(); Files.createDirectories(output);
         var results = new ArrayList<Result>();
@@ -147,5 +151,69 @@ public final class RtxptEnvironmentMapNativeSelfTest {
         }
         summary(output, results, true, null);
         System.out.println("ENVIRONMENT_MAP_NATIVE PASS states=5 frames=10 publicRenderer=true lightOnlyMapRetained=true output=" + output);
+    }
+
+    /** Select the original procedural baker through native scenes, without generated sky DDS files. */
+    private static void proceduralSky(Path output) throws Exception {
+        Files.createDirectories(output);
+        final int extent = 1024;
+        Path assets = RtxptNative.runtime().resolve("../Assets/StandaloneTextures").normalize();
+        for (String name : new String[]{"RGBANoiseMedium.png", "q2rtx_env/clouds.dds", "q2rtx_env/inscatter_earth.dds",
+                "q2rtx_env/irradiance_earth.dds", "q2rtx_env/transmittance_earth.dds"})
+            if (!Files.isRegularFile(assets.resolve(name))) throw new AssertionError("Missing procedural sky resource: " + name);
+        // A real triangle behind the camera exercises the ordinary native-file
+        // AS lifecycle without any demonstration models or empty-AS shortcuts.
+        var buffer = java.nio.ByteBuffer.allocate(84).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        for (float value : new float[]{-1,-1,5, 1,-1,5, 0,1,5, 0,0,-1, 0,0,-1, 0,0,-1}) buffer.putFloat(value);
+        buffer.putInt(0).putInt(1).putInt(2);
+        Files.writeString(output.resolve("sky-guard.gltf"), """
+                {"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],
+                 "nodes":[{"mesh":0}],"materials":[{"name":"sky-contract-guard"}],
+                 "meshes":[{"primitives":[{"attributes":{"POSITION":0,"NORMAL":1},"indices":2,"material":0}]}],
+                 "buffers":[{"uri":"data:application/octet-stream;base64,%s","byteLength":84}],
+                 "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36,"target":34962},
+                   {"buffer":0,"byteOffset":36,"byteLength":36,"target":34962},
+                   {"buffer":0,"byteOffset":72,"byteLength":12,"target":34963}],
+                 "accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3","min":[-1,-1,5],"max":[1,1,5]},
+                   {"bufferView":1,"componentType":5126,"count":3,"type":"VEC3"},
+                   {"bufferView":2,"componentType":5125,"count":3,"type":"SCALAR"}]}
+                """.formatted(java.util.Base64.getEncoder().encodeToString(buffer.array())), StandardCharsets.UTF_8);
+        var results = new ArrayList<String>(); results.add("preset,firstSequence,lastSequence,meanChannel,maximumChannel");
+        try (Renderer renderer = RtxptRenderers.openHiddenWindow(config())) {
+            RtxptAccess access = renderer.extension(RtxptAccess.class).orElseThrow();
+            access.diagnosticLevel(RtxptDiagnostics.Level.OFF);
+            long sequence = 1;
+            for (String preset : new String[]{"MIDDAY", "PITCHBLACK"}) {
+                Path scene = output.resolve("sky-" + preset + ".scene.json");
+                Files.writeString(scene, """
+                        {"models":["sky-guard.gltf"],"graph":[{"model":0},
+                         {"name":"Sky","type":"EnvironmentLight","intensity":1,"path":"==PROCEDURAL_SKY_%s=="}]}
+                        """.formatted(preset), StandardCharsets.UTF_8);
+                access.loadNativeScene(scene);
+                long first = sequence;
+                for (int frame = 0; frame < 2; frame++)
+                    renderer.submit(RenderFrameRequest.builder(sequence++, extent, extent, CAMERA).build());
+                access.awaitIdle();
+                Path capture = output.resolve("procedural-" + preset + ".png"); access.capture(capture);
+                BufferedImage image = ImageIO.read(capture.toFile());
+                if (image == null || image.getWidth() != extent || image.getHeight() != extent)
+                    throw new AssertionError("Missing procedural sky capture: " + preset);
+                long sum = 0; int maximum = 0;
+                // Native-file scenes retain the official settings panel on the left.
+                // Sample a fixed 64x64 sky region clear of that panel.
+                for (int y = extent / 2 - 32; y < extent / 2 + 32; y++) for (int x = extent - 80; x < extent - 16; x++) {
+                    int pixel = image.getRGB(x, y);
+                    for (int shift = 0; shift <= 16; shift += 8) {
+                        int value = (pixel >>> shift) & 255; sum += value; maximum = Math.max(maximum, value);
+                    }
+                }
+                double mean = sum / (64 * 64 * 3.0);
+                if (preset.equals("MIDDAY") && mean < 4) throw new AssertionError("Procedural midday sky is black: " + mean);
+                if (preset.equals("PITCHBLACK") && maximum > 1) throw new AssertionError("Procedural pitch-black sky retained radiance: " + maximum);
+                results.add(preset + "," + first + "," + (sequence - 1) + "," + mean + "," + maximum);
+            }
+        }
+        Files.write(output.resolve("procedural-sky-cases.csv"), results, StandardCharsets.UTF_8);
+        System.out.println("PROCEDURAL_SKY_NATIVE PASS states=2 frames=4 assets=5 nativeScene=true generatedEnvironmentMap=false output=" + output);
     }
 }

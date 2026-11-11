@@ -7,6 +7,8 @@
 #include <vector>
 #include <cstdio>
 #include <d3d12sdklayers.h>
+#include <dxgi1_6.h>
+#include <wrl/client.h>
 #include "OpacityMicroMap/OmmBaker.h"
 #include "SampleCommon/AccelerationStructureUtil.h"
 #include "SampleCommon/BlasCompactor.h"
@@ -85,6 +87,11 @@ public:
     PathTracer(donut::app::DeviceManager& manager, const CommandLineOptions& options,
         bool managedScene) : AdvancedPathTracer(manager, options),
         m_adapterOptions(options), m_managedScene(managedScene) {
+        // Sample::Init selects an empty name when no bundled demos exist. Its
+        // same-name shortcut would then skip the public LoadScene hook entirely.
+        // Make the first selection enter that lifecycle for API-managed scenes
+        // and explicitly supplied external scenes, without a dummy demo file.
+        if(m_managedScene||!options.scene.empty())m_currentSceneName="API scene initialization pending";
         if(options.debug||options.gpuValidation){
             auto* native=static_cast<ID3D12Device*>(GetDevice()->getNativeObject(nvrhi::ObjectTypes::D3D12_Device));
             if(native&&SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&m_validationQueue))))
@@ -1289,8 +1296,8 @@ class Application final : public SampleBaseApp {
 public:
     using FrameCallback = std::function<void(donut::app::DeviceManager&, uint32_t)>;
 
-    Application(const std::vector<std::string>& options, bool managedScene)
-        : m_managedScene(managedScene) {
+    Application(const std::vector<std::string>& options, bool managedScene, bool requiresStreamline)
+        : m_managedScene(managedScene), m_requiresStreamline(requiresStreamline) {
         std::vector<const char*> argv;
         for (const auto& option : options) argv.push_back(option.c_str());
         if (!m_options.InitFromCommandLine(static_cast<int>(argv.size()), argv.data()))
@@ -1342,6 +1349,57 @@ public:
     }
 
 private:
+    static int SelectDefaultHardwareAdapter(D3D_FEATURE_LEVEL featureLevel) {
+        using Microsoft::WRL::ComPtr;
+        ComPtr<IDXGIFactory1> factory;
+        if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(factory.GetAddressOf()))))
+            throw std::runtime_error("Cannot enumerate graphics adapters for native lighting");
+        auto supported = [featureLevel](IDXGIAdapter1* adapter, DXGI_ADAPTER_DESC1& desc) {
+            return SUCCEEDED(adapter->GetDesc1(&desc)) && !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+                && SUCCEEDED(D3D12CreateDevice(adapter, featureLevel, __uuidof(ID3D12Device), nullptr));
+        };
+        auto ordinaryIndex = [&](const DXGI_ADAPTER_DESC1& selected) {
+            for (UINT index = 0;; ++index) {
+                ComPtr<IDXGIAdapter> adapter;
+                if (FAILED(factory->EnumAdapters(index, adapter.GetAddressOf()))) break;
+                DXGI_ADAPTER_DESC desc{};
+                if (SUCCEEDED(adapter->GetDesc(&desc))
+                    && desc.AdapterLuid.HighPart == selected.AdapterLuid.HighPart
+                    && desc.AdapterLuid.LowPart == selected.AdapterLuid.LowPart) {
+                    donut::log::info("Native lighting adapter: %S (DXGI index %u)", desc.Description, index);
+                    return static_cast<int>(index);
+                }
+            }
+            throw std::runtime_error("Selected native lighting adapter has no DXGI index");
+        };
+        // Streamline's disabled-session adapter helper returns index zero. Use
+        // the OS performance preference here, then map its LUID back to the
+        // ordinary index consumed by the unchanged DeviceManager.
+        ComPtr<IDXGIFactory6> preferredFactory;
+        if (SUCCEEDED(factory.As(&preferredFactory))) {
+            for (UINT index = 0;; ++index) {
+                ComPtr<IDXGIAdapter1> adapter;
+                if (FAILED(preferredFactory->EnumAdapterByGpuPreference(index,
+                    DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(adapter.GetAddressOf())))) break;
+                DXGI_ADAPTER_DESC1 desc{};
+                if (supported(adapter.Get(), desc)) return ordinaryIndex(desc);
+            }
+        }
+        DXGI_ADAPTER_DESC1 selected{};
+        bool found = false;
+        for (UINT index = 0;; ++index) {
+            ComPtr<IDXGIAdapter1> adapter;
+            if (FAILED(factory->EnumAdapters1(index, adapter.GetAddressOf()))) break;
+            DXGI_ADAPTER_DESC1 desc{};
+            if (supported(adapter.Get(), desc) && (!found || desc.DedicatedVideoMemory > selected.DedicatedVideoMemory)) {
+                selected = desc;
+                found = true;
+            }
+        }
+        if (!found) throw std::runtime_error("No hardware graphics adapter supports the required D3D12 feature level");
+        return ordinaryIndex(selected);
+    }
+
     std::unique_ptr<Sample> CreateMainRenderPass(donut::app::DeviceManager& manager,
         const CommandLineOptions&) override {
         auto renderer = std::make_unique<PathTracer>(manager, m_options, m_managedScene);
@@ -1359,6 +1417,8 @@ private:
         parameters.startFullscreen = m_options.fullscreen;
         parameters.startBorderless = m_options.borderless;
         parameters.adapterIndex = m_options.adapterIndex;
+        if (!m_requiresStreamline && parameters.adapterIndex < 0)
+            parameters.adapterIndex = SelectDefaultHardwareAdapter(parameters.featureLevel);
         parameters.vsyncEnabled = false;
     }
 
@@ -1366,6 +1426,7 @@ private:
     PathTracer* m_renderer = nullptr;
     CommandLineOptions m_options;
     bool m_managedScene = false;
+    bool m_requiresStreamline = true;
     bool m_observing = false;
 };
 
