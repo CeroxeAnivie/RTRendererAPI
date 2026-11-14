@@ -2,6 +2,7 @@
 param(
     [string]$RuntimeDirectory='build/upstream-rtxpt/runtime/rtxpt_v.1.9.0_binaries/bin',
     [string]$BaselineRuntimeDirectory='',
+    [string]$BaselineClasspathFile='',
     [string]$ClasspathFile='build/renderer-validation-classpath.txt',
     [string]$OutputDirectory='build/reports/streaming-scene-performance',
     [ValidateSet('medium','fast')][string[]]$Profiles=@('medium','fast'),
@@ -47,8 +48,15 @@ $hostRunner=Join-Path $PSScriptRoot 'Invoke-RtxptHost.ps1'
 $runtimes=[ordered]@{}
 if($BaselineRuntimeDirectory){$runtimes.baseline=Full $BaselineRuntimeDirectory}
 $runtimes.current=Full $RuntimeDirectory
+$classpaths=[ordered]@{}
+if($BaselineRuntimeDirectory){$classpaths.baseline=if($BaselineClasspathFile){Full $BaselineClasspathFile}else{$classpathPath}}
+$classpaths.current=$classpathPath
+foreach($identity in $classpaths.Keys){
+    if(!(Test-Path -LiteralPath $classpaths[$identity] -PathType Leaf)){throw "Missing fixed Java classpath: $identity"}
+}
+
 if($CheckPaths){
-    Add-WorkloadFields ([ordered]@{Runtimes=$runtimes;Classpath=$classpathPath;Output=$output;Host=$hostRunner;Profiles=$Profiles;Diagnostics=$Diagnostics;Meshes=$Meshes;Sources=$Sources;Ticks=$Ticks;FramesPerTick=$FramesPerTick;MovementFrames=$Ticks*$FramesPerTick;StationaryFrames=$StationaryFrames;JobLimitGiB=10;Runs=$runtimes.Count*$Profiles.Count*$Diagnostics.Count})
+    Add-WorkloadFields ([ordered]@{Runtimes=$runtimes;Classpaths=$classpaths;Output=$output;Host=$hostRunner;Profiles=$Profiles;Diagnostics=$Diagnostics;Meshes=$Meshes;Sources=$Sources;Ticks=$Ticks;FramesPerTick=$FramesPerTick;MovementFrames=$Ticks*$FramesPerTick;StationaryFrames=$StationaryFrames;JobLimitGiB=10;Runs=$runtimes.Count*$Profiles.Count*$Diagnostics.Count})
     return
 }
 if(!(Test-Path -LiteralPath $classpathPath -PathType Leaf)){throw 'Compile the fixture and export its fixed runtime classpath before running this tool'}
@@ -66,6 +74,19 @@ foreach($entry in $entries){
 }
 if($fixtureClasses.Count -eq 0){throw 'The already-compiled RtxptStreamingWorkload classes are missing'}
 $classIdentities=@($fixtureClasses|Sort-Object FullName|ForEach-Object{[ordered]@{path=$_.FullName;sha256=(Hash $_.FullName);bytes=$_.Length}})
+$javaIdentities=[ordered]@{}
+foreach($identity in $classpaths.Keys){
+    $fixed=([IO.File]::ReadAllText($classpaths[$identity])).Trim()
+    if($fixed.Contains('*')){throw 'Java classpaths must name fixed entries, without wildcards'}
+    $javaIdentities[$identity]=@($fixed.Split([IO.Path]::PathSeparator)|ForEach-Object{
+        $entry=Full $_
+        if(Test-Path -LiteralPath $entry -PathType Leaf){[ordered]@{path=$entry;sha256=(Hash $entry)}}
+        elseif(Test-Path -LiteralPath $entry -PathType Container){
+            $classes=@(Get-ChildItem -LiteralPath $entry -Filter '*.class' -File -Recurse|Sort-Object FullName)
+            [ordered]@{path=$entry;classes=@($classes|ForEach-Object{[ordered]@{path=$_.FullName;sha256=(Hash $_.FullName)}})}
+        }else{throw "Missing Java classpath entry: $entry"}
+    })
+}
 $runtimeIdentities=[ordered]@{}
 foreach($identity in $runtimes.Keys){
     $bin=$runtimes[$identity]
@@ -74,12 +95,12 @@ foreach($identity in $runtimes.Keys){
     $runtimeIdentities[$identity]=@($files|ForEach-Object{$path=Join-Path $bin $_;[ordered]@{name=$_;sha256=(Hash $path);bytes=(Get-Item -LiteralPath $path).Length}})
 }
 Save-Json (Join-Path $output 'environment.json') ([ordered]@{
-    schema='streaming-scene-performance-v1';timestampUtc=[DateTime]::UtcNow.ToString('o');testClasses=$classIdentities;runtime=$runtimeIdentities
+    schema='streaming-scene-performance-v1';timestampUtc=[DateTime]::UtcNow.ToString('o');testClasses=$classIdentities;java=$javaIdentities;classpathFiles=$classpaths;runtime=$runtimeIdentities
     profiles=$Profiles;diagnostics=$Diagnostics;runOrder=$RunOrder;collectGpuTiming=[bool]$CollectGpuTiming;meshes=$Meshes;admissionBatches=$AdmissionBatches;sources=$Sources;ticks=$Ticks;sceneTickHz=20;framesPerTick=$FramesPerTick
     workloadKey=$workloadKey;sourceModel=$SourceModel;staticSources=$effectiveStaticSources;dynamicSources=$dynamicSources;flowPerFrame=$FlowPerFrame;materialCount=$MaterialCount;exportRaw=[bool]$ExportRaw;requireTarget=[bool]$RequireTarget
     movementFrames=$Ticks*$FramesPerTick;warmupFrames=$WarmupFrames;stationaryFrames=$StationaryFrames;textureSize=$TextureSize
     outputExtent=@(2560,1600);lightingExtent=@(1280,800);jobMemoryLimitGiB=10;javaMaximumHeapMiB=512;serialRuns=$true
-    backgroundWindow=$true;runtimeCompilationProhibited=$true;baselineAndCurrentUseIdenticalClassBytes=$true
+    backgroundWindow=$true;runtimeCompilationProhibited=$true;baselineAndCurrentUseIdenticalClassBytes=(!$BaselineClasspathFile);baselineAndCurrentUseIdenticalFixtureBytes=$true
     measurement='public apply through fresh GPU-only output lease; wall time includes waits; not GPU busy time or application FPS'
 })
 function Read-GpuBaseline {
@@ -124,7 +145,7 @@ try {
             '--flow-per-frame',[string]$FlowPerFrame,'--material-count',[string]$MaterialCount,
             '--export-raw',([bool]$ExportRaw).ToString().ToLowerInvariant(),'--require-target',([bool]$RequireTarget).ToString().ToLowerInvariant(),'--output',$case)
         if($SourceModel -eq 'finite-channel-max'){$arguments+=@('--static-sources',[string]$effectiveStaticSources)}
-        Save-Json (Join-Path $case 'host-arguments.json') ([ordered]@{hostRunner=$hostRunner;mainClass='top.ceroxe.rt.renderer.rtxpt.RtxptStreamingWorkload';applicationArguments=$arguments;runtimeDirectory=$runtimes[$identity];classpathFile=$classpathPath;timeoutSeconds=$TimeoutSeconds})
+        Save-Json (Join-Path $case 'host-arguments.json') ([ordered]@{hostRunner=$hostRunner;mainClass='top.ceroxe.rt.renderer.rtxpt.RtxptStreamingWorkload';applicationArguments=$arguments;runtimeDirectory=$runtimes[$identity];classpathFile=$classpaths[$identity];timeoutSeconds=$TimeoutSeconds})
         # Keep paths and application arguments as data. This constant launcher
         # invokes the existing bounded host; native processes cannot escape its Job.
         $launcher=Join-Path $case 'launch.ps1'

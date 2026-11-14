@@ -10,9 +10,12 @@ namespace donut::engine {class MeshInstance;struct MeshInfo;}
 struct RtrSceneRowChanges {
     std::vector<std::shared_ptr<donut::engine::MeshInfo>> meshes;
     std::vector<std::shared_ptr<donut::engine::MeshInstance>> instances;
+    // Pose/current mesh inputs for direct TLAS translation, separate from
+    // owner/index changes consumed by receiver metadata.
+    std::vector<std::shared_ptr<donut::engine::MeshInstance>> tlasInstances;
     uint64_t revision=0;
     bool snapshot=false,prepared=false;
-    void Clear(){meshes.clear();instances.clear();snapshot=false;prepared=false;}
+    void Clear(){meshes.clear();instances.clear();tlasInstances.clear();snapshot=false;prepared=false;}
 };
 
 // API-owned owner-thread journal. The unmodified upstream graph owns indices;

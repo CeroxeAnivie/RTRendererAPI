@@ -63,6 +63,14 @@ public final class RtxptIdentityReuseNativeSelfTest {
                 long uploads=count(snapshot,"MeshBufferUpload"),builds=count(snapshot,"BlasBuild");
                 long tlas=snapshot.events().stream().filter(e->e.stage().equals("TlasBuild")).mapToLong(e->e.items()).sum();
                 if(sequence>1)require(count(snapshot,"TlasBuild")==1,"Missing explicit TLAS work event");
+                // The first identity-only phase keeps the same settled node.
+                // Later real geometry edits can create a new leaf whose next
+                // frame must still converge its native previous transform.
+                if(sequence>=4&&sequence<=9&&!attribute&&!geometry&&!groups){
+                    var instanceWork=snapshot.events().stream().filter(e->e.stage().equals("SceneInstanceRows")).toList();
+                    require(!instanceWork.isEmpty()&&instanceWork.stream().allMatch(e->e.tasks()==0),
+                            "Stable identity publication scanned unchanged instance rows at sequence="+sequence);
+                }
                 rows.add(sequence+","+(sequence==1?"bootstrap":attribute?"normal-change-keeps-blas"
                         :groups?"material-group-change-keeps-geometry":geometry?"geometry-change-builds":"identity-only-zero-geometry-work")
                         +","+uploads+","+builds+","+tlas+","+(int)metadata[0]+","+(int)metadata[1]);
@@ -75,7 +83,7 @@ public final class RtxptIdentityReuseNativeSelfTest {
                     require(current[0]==resources[0],"Identity/shading-only replacement rebuilt or replaced its BLAS");
                     require(builds==0&&tlas==0,"Identity/shading-only replacement did unnecessary AS work at sequence="
                             +sequence+" builds="+builds+" tlas="+tlas);
-                    if(attribute)require(uploads==1&&current[1]!=resources[1],"Real normal change was lost");
+                    if(attribute)require(uploads==1&&!Arrays.equals(pixels,expectedPixels),"Real normal change did not reach fresh GPU pixels");
                     else{require(uploads==0&&Arrays.equals(current,resources),"Identical replacement reuploaded immutable geometry");
                         require(Arrays.equals(pixels,expectedPixels),"Identical replacement changed GPU lighting output");}
                 }

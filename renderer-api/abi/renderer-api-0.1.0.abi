@@ -1,0 +1,2876 @@
+Compiled from "AffineTransform.java"
+public final class top.ceroxe.rt.renderer.api.AffineTransform {
+  public top.ceroxe.rt.renderer.api.AffineTransform(float[]);
+    descriptor: ([F)V
+
+  public static top.ceroxe.rt.renderer.api.AffineTransform identity();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/AffineTransform;
+
+  public java.nio.FloatBuffer elements();
+    descriptor: ()Ljava/nio/FloatBuffer;
+
+  public float element(int);
+    descriptor: (I)F
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "AntiAliasingState.java"
+public final class top.ceroxe.rt.renderer.api.AntiAliasingState extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.AntiAliasingState(int);
+    descriptor: (I)V
+
+  public static top.ceroxe.rt.renderer.api.AntiAliasingState disabled();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/AntiAliasingState;
+
+  public static top.ceroxe.rt.renderer.api.AntiAliasingState multisampled(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/AntiAliasingState;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int samplesPerPixel();
+    descriptor: ()I
+}
+
+Compiled from "CameraState.java"
+public final class top.ceroxe.rt.renderer.api.CameraState {
+  public static top.ceroxe.rt.renderer.api.CameraState$Builder lookAt(double, double, double, double, double, double);
+    descriptor: (DDDDDD)Ltop/ceroxe/rt/renderer/api/CameraState$Builder;
+
+  public static top.ceroxe.rt.renderer.api.CameraState$ExplicitBasisBuilder explicitBasis(double, double, double);
+    descriptor: (DDD)Ltop/ceroxe/rt/renderer/api/CameraState$ExplicitBasisBuilder;
+
+  public double x();
+    descriptor: ()D
+
+  public double y();
+    descriptor: ()D
+
+  public double z();
+    descriptor: ()D
+
+  public float forwardX();
+    descriptor: ()F
+
+  public float forwardY();
+    descriptor: ()F
+
+  public float forwardZ();
+    descriptor: ()F
+
+  public float rightX();
+    descriptor: ()F
+
+  public float rightY();
+    descriptor: ()F
+
+  public float rightZ();
+    descriptor: ()F
+
+  public float upX();
+    descriptor: ()F
+
+  public float upY();
+    descriptor: ()F
+
+  public float upZ();
+    descriptor: ()F
+
+  public float tanHalfFovX();
+    descriptor: ()F
+
+  public float tanHalfFovY();
+    descriptor: ()F
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "CameraState.java"
+public final class top.ceroxe.rt.renderer.api.CameraState$Builder {
+  public top.ceroxe.rt.renderer.api.CameraState$Builder worldUp(double, double, double);
+    descriptor: (DDD)Ltop/ceroxe/rt/renderer/api/CameraState$Builder;
+
+  public top.ceroxe.rt.renderer.api.CameraState$Builder verticalFieldOfViewDegrees(double);
+    descriptor: (D)Ltop/ceroxe/rt/renderer/api/CameraState$Builder;
+
+  public top.ceroxe.rt.renderer.api.CameraState$Builder aspectRatio(double);
+    descriptor: (D)Ltop/ceroxe/rt/renderer/api/CameraState$Builder;
+
+  public top.ceroxe.rt.renderer.api.CameraState build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CameraState;
+}
+
+Compiled from "CameraState.java"
+public final class top.ceroxe.rt.renderer.api.CameraState$ExplicitBasisBuilder {
+  public top.ceroxe.rt.renderer.api.CameraState$ExplicitBasisBuilder forward(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/CameraState$ExplicitBasisBuilder;
+
+  public top.ceroxe.rt.renderer.api.CameraState$ExplicitBasisBuilder right(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/CameraState$ExplicitBasisBuilder;
+
+  public top.ceroxe.rt.renderer.api.CameraState$ExplicitBasisBuilder up(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/CameraState$ExplicitBasisBuilder;
+
+  public top.ceroxe.rt.renderer.api.CameraState$ExplicitBasisBuilder projectionTangents(float, float);
+    descriptor: (FF)Ltop/ceroxe/rt/renderer/api/CameraState$ExplicitBasisBuilder;
+
+  public top.ceroxe.rt.renderer.api.CameraState build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CameraState;
+}
+
+Compiled from "CpuFrame.java"
+public final class top.ceroxe.rt.renderer.api.CpuFrame {
+  public static top.ceroxe.rt.renderer.api.CpuFrame$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CpuFrame$Builder;
+
+  public top.ceroxe.rt.renderer.api.CpuFrame$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CpuFrame$Builder;
+
+  public long frameSequence();
+    descriptor: ()J
+
+  public long renderedSceneRevision();
+    descriptor: ()J
+
+  public int width();
+    descriptor: ()I
+
+  public int height();
+    descriptor: ()I
+
+  public int byteCount();
+    descriptor: ()I
+
+  public java.nio.ByteBuffer pixelsRgba8();
+    descriptor: ()Ljava/nio/ByteBuffer;
+
+  public void copyPixelsRgba8To(java.nio.ByteBuffer);
+    descriptor: (Ljava/nio/ByteBuffer;)V
+}
+
+Compiled from "CpuFrame.java"
+public final class top.ceroxe.rt.renderer.api.CpuFrame$Builder {
+  public top.ceroxe.rt.renderer.api.CpuFrame$Builder frameSequence(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/CpuFrame$Builder;
+
+  public top.ceroxe.rt.renderer.api.CpuFrame$Builder renderedSceneRevision(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/CpuFrame$Builder;
+
+  public top.ceroxe.rt.renderer.api.CpuFrame$Builder extent(int, int);
+    descriptor: (II)Ltop/ceroxe/rt/renderer/api/CpuFrame$Builder;
+
+  public top.ceroxe.rt.renderer.api.CpuFrame$Builder pixelsRgba8(byte[]);
+    descriptor: ([B)Ltop/ceroxe/rt/renderer/api/CpuFrame$Builder;
+
+  public top.ceroxe.rt.renderer.api.CpuFrame build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CpuFrame;
+}
+
+Compiled from "DistanceFogState.java"
+public final class top.ceroxe.rt.renderer.api.DistanceFogState {
+  public static top.ceroxe.rt.renderer.api.DistanceFogState disabled();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/DistanceFogState;
+
+  public static top.ceroxe.rt.renderer.api.DistanceFogState$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/DistanceFogState$Builder;
+
+  public float red();
+    descriptor: ()F
+
+  public float green();
+    descriptor: ()F
+
+  public float blue();
+    descriptor: ()F
+
+  public float opacity();
+    descriptor: ()F
+
+  public float sphericalStart();
+    descriptor: ()F
+
+  public float sphericalEnd();
+    descriptor: ()F
+
+  public float cylindricalStart();
+    descriptor: ()F
+
+  public float cylindricalEnd();
+    descriptor: ()F
+
+  public top.ceroxe.rt.renderer.api.DistanceFogState$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/DistanceFogState$Builder;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "DistanceFogState.java"
+public final class top.ceroxe.rt.renderer.api.DistanceFogState$Builder {
+  public top.ceroxe.rt.renderer.api.DistanceFogState$Builder color(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/DistanceFogState$Builder;
+
+  public top.ceroxe.rt.renderer.api.DistanceFogState$Builder opacity(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/DistanceFogState$Builder;
+
+  public top.ceroxe.rt.renderer.api.DistanceFogState$Builder sphericalRange(float, float);
+    descriptor: (FF)Ltop/ceroxe/rt/renderer/api/DistanceFogState$Builder;
+
+  public top.ceroxe.rt.renderer.api.DistanceFogState$Builder cylindricalRange(float, float);
+    descriptor: (FF)Ltop/ceroxe/rt/renderer/api/DistanceFogState$Builder;
+
+  public top.ceroxe.rt.renderer.api.DistanceFogState build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/DistanceFogState;
+}
+
+Compiled from "EnvironmentState.java"
+public final class top.ceroxe.rt.renderer.api.EnvironmentState {
+  public static top.ceroxe.rt.renderer.api.EnvironmentState neutral();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState;
+
+  public static top.ceroxe.rt.renderer.api.EnvironmentState$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState$Builder;
+
+  public float skyRed();
+    descriptor: ()F
+
+  public float skyGreen();
+    descriptor: ()F
+
+  public float skyBlue();
+    descriptor: ()F
+
+  public float ambientIntensity();
+    descriptor: ()F
+
+  public float sunDirectionX();
+    descriptor: ()F
+
+  public float sunDirectionY();
+    descriptor: ()F
+
+  public float sunDirectionZ();
+    descriptor: ()F
+
+  public float sunRed();
+    descriptor: ()F
+
+  public float sunGreen();
+    descriptor: ()F
+
+  public float sunBlue();
+    descriptor: ()F
+
+  public float sunIntensity();
+    descriptor: ()F
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Medium cameraMedium();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState$Builder;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "EnvironmentState.java"
+public final class top.ceroxe.rt.renderer.api.EnvironmentState$Builder {
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Builder skyRadiance(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Builder ambientIntensity(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Builder sunDirection(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Builder sunRadiance(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Builder sunIntensity(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Builder cameraMedium(top.ceroxe.rt.renderer.api.EnvironmentState$Medium);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium;)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState;
+}
+
+Compiled from "EnvironmentState.java"
+public final class top.ceroxe.rt.renderer.api.EnvironmentState$Medium {
+  public static top.ceroxe.rt.renderer.api.EnvironmentState$Medium vacuum();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium;
+
+  public static top.ceroxe.rt.renderer.api.EnvironmentState$Medium$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium$Builder;
+
+  public float extinctionRed();
+    descriptor: ()F
+
+  public float extinctionGreen();
+    descriptor: ()F
+
+  public float extinctionBlue();
+    descriptor: ()F
+
+  public float scatteringRed();
+    descriptor: ()F
+
+  public float scatteringGreen();
+    descriptor: ()F
+
+  public float scatteringBlue();
+    descriptor: ()F
+
+  public float density();
+    descriptor: ()F
+
+  public float indexOfRefraction();
+    descriptor: ()F
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Medium$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium$Builder;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "EnvironmentState.java"
+public final class top.ceroxe.rt.renderer.api.EnvironmentState$Medium$Builder {
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Medium$Builder extinction(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Medium$Builder scattering(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Medium$Builder density(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Medium$Builder indexOfRefraction(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium$Builder;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState$Medium build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState$Medium;
+}
+
+Compiled from "FrameOutputFormat.java"
+public final class top.ceroxe.rt.renderer.api.FrameOutputFormat extends java.lang.Enum<top.ceroxe.rt.renderer.api.FrameOutputFormat> {
+  public static final top.ceroxe.rt.renderer.api.FrameOutputFormat SDR_RGBA8;
+    descriptor: Ltop/ceroxe/rt/renderer/api/FrameOutputFormat;
+  public static final top.ceroxe.rt.renderer.api.FrameOutputFormat LINEAR_HDR_RGBA16F;
+    descriptor: Ltop/ceroxe/rt/renderer/api/FrameOutputFormat;
+  public static top.ceroxe.rt.renderer.api.FrameOutputFormat[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/FrameOutputFormat;
+
+  public static top.ceroxe.rt.renderer.api.FrameOutputFormat valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/FrameOutputFormat;
+}
+
+Compiled from "HistoryInvalidationReason.java"
+public final class top.ceroxe.rt.renderer.api.HistoryInvalidationReason extends java.lang.Enum<top.ceroxe.rt.renderer.api.HistoryInvalidationReason> {
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason FIRST_FRAME;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason CAMERA_CUT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason SCENE_DISCONTINUITY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason EXPLICIT_RESET;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason CAMERA_PROJECTION_CHANGED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason SCENE_TOPOLOGY_CHANGED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason SCENE_CONTENT_CHANGED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason FRAME_SHADING_CHANGED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason OUTPUT_EXTENT_CHANGED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason OUTPUT_FORMAT_CHANGED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason FRAME_SEQUENCE_DISCONTINUITY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason DEVICE_RECOVERY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason HISTORY_EVICTED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryInvalidationReason MOTION_DATA_UNAVAILABLE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+  public static top.ceroxe.rt.renderer.api.HistoryInvalidationReason[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+
+  public static top.ceroxe.rt.renderer.api.HistoryInvalidationReason valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/HistoryInvalidationReason;
+}
+
+Compiled from "HistoryResetReason.java"
+public final class top.ceroxe.rt.renderer.api.HistoryResetReason extends java.lang.Enum<top.ceroxe.rt.renderer.api.HistoryResetReason> {
+  public static final top.ceroxe.rt.renderer.api.HistoryResetReason CAMERA_CUT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryResetReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryResetReason SCENE_DISCONTINUITY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryResetReason;
+  public static final top.ceroxe.rt.renderer.api.HistoryResetReason EXPLICIT_RESET;
+    descriptor: Ltop/ceroxe/rt/renderer/api/HistoryResetReason;
+  public static top.ceroxe.rt.renderer.api.HistoryResetReason[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/HistoryResetReason;
+
+  public static top.ceroxe.rt.renderer.api.HistoryResetReason valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/HistoryResetReason;
+}
+
+Compiled from "LightmapState.java"
+public final class top.ceroxe.rt.renderer.api.LightmapState {
+  public static final int AXIS_SIZE = 16;
+    descriptor: I
+  public static final int ENTRY_COUNT = 256;
+    descriptor: I
+  public top.ceroxe.rt.renderer.api.LightmapState(long, int[]);
+    descriptor: (J[I)V
+
+  public static top.ceroxe.rt.renderer.api.LightmapState fullIntensity();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/LightmapState;
+
+  public long revision();
+    descriptor: ()J
+
+  public java.nio.IntBuffer texelsRgba8();
+    descriptor: ()Ljava/nio/IntBuffer;
+}
+
+Compiled from "MaterialAsset.java"
+public final class top.ceroxe.rt.renderer.api.MaterialAsset {
+  public static top.ceroxe.rt.renderer.api.MaterialAsset$Builder builder(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public static top.ceroxe.rt.renderer.api.MaterialAsset opaque(long, int);
+    descriptor: (JI)Ltop/ceroxe/rt/renderer/api/MaterialAsset;
+
+  public long id();
+    descriptor: ()J
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode blendMode();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/MaterialAsset$BlendMode;
+
+  public int baseColorRgba8();
+    descriptor: ()I
+
+  public long baseColorTextureId();
+    descriptor: ()J
+
+  public long normalTextureId();
+    descriptor: ()J
+
+  public long metallicRoughnessTextureId();
+    descriptor: ()J
+
+  public long emissiveTextureId();
+    descriptor: ()J
+
+  public int emissiveColorRgba8();
+    descriptor: ()I
+
+  public float emissiveStrength();
+    descriptor: ()F
+
+  public float alphaCutoff();
+    descriptor: ()F
+
+  public float roughness();
+    descriptor: ()F
+
+  public float metallic();
+    descriptor: ()F
+
+  public float transmission();
+    descriptor: ()F
+
+  public float indexOfRefraction();
+    descriptor: ()F
+
+  public boolean doubleSided();
+    descriptor: ()Z
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$ShadingModel shadingModel();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/MaterialAsset$ShadingModel;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "MaterialAsset.java"
+public final class top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode extends java.lang.Enum<top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode> {
+  public static final top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode OPAQUE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/MaterialAsset$BlendMode;
+  public static final top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode MASKED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/MaterialAsset$BlendMode;
+  public static final top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode TRANSLUCENT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/MaterialAsset$BlendMode;
+  public static top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/MaterialAsset$BlendMode;
+
+  public static top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/MaterialAsset$BlendMode;
+}
+
+Compiled from "MaterialAsset.java"
+public final class top.ceroxe.rt.renderer.api.MaterialAsset$Builder {
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder blendMode(top.ceroxe.rt.renderer.api.MaterialAsset$BlendMode);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/MaterialAsset$BlendMode;)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder baseColorRgba8(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder baseColorTexture(top.ceroxe.rt.renderer.api.TextureAsset);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset;)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder baseColorTextureId(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder normalTexture(top.ceroxe.rt.renderer.api.TextureAsset);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset;)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder normalTextureId(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder metallicRoughnessTexture(top.ceroxe.rt.renderer.api.TextureAsset);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset;)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder metallicRoughnessTextureId(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder emissive(int, float);
+    descriptor: (IF)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder emissive(top.ceroxe.rt.renderer.api.TextureAsset, int, float);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset;IF)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder emissiveTextureId(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder alphaCutoff(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder roughness(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder metallic(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder transmission(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder indexOfRefraction(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder doubleSided(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset$Builder shadingModel(top.ceroxe.rt.renderer.api.MaterialAsset$ShadingModel);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/MaterialAsset$ShadingModel;)Ltop/ceroxe/rt/renderer/api/MaterialAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MaterialAsset build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/MaterialAsset;
+}
+
+Compiled from "MaterialAsset.java"
+public final class top.ceroxe.rt.renderer.api.MaterialAsset$ShadingModel extends java.lang.Enum<top.ceroxe.rt.renderer.api.MaterialAsset$ShadingModel> {
+  public static final top.ceroxe.rt.renderer.api.MaterialAsset$ShadingModel PHYSICALLY_BASED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/MaterialAsset$ShadingModel;
+  public static final top.ceroxe.rt.renderer.api.MaterialAsset$ShadingModel LIGHTMAP_MODULATED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/MaterialAsset$ShadingModel;
+  public static top.ceroxe.rt.renderer.api.MaterialAsset$ShadingModel[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/MaterialAsset$ShadingModel;
+
+  public static top.ceroxe.rt.renderer.api.MaterialAsset$ShadingModel valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/MaterialAsset$ShadingModel;
+}
+
+Compiled from "MeshAsset.java"
+public final class top.ceroxe.rt.renderer.api.MeshAsset {
+  public static top.ceroxe.rt.renderer.api.MeshAsset$Builder builder(long, float[], int[], long[]);
+    descriptor: (J[F[I[J)Ltop/ceroxe/rt/renderer/api/MeshAsset$Builder;
+
+  public static top.ceroxe.rt.renderer.api.MeshAsset triangles(long, float[], int[], long);
+    descriptor: (J[F[IJ)Ltop/ceroxe/rt/renderer/api/MeshAsset;
+
+  public static top.ceroxe.rt.renderer.api.MeshAsset wrapImmutableDirect(long, java.nio.FloatBuffer, java.nio.FloatBuffer, java.nio.FloatBuffer, java.nio.FloatBuffer, java.nio.FloatBuffer, java.nio.IntBuffer, java.nio.IntBuffer, java.nio.LongBuffer);
+    descriptor: (JLjava/nio/FloatBuffer;Ljava/nio/FloatBuffer;Ljava/nio/FloatBuffer;Ljava/nio/FloatBuffer;Ljava/nio/FloatBuffer;Ljava/nio/IntBuffer;Ljava/nio/IntBuffer;Ljava/nio/LongBuffer;)Ltop/ceroxe/rt/renderer/api/MeshAsset;
+
+  public top.ceroxe.rt.renderer.api.MeshAsset$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/MeshAsset$Builder;
+
+  public long id();
+    descriptor: ()J
+
+  public int vertexCount();
+    descriptor: ()I
+
+  public int triangleCount();
+    descriptor: ()I
+
+  public java.nio.FloatBuffer positions();
+    descriptor: ()Ljava/nio/FloatBuffer;
+
+  public java.nio.FloatBuffer normals();
+    descriptor: ()Ljava/nio/FloatBuffer;
+
+  public java.nio.FloatBuffer tangents();
+    descriptor: ()Ljava/nio/FloatBuffer;
+
+  public java.nio.FloatBuffer textureCoordinates();
+    descriptor: ()Ljava/nio/FloatBuffer;
+
+  public java.nio.FloatBuffer lightmapCoordinates();
+    descriptor: ()Ljava/nio/FloatBuffer;
+
+  public java.nio.IntBuffer vertexColorsRgba8();
+    descriptor: ()Ljava/nio/IntBuffer;
+
+  public java.nio.IntBuffer triangleIndices();
+    descriptor: ()Ljava/nio/IntBuffer;
+
+  public java.nio.LongBuffer triangleMaterialIds();
+    descriptor: ()Ljava/nio/LongBuffer;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "MeshAsset.java"
+public final class top.ceroxe.rt.renderer.api.MeshAsset$Builder {
+  public top.ceroxe.rt.renderer.api.MeshAsset$Builder normals(float[]);
+    descriptor: ([F)Ltop/ceroxe/rt/renderer/api/MeshAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MeshAsset$Builder tangents(float[]);
+    descriptor: ([F)Ltop/ceroxe/rt/renderer/api/MeshAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MeshAsset$Builder textureCoordinates(float[]);
+    descriptor: ([F)Ltop/ceroxe/rt/renderer/api/MeshAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MeshAsset$Builder lightmapCoordinates(float[]);
+    descriptor: ([F)Ltop/ceroxe/rt/renderer/api/MeshAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MeshAsset$Builder vertexColorsRgba8(int[]);
+    descriptor: ([I)Ltop/ceroxe/rt/renderer/api/MeshAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.MeshAsset build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/MeshAsset;
+}
+
+Compiled from "RayTracingGpuDevice.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingGpuDevice {
+  public static top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public java.lang.String backendId();
+    descriptor: ()Ljava/lang/String;
+
+  public java.lang.String stableId();
+    descriptor: ()Ljava/lang/String;
+
+  public java.lang.String name();
+    descriptor: ()Ljava/lang/String;
+
+  public int vendorId();
+    descriptor: ()I
+
+  public int deviceId();
+    descriptor: ()I
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type type();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Type;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$ApiVersion apiVersion();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$ApiVersion;
+
+  public long deviceLocalMemoryBytes();
+    descriptor: ()J
+
+  public java.util.Set<top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability> capabilities();
+    descriptor: ()Ljava/util/Set;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits rayTracingLimits();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RayTracingGpuDevice.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingGpuDevice$ApiVersion extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$ApiVersion(int, int, int);
+    descriptor: (III)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int major();
+    descriptor: ()I
+
+  public int minor();
+    descriptor: ()I
+
+  public int patch();
+    descriptor: ()I
+}
+
+Compiled from "RayTracingGpuDevice.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder {
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder backendId(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder stableId(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder name(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder vendorId(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder deviceId(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder type(top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Type;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder apiVersion(top.ceroxe.rt.renderer.api.RayTracingGpuDevice$ApiVersion);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$ApiVersion;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder deviceLocalMemoryBytes(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder capabilities(java.util.Set<top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability>);
+    descriptor: (Ljava/util/Set;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Builder rayTracingLimits(top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice;
+}
+
+Compiled from "RayTracingGpuDevice.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability extends java.lang.Enum<top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability> {
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability HARDWARE_RAY_TRACING;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability ACCELERATION_STRUCTURE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability RAY_TRACING_PIPELINE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability BUFFER_DEVICE_ADDRESS;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability SHADER_INT64;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability EXTERNAL_MEMORY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability EXTERNAL_SEMAPHORE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability NATIVE_SDR_RGBA8;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability NATIVE_LINEAR_HDR_RGBA16F;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability MEMORY_BUDGET;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability GPU_TIMESTAMPS;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+  public static top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+
+  public static top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Capability valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Capability;
+}
+
+Compiled from "RayTracingGpuDevice.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits {
+  public static top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public int maxRayRecursionDepth();
+    descriptor: ()I
+
+  public int shaderGroupHandleSize();
+    descriptor: ()I
+
+  public int shaderGroupHandleAlignment();
+    descriptor: ()I
+
+  public int shaderGroupBaseAlignment();
+    descriptor: ()I
+
+  public int maxShaderGroupStride();
+    descriptor: ()I
+
+  public long maxRayDispatchInvocationCount();
+    descriptor: ()J
+
+  public int minAccelerationStructureScratchAlignment();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RayTracingGpuDevice.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder {
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder maxRayRecursionDepth(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder shaderGroupHandleSize(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder shaderGroupHandleAlignment(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder shaderGroupBaseAlignment(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder maxShaderGroupStride(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder maxRayDispatchInvocationCount(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits$Builder minAccelerationStructureScratchAlignment(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingGpuDevice$RayTracingLimits build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$RayTracingLimits;
+}
+
+Compiled from "RayTracingGpuDevice.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type extends java.lang.Enum<top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type> {
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type DISCRETE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Type;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type INTEGRATED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Type;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type VIRTUAL;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Type;
+  public static final top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type OTHER;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Type;
+  public static top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Type;
+
+  public static top.ceroxe.rt.renderer.api.RayTracingGpuDevice$Type valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice$Type;
+}
+
+Compiled from "RayTracingRenderer.java"
+public interface top.ceroxe.rt.renderer.api.RayTracingRenderer extends java.lang.AutoCloseable {
+  public abstract top.ceroxe.rt.renderer.api.RayTracingRenderer$Status status();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+
+  public abstract top.ceroxe.rt.renderer.api.RendererHealth health();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererHealth;
+
+  public abstract top.ceroxe.rt.renderer.api.RayTracingRenderer$SceneUpdateResult apply(top.ceroxe.rt.renderer.api.SceneTransaction);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/SceneTransaction;)Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$SceneUpdateResult;
+
+  public abstract top.ceroxe.rt.renderer.api.RayTracingRenderer$FrameSubmissionResult submit(top.ceroxe.rt.renderer.api.RenderFrameRequest);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RenderFrameRequest;)Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$FrameSubmissionResult;
+
+  public abstract java.util.Optional<top.ceroxe.rt.renderer.api.CpuFrame> pollLatestCpuFrame();
+    descriptor: ()Ljava/util/Optional;
+
+  public default java.util.Optional<top.ceroxe.rt.renderer.api.CpuFrame> awaitLatestCpuFrame(java.time.Duration) throws java.lang.InterruptedException;
+    descriptor: (Ljava/time/Duration;)Ljava/util/Optional;
+
+  public default java.util.concurrent.CompletableFuture<java.util.Optional<top.ceroxe.rt.renderer.api.CpuFrame>> awaitLatestCpuFrameAsync(java.time.Duration, java.util.concurrent.Executor);
+    descriptor: (Ljava/time/Duration;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;
+
+  public default <T> java.util.Optional<T> extension(java.lang.Class<T>);
+    descriptor: (Ljava/lang/Class;)Ljava/util/Optional;
+
+  public abstract top.ceroxe.rt.renderer.api.RendererDiagnostics diagnostics();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics;
+
+  public abstract void close();
+    descriptor: ()V
+}
+
+Compiled from "RayTracingRenderer.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingRenderer$FrameSubmissionResult {
+  public static top.ceroxe.rt.renderer.api.RayTracingRenderer$FrameSubmissionResult accepted(long, long, java.util.Set<top.ceroxe.rt.renderer.api.HistoryInvalidationReason>);
+    descriptor: (JJLjava/util/Set;)Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$FrameSubmissionResult;
+
+  public long frameSequence();
+    descriptor: ()J
+
+  public long scheduledSceneRevision();
+    descriptor: ()J
+
+  public java.util.Set<top.ceroxe.rt.renderer.api.HistoryInvalidationReason> historyInvalidations();
+    descriptor: ()Ljava/util/Set;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RayTracingRenderer.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingRenderer$SceneUpdateResult extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.RayTracingRenderer$SceneUpdateResult(long);
+    descriptor: (J)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public long acceptedSceneRevision();
+    descriptor: ()J
+}
+
+Compiled from "RayTracingRenderer.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingRenderer$Status extends java.lang.Enum<top.ceroxe.rt.renderer.api.RayTracingRenderer$Status> {
+  public static final top.ceroxe.rt.renderer.api.RayTracingRenderer$Status READY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+  public static final top.ceroxe.rt.renderer.api.RayTracingRenderer$Status RECOVERING;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+  public static final top.ceroxe.rt.renderer.api.RayTracingRenderer$Status FAILED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+  public static final top.ceroxe.rt.renderer.api.RayTracingRenderer$Status CLOSED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+  public static top.ceroxe.rt.renderer.api.RayTracingRenderer$Status[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+
+  public static top.ceroxe.rt.renderer.api.RayTracingRenderer$Status valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+}
+
+Compiled from "RayTracingRendererConfig.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingRendererConfig {
+  public static final int DEFAULT_MAX_FRAMES_IN_FLIGHT = 3;
+    descriptor: I
+  public static top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public static top.ceroxe.rt.renderer.api.RayTracingRendererConfig defaults();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public int maxFramesInFlight();
+    descriptor: ()I
+
+  public boolean validationEnabled();
+    descriptor: ()Z
+
+  public boolean gpuTimingsEnabled();
+    descriptor: ()Z
+
+  public java.util.Optional<top.ceroxe.rt.renderer.api.RayTracingGpuDevice> gpuDevice();
+    descriptor: ()Ljava/util/Optional;
+
+  public top.ceroxe.rt.renderer.api.FrameOutputFormat frameOutputFormat();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/FrameOutputFormat;
+
+  public top.ceroxe.rt.renderer.api.TemporalRenderingOptions temporalRendering();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RayTracingRendererConfig.java"
+public final class top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder {
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder maxFramesInFlight(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder validationEnabled(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder gpuTimingsEnabled(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder gpuDevice(top.ceroxe.rt.renderer.api.RayTracingGpuDevice);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingGpuDevice;)Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder automaticGpuSelection();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder frameOutputFormat(top.ceroxe.rt.renderer.api.FrameOutputFormat);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/FrameOutputFormat;)Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig$Builder temporalRendering(top.ceroxe.rt.renderer.api.TemporalRenderingOptions);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions;)Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRendererConfig build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig;
+}
+
+Compiled from "RenderFrameRequest.java"
+public final class top.ceroxe.rt.renderer.api.RenderFrameRequest {
+  public static top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder builder(long, int, int, top.ceroxe.rt.renderer.api.CameraState);
+    descriptor: (JIILtop/ceroxe/rt/renderer/api/CameraState;)Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public long sequence();
+    descriptor: ()J
+
+  public long minimumSceneRevision();
+    descriptor: ()J
+
+  public int width();
+    descriptor: ()I
+
+  public int height();
+    descriptor: ()I
+
+  public top.ceroxe.rt.renderer.api.CameraState camera();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/CameraState;
+
+  public top.ceroxe.rt.renderer.api.EnvironmentState environment();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/EnvironmentState;
+
+  public top.ceroxe.rt.renderer.api.LightmapState lightmap();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/LightmapState;
+
+  public top.ceroxe.rt.renderer.api.DistanceFogState fog();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/DistanceFogState;
+
+  public top.ceroxe.rt.renderer.api.TextureSamplingState textureSampling();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureSamplingState;
+
+  public top.ceroxe.rt.renderer.api.AntiAliasingState antiAliasing();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/AntiAliasingState;
+
+  public java.util.Set<top.ceroxe.rt.renderer.api.HistoryResetReason> temporalHistoryResets();
+    descriptor: ()Ljava/util/Set;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RenderFrameRequest.java"
+public final class top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder {
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder minimumSceneRevision(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder environment(top.ceroxe.rt.renderer.api.EnvironmentState);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/EnvironmentState;)Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder lightmap(top.ceroxe.rt.renderer.api.LightmapState);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/LightmapState;)Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder fog(top.ceroxe.rt.renderer.api.DistanceFogState);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/DistanceFogState;)Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder textureSampling(top.ceroxe.rt.renderer.api.TextureSamplingState);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureSamplingState;)Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder antiAliasing(top.ceroxe.rt.renderer.api.AntiAliasingState);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/AntiAliasingState;)Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder resetTemporalHistory(top.ceroxe.rt.renderer.api.HistoryResetReason);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/HistoryResetReason;)Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest$Builder continueTemporalHistory();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RenderFrameRequest$Builder;
+
+  public top.ceroxe.rt.renderer.api.RenderFrameRequest build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RenderFrameRequest;
+}
+
+Compiled from "RendererBootstrap.java"
+public final class top.ceroxe.rt.renderer.api.RendererBootstrap {
+  public static top.ceroxe.rt.renderer.api.RayTracingRenderer open();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRenderer;
+
+  public static top.ceroxe.rt.renderer.api.RayTracingRenderer open(top.ceroxe.rt.renderer.api.RayTracingRendererConfig);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig;)Ltop/ceroxe/rt/renderer/api/RayTracingRenderer;
+
+  public static top.ceroxe.rt.renderer.api.RayTracingRenderer openProvider(java.lang.String, top.ceroxe.rt.renderer.api.RayTracingRendererConfig);
+    descriptor: (Ljava/lang/String;Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig;)Ltop/ceroxe/rt/renderer/api/RayTracingRenderer;
+
+  public static java.util.List<top.ceroxe.rt.renderer.api.RayTracingGpuDevice> availableGpuDevices();
+    descriptor: ()Ljava/util/List;
+}
+
+Compiled from "RendererDeviceException.java"
+public final class top.ceroxe.rt.renderer.api.RendererDeviceException extends top.ceroxe.rt.renderer.api.RendererException {
+  public top.ceroxe.rt.renderer.api.RendererDeviceException(java.lang.String, top.ceroxe.rt.renderer.api.RendererDeviceException$Reason, top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction, java.lang.String, int);
+    descriptor: (Ljava/lang/String;Ltop/ceroxe/rt/renderer/api/RendererDeviceException$Reason;Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;Ljava/lang/String;I)V
+
+  public top.ceroxe.rt.renderer.api.RendererDeviceException$Reason reason();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDeviceException$Reason;
+
+  public top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction recoveryAction();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;
+
+  public java.lang.String operation();
+    descriptor: ()Ljava/lang/String;
+
+  public int nativeResult();
+    descriptor: ()I
+}
+
+Compiled from "RendererDeviceException.java"
+public final class top.ceroxe.rt.renderer.api.RendererDeviceException$Reason extends java.lang.Enum<top.ceroxe.rt.renderer.api.RendererDeviceException$Reason> {
+  public static final top.ceroxe.rt.renderer.api.RendererDeviceException$Reason DEVICE_LOST;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererDeviceException$Reason;
+  public static final top.ceroxe.rt.renderer.api.RendererDeviceException$Reason DEVICE_OUT_OF_MEMORY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererDeviceException$Reason;
+  public static final top.ceroxe.rt.renderer.api.RendererDeviceException$Reason HOST_OUT_OF_MEMORY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererDeviceException$Reason;
+  public static final top.ceroxe.rt.renderer.api.RendererDeviceException$Reason DRIVER_FAILURE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererDeviceException$Reason;
+  public static top.ceroxe.rt.renderer.api.RendererDeviceException$Reason[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/RendererDeviceException$Reason;
+
+  public static top.ceroxe.rt.renderer.api.RendererDeviceException$Reason valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RendererDeviceException$Reason;
+}
+
+Compiled from "RendererDeviceException.java"
+public final class top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction extends java.lang.Enum<top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction> {
+  public static final top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction RETRY_OPERATION;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;
+  public static final top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction RECREATE_RENDERER;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;
+  public static final top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction REDUCE_MEMORY_AND_RECREATE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;
+  public static final top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction ABORT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;
+  public static top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;
+
+  public static top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;
+}
+
+Compiled from "RendererDiagnostics.java"
+public final class top.ceroxe.rt.renderer.api.RendererDiagnostics {
+  public static top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RayTracingRenderer$Status status();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+
+  public long latestAcceptedSceneRevision();
+    descriptor: ()J
+
+  public long latestSubmittedFrameSequence();
+    descriptor: ()J
+
+  public long latestCompletedFrameSequence();
+    descriptor: ()J
+
+  public long residentMeshes();
+    descriptor: ()J
+
+  public long residentInstances();
+    descriptor: ()J
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$DeviceRecovery deviceRecovery();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$DeviceRecovery;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming frameGpuTiming();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RendererDiagnostics.java"
+public final class top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder {
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder status(top.ceroxe.rt.renderer.api.RayTracingRenderer$Status);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder latestAcceptedSceneRevision(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder latestSubmittedFrameSequence(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder latestCompletedFrameSequence(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder residentMeshes(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder residentInstances(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder deviceRecovery(top.ceroxe.rt.renderer.api.RendererDiagnostics$DeviceRecovery);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$DeviceRecovery;)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$Builder frameGpuTiming(top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming;)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics;
+}
+
+Compiled from "RendererDiagnostics.java"
+public final class top.ceroxe.rt.renderer.api.RendererDiagnostics$DeviceRecovery extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$DeviceRecovery(long, long, long);
+    descriptor: (JJJ)V
+
+  public static top.ceroxe.rt.renderer.api.RendererDiagnostics$DeviceRecovery initial();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$DeviceRecovery;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public long generation();
+    descriptor: ()J
+
+  public long attempts();
+    descriptor: ()J
+
+  public long failures();
+    descriptor: ()J
+}
+
+Compiled from "RendererDiagnostics.java"
+public final class top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming {
+  public static top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public static top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming unavailable();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public boolean enabled();
+    descriptor: ()Z
+
+  public long completedSamples();
+    descriptor: ()J
+
+  public long droppedSamples();
+    descriptor: ()J
+
+  public long failedSamples();
+    descriptor: ()J
+
+  public long averageTraceNanos();
+    descriptor: ()J
+
+  public long averagePostTraceNanos();
+    descriptor: ()J
+
+  public long averageTotalNanos();
+    descriptor: ()J
+
+  public long maxTotalNanos();
+    descriptor: ()J
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RendererDiagnostics.java"
+public final class top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder {
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder enabled(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder completedSamples(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder droppedSamples(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder failedSamples(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder averageTraceNanos(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder averagePostTraceNanos(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder averageTotalNanos(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming$Builder maxTotalNanos(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming$Builder;
+
+  public top.ceroxe.rt.renderer.api.RendererDiagnostics$FrameGpuTiming build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDiagnostics$FrameGpuTiming;
+}
+
+Compiled from "RendererException.java"
+public class top.ceroxe.rt.renderer.api.RendererException extends java.lang.RuntimeException {
+  public top.ceroxe.rt.renderer.api.RendererException(java.lang.String);
+    descriptor: (Ljava/lang/String;)V
+
+  public top.ceroxe.rt.renderer.api.RendererException(java.lang.String, java.lang.Throwable);
+    descriptor: (Ljava/lang/String;Ljava/lang/Throwable;)V
+}
+
+Compiled from "RendererHealth.java"
+public final class top.ceroxe.rt.renderer.api.RendererHealth extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.RendererHealth(top.ceroxe.rt.renderer.api.RayTracingRenderer$Status, java.util.Optional<top.ceroxe.rt.renderer.api.RendererHealth$Failure>, top.ceroxe.rt.renderer.api.RendererHealth$ResourceObligations);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;Ljava/util/Optional;Ltop/ceroxe/rt/renderer/api/RendererHealth$ResourceObligations;)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public top.ceroxe.rt.renderer.api.RayTracingRenderer$Status status();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+
+  public java.util.Optional<top.ceroxe.rt.renderer.api.RendererHealth$Failure> activeFailure();
+    descriptor: ()Ljava/util/Optional;
+
+  public top.ceroxe.rt.renderer.api.RendererHealth$ResourceObligations obligations();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererHealth$ResourceObligations;
+}
+
+Compiled from "RendererHealth.java"
+public final class top.ceroxe.rt.renderer.api.RendererHealth$Failure extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.RendererHealth$Failure(top.ceroxe.rt.renderer.api.RendererHealth$Kind, top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction, java.lang.String, java.util.OptionalInt);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;Ljava/lang/String;Ljava/util/OptionalInt;)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public top.ceroxe.rt.renderer.api.RendererHealth$Kind kind();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+
+  public top.ceroxe.rt.renderer.api.RendererDeviceException$RecoveryAction recoveryAction();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererDeviceException$RecoveryAction;
+
+  public java.lang.String operation();
+    descriptor: ()Ljava/lang/String;
+
+  public java.util.OptionalInt nativeResult();
+    descriptor: ()Ljava/util/OptionalInt;
+}
+
+Compiled from "RendererHealth.java"
+public final class top.ceroxe.rt.renderer.api.RendererHealth$Kind extends java.lang.Enum<top.ceroxe.rt.renderer.api.RendererHealth$Kind> {
+  public static final top.ceroxe.rt.renderer.api.RendererHealth$Kind UNCLASSIFIED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+  public static final top.ceroxe.rt.renderer.api.RendererHealth$Kind DEVICE_LOST;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+  public static final top.ceroxe.rt.renderer.api.RendererHealth$Kind DEVICE_OUT_OF_MEMORY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+  public static final top.ceroxe.rt.renderer.api.RendererHealth$Kind HOST_OUT_OF_MEMORY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+  public static final top.ceroxe.rt.renderer.api.RendererHealth$Kind DRIVER_FAILURE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+  public static final top.ceroxe.rt.renderer.api.RendererHealth$Kind BACKEND_FAILURE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+  public static final top.ceroxe.rt.renderer.api.RendererHealth$Kind RESOURCE_CLEANUP_FAILURE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+  public static final top.ceroxe.rt.renderer.api.RendererHealth$Kind RECOVERY_FAILURE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+  public static top.ceroxe.rt.renderer.api.RendererHealth$Kind[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+
+  public static top.ceroxe.rt.renderer.api.RendererHealth$Kind valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RendererHealth$Kind;
+}
+
+Compiled from "RendererHealth.java"
+public final class top.ceroxe.rt.renderer.api.RendererHealth$ResourceObligations extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.RendererHealth$ResourceObligations(int, boolean, boolean);
+    descriptor: (IZZ)V
+
+  public static top.ceroxe.rt.renderer.api.RendererHealth$ResourceObligations none();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RendererHealth$ResourceObligations;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int outstandingGpuFrameLeases();
+    descriptor: ()I
+
+  public boolean nativeCleanupPending();
+    descriptor: ()Z
+
+  public boolean deviceRecoveryPending();
+    descriptor: ()Z
+}
+
+Compiled from "RendererInitializationException.java"
+public final class top.ceroxe.rt.renderer.api.RendererInitializationException extends top.ceroxe.rt.renderer.api.RendererException {
+  public top.ceroxe.rt.renderer.api.RendererInitializationException(java.lang.String, java.lang.String, java.lang.Throwable);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+
+  public java.lang.String providerId();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RendererStateException.java"
+public final class top.ceroxe.rt.renderer.api.RendererStateException extends top.ceroxe.rt.renderer.api.RendererException {
+  public top.ceroxe.rt.renderer.api.RendererStateException(java.lang.String, top.ceroxe.rt.renderer.api.RayTracingRenderer$Status, java.lang.Throwable);
+    descriptor: (Ljava/lang/String;Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;Ljava/lang/Throwable;)V
+
+  public top.ceroxe.rt.renderer.api.RayTracingRenderer$Status status();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/RayTracingRenderer$Status;
+}
+
+Compiled from "RendererUnavailableException.java"
+public final class top.ceroxe.rt.renderer.api.RendererUnavailableException extends top.ceroxe.rt.renderer.api.RendererException {
+  public top.ceroxe.rt.renderer.api.RendererUnavailableException(java.lang.String, java.util.List<top.ceroxe.rt.renderer.api.RendererUnavailableException$BackendAttempt>);
+    descriptor: (Ljava/lang/String;Ljava/util/List;)V
+
+  public java.util.List<top.ceroxe.rt.renderer.api.RendererUnavailableException$BackendAttempt> attempts();
+    descriptor: ()Ljava/util/List;
+}
+
+Compiled from "RendererUnavailableException.java"
+public final class top.ceroxe.rt.renderer.api.RendererUnavailableException$BackendAttempt implements java.io.Serializable {
+  public static top.ceroxe.rt.renderer.api.RendererUnavailableException$BackendAttempt of(java.lang.String, top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility, java.lang.String);
+    descriptor: (Ljava/lang/String;Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/RendererUnavailableException$BackendAttempt;
+
+  public java.lang.String providerId();
+    descriptor: ()Ljava/lang/String;
+
+  public top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility compatibility();
+    descriptor: ()Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;
+
+  public java.lang.String reason();
+    descriptor: ()Ljava/lang/String;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "SceneInstance.java"
+public final class top.ceroxe.rt.renderer.api.SceneInstance {
+  public static top.ceroxe.rt.renderer.api.SceneInstance$Builder builder(long, long);
+    descriptor: (JJ)Ltop/ceroxe/rt/renderer/api/SceneInstance$Builder;
+
+  public long id();
+    descriptor: ()J
+
+  public long meshAssetId();
+    descriptor: ()J
+
+  public top.ceroxe.rt.renderer.api.AffineTransform transform();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/AffineTransform;
+
+  public top.ceroxe.rt.renderer.api.SceneInstance$Mobility mobility();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneInstance$Mobility;
+
+  public int visibilityMask();
+    descriptor: ()I
+
+  public boolean castsShadow();
+    descriptor: ()Z
+
+  public float surfaceVisibility();
+    descriptor: ()F
+
+  public top.ceroxe.rt.renderer.api.SceneInstance$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneInstance$Builder;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "SceneInstance.java"
+public final class top.ceroxe.rt.renderer.api.SceneInstance$Builder {
+  public top.ceroxe.rt.renderer.api.SceneInstance$Builder transform(top.ceroxe.rt.renderer.api.AffineTransform);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/AffineTransform;)Ltop/ceroxe/rt/renderer/api/SceneInstance$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneInstance$Builder mobility(top.ceroxe.rt.renderer.api.SceneInstance$Mobility);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/SceneInstance$Mobility;)Ltop/ceroxe/rt/renderer/api/SceneInstance$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneInstance$Builder visibilityMask(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/SceneInstance$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneInstance$Builder castsShadow(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/SceneInstance$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneInstance$Builder surfaceVisibility(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/SceneInstance$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneInstance build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneInstance;
+}
+
+Compiled from "SceneInstance.java"
+public final class top.ceroxe.rt.renderer.api.SceneInstance$Mobility extends java.lang.Enum<top.ceroxe.rt.renderer.api.SceneInstance$Mobility> {
+  public static final top.ceroxe.rt.renderer.api.SceneInstance$Mobility STATIC;
+    descriptor: Ltop/ceroxe/rt/renderer/api/SceneInstance$Mobility;
+  public static final top.ceroxe.rt.renderer.api.SceneInstance$Mobility DYNAMIC;
+    descriptor: Ltop/ceroxe/rt/renderer/api/SceneInstance$Mobility;
+  public static top.ceroxe.rt.renderer.api.SceneInstance$Mobility[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/SceneInstance$Mobility;
+
+  public static top.ceroxe.rt.renderer.api.SceneInstance$Mobility valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/SceneInstance$Mobility;
+}
+
+Compiled from "SceneLight.java"
+public final class top.ceroxe.rt.renderer.api.SceneLight {
+  public static top.ceroxe.rt.renderer.api.SceneLight$Builder point(long, double, double, double);
+    descriptor: (JDDD)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public static top.ceroxe.rt.renderer.api.SceneLight$Builder directional(long, float, float, float);
+    descriptor: (JFFF)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public static top.ceroxe.rt.renderer.api.SceneLight$Builder spot(long, double, double, double, float, float, float);
+    descriptor: (JDDDFFF)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public long id();
+    descriptor: ()J
+
+  public top.ceroxe.rt.renderer.api.SceneLight$Type type();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneLight$Type;
+
+  public double x();
+    descriptor: ()D
+
+  public double y();
+    descriptor: ()D
+
+  public double z();
+    descriptor: ()D
+
+  public float directionX();
+    descriptor: ()F
+
+  public float directionY();
+    descriptor: ()F
+
+  public float directionZ();
+    descriptor: ()F
+
+  public float red();
+    descriptor: ()F
+
+  public float green();
+    descriptor: ()F
+
+  public float blue();
+    descriptor: ()F
+
+  public float intensity();
+    descriptor: ()F
+
+  public float range();
+    descriptor: ()F
+
+  public float innerConeCosine();
+    descriptor: ()F
+
+  public float outerConeCosine();
+    descriptor: ()F
+
+  public boolean castsShadow();
+    descriptor: ()Z
+
+  public top.ceroxe.rt.renderer.api.SceneLight$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "SceneLight.java"
+public final class top.ceroxe.rt.renderer.api.SceneLight$Builder {
+  public top.ceroxe.rt.renderer.api.SceneLight$Builder color(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneLight$Builder intensity(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneLight$Builder normalizedDirection(float, float, float);
+    descriptor: (FFF)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneLight$Builder range(float);
+    descriptor: (F)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneLight$Builder coneDegrees(float, float);
+    descriptor: (FF)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneLight$Builder coneCosines(float, float);
+    descriptor: (FF)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneLight$Builder castsShadow(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/SceneLight$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneLight build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneLight;
+}
+
+Compiled from "SceneLight.java"
+public final class top.ceroxe.rt.renderer.api.SceneLight$Type extends java.lang.Enum<top.ceroxe.rt.renderer.api.SceneLight$Type> {
+  public static final top.ceroxe.rt.renderer.api.SceneLight$Type DIRECTIONAL;
+    descriptor: Ltop/ceroxe/rt/renderer/api/SceneLight$Type;
+  public static final top.ceroxe.rt.renderer.api.SceneLight$Type POINT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/SceneLight$Type;
+  public static final top.ceroxe.rt.renderer.api.SceneLight$Type SPOT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/SceneLight$Type;
+  public static top.ceroxe.rt.renderer.api.SceneLight$Type[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/SceneLight$Type;
+
+  public static top.ceroxe.rt.renderer.api.SceneLight$Type valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/SceneLight$Type;
+}
+
+Compiled from "SceneRevisionException.java"
+public final class top.ceroxe.rt.renderer.api.SceneRevisionException extends top.ceroxe.rt.renderer.api.RendererException {
+  public top.ceroxe.rt.renderer.api.SceneRevisionException(java.lang.String);
+    descriptor: (Ljava/lang/String;)V
+}
+
+Compiled from "SceneTransaction.java"
+public final class top.ceroxe.rt.renderer.api.SceneTransaction {
+  public static top.ceroxe.rt.renderer.api.SceneTransaction empty(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/SceneTransaction;
+
+  public static top.ceroxe.rt.renderer.api.SceneTransaction$Builder builder(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public long revision();
+    descriptor: ()J
+
+  public boolean reset();
+    descriptor: ()Z
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Upserts upserts();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneTransaction$Upserts;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Removals removals();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneTransaction$Removals;
+
+  public boolean hasChanges();
+    descriptor: ()Z
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "SceneTransaction.java"
+public final class top.ceroxe.rt.renderer.api.SceneTransaction$Builder {
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder resetScene();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsert(top.ceroxe.rt.renderer.api.TextureAsset);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsert(top.ceroxe.rt.renderer.api.MaterialAsset);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/MaterialAsset;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsert(top.ceroxe.rt.renderer.api.MeshAsset);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/MeshAsset;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsert(top.ceroxe.rt.renderer.api.SceneInstance);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/SceneInstance;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsert(top.ceroxe.rt.renderer.api.SceneLight);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/SceneLight;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsertTextures(java.lang.Iterable<? extends top.ceroxe.rt.renderer.api.TextureAsset>);
+    descriptor: (Ljava/lang/Iterable;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsertMaterials(java.lang.Iterable<? extends top.ceroxe.rt.renderer.api.MaterialAsset>);
+    descriptor: (Ljava/lang/Iterable;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsertMeshes(java.lang.Iterable<? extends top.ceroxe.rt.renderer.api.MeshAsset>);
+    descriptor: (Ljava/lang/Iterable;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsertInstances(java.lang.Iterable<? extends top.ceroxe.rt.renderer.api.SceneInstance>);
+    descriptor: (Ljava/lang/Iterable;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder upsertLights(java.lang.Iterable<? extends top.ceroxe.rt.renderer.api.SceneLight>);
+    descriptor: (Ljava/lang/Iterable;)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeTexture(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeMaterial(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeMesh(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeInstance(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeLight(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeTextures(long...);
+    descriptor: ([J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeMaterials(long...);
+    descriptor: ([J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeMeshes(long...);
+    descriptor: ([J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeInstances(long...);
+    descriptor: ([J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction$Builder removeLights(long...);
+    descriptor: ([J)Ltop/ceroxe/rt/renderer/api/SceneTransaction$Builder;
+
+  public top.ceroxe.rt.renderer.api.SceneTransaction build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/SceneTransaction;
+}
+
+Compiled from "SceneTransaction.java"
+public final class top.ceroxe.rt.renderer.api.SceneTransaction$Removals {
+  public java.nio.LongBuffer textureIds();
+    descriptor: ()Ljava/nio/LongBuffer;
+
+  public java.nio.LongBuffer materialIds();
+    descriptor: ()Ljava/nio/LongBuffer;
+
+  public java.nio.LongBuffer meshIds();
+    descriptor: ()Ljava/nio/LongBuffer;
+
+  public java.nio.LongBuffer instanceIds();
+    descriptor: ()Ljava/nio/LongBuffer;
+
+  public java.nio.LongBuffer lightIds();
+    descriptor: ()Ljava/nio/LongBuffer;
+
+  public boolean hasChanges();
+    descriptor: ()Z
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "SceneTransaction.java"
+public final class top.ceroxe.rt.renderer.api.SceneTransaction$Upserts {
+  public java.util.List<top.ceroxe.rt.renderer.api.TextureAsset> textures();
+    descriptor: ()Ljava/util/List;
+
+  public java.util.List<top.ceroxe.rt.renderer.api.MaterialAsset> materials();
+    descriptor: ()Ljava/util/List;
+
+  public java.util.List<top.ceroxe.rt.renderer.api.MeshAsset> meshes();
+    descriptor: ()Ljava/util/List;
+
+  public java.util.List<top.ceroxe.rt.renderer.api.SceneInstance> instances();
+    descriptor: ()Ljava/util/List;
+
+  public java.util.List<top.ceroxe.rt.renderer.api.SceneLight> lights();
+    descriptor: ()Ljava/util/List;
+
+  public boolean hasChanges();
+    descriptor: ()Z
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "SceneValidationException.java"
+public final class top.ceroxe.rt.renderer.api.SceneValidationException extends top.ceroxe.rt.renderer.api.RendererException {
+  public top.ceroxe.rt.renderer.api.SceneValidationException(java.lang.String);
+    descriptor: (Ljava/lang/String;)V
+
+  public top.ceroxe.rt.renderer.api.SceneValidationException(java.lang.String, java.lang.Throwable);
+    descriptor: (Ljava/lang/String;Ljava/lang/Throwable;)V
+}
+
+Compiled from "SubmissionOrderException.java"
+public final class top.ceroxe.rt.renderer.api.SubmissionOrderException extends top.ceroxe.rt.renderer.api.RendererException {
+  public top.ceroxe.rt.renderer.api.SubmissionOrderException(java.lang.String);
+    descriptor: (Ljava/lang/String;)V
+}
+
+Compiled from "SubmissionRejectedException.java"
+public final class top.ceroxe.rt.renderer.api.SubmissionRejectedException extends top.ceroxe.rt.renderer.api.RendererException {
+  public top.ceroxe.rt.renderer.api.SubmissionRejectedException(java.lang.String);
+    descriptor: (Ljava/lang/String;)V
+
+  public top.ceroxe.rt.renderer.api.SubmissionRejectedException(java.lang.String, java.lang.Throwable);
+    descriptor: (Ljava/lang/String;Ljava/lang/Throwable;)V
+}
+
+Compiled from "TemporalRenderingOptions.java"
+public final class top.ceroxe.rt.renderer.api.TemporalRenderingOptions {
+  public static final int BALANCED_HISTORY_FRAMES = 8;
+    descriptor: I
+  public static final int MIN_HISTORY_FRAMES = 2;
+    descriptor: I
+  public static final int MAX_HISTORY_FRAMES = 64;
+    descriptor: I
+  public static top.ceroxe.rt.renderer.api.TemporalRenderingOptions disabled();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions;
+
+  public static top.ceroxe.rt.renderer.api.TemporalRenderingOptions balanced();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions;
+
+  public static top.ceroxe.rt.renderer.api.TemporalRenderingOptions accumulating(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions;
+
+  public top.ceroxe.rt.renderer.api.TemporalRenderingOptions$Mode mode();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions$Mode;
+
+  public int maxHistoryFrames();
+    descriptor: ()I
+
+  public boolean enabled();
+    descriptor: ()Z
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "TemporalRenderingOptions.java"
+public final class top.ceroxe.rt.renderer.api.TemporalRenderingOptions$Mode extends java.lang.Enum<top.ceroxe.rt.renderer.api.TemporalRenderingOptions$Mode> {
+  public static final top.ceroxe.rt.renderer.api.TemporalRenderingOptions$Mode DISABLED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions$Mode;
+  public static final top.ceroxe.rt.renderer.api.TemporalRenderingOptions$Mode BALANCED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions$Mode;
+  public static final top.ceroxe.rt.renderer.api.TemporalRenderingOptions$Mode ACCUMULATING;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions$Mode;
+  public static top.ceroxe.rt.renderer.api.TemporalRenderingOptions$Mode[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions$Mode;
+
+  public static top.ceroxe.rt.renderer.api.TemporalRenderingOptions$Mode valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/TemporalRenderingOptions$Mode;
+}
+
+Compiled from "TextureAsset.java"
+public final class top.ceroxe.rt.renderer.api.TextureAsset {
+  public static top.ceroxe.rt.renderer.api.TextureAsset$Builder builder(long, int, int);
+    descriptor: (JII)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public static top.ceroxe.rt.renderer.api.TextureAsset color(long, int, int, byte[]);
+    descriptor: (JII[B)Ltop/ceroxe/rt/renderer/api/TextureAsset;
+
+  public static top.ceroxe.rt.renderer.api.TextureAsset colorMipChain(long, int, int, int, byte[]);
+    descriptor: (JIII[B)Ltop/ceroxe/rt/renderer/api/TextureAsset;
+
+  public static top.ceroxe.rt.renderer.api.TextureAsset wrapImmutableDirect(long, int, int, top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace, top.ceroxe.rt.renderer.api.TextureAsset$AddressMode, top.ceroxe.rt.renderer.api.TextureAsset$AddressMode, top.ceroxe.rt.renderer.api.TextureAsset$Filter, java.nio.ByteBuffer);
+    descriptor: (JIILtop/ceroxe/rt/renderer/api/TextureAsset$ColorSpace;Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;Ltop/ceroxe/rt/renderer/api/TextureAsset$Filter;Ljava/nio/ByteBuffer;)Ltop/ceroxe/rt/renderer/api/TextureAsset;
+
+  public static top.ceroxe.rt.renderer.api.TextureAsset wrapImmutableDirect(long, int, int, top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace, top.ceroxe.rt.renderer.api.TextureAsset$AddressMode, top.ceroxe.rt.renderer.api.TextureAsset$AddressMode, top.ceroxe.rt.renderer.api.TextureAsset$Filter, int, java.nio.ByteBuffer);
+    descriptor: (JIILtop/ceroxe/rt/renderer/api/TextureAsset$ColorSpace;Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;Ltop/ceroxe/rt/renderer/api/TextureAsset$Filter;ILjava/nio/ByteBuffer;)Ltop/ceroxe/rt/renderer/api/TextureAsset;
+
+  public static int maximumMipLevelCount(int, int);
+    descriptor: (II)I
+
+  public static long requiredByteCount(int, int, int);
+    descriptor: (III)J
+
+  public long id();
+    descriptor: ()J
+
+  public int width();
+    descriptor: ()I
+
+  public int height();
+    descriptor: ()I
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace colorSpace();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureAsset$ColorSpace;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$AddressMode addressU();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$AddressMode addressV();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$Filter filter();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureAsset$Filter;
+
+  public int mipLevelCount();
+    descriptor: ()I
+
+  public int mipWidth(int);
+    descriptor: (I)I
+
+  public int mipHeight(int);
+    descriptor: (I)I
+
+  public int mipByteOffset(int);
+    descriptor: (I)I
+
+  public java.nio.ByteBuffer rgba8();
+    descriptor: ()Ljava/nio/ByteBuffer;
+}
+
+Compiled from "TextureAsset.java"
+public final class top.ceroxe.rt.renderer.api.TextureAsset$AddressMode extends java.lang.Enum<top.ceroxe.rt.renderer.api.TextureAsset$AddressMode> {
+  public static final top.ceroxe.rt.renderer.api.TextureAsset$AddressMode REPEAT;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;
+  public static final top.ceroxe.rt.renderer.api.TextureAsset$AddressMode CLAMP_TO_EDGE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;
+  public static top.ceroxe.rt.renderer.api.TextureAsset$AddressMode[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;
+
+  public static top.ceroxe.rt.renderer.api.TextureAsset$AddressMode valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;
+}
+
+Compiled from "TextureAsset.java"
+public final class top.ceroxe.rt.renderer.api.TextureAsset$Builder {
+  public top.ceroxe.rt.renderer.api.TextureAsset$Builder colorSpace(top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset$ColorSpace;)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$Builder addressMode(top.ceroxe.rt.renderer.api.TextureAsset$AddressMode);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$Builder addressModes(top.ceroxe.rt.renderer.api.TextureAsset$AddressMode, top.ceroxe.rt.renderer.api.TextureAsset$AddressMode);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;Ltop/ceroxe/rt/renderer/api/TextureAsset$AddressMode;)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$Builder filter(top.ceroxe.rt.renderer.api.TextureAsset$Filter);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureAsset$Filter;)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$Builder pixelsRgba8(byte[]);
+    descriptor: ([B)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$Builder mipChainRgba8(int, byte[]);
+    descriptor: (I[B)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$Builder immutableDirectPixelsRgba8(java.nio.ByteBuffer);
+    descriptor: (Ljava/nio/ByteBuffer;)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset$Builder immutableDirectMipChainRgba8(int, java.nio.ByteBuffer);
+    descriptor: (ILjava/nio/ByteBuffer;)Ltop/ceroxe/rt/renderer/api/TextureAsset$Builder;
+
+  public top.ceroxe.rt.renderer.api.TextureAsset build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureAsset;
+}
+
+Compiled from "TextureAsset.java"
+public final class top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace extends java.lang.Enum<top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace> {
+  public static final top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace LINEAR;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureAsset$ColorSpace;
+  public static final top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace SRGB;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureAsset$ColorSpace;
+  public static top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/TextureAsset$ColorSpace;
+
+  public static top.ceroxe.rt.renderer.api.TextureAsset$ColorSpace valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/TextureAsset$ColorSpace;
+}
+
+Compiled from "TextureAsset.java"
+public final class top.ceroxe.rt.renderer.api.TextureAsset$Filter extends java.lang.Enum<top.ceroxe.rt.renderer.api.TextureAsset$Filter> {
+  public static final top.ceroxe.rt.renderer.api.TextureAsset$Filter NEAREST;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureAsset$Filter;
+  public static final top.ceroxe.rt.renderer.api.TextureAsset$Filter LINEAR;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureAsset$Filter;
+  public static top.ceroxe.rt.renderer.api.TextureAsset$Filter[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/TextureAsset$Filter;
+
+  public static top.ceroxe.rt.renderer.api.TextureAsset$Filter valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/TextureAsset$Filter;
+}
+
+Compiled from "TextureSamplingState.java"
+public final class top.ceroxe.rt.renderer.api.TextureSamplingState extends java.lang.Record {
+  public static final int MAX_SUPPORTED_ANISOTROPY = 16;
+    descriptor: I
+  public top.ceroxe.rt.renderer.api.TextureSamplingState(top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode, int);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/TextureSamplingState$MinificationMode;I)V
+
+  public static top.ceroxe.rt.renderer.api.TextureSamplingState pixelStable();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureSamplingState;
+
+  public static top.ceroxe.rt.renderer.api.TextureSamplingState rotatedGridSupersampling();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureSamplingState;
+
+  public static top.ceroxe.rt.renderer.api.TextureSamplingState anisotropic(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/TextureSamplingState;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode minificationMode();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/TextureSamplingState$MinificationMode;
+
+  public int maxAnisotropy();
+    descriptor: ()I
+}
+
+Compiled from "TextureSamplingState.java"
+public final class top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode extends java.lang.Enum<top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode> {
+  public static final top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode PIXEL_STABLE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureSamplingState$MinificationMode;
+  public static final top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode ROTATED_GRID_SUPERSAMPLING;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureSamplingState$MinificationMode;
+  public static final top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode ANISOTROPIC;
+    descriptor: Ltop/ceroxe/rt/renderer/api/TextureSamplingState$MinificationMode;
+  public static top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/TextureSamplingState$MinificationMode;
+
+  public static top.ceroxe.rt.renderer.api.TextureSamplingState$MinificationMode valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/TextureSamplingState$MinificationMode;
+}
+
+Compiled from "GpuFrameLease.java"
+public interface top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease extends java.lang.AutoCloseable {
+  public abstract top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor descriptor();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor;
+
+  public abstract top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ExportedNativeHandle<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanMemoryHandleType> memoryHandle();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ExportedNativeHandle;
+
+  public abstract java.util.Optional<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$AcquireSignal> acquireSignal();
+    descriptor: ()Ljava/util/Optional;
+
+  public default top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletionCapabilities consumerCompletionCapabilities();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ConsumerCompletionCapabilities;
+
+  public abstract void release(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletion);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ConsumerCompletion;)V
+
+  public abstract top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$LeaseState state();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$LeaseState;
+
+  public abstract void close();
+    descriptor: ()V
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$AcquireSignal extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$AcquireSignal(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ExportedNativeHandle<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSemaphoreHandleType>, top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind, long);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ExportedNativeHandle;Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;J)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ExportedNativeHandle<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSemaphoreHandleType> handle();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ExportedNativeHandle;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind kind();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;
+
+  public long timelineValue();
+    descriptor: ()J
+}
+
+Compiled from "GpuFrameLease.java"
+public interface top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletion {
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletionCapabilities extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletionCapabilities(boolean, java.util.Set<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind>);
+    descriptor: (ZLjava/util/Set;)V
+
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletionCapabilities cpuOnly();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ConsumerCompletionCapabilities;
+
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletionCapabilities cpuAndBinarySemaphore();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ConsumerCompletionCapabilities;
+
+  public boolean externalSemaphoreSignal();
+    descriptor: ()Z
+
+  public boolean supports(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;)Z
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public boolean cpuCompleted();
+    descriptor: ()Z
+
+  public java.util.Set<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind> externalSemaphoreKinds();
+    descriptor: ()Ljava/util/Set;
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$CpuCompleted extends java.lang.Record implements top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletion {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$CpuCompleted();
+    descriptor: ()V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+Compiled from "GpuFrameLease.java"
+public interface top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ExportedNativeHandle<T extends top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanExternalHandleType> extends java.lang.AutoCloseable {
+  public abstract long value();
+    descriptor: ()J
+
+  public abstract T handleType();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanExternalHandleType;
+
+  public abstract top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition importDisposition();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ImportDisposition;
+
+  public abstract top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$HandleState state();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$HandleState;
+
+  public abstract boolean markImported();
+    descriptor: ()Z
+
+  public abstract void close();
+    descriptor: ()V
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ExternalSemaphoreSignal extends java.lang.Record implements top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ConsumerCompletion {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ExternalSemaphoreSignal(long, top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSemaphoreHandleType, top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind, long, top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition);
+    descriptor: (JLtop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanSemaphoreHandleType;Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;JLtop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ImportDisposition;)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public long handle();
+    descriptor: ()J
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSemaphoreHandleType handleType();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanSemaphoreHandleType;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind kind();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;
+
+  public long timelineValue();
+    descriptor: ()J
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition importDisposition();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ImportDisposition;
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor {
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder builder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public long frameSequence();
+    descriptor: ()J
+
+  public long renderedSceneRevision();
+    descriptor: ()J
+
+  public int width();
+    descriptor: ()I
+
+  public int height();
+    descriptor: ()I
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanFormat format();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanFormat;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageType imageType();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageType;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageTiling imageTiling();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageTiling;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageUsage imageUsage();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageUsage;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageCreateFlags imageCreateFlags();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageCreateFlags;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageLayout imageLayout();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageLayout;
+
+  public int mipLevels();
+    descriptor: ()I
+
+  public int arrayLayers();
+    descriptor: ()I
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSampleCount sampleCount();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanSampleCount;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSharingMode sharingMode();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanSharingMode;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanQueueFamily producerQueueFamily();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanQueueFamily;
+
+  public long allocationSize();
+    descriptor: ()J
+
+  public long allocationOffset();
+    descriptor: ()J
+
+  public boolean dedicatedAllocation();
+    descriptor: ()Z
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder frameSequence(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder renderedSceneRevision(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder extent(int, int);
+    descriptor: (II)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder format(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanFormat);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanFormat;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder imageType(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageType);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageType;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder imageTiling(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageTiling);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageTiling;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder imageUsage(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageUsage);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageUsage;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder imageCreateFlags(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageCreateFlags);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageCreateFlags;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder imageLayout(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageLayout);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanImageLayout;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder mipLevels(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder arrayLayers(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder sampleCount(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSampleCount);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanSampleCount;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder sharingMode(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSharingMode);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanSharingMode;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder producerQueueFamily(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanQueueFamily);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$VulkanQueueFamily;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder allocationSize(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder allocationOffset(long);
+    descriptor: (J)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor$Builder dedicatedAllocation(boolean);
+    descriptor: (Z)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor$Builder;
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$FrameDescriptor build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$FrameDescriptor;
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$HandleState extends java.lang.Enum<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$HandleState> {
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$HandleState EXPORTED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$HandleState;
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$HandleState IMPORTED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$HandleState;
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$HandleState CLOSED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$HandleState;
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$HandleState[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$HandleState;
+
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$HandleState valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$HandleState;
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition extends java.lang.Enum<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition> {
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition IMPORT_CONSUMES_HANDLE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ImportDisposition;
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition CALLER_RETAINS_HANDLE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ImportDisposition;
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ImportDisposition;
+
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$ImportDisposition valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$ImportDisposition;
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$LeaseState extends java.lang.Enum<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$LeaseState> {
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$LeaseState ACTIVE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$LeaseState;
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$LeaseState RELEASED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$LeaseState;
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$LeaseState CLOSED;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$LeaseState;
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$LeaseState[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$LeaseState;
+
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$LeaseState valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$LeaseState;
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind extends java.lang.Enum<top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind> {
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind BINARY;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind TIMELINE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;
+
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$SemaphoreKind valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease$SemaphoreKind;
+}
+
+Compiled from "GpuFrameLease.java"
+public interface top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanExternalHandleType {
+  public abstract int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanFormat extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanFormat(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageCreateFlags extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageCreateFlags(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageLayout extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageLayout(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageTiling extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageTiling(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageType extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageType(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageUsage extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanImageUsage(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanMemoryHandleType extends java.lang.Record implements top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanExternalHandleType {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanMemoryHandleType(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanQueueFamily extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanQueueFamily(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSampleCount extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSampleCount(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSemaphoreHandleType extends java.lang.Record implements top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanExternalHandleType {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSemaphoreHandleType(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "GpuFrameLease.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSharingMode extends java.lang.Record {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease$VulkanSharingMode(int);
+    descriptor: (I)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int value();
+    descriptor: ()I
+}
+
+Compiled from "VulkanFrameInterop.java"
+public interface top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop {
+  public abstract top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FramePollResult pollLatestFrame();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFrameInterop$FramePollResult;
+
+  public default top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FramePollResult awaitLatestFrame(java.time.Duration) throws java.lang.InterruptedException;
+    descriptor: (Ljava/time/Duration;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFrameInterop$FramePollResult;
+
+  public default java.util.concurrent.CompletableFuture<top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FramePollResult> awaitLatestFrameAsync(java.time.Duration, java.util.concurrent.Executor);
+    descriptor: (Ljava/time/Duration;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;
+}
+
+Compiled from "VulkanFrameInterop.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FrameAvailable extends java.lang.Record implements top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FramePollResult {
+  public top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FrameAvailable(top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease;)V
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public top.ceroxe.rt.renderer.api.interop.vulkan.GpuFrameLease lease();
+    descriptor: ()Ltop/ceroxe/rt/renderer/api/interop/vulkan/GpuFrameLease;
+}
+
+Compiled from "VulkanFrameInterop.java"
+public final class top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FrameNotReady extends java.lang.Enum<top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FrameNotReady> implements top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FramePollResult {
+  public static final top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FrameNotReady INSTANCE;
+    descriptor: Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFrameInterop$FrameNotReady;
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FrameNotReady[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFrameInterop$FrameNotReady;
+
+  public static top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FrameNotReady valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/api/interop/vulkan/VulkanFrameInterop$FrameNotReady;
+}
+
+Compiled from "VulkanFrameInterop.java"
+public interface top.ceroxe.rt.renderer.api.interop.vulkan.VulkanFrameInterop$FramePollResult {
+}
+
+Compiled from "RayTracingBackendProvider.java"
+public interface top.ceroxe.rt.renderer.spi.RayTracingBackendProvider {
+  public static final int API_MAJOR = 1;
+    descriptor: I
+  public abstract top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor descriptor();
+    descriptor: ()Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Descriptor;
+
+  public default java.util.List<top.ceroxe.rt.renderer.api.RayTracingGpuDevice> availableGpuDevices();
+    descriptor: ()Ljava/util/List;
+
+  public abstract top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$ProbeResult probe(top.ceroxe.rt.renderer.api.RayTracingRendererConfig);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig;)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$ProbeResult;
+
+  public abstract top.ceroxe.rt.renderer.api.RayTracingRenderer open(top.ceroxe.rt.renderer.api.RayTracingRendererConfig);
+    descriptor: (Ltop/ceroxe/rt/renderer/api/RayTracingRendererConfig;)Ltop/ceroxe/rt/renderer/api/RayTracingRenderer;
+}
+
+Compiled from "RayTracingBackendProvider.java"
+public final class top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility extends java.lang.Enum<top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility> {
+  public static final top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility COMPATIBLE;
+    descriptor: Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;
+  public static final top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility UNSUPPORTED;
+    descriptor: Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;
+  public static final top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility INCOMPATIBLE;
+    descriptor: Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;
+  public static top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility[] values();
+    descriptor: ()[Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;
+
+  public static top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;
+}
+
+Compiled from "RayTracingBackendProvider.java"
+public final class top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor {
+  public static top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor$Builder builder(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Descriptor$Builder;
+
+  public top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor$Builder toBuilder();
+    descriptor: ()Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Descriptor$Builder;
+
+  public java.lang.String id();
+    descriptor: ()Ljava/lang/String;
+
+  public int priority();
+    descriptor: ()I
+
+  public int apiMajor();
+    descriptor: ()I
+
+  public int apiMinor();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public int hashCode();
+    descriptor: ()I
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+}
+
+Compiled from "RayTracingBackendProvider.java"
+public final class top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor$Builder {
+  public top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor$Builder priority(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Descriptor$Builder;
+
+  public top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor$Builder apiMajor(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Descriptor$Builder;
+
+  public top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor$Builder apiMinor(int);
+    descriptor: (I)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Descriptor$Builder;
+
+  public top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Descriptor build();
+    descriptor: ()Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Descriptor;
+}
+
+Compiled from "RayTracingBackendProvider.java"
+public final class top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$ProbeResult extends java.lang.Record {
+  public top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$ProbeResult(top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility, java.lang.String);
+    descriptor: (Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;Ljava/lang/String;)V
+
+  public static top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$ProbeResult compatible(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$ProbeResult;
+
+  public static top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$ProbeResult unsupported(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$ProbeResult;
+
+  public static top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$ProbeResult incompatible(java.lang.String);
+    descriptor: (Ljava/lang/String;)Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$ProbeResult;
+
+  public final java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public final int hashCode();
+    descriptor: ()I
+
+  public final boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public top.ceroxe.rt.renderer.spi.RayTracingBackendProvider$Compatibility compatibility();
+    descriptor: ()Ltop/ceroxe/rt/renderer/spi/RayTracingBackendProvider$Compatibility;
+
+  public java.lang.String reason();
+    descriptor: ()Ljava/lang/String;
+}

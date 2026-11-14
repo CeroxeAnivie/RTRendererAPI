@@ -7,10 +7,10 @@ import top.ceroxe.rt.renderer.api.*;
 /** Retained memory resources. No tracing, file export, denoising or scheduling. */
 final class RtxptScene {
     boolean nativeLighting;
-    final RtxptPersistentMap<TextureAsset> textures;
-    final RtxptPersistentMap<MaterialAsset> materials;
-    final RtxptPersistentMap<MeshAsset> meshes;
-    final RtxptPersistentMap<SceneInstance> instances;
+    final RtxptSceneTable<TextureAsset> textures;
+    final RtxptSceneTable<MaterialAsset> materials;
+    final RtxptSceneTable<MeshAsset> meshes;
+    final RtxptSceneTable<SceneInstance> instances;
     final RtxptLightMap lights;
     final RtxptPersistentMap<SparseLightSource> sparseSources;
     private record MeshMaterials(MeshAsset mesh,Set<Long> ids,List<RtxptAttributeBatch.Group> groups) { }
@@ -34,20 +34,35 @@ final class RtxptScene {
     private FramePrimitiveBatch cachedPrimitiveBatch;
     private List<Item> cachedFrameItems;
     private Object cachedResidentItems;
-    private RtxptPersistentMap<MeshAsset> cachedPrimitiveMeshes;
+    private RtxptSceneTable<MeshAsset> cachedPrimitiveMeshes;
+    void selectNativeLighting(){
+        if(nativeLighting)return;
+        nativeLighting=true;
+        // Mode selection can follow retained inputs. The resident snapshot
+        // must keep its imported identities until the next resource delta.
+        for(var instance:instances.values()){
+            var old=itemTable.get(instance.id());
+            if(old!=null&&old.visibility()!=1){
+                itemTable.put(instance.id(),new Item(old.name(),old.mesh(),old.transform(),old.boundary(),1));
+                itemStructure=new Object();
+            }
+        }
+        residentItems=null;cachedPrimitiveBatch=null;cachedFrameItems=null;
+        cachedResidentItems=null;cachedPrimitiveMeshes=null;
+    }
     List<SceneLight> sortedLights(){if(sortedLights==null)sortedLights=List.copyOf(lights.values());return sortedLights;}
     final Map<String,MediumBoundary> interiors=new LinkedHashMap<>();
     final Map<String,Float> materialIors=new LinkedHashMap<>();
     RtxptScene() {
-        textures=new RtxptPersistentMap<>();materials=new RtxptPersistentMap<>();meshes=new RtxptPersistentMap<>();instances=new RtxptPersistentMap<>();
+        textures=new RtxptSceneTable<>();materials=new RtxptSceneTable<>();meshes=new RtxptSceneTable<>();instances=new RtxptSceneTable<>();
         meshMaterials=new RtxptPersistentMap<>();textureUsers=new RtxptPersistentMap<>();materialUsers=new RtxptPersistentMap<>();meshUsers=new RtxptPersistentMap<>();
         itemTable=new RtxptPersistentMap<>();
         lights=new RtxptLightMap();sparseSources=new RtxptPersistentMap<>();
     }
     RtxptScene(RtxptScene src) {
         nativeLighting=src.nativeLighting;
-        textures=new RtxptPersistentMap<>(src.textures);materials=new RtxptPersistentMap<>(src.materials);meshes=new RtxptPersistentMap<>(src.meshes);
-        instances=new RtxptPersistentMap<>(src.instances);residentItems=src.residentItems;lights=new RtxptLightMap(src.lights);sortedLights=src.sortedLights;meshMaterials=new RtxptPersistentMap<>(src.meshMaterials);
+        textures=new RtxptSceneTable<>(src.textures);materials=new RtxptSceneTable<>(src.materials);meshes=new RtxptSceneTable<>(src.meshes);
+        instances=new RtxptSceneTable<>(src.instances);residentItems=src.residentItems;lights=new RtxptLightMap(src.lights);sortedLights=src.sortedLights;meshMaterials=new RtxptPersistentMap<>(src.meshMaterials);
         textureUsers=new RtxptPersistentMap<>(src.textureUsers);materialUsers=new RtxptPersistentMap<>(src.materialUsers);meshUsers=new RtxptPersistentMap<>(src.meshUsers);referenceChecks=src.referenceChecks;
         sparseSources=new RtxptPersistentMap<>(src.sparseSources);
         itemTable=new RtxptPersistentMap<>(src.itemTable);itemStructure=src.itemStructure;
@@ -61,7 +76,6 @@ final class RtxptScene {
         if(tx.reset()){meshMaterials.clear();textureUsers.clear();materialUsers.clear();meshUsers.clear();textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();sparseSources.clear();itemTable.clear();itemStructure=new Object();residentItems=null;geometryBytes=textureBytes=0;}
         var r=tx.removals();var u=tx.upserts();
         for(var t:u.textures())t.validateReplacementOf(textures.get(t.id()));
-        if(nativeContract)for(var material:u.materials())validateMaterial(material);
         // An exact immutable republish is not a resource change. Retain the
         // resident value and its dependency paths, as with the original stable
         // scene slots. Texture generations are still validated above and only
@@ -94,13 +108,17 @@ final class RtxptScene {
         for(var i:instanceUpserts){++referenceChecks;if(!meshes.containsKey(i.meshAssetId()))throw new IllegalArgumentException("Missing mesh "+i.meshAssetId());dependency(meshUsers,i.meshAssetId(),i.id(),true);}
         rejectReferencedRemoval(textures,textureUsers,r.textureIds(),"texture");rejectReferencedRemoval(materials,materialUsers,r.materialIds(),"material");rejectReferencedRemoval(meshes,meshUsers,r.meshIds(),"mesh");
         if(nativeContract){var check=new HashSet<>(changedInstances);for(var instance:u.instances())check.add(instance.id());for(long id:changedMeshes){var users=meshUsers.get(id);if(users!=null)check.addAll(users.keySet());}
-            for(long id:check){var i=instances.get(id);if(i!=null)validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.renderState(),i.castsShadow(),i.visibilityMask());}}
+            for(long id:check){var i=instances.get(id);if(i!=null)validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.castsShadow(),i.visibilityMask());}}
         for(long id:changedInstances){var instance=instances.get(id);var before=itemTable.get(id);
-            var after=instance==null?null:new Item("i"+id,instance.meshAssetId(),instance.transform(),instance.mediumBoundary().orElse(null),instance.surfaceVisibility());
+            var after=instance==null?null:new Item("i"+id,instance.meshAssetId(),instance.transform(),instance.mediumBoundary().orElse(null),nativeLighting?1:instance.surfaceVisibility());
             if(Objects.equals(before,after))continue;
             if(!sameStructure(before,after))itemStructure=new Object();
             if(after==null)itemTable.remove(id);else itemTable.put(id,after);residentItems=null;
         }
+    }
+    void retireResourceSnapshots() {
+        textures.retireSnapshots(); materials.retireSnapshots();
+        meshes.retireSnapshots(); instances.retireSnapshots();
     }
     void validateAssetBudget(RendererResourceOptions budget){
         budget.validateAssetBytes(geometryBytes,textureBytes);
@@ -132,19 +150,15 @@ final class RtxptScene {
     private void rejectReferencedRemoval(Map<Long,?> table,RtxptPersistentMap<RtxptPersistentMap<Boolean>> users,LongBuffer removed,String kind){
         while(removed.hasRemaining()){long id=removed.get();++referenceChecks;if(!table.containsKey(id)&&users.containsKey(id))throw new IllegalArgumentException("Referenced "+kind+" removed: "+id);}
     }
-    private static void validateMaterial(MaterialAsset m){
-        if(m.shadingModel()!=MaterialAsset.ShadingModel.PHYSICALLY_BASED || m.surfaceOverlay().enabled())
-            throw new IllegalArgumentException("RTXPT uses native physical materials; custom surface equations/overlays belong to Vulkan");
-    }
+
     void validate() {
-        for(var m:materials.values())validateMaterial(m);
-        for(var i:instances.values())validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.renderState(),i.castsShadow(),i.visibilityMask());
+        for(var i:instances.values())validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.castsShadow(),i.visibilityMask());
     }
-    void validateInstance(long id,AffineTransform transform,MediumBoundary b,InstanceRenderState state,boolean shadow,int mask) {
+    void validateInstance(long id,AffineTransform transform,MediumBoundary b,boolean shadow,int mask) {
         var m=meshes.get(id);if(m==null)throw new IllegalArgumentException("Missing mesh "+id);
         if(b!=null && !m.isClosedManifold())throw new IllegalArgumentException("Medium requires a closed outward-wound manifold mesh");
-        if(!state.equals(InstanceRenderState.defaults()) || (!nativeLighting&&(!shadow||mask!=255)))
-            throw new IllegalArgumentException("Custom ray masks, no-shadow instances and game surface overrides belong to Vulkan");
+        if(!nativeLighting&&(!shadow||mask!=255))
+            throw new IllegalArgumentException("Custom ray masks and no-shadow instances require the native-lighting output contract");
         if(nativeLighting&&mask!=255&&(mask&~7)!=0)
             throw new IllegalArgumentException("Native lighting supports receiver=1, shadow=2 and bounce=4 ray roles");
         // AffineTransform already enforces finite, invertible input. The native
@@ -167,11 +181,11 @@ final class RtxptScene {
                 &&cachedPrimitiveMeshes!=null&&cachedPrimitiveMeshes.sameSnapshot(meshes))return cachedFrameItems;
         var a=new ArrayList<Item>(f.primitiveBatch().primitives().size());
         int k=0;for(var i:f.primitiveBatch().primitives()) {
-            validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.renderState(),i.castsShadow(),i.visibilityMask());
-            a.add(new Item("p"+k++,i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.surfaceVisibility()));
+            validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.castsShadow(),i.visibilityMask());
+            a.add(new Item("p"+k++,i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),nativeLighting?1:i.surfaceVisibility()));
         }
         cachedPrimitiveBatch=f.primitiveBatch();cachedResidentItems=residentItems;
-        cachedPrimitiveMeshes=new RtxptPersistentMap<>(meshes);
+        cachedPrimitiveMeshes=new RtxptSceneTable<>(meshes);
         return cachedFrameItems=new Items((Items)residentItems,a);
     }
     static boolean sameStructure(List<Item> a,List<Item> b) {

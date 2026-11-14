@@ -19,7 +19,6 @@ public final class PrimitiveInstance {
     private final boolean castsShadow;
     private final float surfaceVisibility;
     private final int packedLight;
-    private final InstanceRenderState renderState;
     private final MediumBoundary mediumBoundary;
 
     private PrimitiveInstance(Builder builder) {
@@ -29,7 +28,7 @@ public final class PrimitiveInstance {
                 ? transform
                 : Objects.requireNonNull(builder.previousTransform, "previousTransform");
         if ((builder.visibilityMask & ~0xff) != 0 || builder.visibilityMask == 0) {
-            throw new IllegalArgumentException("visibilityMask must contain a non-zero Vulkan 8-bit mask");
+            throw new IllegalArgumentException("visibilityMask must contain a non-zero 8-bit ray mask");
         }
         if (!Float.isFinite(builder.surfaceVisibility)
                 || builder.surfaceVisibility < 0.0F || builder.surfaceVisibility > 1.0F) {
@@ -40,7 +39,6 @@ public final class PrimitiveInstance {
         castsShadow = builder.castsShadow;
         surfaceVisibility = builder.surfaceVisibility;
         packedLight = SceneInstance.requireValidPackedLight(builder.packedLight);
-        renderState = Objects.requireNonNull(builder.renderState, "renderState");
         mediumBoundary = builder.mediumBoundary;
     }
 
@@ -66,8 +64,7 @@ public final class PrimitiveInstance {
                 .visibilityMask(source.visibilityMask())
                 .castsShadow(source.castsShadow())
                 .surfaceVisibility(source.surfaceVisibility())
-                .packedLight(source.packedLight())
-                .renderState(source.renderState());
+                .packedLight(source.packedLight());
         source.mediumBoundary().ifPresent(builder::mediumBoundary);
         return builder.build();
     }
@@ -111,11 +108,7 @@ public final class PrimitiveInstance {
      * @return validated packed light value
      */
     public int packedLight() { return packedLight; }
-    /**
-     * Returns shared per-instance render state.
-     * @return non-null render state
-     */
-    public InstanceRenderState renderState() { return renderState; }
+
 
     /** Returns the optional frame-local volume boundary. */
     public java.util.Optional<MediumBoundary> mediumBoundary() { return java.util.Optional.ofNullable(mediumBoundary); }
@@ -138,14 +131,13 @@ public final class PrimitiveInstance {
                 && packedLight == instance.packedLight
                 && Objects.equals(mediumBoundary, instance.mediumBoundary)
                 && transform.equals(instance.transform)
-                && previousTransform.equals(instance.previousTransform)
-                && renderState.equals(instance.renderState);
+                && previousTransform.equals(instance.previousTransform);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(meshAssetId, transform, previousTransform, visibilityMask, castsShadow,
-                surfaceVisibility, packedLight, renderState, mediumBoundary);
+                surfaceVisibility, packedLight, mediumBoundary);
     }
 
     @Override
@@ -157,7 +149,7 @@ public final class PrimitiveInstance {
                 + ", castsShadow=" + castsShadow
                 + ", surfaceVisibility=" + surfaceVisibility
                 + ", packedLight=" + packedLight
-                + ", renderState=" + renderState + ", mediumBoundary=" + mediumBoundary + ']';
+                + ", mediumBoundary=" + mediumBoundary + ']';
     }
 
     /** Single-thread-confined semantic builder. */
@@ -169,7 +161,6 @@ public final class PrimitiveInstance {
         private boolean castsShadow = true;
         private float surfaceVisibility = 1.0F;
         private int packedLight = SceneInstance.FULL_BRIGHT_PACKED_LIGHT;
-        private InstanceRenderState renderState = InstanceRenderState.defaults();
         private MediumBoundary mediumBoundary;
 
         private Builder(long meshAssetId) {
@@ -185,7 +176,6 @@ public final class PrimitiveInstance {
             castsShadow = source.castsShadow;
             surfaceVisibility = source.surfaceVisibility;
             packedLight = source.packedLight;
-            renderState = source.renderState;
             mediumBoundary = source.mediumBoundary;
         }
 
@@ -221,7 +211,7 @@ public final class PrimitiveInstance {
 
         /**
          * Replaces the ray visibility mask.
-         * @param value non-zero Vulkan 8-bit mask
+         * @param value non-zero 8-bit ray mask
          * @return this builder
          */
         public Builder visibilityMask(int value) {
@@ -272,15 +262,7 @@ public final class PrimitiveInstance {
             return this;
         }
 
-        /**
-         * Replaces shared per-instance render state.
-         * @param value non-null render state
-         * @return this builder
-         */
-        public Builder renderState(InstanceRenderState value) {
-            renderState = Objects.requireNonNull(value, "renderState");
-            return this;
-        }
+
 
         /**
          * Builds validated immutable frame primitive.

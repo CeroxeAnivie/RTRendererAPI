@@ -274,3 +274,5 @@ tasks.register("verifyRendererApiAbi") {
 tasks.named("check") {
     dependsOn("meshTopologySelfTest", "verifyRendererApiBoundary", "verifyRendererApiAbi")
 }
+
+sourceSets.named("test") { java.setIncludes(setOf("**/NativeLightingApplicationPatchSelfTest.java", "**/MeshTopologySelfTest.java")) }

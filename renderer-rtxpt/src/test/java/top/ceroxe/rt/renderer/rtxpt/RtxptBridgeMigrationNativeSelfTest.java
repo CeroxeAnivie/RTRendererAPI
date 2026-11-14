@@ -63,6 +63,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                     TextureAsset previousTexture=texture;
                     double[] before=RtxptNative.meshResourceState(handle,"i22");
                     long[] workBefore=RtxptNative.resourceWorkState(handle);
+                    long geometryChecksBefore=sequence==9?RtxptNative.lightingMetadataWork(handle)[2]:0;
                     if(sequence==2) {
                         name="full-generation-no-op";texture=copy(texture);noOp=true;
                     } else if(sequence==3) {
@@ -159,7 +160,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                     }
                     if(attributeOnly) {
                         require(before[0]==after[0],"Attribute/texture update rebuilt BLAS at sequence="+sequence);
-                        require(before[1]!=after[1],"Mixed texture/attribute update omitted new vertex buffer at sequence="+sequence);
+                        require(before[1]==after[1],"Compatible mixed texture/attribute update discarded stable vertex storage at sequence="+sequence);
                     } else if(!topology&&sequence!=11&&sequence!=12&&sequence!=13)
                         require(Arrays.equals(before,after),"Texture-only publication rebuilt geometry at sequence="+sequence+" before="+Arrays.toString(before)+" after="+Arrays.toString(after));
                     var snapshot=monitor.poll();var second=independent.poll();
@@ -188,6 +189,8 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                         require(javaSnapshot.level()==RtxptDiagnostics.Level.OFF,"Diagnostic OFF level was not visible");
                     }
                     checkMetadata(handle,texture,masked,thirdPresent,sequence!=9);
+                    if(sequence==9)require(RtxptNative.lightingMetadataWork(handle)[2]==geometryChecksBefore,
+                            "Removing a neighbor rechecked surviving receiver material and triangle metadata");
                     if(sequence==11||sequence==12||sequence==35||sequence==36) {
                         Path file=output.resolve(name+".pfm");RtxptNative.nativeLightingCapture(handle,file.toString(),2);
                         checkCenterGeometry(file,sequence==12||sequence==36);
@@ -229,6 +232,7 @@ public final class RtxptBridgeMigrationNativeSelfTest {
             RtxptNative.nativeLightingCapture(handle,initial.toString(),2);checkCenterGeometry(initial,true);
             var monitor=access.nativeDiagnosticMonitor();monitor.poll();
             double[] previous=RtxptNative.meshResourceState(handle,"i22");
+            long[] previousRanges=RtxptNative.meshStorageRanges(handle,"i22");
             double[] stableMetadata=RtxptNative.lightingMetadataState(handle,"i22",meshName(2)+":0");
             double previousPolicy=RtxptNative.lightingSurfaceState(handle,meshName(2)+":0",0)[1];
             for(int sequence=2;sequence<=11;sequence++) {
@@ -249,21 +253,26 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 try(var lease=lighting.acquireLightingFrame().orElseThrow()){checkFrame(lease.frame(),sequence);}
                 double elapsed=(System.nanoTime()-begin)/1_000_000.0;
                 double[] current=RtxptNative.meshResourceState(handle,"i22");
+                long[] currentRanges=RtxptNative.meshStorageRanges(handle,"i22");
+                if(sequence==5||sequence==7)require(previous[1]!=current[1]
+                        ||currentRanges[1]<=previousRanges[0]||previousRanges[1]<=currentRanges[0],
+                        "Vertex-count change reused the previous occupied vertex slice");
+                else require(Arrays.equals(previousRanges,currentRanges),"Compatible edit moved its vertex/index ranges");
+                previousRanges=currentRanges;
                 var snapshot=monitor.poll();require(snapshot.lostEvents()==0,"Deformation diagnostics lost events");
                 long full=count(snapshot,"SceneFullRefresh"),tlas=count(snapshot,"TlasAllocate");
                 long blas=count(snapshot,"BlasBuild"),attributes=count(snapshot,"AttributePreparation"),materials=count(snapshot,"Materials");
                 require(materials==0&&blas>0,"Geometry edit lost its native BLAS build or reimported materials");
                 require(full==0&&tlas==0&&attributes>0,"Stable graph edit rebuilt the whole native scene/TLAS");
-                require(previous[1]!=current[1],"Geometry edit omitted its new immutable vertex input");
+                require(current[1]!=0&&(sequence==5||sequence==7||previous[1]==current[1]),
+                        "Compatible geometry edit changed its native storage page at sequence="+sequence);
                 if(sequence==3||sequence==6||mixedSampler||sequence>=10)
                     require(previous[0]==current[0],"Same-layout deformation failed to reuse the ordinary native BLAS");
-                if(reshaped) {
-                    // These are complete builds, not topology-changing refits.
-                    // Sequence 5 outgrows the original native capacity; index
-                    // reorder and shrink fit it, as in the capacity contract.
-                    if(sequence==5)require(previous[0]!=current[0],"Geometry growth retained insufficient native BLAS capacity");
-                    else require(previous[0]==current[0],"Compatible full rebuild replaced its ordinary native capacity");
-                }
+                // DXR can report the same storage requirement for two and four
+                // triangles. The grow case checks the real build, new metadata
+                // and pixels; reuse is required for reorder and shrink.
+                if(reshaped&&sequence!=5)require(previous[0]==current[0],
+                        "Compatible full rebuild replaced its ordinary native capacity");
                 double[] metadata=RtxptNative.lightingMetadataState(handle,"i22",meshName(2)+":0");
                 require(metadata[0]==stableMetadata[0]&&metadata[1]==stableMetadata[1],
                         "Stable mesh/instance changed its original dense graph indices");
@@ -271,6 +280,10 @@ public final class RtxptBridgeMigrationNativeSelfTest {
                 long[] metadataAfter=RtxptNative.lightingMetadataWork(handle);
                 require(metadataAfter.length==11&&metadataAfter[0]==metadataBefore[0],
                         "Stable geometry edit rebuilt its cached attribute identity keys");
+                if(sequence==5||sequence==7)require(metadataAfter[2]>metadataBefore[2],
+                        "Triangle count change did not reconcile receiver geometry");
+                else if(!mixedSampler)require(metadataAfter[2]==metadataBefore[2],
+                        "An edit with unchanged receiver metadata still checked geometry at sequence="+sequence);
                 if(mixedSampler) {
                     require(RtxptNative.lightingSurfaceState(handle,meshName(2)+":0",0)[1]!=previousPolicy,
                             "Mixed sampler/deformation lost its real sampling-policy update");

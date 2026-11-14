@@ -19,7 +19,6 @@ public final class SceneInstance {
     private final boolean castsShadow;
     private final float surfaceVisibility;
     private final int packedLight;
-    private final InstanceRenderState renderState;
     private final MediumBoundary mediumBoundary;
 
     /**
@@ -43,7 +42,6 @@ public final class SceneInstance {
             boolean castsShadow,
             float surfaceVisibility,
             int packedLight,
-            InstanceRenderState renderState,
             MediumBoundary mediumBoundary
     ) {
         MaterialAsset.requireId(id, "id");
@@ -51,7 +49,7 @@ public final class SceneInstance {
         this.transform = java.util.Objects.requireNonNull(transform, "transform");
         this.mobility = java.util.Objects.requireNonNull(mobility, "mobility");
         if ((visibilityMask & ~0xff) != 0 || visibilityMask == 0) {
-            throw new IllegalArgumentException("visibilityMask must contain a non-zero Vulkan 8-bit mask");
+            throw new IllegalArgumentException("visibilityMask must contain a non-zero 8-bit ray mask");
         }
         if (!Float.isFinite(surfaceVisibility)
                 || surfaceVisibility < 0.0F || surfaceVisibility > 1.0F) {
@@ -63,7 +61,6 @@ public final class SceneInstance {
         this.castsShadow = castsShadow;
         this.surfaceVisibility = surfaceVisibility;
         this.packedLight = requireValidPackedLight(packedLight);
-        this.renderState = java.util.Objects.requireNonNull(renderState, "renderState");
         this.mediumBoundary = mediumBoundary;
     }
 
@@ -155,13 +152,7 @@ public final class SceneInstance {
         return packedLight;
     }
 
-    /**
-     * Returns per-instance UV, receiver-mask, object-mask, outline, and cardinal-lighting state.
-     * @return non-null render state
-     */
-    public InstanceRenderState renderState() {
-        return renderState;
-    }
+
 
     /** Returns the optional closed-volume medium boundary. */
     public java.util.Optional<MediumBoundary> mediumBoundary() {
@@ -189,15 +180,14 @@ public final class SceneInstance {
                 && packedLight == instance.packedLight
                 && java.util.Objects.equals(mediumBoundary, instance.mediumBoundary)
                 && transform.equals(instance.transform)
-                && mobility == instance.mobility
-                && renderState.equals(instance.renderState);
+                && mobility == instance.mobility;
     }
 
     @Override
     public int hashCode() {
         return java.util.Objects.hash(
                 id, meshAssetId, transform, mobility,
-                visibilityMask, castsShadow, surfaceVisibility, packedLight, renderState, mediumBoundary
+                visibilityMask, castsShadow, surfaceVisibility, packedLight, mediumBoundary
         );
     }
 
@@ -212,7 +202,6 @@ public final class SceneInstance {
                 + ", castsShadow=" + castsShadow
                 + ", surfaceVisibility=" + surfaceVisibility
                 + ", packedLight=" + packedLight
-                + ", renderState=" + renderState
                 + ", mediumBoundary=" + mediumBoundary
                 + ']';
     }
@@ -243,7 +232,6 @@ public final class SceneInstance {
         private boolean castsShadow = true;
         private float surfaceVisibility = 1.0F;
         private int packedLight = FULL_BRIGHT_PACKED_LIGHT;
-        private InstanceRenderState renderState = InstanceRenderState.defaults();
         private MediumBoundary mediumBoundary;
 
         private Builder(long id, long meshAssetId) {
@@ -262,7 +250,6 @@ public final class SceneInstance {
             castsShadow = source.castsShadow;
             surfaceVisibility = source.surfaceVisibility;
             packedLight = source.packedLight;
-            renderState = source.renderState;
             mediumBoundary = source.mediumBoundary;
         }
 
@@ -351,15 +338,7 @@ public final class SceneInstance {
         }
 
         /** Selects immutable instance-local UV, masking, outline, and cardinal-lighting state. */
-        /**
-         * Replaces the shared per-instance shading state.
-         * @param value non-null render state
-         * @return this builder
-         */
-        public Builder renderState(InstanceRenderState value) {
-            renderState = java.util.Objects.requireNonNull(value, "renderState");
-            return this;
-        }
+
 
         /** Declares a closed-volume interface with independent participating-medium coefficients. */
         public Builder mediumBoundary(MediumBoundary value) {
@@ -378,7 +357,7 @@ public final class SceneInstance {
         public SceneInstance build() {
             return new SceneInstance(
                     id, meshAssetId, transform, mobility,
-                    visibilityMask, castsShadow, surfaceVisibility, packedLight, renderState, mediumBoundary
+                    visibilityMask, castsShadow, surfaceVisibility, packedLight, mediumBoundary
             );
         }
     }

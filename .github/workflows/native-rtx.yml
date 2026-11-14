@@ -18,17 +18,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  vulkan-rt-hardware-gate:
+  rtxpt-hardware-gate:
     # The custom label prevents this correctness/performance lane from ever falling back to a
     # hosted runner without a hardware ray-tracing device.
     runs-on: [ self-hosted, Windows, X64, rtrenderer-rtx ]
     timeout-minutes: 120
     env:
       RTRENDERER_CMAKE_EXECUTABLE: ${{ vars.RTRENDERER_CMAKE_EXECUTABLE }}
-      RTRENDERER_NRD_SDK_ROOT: ${{ vars.RTRENDERER_NRD_SDK_ROOT }}
-      RTRENDERER_NRI_SDK_ROOT: ${{ vars.RTRENDERER_NRI_SDK_ROOT }}
-      RTRENDERER_STREAMLINE_SDK_ROOT: ${{ vars.RTRENDERER_STREAMLINE_SDK_ROOT }}
-      RTRENDERER_RTXMU_SDK_ROOT: ${{ vars.RTRENDERER_RTXMU_SDK_ROOT }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -39,35 +35,33 @@ jobs:
           java-version: '25'
           cache: gradle
       - name: Configure Gradle
-        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
         with:
           validate-wrappers: true
-      - name: Validate fixed NVIDIA SDK inputs
+      - name: Verify native bridge, runtime and contracts
         shell: pwsh
         run: |
-          $required = @(
-            'RTRENDERER_CMAKE_EXECUTABLE',
-            'RTRENDERER_NRD_SDK_ROOT',
-            'RTRENDERER_NRI_SDK_ROOT',
-            'RTRENDERER_STREAMLINE_SDK_ROOT',
-            'RTRENDERER_RTXMU_SDK_ROOT'
-          )
-          $missing = $required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
-          if ($missing.Count -ne 0) { throw "Missing native-rtx repository variables: $($missing -join ', ')" }
-          if (-not (Test-Path -LiteralPath $env:RTRENDERER_CMAKE_EXECUTABLE -PathType Leaf)) {
-            throw "CMake executable does not exist: $env:RTRENDERER_CMAKE_EXECUTABLE"
+          if (-not (Test-Path -LiteralPath $env:RTRENDERER_CMAKE_EXECUTABLE -PathType Leaf)) { throw "Missing CMake executable" }
+          ./tools/Invoke-BoundedBuild.ps1 -FilePath "$env:JAVA_HOME/bin/java.exe" -ArgumentList @(
+            '-cp','gradle/wrapper/gradle-wrapper.jar','org.gradle.wrapper.GradleWrapperMain',
+            'assemble','check',':renderer-rtxpt:rtxptReleaseValidationClasspath',
+            "-PcmakeExecutable=$env:RTRENDERER_CMAKE_EXECUTABLE",
+            '--dependency-verification=strict','--no-daemon','--no-parallel','--max-workers=1','--console=plain'
+          ) -TimeoutSeconds 5400
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify native rendering contracts serially
+        shell: pwsh
+        run: |
+          $tests=@('RtxptBridgeMigrationNativeSelfTest','RtxptMeshInputBatchingNativeSelfTest',
+            'RtxptMeshInputLifetimeNativeSelfTest','RtxptBlasCapacityNativeSelfTest',
+            'RtxptBeautyMaskedEntryNativeSelfTest','RtxptSignalQueriesNativeSelfTest',
+            'RtxptMaterialMutationNativeSelfTest','RtxptEnvironmentMapNativeSelfTest',
+            'RtxptAnalyticLightsNativeSelfTest','RtxptBridgeTopologyNativeSelfTest',
+            'RtxptDirectMaterialLifecycleNativeSelfTest')
+          foreach ($name in $tests) {
+            ./tools/Invoke-RtxptHost.ps1 -MainClass ("top.ceroxe.rt.renderer.rtxpt."+$name) -ApplicationArguments ("build/reports/native-contracts/"+$name)
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
-      - name: Run strict release acceptance
-        shell: pwsh
-        run: |
-          .\gradlew.bat strictAcceptanceTest `
-            -PcmakeExecutable="$env:RTRENDERER_CMAKE_EXECUTABLE" `
-            -PnrdSdkRoot="$env:RTRENDERER_NRD_SDK_ROOT" `
-            -PnriSdkRoot="$env:RTRENDERER_NRI_SDK_ROOT" `
-            -PstreamlineSdkRoot="$env:RTRENDERER_STREAMLINE_SDK_ROOT" `
-            -PrtxmuSdkRoot="$env:RTRENDERER_RTXMU_SDK_ROOT" `
-            -PjdkHome="$env:JAVA_HOME" `
-            --dependency-verification=strict --no-daemon --console=plain --stacktrace
       - name: Upload native diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

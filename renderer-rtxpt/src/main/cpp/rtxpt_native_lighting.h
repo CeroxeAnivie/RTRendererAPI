@@ -19,11 +19,11 @@ class RtrNativeLightingPass {
 public:
     static constexpr uint32_t AbiVersion=1;
     struct alignas(16) Constants {std::array<float,88> words{};};
-    struct InstanceAttributes {float4 rolesVisibility={23,1,0,0};float4 baseline={1,1,0,0};std::array<float4,3> explicitPrevious{};};
+    struct InstanceAttributes {float4 rolesVisibility={23,1,0,0};float4 baseline={1,1,0,0};std::array<float4,3> explicitPrevious{};float4 surfaceVisibility={1,0,0,0};};
     struct GeometryAttributes {uint32_t offset=0,triangles=0;std::array<uint32_t,4> texturePolicies{};float maskedOpacity=1.f;};
     struct VertexAttributes {float2 baseline={0,0};uint32_t color=0xffffffff,reserved=0;};
     static_assert(sizeof(VertexAttributes)==16);
-    static_assert(sizeof(Constants)==352&&sizeof(InstanceAttributes)==80&&sizeof(GeometryAttributes)==28);
+    static_assert(sizeof(Constants)==352&&sizeof(InstanceAttributes)==96&&sizeof(GeometryAttributes)==28);
     std::function<std::array<uint32_t,4>(const std::string&)> texturePolicies;
     std::function<const std::vector<uint32_t>*(const std::string&)> surfaceSlots;
     std::function<void(std::vector<rtr::upstream::SurfaceMaterialRow>&,std::vector<uint32_t>&)> surfaceUpdates;
@@ -128,11 +128,10 @@ public:
     struct MeshMetadata {
         std::weak_ptr<donut::engine::MeshInfo> owner;
         std::vector<GeometryMetadata> groups;
-        uint64_t scan=0;
     };
-    // Only API-owned lookup keys/policies are cached. Weak owners distinguish a
-    // replacement at the same address without retaining its buffers or BLAS.
-    std::unordered_map<std::string,MeshMetadata> metadataLayouts;
+    // Reindexing preserves the native mesh owner even when its dense slot moves.
+    // The weak owner guards address reuse without keeping the mesh/BLAS alive.
+    std::unordered_map<const donut::engine::MeshInfo*,MeshMetadata> metadataLayouts;
     struct MaterialGeometryUser {std::weak_ptr<donut::engine::MeshInfo> owner;uint32_t group=0;};
     struct MaterialMetadata {
         std::weak_ptr<donut::engine::Material> owner;
@@ -153,6 +152,7 @@ public:
         // Layouts are collected once before upload and remain stable until
         // this owner-thread journal is consumed. No second name lookup needed.
         GeometryMetadata* metadata;
+        bool indexOnly=false;
     };
     std::vector<GeometryMetadataChange> metadataGeometryChanges;
     uint64_t metadataScan=0;
@@ -171,8 +171,13 @@ public:
         maskedScalarGeometries.erase(group.name);maskedScalarCandidates=!maskedScalarGeometries.empty();
     }
     void ForgetMetadataLayout(const MeshMetadata& layout){for(const auto& group:layout.groups)ForgetMetadataGroup(group);}
+    void ForgetMeshMetadata(const std::shared_ptr<donut::engine::MeshInfo>& mesh){
+        const auto found=metadataLayouts.find(mesh.get());
+        if(found==metadataLayouts.end()||found->second.owner.owner_before(mesh)||mesh.owner_before(found->second.owner))return;
+        ForgetMetadataLayout(found->second);metadataLayouts.erase(found);
+    }
     MeshMetadata& MetadataLayout(const std::shared_ptr<donut::engine::MeshInfo>& mesh){
-        auto& result=metadataLayouts[mesh->name];
+        auto& result=metadataLayouts[mesh.get()];
         if(result.owner.owner_before(mesh)||mesh.owner_before(result.owner)){
             ForgetMetadataLayout(result);
             result.owner=mesh;result.groups.clear();
@@ -183,7 +188,7 @@ public:
         for(size_t group=before;group<result.groups.size();++group){
             result.groups[group].name=mesh->name+":"+std::to_string(group);++metadataWork[0];
         }
-        result.scan=metadataScan;return result;
+        return result;
     }
     void RefreshMetadataPolicy(GeometryMetadata& cached,const std::shared_ptr<donut::engine::Material>& material,
             const std::shared_ptr<donut::engine::MeshInfo>& mesh,uint32_t group){
@@ -589,7 +594,7 @@ public:
         command->dispatch((width+7)/8,(height+7)/8);RtrGpuProfile::End(command,scope);
     }
     void TrackInstanceRole(const std::string& name,const InstanceAttributes& value){
-        if(value.rolesVisibility.x!=23)specialInstances.insert(name);else specialInstances.erase(name);
+        if(value.rolesVisibility.x!=23||value.surfaceVisibility.x!=1)specialInstances.insert(name);else specialInstances.erase(name);
         specialRoleCount=specialInstances.size();
     }
     void RetireInstance(const std::string& name){
@@ -601,11 +606,6 @@ public:
             FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);geometrySlots.erase(found);
         }
         geometryIndices.erase(name);meshBaselines.erase(name);meshColors.erase(name);alphaMeshes.erase(name);dirtyBaselines.erase(name);dirtyColors.erase(name);metadataDirty=true;
-        if(const auto separator=name.rfind(':');separator!=std::string::npos){
-            if(auto found=metadataLayouts.find(name.substr(0,separator));found!=metadataLayouts.end()){
-                ForgetMetadataLayout(found->second);metadataLayouts.erase(found);
-            }
-        }
     }
     void RenameGeometry(const std::string& before,const std::string& after){
         if(before==after)return;
@@ -614,10 +614,6 @@ public:
         rename(geometrySlots);rename(geometryIndices);rename(meshBaselines);rename(meshColors);
         auto renameSet=[&](auto& values){if(values.erase(before))values.insert(after);};
         renameSet(alphaMeshes);renameSet(dirtyBaselines);renameSet(dirtyColors);renameSet(dirtySurfaces);
-        if(const auto separator=before.rfind(':');separator!=std::string::npos)
-            if(auto found=metadataLayouts.find(before.substr(0,separator));found!=metadataLayouts.end()){
-                ForgetMetadataLayout(found->second);metadataLayouts.erase(found);
-            }
         metadataDirty=true;
     }
     bool CollectGeometryMetadata(const std::shared_ptr<donut::engine::MeshInfo>& mesh,uint32_t group,GeometryMetadata& entry){
@@ -640,7 +636,7 @@ public:
             auto& users=found->second.users;
             for(auto user=users.begin();user!=users.end();){
                 auto mesh=user->second.owner.lock();
-                auto layout=mesh?metadataLayouts.find(mesh->name):metadataLayouts.end();
+                auto layout=mesh?metadataLayouts.find(mesh.get()):metadataLayouts.end();
                 if(!mesh||layout==metadataLayouts.end()||layout->second.owner.owner_before(mesh)
                     ||mesh.owner_before(layout->second.owner)||user->second.group>=mesh->geometries.size()
                     ||user->second.group>=layout->second.groups.size()){
@@ -673,10 +669,23 @@ public:
             if(previous==instanceSlots.end()||previous->second!=uint32_t(slot))
                 sceneDelta.instances.push_back({instance,previous==instanceSlots.end()?nullptr:&previous->second});
         }
+        const bool materialStable=materialMetadataChanges.empty();
         for(const auto& mesh:rows.meshes) {
             auto& cached=MetadataLayout(mesh);
             for(size_t group=0;group<mesh->geometries.size();++group) {
-                CollectGeometryMetadata(mesh,uint32_t(group),cached.groups[group]);
+                auto& entry=cached.groups[group];
+                const auto& geometry=*mesh->geometries[group];
+                const auto* mapping=entry.mapping;
+                // Dense relocation only changes where the existing row lives.
+                // Preserve its attribute arena and already published payload.
+                if(materialStable&&entry.policiesInitialized&&mapping&&mapping->attributes
+                    &&mapping->attributes->triangles*3==geometry.numIndices
+                    &&!entry.material.owner_before(geometry.material)&&!geometry.material.owner_before(entry.material)){
+                    if(mapping->index!=uint32_t(geometry.globalGeometryIndex))
+                        metadataGeometryChanges.push_back({mesh,uint32_t(group),&entry,true});
+                    continue;
+                }
+                CollectGeometryMetadata(mesh,uint32_t(group),entry);
             }
         }
         AppendMaterialMetadataDelta();
@@ -710,7 +719,7 @@ public:
             stageInstance(name,uint32_t(slot),newIdentity||dirtyInstances.contains(name));++attributeTableVisits;
         }
         std::unordered_set<std::string> upload=dirtyBaselines;upload.insert(dirtyColors.begin(),dirtyColors.end());
-        for(const auto& [mesh,group,cached]:metadataGeometryChanges){
+        for(const auto& [mesh,group,cached,indexOnly]:metadataGeometryChanges){
             auto& geometry=mesh->geometries[group];auto& metadata=*cached;const auto& key=metadata.name;
             const auto index=uint32_t(geometry->globalGeometryIndex);++attributeTableVisits;
             if(index>=graph->GetGeometryCount())throw std::runtime_error("Invalid changed geometry index");
@@ -723,8 +732,10 @@ public:
             }
             if(!mapping)mapping=&geometryIndices.try_emplace(key,GeometryIndex{}).first->second;
             *mapping=GeometryIndex{index,geometryIndexEpoch,attributes};metadata.mapping=mapping;
-            attributes->texturePolicies=metadata.texturePolicies;
-            attributes->maskedOpacity=MetadataOpacity(geometry->material);
+            if(!indexOnly){
+                attributes->texturePolicies=metadata.texturePolicies;
+                attributes->maskedOpacity=MetadataOpacity(geometry->material);
+            }
             geometryUploadScratch[index]=*attributes;geometryUploadIndices.push_back(index);attributeWork[3]+=sizeof(GeometryAttributes);
         }
         for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found==instanceSlots.end())continue;
@@ -743,7 +754,7 @@ public:
         const auto graph=scene->GetSceneGraph();
         const size_t instanceCount=graph->GetMeshInstances().size(),geometryCount=graph->GetGeometryCount();
         if(previousInstanceCount!=instanceCount||previousGeometryCount!=geometryCount)metadataDirty=true;
-        if(rows.prepared)metadataDirty=true;
+        if(rows.prepared&&(rows.snapshot||!rows.instances.empty()||!rows.meshes.empty()))metadataDirty=true;
         if(metadataDirty&&!rows.prepared)throw std::runtime_error("Native receiver metadata changed without a prepared scene-row journal");
         if(metadataDirty&&metadataInitialized&&!rows.snapshot){CollectNativeRowDelta(rows);UploadChangedAttributes(device,command,scene);return;}
         if(!metadataDirty&&!materialMetadataChanges.empty()){
@@ -787,21 +798,24 @@ public:
         // the complete table, but it need not allocate a temporary hash set for it.
         if(++geometryIndexEpoch==0){for(auto& [name,index]:geometryIndices)index.epoch=0;++geometryIndexEpoch;}
         geometryEntriesScratch.resize(geometryCount);size_t entryCount=0;maskedScalarCandidates=false;
-        for(const auto& mesh:rows.meshes)for(size_t j=0;j<mesh->geometries.size();j++){
-            if(entryCount>=geometryEntriesScratch.size())throw std::runtime_error("Invalid dense geometry count");
-            const auto& g=mesh->geometries[j];auto& entry=geometryEntriesScratch[entryCount++];
-            auto& metadata=MetadataLayout(mesh).groups[j];entry.name=metadata.name;
-            entry.index=uint32_t(g->globalGeometryIndex);entry.corners=g->numIndices;
-            RefreshMetadataPolicy(metadata,g->material,mesh,uint32_t(j));entry.texturePolicies=metadata.texturePolicies;
-            // Donut normalizes masked MaterialConstants.opacity to one. Its
-            // original Material object still retains the consumer's float scalar.
-            // Keep that input in adapter metadata for this independent pass only.
-            entry.maskedOpacity=MetadataOpacity(g->material);TrackMaskedScalar(entry.name,entry.maskedOpacity);
-            auto old=geometryIndices.find(entry.name);
-            entry.indexChanged=old==geometryIndices.end()||old->second.index!=entry.index;
-            if(old==geometryIndices.end())old=geometryIndices.emplace(entry.name,GeometryIndex{entry.index,geometryIndexEpoch}).first;
-            else{old->second.index=entry.index;old->second.epoch=geometryIndexEpoch;}
-            entry.slot=&old->second;metadata.mapping=entry.slot;++attributeTableVisits;
+        for(const auto& mesh:rows.meshes){
+            auto& layout=MetadataLayout(mesh);
+            for(size_t j=0;j<mesh->geometries.size();j++){
+                if(entryCount>=geometryEntriesScratch.size())throw std::runtime_error("Invalid dense geometry count");
+                const auto& g=mesh->geometries[j];auto& entry=geometryEntriesScratch[entryCount++];
+                auto& metadata=layout.groups[j];entry.name=metadata.name;
+                entry.index=uint32_t(g->globalGeometryIndex);entry.corners=g->numIndices;
+                RefreshMetadataPolicy(metadata,g->material,mesh,uint32_t(j));entry.texturePolicies=metadata.texturePolicies;
+                // Donut normalizes masked MaterialConstants.opacity to one. Its
+                // original Material object still retains the consumer's float scalar.
+                // Keep that input in adapter metadata for this independent pass only.
+                entry.maskedOpacity=MetadataOpacity(g->material);TrackMaskedScalar(entry.name,entry.maskedOpacity);
+                auto old=geometryIndices.find(entry.name);
+                entry.indexChanged=old==geometryIndices.end()||old->second.index!=entry.index;
+                if(old==geometryIndices.end())old=geometryIndices.emplace(entry.name,GeometryIndex{entry.index,geometryIndexEpoch}).first;
+                else{old->second.index=entry.index;old->second.epoch=geometryIndexEpoch;}
+                entry.slot=&old->second;metadata.mapping=entry.slot;++attributeTableVisits;
+            }
         }
         if(entryCount!=geometryCount)throw std::runtime_error("Invalid dense geometry count");
         // Release only retired identities. Same-size replacements keep their stable range.

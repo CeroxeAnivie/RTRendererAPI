@@ -7,10 +7,6 @@
 /logs/
 /**/logs/
 
-# Generated JARs are published through Maven, never committed to this repository.
-*.jar
-!/gradle/wrapper/gradle-wrapper.jar
-
 /.idea/
 /**/.idea/
 *.iml
@@ -18,25 +14,21 @@
 hs_err_pid*.log
 replay_pid*.log
 *.hprof
-/.lwjgl/
-__pycache__/
-*.py[cod]
-hs_err_pid*.jfr
 
-# Runtime, build and rotated diagnostic logs stay local.
-*.log
-*.log.[0-9]*
-*.log.old
-*.log.bak
-*.log.gz
+*.jar
 
-# One-off captures and editor leftovers are not source artifacts.
-*.jfr
-*.tmp
-*.temp
-*.bak
-*.orig
-*.rej
+!/gradle/wrapper/gradle-wrapper.jar
 
-# Local development evidence is not part of the source distribution.
 /docs/quality/
+
+/.lwjgl/
+
+__pycache__/
+
+*.py[cod]
+
+*.jfr
+
+*.tmp
+
+*.bak

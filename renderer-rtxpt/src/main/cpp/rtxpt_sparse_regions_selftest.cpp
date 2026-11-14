@@ -62,14 +62,18 @@ struct UploadOracle {
         bool growth=gpu.size()<r.packed.size();if(growth){size_t size=64;while(size<r.packed.size())size*=2;gpu.resize(size);std::memset(gpu.data(),0xcd,gpu.size()*64);}
         bytes=spans=0;
         if(growth||r.full){std::copy(r.packed.begin(),r.packed.end(),gpu.begin());bytes=r.packed.size()*64;spans=!r.packed.empty();}
-        else{auto dirty=r.dirtyNodes;rtr::UploadRanges::ForEach(dirty,r.packed.size(),64,[&](size_t first,size_t count){
+        else{auto dirty=r.dirtyNodes;rtr::UploadRanges::ForEachRegional(dirty,r.packed.size(),[&](size_t first,size_t count){
             Check(count*64<=rtr::UploadRanges::MaximumWriteBytes,"Coalesced upload exceeded write bound");
-            std::copy(r.packed.begin()+first,r.packed.begin()+first+count,gpu.begin()+first);bytes+=count*64;++spans;});}
+            std::copy(r.packed.begin()+first,r.packed.begin()+first+count,gpu.begin()+first);bytes+=count*64;++spans;},true);}
         for(uint32_t slot=0;slot<r.buckets;slot++)Check(!std::memcmp(&gpu[slot],&r.packed[slot],64),"Partial upload left a stale hash bucket");
         auto actual=reinterpret_cast<const unsigned char*>(gpu.data()+r.buckets),expected=reinterpret_cast<const unsigned char*>(r.packed.data()+r.buckets);
         Check(!std::memcmp(actual,expected,r.global.size()*4),"Partial upload left stale global roots");
         for(const auto& [cell,entry]:r.cells)if(entry.slot!=RtrSparseRegions::None){uint32_t start;std::memcpy(&start,&r.packed[entry.slot].left,4);
             Check(!std::memcmp(actual+size_t(start)*4,expected+size_t(start)*4,entry.roots.size()*4),"Partial upload left stale list words");}
+        // The regional burst path may include gap rows. Each dirty node
+        // funds at most three gap rows across the whole update.
+        if(!growth&&!r.full&&r.dirtyNodes.size()>=1024)
+            Check(bytes<=r.dirtyNodes.size()*64*4,"Regional burst exceeded the transfer budget");
         r.Uploaded();
     }
 };

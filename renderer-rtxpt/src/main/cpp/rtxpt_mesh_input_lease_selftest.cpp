@@ -1,6 +1,7 @@
 #include "rtxpt_mesh_input_lease.h"
 #include <algorithm>
 #include <iostream>
+#include <vector>
 
 using namespace rtr::upstream;
 static void require(bool value,const char* message){if(!value)throw std::runtime_error(message);}
@@ -30,10 +31,10 @@ int main(){
     auto second=std::make_shared<const MeshInputLease>(b,accounting);
     require(first->bytes.size()==152&&second->bytes.size()==60,"Canonical input size included unrelated transaction bytes");
     require(accounting->bytes==212&&accounting->peakBytes==212&&accounting->packets==2,"Retained-byte accounting is not exact");
-    require(first->bytes==expectedA&&second->bytes==expectedB,"Retained channel order or exact bytes changed");
+    require(std::ranges::equal(first->bytes,expectedA)&&std::ranges::equal(second->bytes,expectedB),"Retained channel order or exact bytes changed");
     std::fill(packet->begin(),packet->end(),0);packet.reset();
     require(transport.expired(),"A retained mesh pins its original transaction");
-    require(first->bytes==expectedA&&second->bytes==expectedB,"Copied input lifetime depends on transaction bytes");
+    require(std::ranges::equal(first->bytes,expectedA)&&std::ranges::equal(second->bytes,expectedB),"Copied input lifetime depends on transaction bytes");
     auto inherited=first;first.reset();second.reset();
     require(accounting->bytes==152&&accounting->packets==1,"Deleted neighbour bytes remain retained");
     require(inherited->bytes.size()==152&&accounting->peakBytes==212,"Inherited input changed its source or double-counted ownership");

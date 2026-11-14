@@ -388,7 +388,7 @@ public final class NativeSceneDemo {
         return FrameGenerationOptions.builder().preference(RendererFeaturePreference.PREFERRED)
                 .mode(multiplier == FrameGenerationOptions.Multiplier.TWO_X ? FrameGenerationOptions.Mode.FRAME_GENERATION
                         : FrameGenerationOptions.Mode.MULTI_FRAME_GENERATION)
-                .multiplier(multiplier).fallback(FrameGenerationOptions.Fallback.PRESENT_NATIVE_FRAMES).build();
+                .multiplier(multiplier).build();
     }
 
     record Config(String scene, BouncingBallScene.BallMaterial material, int width, int height,

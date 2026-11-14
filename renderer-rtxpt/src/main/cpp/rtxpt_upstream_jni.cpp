@@ -38,6 +38,18 @@ void Throw(JNIEnv* env, const std::exception& exception) {
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), exception.what());
 }
 
+// Win32 caption controls impose a minimum decorated client width. Hidden
+// output must keep the public pixel extent even for small validation targets.
+void SetWindowExtent(GLFWwindow* window, int width, int height) {
+    glfwSetWindowSize(window, width, height);
+    int actualWidth = 0, actualHeight = 0;
+    glfwGetWindowSize(window, &actualWidth, &actualHeight);
+    if (actualWidth != width || actualHeight != height) {
+        glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_FALSE);
+        glfwSetWindowSize(window, width, height);
+    }
+}
+
 struct Renderer {
     std::unique_ptr<rtr::upstream::Session> session;
     RtrSignalFrames signals;
@@ -205,8 +217,20 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_createSession(JNIEnv* env, jclass,
         RtrDiagnostics::Reset();
         auto renderer = std::make_shared<Renderer>();
         renderer->session = std::make_unique<rtr::upstream::Session>(std::move(arguments), scenePath.empty(), requiresStreamline == JNI_TRUE);
-        if (externalPresentation) renderer->session->Invoke([](auto& app) {
-            glfwHideWindow(app.DeviceManager().GetWindow());
+        renderer->session->Invoke([width, height, externalPresentation, owner=renderer.get()](auto& app) {
+            auto* window = app.DeviceManager().GetWindow();
+            if (externalPresentation) {
+                glfwHideWindow(window);
+                glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_FALSE);
+            }
+            SetWindowExtent(window, width, height);
+            auto* path=&app.Renderer();auto* device=app.DeviceManager().GetDevice();
+            path->SetLeanSignalPublisher([owner,path,device](nvrhi::ICommandList* commands){
+                auto& pass=path->lighting;
+                owner->signals.Record(device,commands,pass.Outputs(),owner->sequence,owner->revision,
+                    pass.publication,pass.timeNanos,pass.deltaNanos,
+                    pass.compactEncoding?(pass.compactResponseEncoding?2:1):0,pass.maximumGi());
+            },[owner,device]{owner->signals.SignalSubmitted(device);});
         });
         std::lock_guard lock(rendererMutex);
         const auto handle = nextRenderer++;
@@ -257,6 +281,15 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_meshResourceState(JNIEnv* env,jcla
         auto renderer=Get(handle);auto id=String(env,name);std::array<double,2> state{};
         renderer->session->Invoke([&](auto& app){state=app.Renderer().MeshResourceState(id);});
         auto result=env->NewDoubleArray(2);if(result)env->SetDoubleArrayRegion(result,0,2,state.data());return result;
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_meshStorageRanges(JNIEnv* env,jclass,jlong handle,jstring name){
+    try{
+        auto renderer=Get(handle);auto id=String(env,name);std::array<uint64_t,4> state{};
+        renderer->session->Invoke([&](auto& app){state=app.Renderer().MeshStorageRanges(id);});
+        return LongArray(env,std::vector<jlong>(state.begin(),state.end()));
     }catch(const std::exception& error){Throw(env,error);return nullptr;}
 }
 
@@ -341,7 +374,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesMemory(JNIEnv* env, jclas
         if (!bytes || size <= 0 || size > 512ll * 1024 * 1024)
             throw std::invalid_argument("Resource transport must be a bounded direct ByteBuffer");
         auto owned=std::make_shared<const std::vector<uint8_t>>(bytes,bytes+size);
-        Get(handle)->session->Enqueue([owned](auto& app) { app.Renderer().ApplyResources(owned); });
+        Get(handle)->session->Enqueue([owned](auto& app) { app.Renderer().ApplyResources(*owned); });
     } catch (const std::exception& error) { Throw(env, error); }
 }
 
@@ -357,7 +390,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributes(JNIEnv* e
     jobjectArray names, jfloatArray attributes, jfloatArray lookup, jbyteArray application) {
     try {
         auto keys = Strings(env, names); auto values = Floats(env, attributes);
-        const size_t stride=values.size()==keys.size()*8?8:20;
+        const size_t stride=values.size()==keys.size()*8?8:values.size()==keys.size()*20?20:24;
         if (generation < 0 || values.size() != keys.size()*stride) throw std::invalid_argument("Invalid instance attribute publication");
         auto table = lookup ? Floats(env, lookup) : std::vector<float>();
         if (lookup && table.size()!=512 && table.size()!=1280) throw std::invalid_argument("Invalid host response lookup size");
@@ -375,6 +408,8 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributes(JNIEnv* e
                     throw std::invalid_argument("Invalid role or visibility attribute");
                 if(words[3]<0||words[3]>3||words[3]!=float(uint32_t(words[3]))||(stride==8&&(uint32_t(words[3])&2)!=0))
                     throw std::invalid_argument("Invalid explicit previous-transform flags");
+                if(stride==24&&(!std::isfinite(words[20])||words[20]<0||words[20]>1))
+                    throw std::invalid_argument("Invalid surface visibility attribute");
             }
             for(size_t i=0;i<keys.size();++i) {
                 RtrNativeLightingPass::InstanceAttributes value; std::memcpy(&value,values.data()+i*stride,stride*sizeof(float));
@@ -531,16 +566,32 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingPatch(JNIEnv* env,jclass,j
         });
     }catch(const std::exception& error){Throw(env,error);}
 }
+extern "C" JNIEXPORT jboolean JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_startResources(JNIEnv* env,jclass,jlong handle,jobject packet){
+    try {
+        const auto size=packet?env->GetDirectBufferCapacity(packet):0;
+        const auto* bytes=packet?static_cast<const uint8_t*>(env->GetDirectBufferAddress(packet)):nullptr;
+        if(!bytes||size<=0||size>512ll*1024*1024)
+            throw std::invalid_argument("Invalid borrowed resource packet");
+        return Get(handle)->session->StartResources([view=std::span(bytes,size_t(size))](auto& app){
+            app.Renderer().ApplyResources(view);
+        });
+    }catch(const std::exception& error){Throw(env,error);return JNI_FALSE;}
+}
+extern "C" JNIEXPORT void JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_waitResources(JNIEnv* env,jclass,jlong handle){
+    try{Get(handle)->session->WaitResources();}catch(const std::exception& error){Throw(env,error);}
+}
 extern "C" JNIEXPORT jint JNICALL
-Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frame(JNIEnv* env, jclass, jlong handle) {
-    try { auto renderer = Get(handle);
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_frame(JNIEnv* env,jclass,jlong handle){
+    try {auto renderer=Get(handle);
         RtrDiagnostics::Scope frameScope(RtrDiagnostics::Frame,0,0,1,0,0,0,0,0,renderer->sequence,renderer->revision);
         const bool completed = renderer->session->Frame([&](auto& app) {
             auto& pass = app.Renderer().lighting;
-            if (pass.active) renderer->signals.Publish(app.DeviceManager().GetDevice(), pass.Outputs(),
+            if (!app.Renderer().FinishLeanSignal()&&pass.active) renderer->signals.Publish(app.DeviceManager().GetDevice(), pass.Outputs(),
                 renderer->sequence, renderer->revision, pass.publication, pass.timeNanos, pass.deltaNanos,
                 pass.compactEncoding ? (pass.compactResponseEncoding ? 2 : 1) : 0, pass.maximumGi());
-        });
+        },[](auto& app){app.Renderer().ArmLeanSignal();});
         return completed ? 1 : 0;
     } catch (const std::exception& error) { Throw(env, error); return 0; }
 }
@@ -678,7 +729,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_loadScene(JNIEnv* env, jclass, jlo
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resize(JNIEnv* env, jclass, jlong handle, jint width, jint height) {
     try { if (width < 1 || height < 1 || width > 16384 || height > 16384) throw std::invalid_argument("Invalid render extent");
-        Get(handle)->session->Enqueue([width, height](auto& app) { glfwSetWindowSize(app.DeviceManager().GetWindow(), width, height); });
+        Get(handle)->session->Enqueue([width, height](auto& app) { SetWindowExtent(app.DeviceManager().GetWindow(), width, height); });
     } catch (const std::exception& error) { Throw(env, error); }
 }
 extern "C" JNIEXPORT void JNICALL

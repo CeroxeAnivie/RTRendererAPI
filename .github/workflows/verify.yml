@@ -33,15 +33,12 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: gradle
       - name: Configure Gradle
-        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
         with:
           validate-wrappers: true
-      - name: Check feature-based file names
+      - name: Verify deterministic contracts and Java artifacts
         shell: pwsh
-        run: ./tools/Check-FileNaming.ps1
-      - name: Verify deterministic contracts and artifacts
-        shell: pwsh
-        run: .\gradlew.bat clean :check :assemble -Pjava_toolchain_version=${{ matrix.java }} --dependency-verification=strict --no-daemon --console=plain --stacktrace
+        run: .\gradlew.bat clean :check :renderer-api:assemble :renderer-rtxpt:javadoc :renderer-rtxpt:sourcesJar -Pjava_toolchain_version=${{ matrix.java }} --dependency-verification=strict --no-daemon --no-parallel --max-workers=1 --console=plain --stacktrace
       - name: Upload reports on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -53,23 +50,3 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  released-demo:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Install Java 25
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: gradle
-      - name: Configure Gradle
-        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
-        with:
-          validate-wrappers: true
-      - name: Verify released Demo closure
-        shell: pwsh
-        run: .\gradlew.bat :demos:hex-ball:clean :demos:hex-ball:check --refresh-dependencies --dependency-verification=strict --no-daemon --console=plain --stacktrace

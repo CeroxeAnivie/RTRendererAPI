@@ -21,9 +21,16 @@ public:
         const uint8_t* data()const{return values;}
         float operator[](size_t index)const{float result;std::memcpy(&result,values+index*4,4);return result;}
     };
+    // The mesh decoder validates before retaining, so it can compute position
+    // bounds in the same pass instead of reading that channel twice.
+    FloatView readFloatSpan(){auto n=count();return FloatView(take(size_t(n)*4),n);}
     FloatView floatView(){
-        auto n=count();FloatView result(take(size_t(n)*4),n);
-        for(size_t i=0;i<n;++i)if(!std::isfinite(result[i]))throw std::invalid_argument("Nonfinite resource input");
+        const auto result=readFloatSpan();uint32_t invalid=0;
+        for(size_t i=0;i<result.size();++i){
+            uint32_t bits;std::memcpy(&bits,result.data()+size_t(i)*4,4);
+            invalid|=uint32_t((bits&0x7f800000u)==0x7f800000u);
+        }
+        if(invalid)throw std::invalid_argument("Nonfinite resource input");
         return result;
     }
     std::vector<float> floats(){auto view=floatView();std::vector<float> result(view.size());

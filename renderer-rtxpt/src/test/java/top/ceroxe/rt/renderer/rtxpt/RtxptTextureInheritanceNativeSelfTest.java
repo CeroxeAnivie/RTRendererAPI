@@ -22,6 +22,7 @@ public final class RtxptTextureInheritanceNativeSelfTest {
             var field=RtxptRenderer.class.getDeclaredField("handle");field.setAccessible(true);long handle=field.getLong(renderer);
             pixels(handle,output,1,true);var mirror=new RtxptScene();mirror.retain(initial);
             var before=RtxptNative.resourceWorkState(handle);
+            var memory=RtxptDiagnostics.nativeMonitor(handle);
 
             // Real distinct native queue entries share one Frame. Each entry
             // inherits the generation committed by the preceding queue entry.
@@ -44,6 +45,13 @@ public final class RtxptTextureInheritanceNativeSelfTest {
             renderer.apply(SceneTransaction.builder(3).build());render(renderer,access,lighting,3);pixels(handle,output,3,true);
             var restoredWork=RtxptNative.resourceWorkState(handle);
             require(restoredWork[2]-after[2]==1&&restoredWork[3]-after[3]==16,"A patch after inheritance lost its exact image shadow or generation");
+
+            var observed=memory.poll();
+            require(observed.lostEvents()==0,"Lost native texture allocation evidence");
+            require(observed.events().stream().noneMatch(event->event.stage().equals("TextureAllocate")
+                    ||event.stage().equals("StagingAllocate")),"Rectangle generations allocated on the frame path");
+            require(observed.events().stream().filter(event->event.stage().equals("PoolAcquire")
+                    &&(event.flags()&4)!=0).count()>=2,"Both rectangle generations must use prepared storage");
 
             // A forged stale reference must fail at the native boundary rather
             // than silently reusing pixels from the current identity.

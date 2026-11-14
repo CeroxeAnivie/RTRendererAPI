@@ -12,6 +12,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private final boolean externalPresentation;
     private final RendererResourceOptions resources;
     private final RtxptOptions options;
+    private final RendererFeatureProfile featureProfile;
     private float exposureOffset;
     private String windowTitle;
     private String overlayText="";
@@ -54,7 +55,8 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     RtxptRenderer(RendererConfig config,boolean externalPresentation){
         this.externalPresentation=externalPresentation;
         resources=config.resources();
-        options=RtxptOptions.resolve(RtxptOptions.profile(config));
+        featureProfile=RtxptOptions.profile(config);
+        options=RtxptOptions.resolve(featureProfile);
         exposureOffset=options.quality().postProcessing().exposureOffset();
         RtxptNative.load();
     }
@@ -126,6 +128,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         int nativeWidth=nativeLightingPlan==null?frame.width():nativeLightingPlan.width();
         int nativeHeight=nativeLightingPlan==null?frame.height():nativeLightingPlan.height();
         boolean reset=fullReset,first=handle==0,extentChanged=width!=nativeWidth||height!=nativeHeight;
+        RtxptMemoryResources.PacketPool.Borrow resourceBorrow=null;
         try{
             if(first){
                 sessionRequiresStreamline=nativeLightingPlan==null||lightingReconstruction==NativeLightingReconstruction.DLSS_RR;
@@ -156,16 +159,22 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
                 recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.TRANSLATION,begin,delta.work().itemReads(),delta.memory()==null?0:delta.memory().remaining(),false);
                 pendingGeometryVariants=delta.changedVariants();
                 if(delta.hasWork()){
-                    begin=recorder.clock();boolean failed=true;int bytes=delta.memory().remaining();
-                    try(var packet=resourcePackets.borrow(delta.memory())){RtxptNative.resourcesMemory(handle,revision,packet.buffer());failed=false;}
-                    finally{recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.RESOURCES,begin,delta.meshes(),bytes,failed);}
+                    begin=recorder.clock();boolean failed=true;
+                    try{
+                        resourceBorrow=resourcePackets.borrow(delta.memory());
+                        if(first||reset||extentChanged||nativeLightingPlan==null||delta.meshes()==0
+                                ||!RtxptNative.startResources(handle,resourceBorrow.buffer())){
+                            RtxptNative.resourcesMemory(handle,revision,resourceBorrow.buffer());
+                            resourceBorrow.close();resourceBorrow=null;
+                        }
+                        failed=false;
+                    }finally{recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.RESOURCES,begin,delta.meshes(),delta.memory().remaining(),failed);}
                     for(var entry:delta.translated().textures.entrySet())memoryTextures.put(entry.getKey(),entry.getValue());
                     scene.textures.forEachChanged(before.textures,(id,value)->{if(value==null)memoryTextures.remove(id);});
                     scene.materials.forEachChanged(before.materials,(id,value)->{if(value==null)memoryMaterialVariants.remove(id);});
                     for(var variant:delta.materialVariants())memoryMaterialVariants.computeIfAbsent(variant.material(),id->new LinkedHashMap<>()).put(variant.name(),variant);
                     pendingMeshImport=delta;
                 }
-                if(reset)resourcePackets.clear();
             }
             if(!Objects.equals(camera,frame.camera())){var c=frame.camera();RtxptNative.camera(handle,c.x()+","+c.y()+","+c.z()+","+c.forwardX()+","+c.forwardY()+","+c.forwardZ()+","+c.upX()+","+c.upY()+","+c.upZ(),(float)(2*Math.atan(c.tanHalfFovY())));camera=c;}
             if(nativeScene==null){
@@ -179,10 +188,17 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             finally{recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.ATTRIBUTES,begin,attributeItems,0,failed);}
             if(!frame.temporalHistoryResets().isEmpty())RtxptNative.resetHistory(handle);
             begin=recorder.clock();failed=true;
-            try{if(RtxptNative.frame(handle)==0){windowClosed=true;throw new IllegalStateException("RTXPT window closed before frame completion");}failed=false;}
+            try{
+                if(RtxptNative.frame(handle)==0){windowClosed=true;throw new IllegalStateException("RTXPT window closed before frame completion");}
+                failed=false;
+            }
             finally{recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.RTXPT_FRAME,begin,1,0,failed);}
+            if(resourceBorrow!=null){resourceBorrow.close();resourceBorrow=null;}
+            if(first&&RtxptOptions.hasRequiredFeatures(featureProfile))
+                RtxptOptions.validateRequired(featureProfile,renderingState(),presentationState());
             if(pendingMeshImport!=null)RtxptDelta.commitMeshVariants(memoryMeshVariants,pendingMeshImport);
-            submitted=completed=frame.sequence();residentScene=scene;previous=items;fullReset=false;
+            if(reset)resourcePackets.clear();
+            submitted=completed=frame.sequence();residentScene=scene;previous=items;fullReset=false;scene.retireResourceSnapshots();
             var reasons=EnumSet.noneOf(HistoryInvalidationReason.class);
             if(first)reasons.add(HistoryInvalidationReason.FIRST_FRAME);
             else if(reset)reasons.add(HistoryInvalidationReason.SCENE_TOPOLOGY_CHANGED);
@@ -190,7 +206,11 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             if(extentChanged)reasons.add(HistoryInvalidationReason.OUTPUT_EXTENT_CHANGED);
             for(var reason:frame.temporalHistoryResets())reasons.add(HistoryInvalidationReason.valueOf(reason.name()));
             return FrameSubmissionResult.accepted(submitted,revision,reasons);
-        }catch(RuntimeException|Error failure){try{close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}throw failure;}
+        }catch(RuntimeException|Error failure){
+            if(resourceBorrow!=null){RtxptNative.waitResources(handle);resourceBorrow.close();}
+            try{close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
+            throw failure;
+        }
     }
     private void publishLights(RtxptScene before,EnvironmentState nextEnvironment,boolean reset){
         boolean environmentChanged=reset||!Objects.equals(environment,nextEnvironment);
@@ -214,7 +234,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             throw new IllegalArgumentException("Analytic beauty and independent lighting signals are separate output modes");
         if(!externalPresentation||nativeScene!=null||options.reconstruction()!=Reconstruction.NONE||options.standaloneDenoiser()||options.restirDi()||options.restirGi()||options.sharc())throw new IllegalArgumentException("Native lighting requires an external finite-signal configuration");
         nativeLightingPlan=plan;
-        scene.nativeLighting=true;residentScene.nativeLighting=true;
+        scene.selectNativeLighting();
     }
     @Override public void publishLightingAttributes(NativeLightingPublication publication){
         ready();Objects.requireNonNull(publication);lightingPublicationPlan();
@@ -304,17 +324,17 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         if(reset||appliedLightingAttributeGeneration!=lightingAttributeGeneration||!pendingLightingInstances.isEmpty()
                 ||!primitiveRoleChanges.isEmpty()){
             var instanceIds=reset?scene.instances.keySet():pendingLightingInstances;
-            var names=new ArrayList<String>();float[] packed=new float[Math.multiplyExact(instanceIds.size()+primitiveRoleChanges.size(),20)];int offset=0;
+            var names=new ArrayList<String>();float[] packed=new float[Math.multiplyExact(instanceIds.size()+primitiveRoleChanges.size(),24)];int offset=0;
             for(long id:instanceIds){var instance=scene.instances.get(id);if(instance==null)continue;
                 var value=lightingInstances.get(id);if(value==null)value=RtxptLightingRoles.defaults(id,instance.packedLight(),instance.surfaceVisibility(),
                     scene.meshes.get(instance.meshAssetId()),lightingBaselines.containsKey(instance.meshAssetId()));
-                names.add("i"+id);RtxptLightingRoles.pack(packed,offset,value,instance.visibilityMask(),instance.castsShadow());offset+=20;}
+                names.add("i"+id);RtxptLightingRoles.pack(packed,offset,value,instance.visibilityMask(),instance.castsShadow());packed[offset+20]=instance.surfaceVisibility();offset+=24;}
             for(int i:primitiveRoleChanges){
                 var primitive=primitiveBatch.primitives().get(i);
                 names.add("p"+i);var value=RtxptLightingRoles.defaults(i,primitive.packedLight(),primitive.surfaceVisibility(),
                     scene.meshes.get(primitive.meshAssetId()),lightingBaselines.containsKey(primitive.meshAssetId()));
                 RtxptLightingRoles.pack(packed,offset,value,primitive.visibilityMask(),primitive.castsShadow());
-                RtxptLightingRoles.packHistory(packed,offset,primitive);offset+=20;
+                RtxptLightingRoles.packHistory(packed,offset,primitive);packed[offset+20]=primitive.surfaceVisibility();offset+=24;
             }
             RtxptNative.nativeLightingAttributes(handle,lightingAttributeGeneration,names.toArray(String[]::new),offset==packed.length?packed:Arrays.copyOf(packed,offset),pendingBaselineLookup,applicationData.fullPublication());
             appliedLightingAttributeGeneration=lightingAttributeGeneration;

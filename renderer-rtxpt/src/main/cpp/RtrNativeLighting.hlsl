@@ -9,7 +9,7 @@
 
 struct RtrSource {float4 position,direction,color,extent,cone,identity;};
 struct RtrNode {float4 lower,left,upper,right;};
-struct RtrInstance {float4 rolesVisibility;float4 baseline;row_major float3x4 explicitPrevious;};
+struct RtrInstance {float4 rolesVisibility;float4 baseline;row_major float3x4 explicitPrevious;float4 surfaceVisibility;};
 struct RtrVertexAttributes {float2 baseline;uint color;uint reserved;};
 struct RtrGeometryAttributes {uint offset,triangles,basePolicy,normalPolicy,ormPolicy,emissivePolicy;float maskedOpacity;};
 struct RtrSurfaceMaterial {MaterialConstants material;uint4 policies;float maskedOpacity;uint active;};
@@ -156,7 +156,7 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
     r.uv=RtrUv(vertices,geom,tri.x)*bary.x+RtrUv(vertices,geom,tri.y)*bary.y+RtrUv(vertices,geom,tri.z)*bary.z;
     MaterialConstants mat=RtrMaterial(geom,primitive,geometryAttributes);
     bool masked=mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested;
-    float4 base=float4(mat.baseOrDiffuseColor,masked?geometryAttributes.maskedOpacity:mat.opacity);
+    float4 base=float4(mat.baseOrDiffuseColor,(masked?geometryAttributes.maskedOpacity:mat.opacity)*t_InstanceAttributes[instance].surfaceVisibility.x);
     if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)
         base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,r.uv,geometryAttributes.basePolicy);
     if((mat.flags&MaterialFlags_UseOpacityTexture)!=0)
@@ -226,9 +226,9 @@ bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attrib
     GeometryData geom=t_Geometry[geometryIndex];RtrGeometryAttributes geometryAttributes=t_GeometryBaselines[geometryIndex];
     MaterialConstants mat=RtrMaterial(geom,primitive,geometryAttributes);
     bool masked=mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested;
-    if((g.publication.w&4)!=0&&t_InstanceAttributes[instance].rolesVisibility.w==0&&mat.domain==MaterialDomain_Opaque&&mat.opacity==1)
+    if((g.publication.w&4)!=0&&t_InstanceAttributes[instance].rolesVisibility.w==0&&t_InstanceAttributes[instance].surfaceVisibility.x==1&&mat.domain==MaterialDomain_Opaque&&mat.opacity==1)
         {opaque=role==2;return true;}
-    float4 base=float4(mat.baseOrDiffuseColor,masked?geometryAttributes.maskedOpacity:mat.opacity);
+    float4 base=float4(mat.baseOrDiffuseColor,(masked?geometryAttributes.maskedOpacity:mat.opacity)*t_InstanceAttributes[instance].surfaceVisibility.x);
     float3 bary=float3(1-attributes.x-attributes.y,attributes);float2 uv=0;
     const uint textureMask=MaterialFlags_UseBaseOrDiffuseTexture|MaterialFlags_UseOpacityTexture|MaterialFlags_UseTransmissionTexture;
     if((mat.flags&textureMask)!=0){

@@ -191,9 +191,9 @@ public:
         if(!regions.packed.empty()){
             if(full||regions.full){const auto bytes=regions.packed.size()*64;WriteBounded(command,treeBuffer,regions.packed.data(),bytes,size_t(nodeCapacity)*64);work[6]+=bytes;regions.work[8]+=bytes;}
             else{
-                rtr::UploadRanges::ForEach(regions.dirtyNodes,regions.packed.size(),64,[&](size_t first,size_t count){
+                rtr::UploadRanges::ForEachRegional(regions.dirtyNodes,regions.packed.size(),[&](size_t first,size_t count){
                     const auto bytes=count*64;WriteBounded(command,treeBuffer,&regions.packed[first],bytes,(size_t(nodeCapacity)+first)*64);work[6]+=bytes;regions.work[8]+=bytes;},
-                    CoalesceUploads()?rtr::UploadRanges::MergeGapBytes:4*64);
+                    CoalesceUploads());
             }
         }
         regions.Uploaded();

@@ -8,7 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <utility>
-#include <vector>
+#include <span>
 
 namespace rtr::upstream {
 struct MeshInputRetention {
@@ -18,10 +18,14 @@ struct MeshInputRetention {
 // inputs share this owner; unrelated meshes and texture bytes cannot pin it.
 struct MeshInputLease {
     struct Range {const uint8_t* data;size_t size;};
-    const std::vector<uint8_t> bytes;
+private:
+    struct Storage {std::unique_ptr<uint8_t[]> data;size_t size;};
+    const Storage storage;
+public:
+    const std::span<const uint8_t> bytes;
     std::shared_ptr<MeshInputRetention> accounting;
     MeshInputLease(const std::array<Range,5>& ranges,std::shared_ptr<MeshInputRetention> work)
-        :bytes(Copy(ranges)),accounting(std::move(work)){
+        :storage(Copy(ranges)),bytes(storage.data.get(),storage.size),accounting(std::move(work)){
         const auto current=accounting->bytes.fetch_add(bytes.size(),std::memory_order_relaxed)+bytes.size();
         accounting->packets.fetch_add(1,std::memory_order_relaxed);
         auto peak=accounting->peakBytes.load(std::memory_order_relaxed);
@@ -34,7 +38,7 @@ struct MeshInputLease {
         accounting->packets.fetch_sub(1,std::memory_order_relaxed);
     }
 private:
-    static std::vector<uint8_t> Copy(const std::array<Range,5>& ranges){
+    static Storage Copy(const std::array<Range,5>& ranges){
         size_t total=0;
         for(const auto& range:ranges){
             if(range.size>std::numeric_limits<size_t>::max()-total)
@@ -42,12 +46,12 @@ private:
             if(range.size&&!range.data)throw std::invalid_argument("Missing retained mesh input range");
             total+=range.size;
         }
-        std::vector<uint8_t> result(total);size_t offset=0;
+        auto result=std::make_unique_for_overwrite<uint8_t[]>(total);size_t offset=0;
         for(const auto& range:ranges){
-            if(range.size)std::memcpy(result.data()+offset,range.data,range.size);
+            if(range.size)std::memcpy(result.get()+offset,range.data,range.size);
             offset+=range.size;
         }
-        return result;
+        return {std::move(result),total};
     }
 };
 }

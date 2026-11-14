@@ -38,6 +38,7 @@ final class RtxptNative {
     static native long[] renderingState(long handle);
     static native String frameStatistics(long handle);
     static native double[] meshResourceState(long handle,String mesh);
+    static native long[] meshStorageRanges(long handle,String mesh);
     static native double[] instanceTransformState(long handle,String instance);
     static native long[] windowState(long handle);
     static native void overlayText(long handle,String text);
@@ -81,6 +82,8 @@ final class RtxptNative {
     static native void nativeLightingRelease(long handle,int slot,long generation,long sequence,boolean imported);
     static native void resetHistory(long handle);
     static native int frame(long handle);
+    static native boolean startResources(long handle,ByteBuffer packet);
+    static native void waitResources(long handle);
     static native void resize(long handle,int width,int height);
     static native void awaitIdle(long handle);
     static native long window(long handle);

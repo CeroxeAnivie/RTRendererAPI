@@ -21,55 +21,8 @@ public final class MaterialAsset {
     private final boolean doubleSided;
     private final PathDecomposition pathDecomposition;
     private final MotionVectorBlocking motionVectorBlocking;
-    private final ShadingModel shadingModel;
-    private final SurfaceOverlayState surfaceOverlay;
 
-    /**
-     * Validates and creates an immutable material.
-     *
-     * @param id                         stable non-negative material identifier
-     * @param blendMode                  alpha-compositing policy
-     * @param baseColorRgba8             packed base color
-     * @param baseColorTextureId         base-color texture id, or {@code -1}
-     * @param normalTextureId            normal-map texture id, or {@code -1}
-     * @param metallicRoughnessTextureId metallic-roughness texture id, or {@code -1}
-     * @param emissiveTextureId          emissive texture id, or {@code -1}
-     * @param emissiveRadiance           finite non-negative linear RGB radiance
-     * @param alphaCutoff                masked-material cutoff in {@code [0, 1]}
-     * @param roughness                  perceptual roughness in {@code [0, 1]}
-     * @param metallic                   metallic response in {@code [0, 1]}
-     * @param transmission               transmission response in {@code [0, 1]}
-     * @param indexOfRefraction          refractive index in {@code [1, 4]}
-     * @param doubleSided                whether both winding orientations are visible
-     * @param pathDecomposition          path-space decomposition participation and dominant delta lobe
-     * @param shadingModel               renderer-owned lighting equation
-     * @throws IllegalArgumentException if an identifier or physical parameter is invalid
-     * @throws NullPointerException     if an enum component is {@code null}
-     */
-    private MaterialAsset(
-            long id,
-            BlendMode blendMode,
-            int baseColorRgba8,
-            long baseColorTextureId,
-            long normalTextureId,
-            long metallicRoughnessTextureId,
-            long emissiveTextureId,
-            Rgb emissiveRadiance,
-            float alphaCutoff,
-            float roughness,
-            float metallic,
-            float transmission,
-            float indexOfRefraction,
-            boolean doubleSided,
-            PathDecomposition pathDecomposition,
-            ShadingModel shadingModel,
-            SurfaceOverlayState surfaceOverlay
-    ) {
-        this(id, blendMode, baseColorRgba8, baseColorTextureId, normalTextureId,
-                metallicRoughnessTextureId, emissiveTextureId, emissiveRadiance,
-                alphaCutoff, roughness, metallic, transmission, indexOfRefraction,
-                doubleSided, pathDecomposition, MotionVectorBlocking.OFF, shadingModel, surfaceOverlay);
-    }
+
 
     private MaterialAsset(
             long id, BlendMode blendMode, int baseColorRgba8,
@@ -77,15 +30,12 @@ public final class MaterialAsset {
             long emissiveTextureId, Rgb emissiveRadiance, float alphaCutoff,
             float roughness, float metallic, float transmission, float indexOfRefraction,
             boolean doubleSided, PathDecomposition pathDecomposition,
-            MotionVectorBlocking motionVectorBlocking, ShadingModel shadingModel,
-            SurfaceOverlayState surfaceOverlay
+            MotionVectorBlocking motionVectorBlocking
     ) {
         requireId(id, "id");
         this.blendMode = java.util.Objects.requireNonNull(blendMode, "blendMode");
-        this.shadingModel = java.util.Objects.requireNonNull(shadingModel, "shadingModel");
         this.pathDecomposition = java.util.Objects.requireNonNull(pathDecomposition, "pathDecomposition");
         this.motionVectorBlocking = java.util.Objects.requireNonNull(motionVectorBlocking, "motionVectorBlocking");
-        this.surfaceOverlay = java.util.Objects.requireNonNull(surfaceOverlay, "surfaceOverlay");
         requireOptionalId(baseColorTextureId, "baseColorTextureId");
         requireOptionalId(normalTextureId, "normalTextureId");
         requireOptionalId(metallicRoughnessTextureId, "metallicRoughnessTextureId");
@@ -98,12 +48,7 @@ public final class MaterialAsset {
         if (blendMode == BlendMode.OPAQUE && transmission > 0.0F) {
             throw new IllegalArgumentException("opaque material must not transmit light");
         }
-        if (surfaceOverlay.enabled() && blendMode == BlendMode.OPAQUE
-                && ((baseColorRgba8 >>> 24) & 0xff) != 0xff) {
-            throw new IllegalArgumentException(
-                    "alpha-blended surface overlay must use TRANSLUCENT blend mode"
-            );
-        }
+
         this.id = id;
         this.baseColorRgba8 = baseColorRgba8;
         this.baseColorTextureId = baseColorTextureId;
@@ -288,22 +233,9 @@ public final class MaterialAsset {
         return doubleSided;
     }
 
-    /**
-     * Returns the renderer-owned lighting equation.
-     *
-     * @return non-null shading model
-     */
-    public ShadingModel shadingModel() {
-        return shadingModel;
-    }
 
-    /**
-     * Returns receiver-aware surface-overlay policy.
-     * @return non-null overlay policy
-     */
-    public SurfaceOverlayState surfaceOverlay() {
-        return surfaceOverlay;
-    }
+
+
 
     /**
      * Returns path-space decomposition participation and dominant delta-lobe selection.
@@ -348,9 +280,7 @@ public final class MaterialAsset {
                 && doubleSided == material.doubleSided
                 && pathDecomposition == material.pathDecomposition
                 && motionVectorBlocking == material.motionVectorBlocking
-                && blendMode == material.blendMode
-                && shadingModel == material.shadingModel
-                && surfaceOverlay.equals(material.surfaceOverlay);
+                && blendMode == material.blendMode;
     }
 
     @Override
@@ -360,7 +290,7 @@ public final class MaterialAsset {
                 baseColorTextureId, normalTextureId, metallicRoughnessTextureId,
                 emissiveTextureId, emissiveRadiance,
                 alphaCutoff, roughness, metallic, transmission, indexOfRefraction,
-                doubleSided, pathDecomposition, motionVectorBlocking, shadingModel, surfaceOverlay
+                doubleSided, pathDecomposition, motionVectorBlocking
         );
     }
 
@@ -383,8 +313,6 @@ public final class MaterialAsset {
                 + ", doubleSided=" + doubleSided
                 + ", pathDecomposition=" + pathDecomposition
                 + ", motionVectorBlocking=" + motionVectorBlocking
-                + ", shadingModel=" + shadingModel
-                + ", surfaceOverlay=" + surfaceOverlay
                 + ']';
     }
 
@@ -435,26 +363,7 @@ public final class MaterialAsset {
         FULL
     }
 
-    /**
-     * Selects a renderer-owned lighting equation without importing host-specific types.
-     */
-    public enum ShadingModel {
-        /**
-         * Physically based metallic-roughness shading.
-         */
-        PHYSICALLY_BASED,
-        /**
-         * Texture color multiplied by interpolated per-vertex color and frame lightmap.
-         */
-        LIGHTMAP_MODULATED,
-        /**
-         * Base color and emissive contribution bypass all direct and indirect lighting.
-         *
-         * <p>UNLIT remains depth-tested and may still be masked, translucent, outlined, or used
-         * as a receiver-aware surface overlay.</p>
-         */
-        UNLIT
-    }
+
 
     /**
      * Single-thread-confined semantic builder for one material generation.
@@ -477,8 +386,6 @@ public final class MaterialAsset {
         private boolean doubleSided;
         private PathDecomposition pathDecomposition = PathDecomposition.EXCLUDED;
         private MotionVectorBlocking motionVectorBlocking = MotionVectorBlocking.OFF;
-        private ShadingModel shadingModel = ShadingModel.PHYSICALLY_BASED;
-        private SurfaceOverlayState surfaceOverlay = SurfaceOverlayState.disabled();
 
         private Builder(long id) {
             requireId(id, "id");
@@ -503,8 +410,6 @@ public final class MaterialAsset {
             doubleSided = source.doubleSided;
             pathDecomposition = source.pathDecomposition;
             motionVectorBlocking = source.motionVectorBlocking;
-            shadingModel = source.shadingModel;
-            surfaceOverlay = source.surfaceOverlay;
         }
 
         /**
@@ -765,30 +670,9 @@ public final class MaterialAsset {
             return this;
         }
 
-        /**
-         * Selects the renderer-owned lighting equation.
-         *
-         * @param shadingModel non-null shading model
-         * @return this builder
-         */
-        public Builder shadingModel(ShadingModel shadingModel) {
-            this.shadingModel = java.util.Objects.requireNonNull(shadingModel, "shadingModel");
-            return this;
-        }
 
-        /**
-         * Selects receiver-aware surface compositing for this material.
-         *
-         * <p>The overlay's receiver mask is instance state because one immutable material may be
-         * reused by unrelated semantic layers.</p>
-         *
-         * @param value non-null overlay policy
-         * @return this builder
-         */
-        public Builder surfaceOverlay(SurfaceOverlayState value) {
-            surfaceOverlay = java.util.Objects.requireNonNull(value, "surfaceOverlay");
-            return this;
-        }
+
+
 
         /**
          * Builds a validated immutable material.
@@ -804,7 +688,7 @@ public final class MaterialAsset {
                     baseColorTextureId, normalTextureId, metallicRoughnessTextureId,
                     emissiveTextureId, emissiveRadiance,
                     alphaCutoff, roughness, metallic, transmission, indexOfRefraction,
-                    doubleSided, pathDecomposition, motionVectorBlocking, shadingModel, surfaceOverlay
+                    doubleSided, pathDecomposition, motionVectorBlocking
             );
         }
     }

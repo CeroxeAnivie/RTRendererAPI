@@ -85,9 +85,10 @@ float RtrCandidateCoverage(RayDesc ray,uint instanceIndex,uint geometryIndex,uin
     if(span<=1.25)return -1;
     rtrComplexCoverage=true;
     bool interior=all(bary>.5*(abs(bx-bary)+abs(by-bary))+1e-5);
-    float minimumAlpha=mapping.maskedOpacity*min(vertexAlpha.x,min(vertexAlpha.y,vertexAlpha.z));
+    float materialAlpha=mapping.maskedOpacity*roles.surfaceVisibility.x;
+    float minimumAlpha=materialAlpha*min(vertexAlpha.x,min(vertexAlpha.y,vertexAlpha.z));
     if(!interior&&minimumAlpha>=material.alphaCutoff)
-        interior=RtrCoverageQuad(instance,geometry,mapping,primitive,tri,bary,bx-bary,by-bary,vertices,indices,mapping.maskedOpacity,material.alphaCutoff);
+        interior=RtrCoverageQuad(instance,geometry,mapping,primitive,tri,bary,bx-bary,by-bary,vertices,indices,materialAlpha,material.alphaCutoff);
     if(!interior||levels<2||minimumAlpha<material.alphaCutoff||material.domain!=MaterialDomain_AlphaTested
             ||(material.flags&MaterialFlags_UseOpacityTexture)!=0)return 2;
     float lod=clamp(log2(span),0,float(levels-1)),low=floor(lod);

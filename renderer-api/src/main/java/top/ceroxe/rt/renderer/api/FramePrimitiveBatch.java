@@ -12,7 +12,7 @@ import java.util.Objects;
  * resident BLAS. Omitting a prior primitive from the next batch removes it automatically.</p>
  */
 public final class FramePrimitiveBatch {
-    /** Vulkan exposes a 24-bit custom index; one bit is reserved to select this record lane. */
+    /** The bridge reserves one of the 24 instance-index bits for frame-local records. */
     public static final int MAX_PRIMITIVES = 0x0080_0000;
 
     private static final FramePrimitiveBatch EMPTY = new FramePrimitiveBatch(List.of());

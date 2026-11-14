@@ -17,6 +17,7 @@
 #include "SampleCommon/CaptureScriptManager.h"
 #include "rtxpt_upstream_resources.h"
 #include "rtxpt_blas_storage.h"
+#include "rtxpt_direct_frame.h"
 #include "rtxpt_gpu_profile.h"
 #include "rtxpt_sparse_lighting.h"
 #include "rtxpt_native_lighting.h"
@@ -198,18 +199,20 @@ public:
         m_pendingDirectPreparation.clear();m_pendingDirectGraphRefresh=false;
         if(m_managedScene&&m_scene)static_cast<ManagedScene&>(*m_scene).ResetRowChanges();
         m_unmanagedRowChanges.Clear();m_unmanagedRowsDirty=true;
-        if(m_resourceCommands||m_structureCommands||!m_resourceRetirement.empty()){
+        if(m_resourceCommands||m_structureCommands||m_directGraphicsCommands||!m_resourceRetirement.empty()){
             DrainResourceRetirement("scene-unload-idle",RtrDiagnostics::Removal);
-            m_resourceCommands=nullptr;m_structureCommands=nullptr;
+            if(m_directGraphicsCommands&&m_commandList.Get()==m_directGraphicsCommands.Get())m_commandList=m_graphicsCommandList;
+            m_resourceCommands=nullptr;m_structureCommands=nullptr;m_directGraphicsCommands=nullptr;
         }
         AdvancedPathTracer::SceneUnloading();
-        m_blasStorage.Clear();
+        m_blasStorage.Clear();m_directBlasStorage.Clear();
         m_importedMaterials.clear();
         m_completeMaterialBakeDirty=false;
         m_beautyOmmPrimed=false;m_beautyOmmAdmissionPending=false;
-        m_directTlasDirty=true;m_directTlasIdentity=nullptr;
+        m_directTlasDirty=true;m_directTlasIdentity=nullptr;m_directFrameInputs.Reset();
     }
     std::array<double,2> MeshResourceState(const std::string& name)const{return m_resources.MeshResourceState(name);}
+    std::array<uint64_t,4> MeshStorageRanges(const std::string& name)const{return m_resources.MeshStorageRanges(name);}
     std::array<uint64_t,9> ResourceWorkState()const{
         const auto& textures=m_resources.TextureWork();
         const auto& references=m_resources.ReferenceWork();
@@ -339,6 +342,13 @@ public:
         // All direct requests are freshly evaluated on the original frame.
         lighting.retainSignalsAllowed = false;
         m_resources.SetExternalTextureSampling(true);
+        if(m_managedScene&&m_scene){
+            auto& scene=static_cast<ManagedScene&>(*m_scene);
+            scene.SetDirectGeometry(true,!m_lastFrameAsyncPrefix);
+            scene.PrepareDirectGeometryPages();
+            m_resources.SetTextureResources(GetDevice(),m_DescriptorTable);
+            m_resources.PrepareTextureStorage();
+        }
     }
 
     void SyncManagedSceneRows(){
@@ -378,7 +388,12 @@ public:
         m_windowOutput=nullptr;
         AdvancedPathTracer::BackBufferResizing();
     }
+    void SetLeanSignalPublisher(std::function<void(nvrhi::ICommandList*)> record,
+        std::function<void()> publish){m_recordLeanSignal=std::move(record);m_publishLeanSignal=std::move(publish);}
+    void ArmLeanSignal(){m_leanSignalArmed=true;m_leanSignalPublished=false;}
+    bool FinishLeanSignal(){m_leanSignalArmed=false;return m_leanSignalPublished;}
     void Render(nvrhi::IFramebuffer* framebuffer) override {
+        m_leanSignalPublished=false;
         RtrDiagnostics::Scope renderScope(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-render"));
         // Finalize this Frame's resource packets after Animate and before any
         // renderer reads. The single native graph refresh sees the final pose.
@@ -391,7 +406,8 @@ public:
         }
         const bool finalDirectPreparation=m_managedScene&&m_scene&&IsSceneLoaded()
             &&!m_scene->GetSceneGraph()->GetMeshInstances().empty()&&CanRenderNativeLightingLean(framebuffer);
-        FlushPendingDirectPreparation(finalDirectPreparation);
+        if(finalDirectPreparation){RenderNativeLightingLean(framebuffer);return;}
+        FlushPendingDirectPreparation();
         if(m_managedScene&&m_scene&&IsSceneLoaded())m_resources.ApplyPendingTransforms(*m_scene);
         if (!m_managedScene || !IsSceneLoaded() || !m_scene) {
             m_directTlasDirty=true;
@@ -435,6 +451,7 @@ public:
         if (!m_managedScene || !m_scene) throw std::logic_error("No managed scene");
         DrainResourceRetirement("scene-clear-idle",RtrDiagnostics::Removal);
         m_pendingDirectPreparation.clear();m_pendingDirectGraphRefresh=false;
+        m_directFrameInputs.Reset();
         static_cast<ManagedScene&>(*m_scene).ResetRowChanges();
         m_resources.Reset();
         analytic.Reset(m_scene.get());
@@ -548,6 +565,7 @@ public:
             std::move(fs), m_TextureCache, m_DescriptorTable,
             std::make_shared<ExtendedSceneTypeFactory>());
         static_cast<ManagedScene&>(*m_scene).SetFrameWorkers(&m_frameWorkerPool);
+        static_cast<ManagedScene&>(*m_scene).SetDirectGeometry(lighting.active,false);
         auto graph = m_scene->CreateSceneGraph();
         graph->SetRootNode(std::make_shared<donut::engine::SceneGraphNode>());
         // A newly attached empty root is structurally dirty, but Donut's
@@ -561,16 +579,18 @@ public:
         return true;
     }
 
-    void ApplyResources(const std::shared_ptr<const std::vector<uint8_t>>& packet) {
+    void ApplyResources(std::span<const uint8_t> packet) {
         if (!m_managedScene || !m_scene || !IsSceneLoaded())
             throw std::logic_error("In-memory resources require the loaded managed scene");
         RtrDiagnostics::Scope resourceScope(RtrDiagnostics::ResourcePlan);
         PollResourceRetirement();
         m_resources.SetTextureResources(GetDevice(),m_DescriptorTable);
+        static_cast<ManagedScene&>(*m_scene).SetDirectGeometry(lighting.active,
+            CanRenderNativeLightingLean(nullptr)&&!m_lastFrameAsyncPrefix);
         nvrhi::CommandListHandle commands;
         bool retainRemoved=false;
         bool dormantOmmInvalidated=false;
-        auto changed = m_resources.Apply(packet->data(), packet->size(),
+        auto changed = m_resources.Apply(packet.data(), packet.size(),
             *m_scene, [&]()->nvrhi::ICommandList*{if(!commands)commands=OpenResourceCommands();return commands;},
             GetFrameIndex(),[&](bool geometryOnly){
                 retainRemoved=geometryOnly&&lighting.active&&!m_ommBaker;
@@ -578,7 +598,7 @@ public:
                     FlushPendingDirectPreparation();
                     DrainResourceRetirement("resource-policy-idle",RtrDiagnostics::Material|RtrDiagnostics::Coverage);
                 }
-            },CanRenderNativeLightingLean(nullptr),packet,[&](const MeshInfoEx&){
+            },CanRenderNativeLightingLean(nullptr),[&](const MeshInfoEx&){
                 if(m_ommBaker&&!dormantOmmInvalidated){
                     // The resource lifecycle has already waited idle. Use the
                     // public baker lifecycle to prevent stale pending writes,
@@ -606,6 +626,10 @@ public:
             retired.structures=changed.retiredStructures;retired.textures=changed.retiredTextures;
             m_resourceRetirement.push_back(std::move(retired));
         }
+        // Drop cached group names and mappings before touching their logical keys.
+        // Resource transactions carry the exact owners; no name lookup by group.
+        for(const auto& mesh:changed.retiredMeshes)lighting.ForgetMeshMetadata(mesh);
+        for(const auto& mesh:changed.reboundMeshes)lighting.ForgetMeshMetadata(mesh);
         for(const auto& [before,after]:changed.renamedGeometries)lighting.RenameGeometry(before,after);
         for(const auto& name:changed.surfaceGeometries)lighting.dirtySurfaces.insert(name);
         for(const auto& name:changed.retiredInstances)lighting.RetireInstance(name);
@@ -698,15 +722,21 @@ private:
     // a retained list uses its native fence-aware internal pool, just as Sample
     // reuses its own frame lists; a fresh wrapper per publication rebuilds those
     // allocators and discards their reusable chunks on every transaction.
-    nvrhi::CommandListHandle m_resourceCommands,m_structureCommands;
+    nvrhi::CommandListHandle m_resourceCommands,m_structureCommands,m_directGraphicsCommands;
     // Lifetime counts of successful creation and reopening of retained native lists.
     std::array<uint64_t,4> m_commandWork{};
     // Executed direct frames: lightweight / complete native fallback / empty.
     // These counters advance at the actual dispatch/Render choice, not at request time.
     std::array<uint64_t,3> m_nativeFrameWork{};
+    std::function<void(nvrhi::ICommandList*)> m_recordLeanSignal;
+    std::function<void()> m_publishLeanSignal;
+    bool m_leanSignalPublished=false,m_leanSignalArmed=false;
     bool m_nativeSceneBootstrapPending=false;
     bool m_advancedPipelineOwner=false;
     BlasStorage m_blasStorage;
+    DirectBlasStorage m_directBlasStorage;
+    DirectFrameInputs m_directFrameInputs;
+    uint64_t m_directBlasRevision=0;
     bool m_directTlasDirty=true;
     nvrhi::rt::IAccelStruct* m_directTlasIdentity=nullptr;
     uint32_t m_directTlasPolicy=0;
@@ -740,16 +770,38 @@ private:
         m_viewPrevious->SetViewport(nvrhi::Viewport(float(size.width),float(size.height)));
         {RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-pre-render"));PreRender();}
         RAII_SCOPE(;,PostRenderWithDiagnostics(););
-        m_commandList=m_graphicsCommandList;
+        if(!m_directGraphicsCommands){
+            // This recorder combines mesh, receiver and sparse-light writes
+            // with shading. A burst of 1 MiB writes otherwise consumes nearly
+            // one NVRHI upload chunk per write. Keep the same native queue,
+            // scratch settings and fence owner; amortize only its upload pages.
+            auto parameters=m_graphicsCommandList->getDesc();
+            parameters.setUploadChunkSize(4*1024*1024);
+            m_directGraphicsCommands=GetDevice()->createCommandList(parameters);
+            if(!m_directGraphicsCommands)throw std::runtime_error("Native direct frame command-list allocation failed");
+        }
+        RAII_SCOPE(;,m_commandList=m_graphicsCommandList;);
+        m_commandList=m_directGraphicsCommands;
+        const bool retainedDirectInputs=m_managedScene&&m_scene->GetSceneGraph()->GetSkinnedMeshInstances().empty();
+        // A managed direct frame records its final resource generation, BLAS,
+        // TLAS and shading on one native list, matching 5.0's frame recorder.
+        // Lifecycle/beauty boundaries retain their separate original submission.
+        {RtrDiagnostics::Scope phase(RtrDiagnostics::CommandAcquire,1,0,1,0,HostDiagnosticIdentity("native-frame-command-open"));
+            m_commandList->open();}
+        if(retainedDirectInputs){
+            FlushPendingDirectPreparation(true,m_commandList);
+            m_resources.ApplyPendingTransforms(*m_scene);
+        }
         if(!m_topLevelAS)m_ui.AccelerationStructRebuildRequested=true;
         if(m_ui.AccelerationStructRebuildRequested)m_directTlasDirty=true;
         // Original material/coverage rules and BLAS/TLAS construction remain
         // authoritative, including genuine rebuilds after policy changes.
         {RtrDiagnostics::Scope phase(RtrDiagnostics::Acceleration,m_ui.AccelerationStructRebuildRequested?1:0,
             m_scene->GetSceneGraph()->GetMeshes().size(),1,0,HostDiagnosticIdentity("native-complete-as-recreate"),0,RtrDiagnostics::BuildFlags);
-            RecreateAccelStructs(m_commandList);}
-        {RtrDiagnostics::Scope phase(RtrDiagnostics::CommandAcquire,1,0,1,0,HostDiagnosticIdentity("native-frame-command-open"));
-            m_commandList->open();}
+            if(m_ui.AccelerationStructRebuildRequested){
+                m_commandList->close();GetDevice()->executeCommandList(m_commandList);
+                RecreateAccelStructs(m_commandList);++m_directBlasRevision;m_commandList->open();
+            }}
         GpuProfiler::BeginFrameZone(m_commandList);
         const auto graph=m_scene->GetSceneGraph();
         // Previous-pose convergence changes motion data, not the current TLAS
@@ -767,14 +819,14 @@ private:
                 m_scene->Refresh(m_commandList,GetFrameIndex());SyncManagedSceneRows();
             }
         }
-        {RtrDiagnostics::Scope phase(RtrDiagnostics::InstanceCache,1,graph->GetMeshInstances().size(),1,0,HostDiagnosticIdentity("native-scene-cache-open"));
+        if(!retainedDirectInputs){RtrDiagnostics::Scope phase(RtrDiagnostics::InstanceCache,1,graph->GetMeshInstances().size(),1,0,HostDiagnosticIdentity("native-scene-cache-open"));
             m_sceneRenderCache.Open(m_scene,&m_frameWorkerPool);}
         // The independent shader reads native Donut scene tables, not PT GPU
         // material/sub-instance rows. Keep the native node cache for UpdateTLAS;
         // a complete renderer transition performs the real bake before use.
-        {RtrDiagnostics::Scope phase(RtrDiagnostics::Acceleration,graph->GetSkinnedMeshInstances().size(),0,1,0,HostDiagnosticIdentity("native-skinned-blas-update"));
+        if(!retainedDirectInputs){RtrDiagnostics::Scope phase(RtrDiagnostics::Acceleration,graph->GetSkinnedMeshInstances().size(),0,1,0,HostDiagnosticIdentity("native-skinned-blas-update"));
             UpdateSkinnedBLASs(m_commandList,GetFrameIndex());}
-        {RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,graph->GetMeshes().size(),1,0,HostDiagnosticIdentity("native-mesh-read-transitions"));
+        if(!retainedDirectInputs){RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,graph->GetMeshes().size(),1,0,HostDiagnosticIdentity("native-mesh-read-transitions"));
             TransitionMeshBuffersToReadOnly(m_commandList);}
         // No view-dependent culling or OMM can enter this lean path. Camera,
         // lighting and metadata-only changes do not alter the native TLAS.
@@ -785,7 +837,11 @@ private:
         {RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasBuild,buildTlas?1:0);
             tlasScope.event[11]|=buildTlas?RtrDiagnostics::CacheMiss:RtrDiagnostics::CacheHit;
             const auto tlasTiming=buildTlas?RtrGpuProfile::Begin(m_commandList,"NativeTlas",-1):RtrGpuProfile::Token{};
-            if(buildTlas)UpdateTLAS(m_commandList);
+            if(buildTlas){
+                if(retainedDirectInputs)m_directFrameInputs.Build(GetDevice(),m_commandList,m_topLevelAS,*graph,m_ui.AS.ForceOpaque,
+                    static_cast<ManagedScene&>(*m_scene).RowChanges(),m_directBlasRevision);
+                else UpdateTLAS(m_commandList);
+            }
             RtrGpuProfile::End(m_commandList,tlasTiming);}
         // Dispatch binds the live Scene buffers and its descriptor table itself;
         // Sample's global beauty bindings and accumulation/debug setup are unused.
@@ -794,10 +850,12 @@ private:
         const auto& attachments=framebuffer->getDesc().colorAttachments;
         if(!attachments.empty())m_commandList->clearTextureFloat(attachments[0].texture,
             nvrhi::AllSubresources,nvrhi::Color(0));
+        if(m_leanSignalArmed&&m_recordLeanSignal)m_recordLeanSignal(m_commandList);
         GpuProfiler::End(m_commandList);
         {RtrDiagnostics::Scope phase(RtrDiagnostics::CommandSubmit,1,0,1,0,HostDiagnosticIdentity("native-frame-submit"));
             m_commandList->close();
             m_lastGraphicsSubmit=GetDevice()->executeCommandList(m_commandList);}
+        if(m_leanSignalArmed&&m_publishLeanSignal){m_publishLeanSignal();m_leanSignalPublished=true;m_leanSignalArmed=false;}
         m_directTlasDirty=false;m_directTlasIdentity=m_topLevelAS.Get();m_directTlasPolicy=tlasPolicy;
         m_lastFrameAsyncPrefix=false;
         GetDeviceManager()->SetVsyncEnabled(m_ui.ActualEnableVsync());
@@ -838,7 +896,7 @@ private:
     // alive while all packets are collected; only the final live graph is packed.
     std::vector<Resources::Changes> m_pendingDirectPreparation;
     bool m_pendingDirectGraphRefresh=false;
-    void FlushPendingDirectPreparation(bool finalFramePreparation=false){
+    void FlushPendingDirectPreparation(bool finalFramePreparation=false,nvrhi::ICommandList* frameCommands=nullptr){
         if(m_pendingDirectPreparation.empty()&&!m_pendingDirectGraphRefresh)return;
         if(!m_managedScene||!m_scene||!IsSceneLoaded())
             throw std::logic_error("Pending native preparation requires its managed scene");
@@ -871,7 +929,8 @@ private:
         };
         std::erase_if(merged.deformedMeshes,[&](const auto& mesh){return newBuild(mesh)||reshaped.contains(mesh.get());});
         std::erase_if(merged.reshapedMeshes,[&](const auto& mesh){return newBuild(mesh);});
-        auto commands=OpenResourceCommands();
+        nvrhi::CommandListHandle commands;
+        if(frameCommands)commands=frameCommands;else commands=OpenResourceCommands();
         const auto prepareTiming=RtrGpuProfile::Begin(commands,"NativeScenePreparation",-1);
         if(structuralResources||m_pendingDirectGraphRefresh||m_scene->GetSceneGraph()->HasPendingStructureChanges())
             static_cast<ManagedScene&>(*m_scene).RefreshTopology(commands,GetFrameIndex(),uploads,finalFramePreparation);
@@ -888,7 +947,7 @@ private:
         // after the complete scene preparation has been submitted.
         const bool structuresPrepared=!structuralResources||RefreshRetainedDirectStructures(merged,commands);
         RtrGpuProfile::End(commands,prepareTiming);
-        {RtrDiagnostics::Scope submit(RtrDiagnostics::CommandSubmit);
+        if(!frameCommands){RtrDiagnostics::Scope submit(RtrDiagnostics::CommandSubmit);
             commands->close();
             const auto submitted=GetDevice()->executeCommandList(commands);
             GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,submitted);}
@@ -950,7 +1009,8 @@ private:
             auto description=bvh::GetMeshBlasDesc(
                 bvh::Config{.excludeTransmissive=m_ui.AS.ExcludeTransmissive},*mesh,nullptr,false);
             description.buildFlags=description.buildFlags&~nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
-            bool reusable=replacement&&!m_lastFrameAsyncPrefix&&BlasStorage::CanRebuild(mesh->accelStruct,description);
+            bool reusable=replacement&&!m_lastFrameAsyncPrefix&&(BlasStorage::CanRebuild(mesh->accelStruct,description)
+                ||DirectBlasStorage::CanRebuild(GetDevice(),mesh->accelStruct,description));
 #ifdef NVRHI_WITH_RTXMU
             reusable=false;
 #endif
@@ -963,7 +1023,12 @@ private:
         }
         std::vector<nvrhi::rt::AccelStructDesc> descriptions;std::vector<size_t> missing;
         descriptions.reserve(builds.size());missing.reserve(builds.size());
-        for(size_t i=0;i<builds.size();++i)if(!builds[i].structure){descriptions.push_back(builds[i].description);missing.push_back(i);}
+        for(size_t i=0;i<builds.size();++i)if(!builds[i].structure){
+            if(DirectBlasStorage::Supports(builds[i].description)){
+                RtrDiagnostics::Scope allocate(RtrDiagnostics::BlasAllocate,1);
+                builds[i].structure=m_directBlasStorage.Create(GetDevice(),builds[i].description);
+            }else{descriptions.push_back(builds[i].description);missing.push_back(i);}
+        }
         auto allocated=m_blasStorage.CreateBatch(GetDevice(),m_frameWorkerPool,descriptions);
         for(size_t i=0;i<missing.size();++i){auto& build=builds[missing[i]];
             build.structure=std::move(allocated[i].structure);build.reused=build.poolHit=allocated[i].reused;
@@ -973,23 +1038,29 @@ private:
         for(const auto& build:builds){
             for(const auto& geometry:build.description.bottomLevelGeometries){
                 const auto& triangles=geometry.geometryData.triangles;
-                commands->setBufferState(triangles.indexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
-                commands->setBufferState(triangles.vertexBuffer,nvrhi::ResourceStates::AccelStructBuildInput);
+                commands->setBufferState(triangles.indexBuffer,nvrhi::ResourceStates::AccelStructBuildInput|nvrhi::ResourceStates::ShaderResource);
+                commands->setBufferState(triangles.vertexBuffer,nvrhi::ResourceStates::AccelStructBuildInput|nvrhi::ResourceStates::ShaderResource);
             }
-            commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructWrite);
+            if(!DirectBlasStorage::Is(build.structure))commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructWrite);
         }
         commands->commitBarriers();
+        std::vector<DirectBlasStorage::Build> pagedBuilds;
         for(auto& build:builds){
-            RtrDiagnostics::Scope scope(RtrDiagnostics::BlasBuild,1);
-            if(build.reused)scope.event[11]|=RtrDiagnostics::CacheHit;
-            if(build.poolHit)scope.event[20]|=RtrDiagnostics::PoolHit;
-            nvrhi::utils::BuildBottomLevelAccelStruct(commands,build.structure,build.description);
+            if(DirectBlasStorage::Is(build.structure))pagedBuilds.push_back({build.structure,&build.description,build.reused});
+            else {
+                RtrDiagnostics::Scope scope(RtrDiagnostics::BlasBuild,1);
+                if(build.reused)scope.event[11]|=RtrDiagnostics::CacheHit;
+                if(build.poolHit)scope.event[20]|=RtrDiagnostics::PoolHit;
+                nvrhi::utils::BuildBottomLevelAccelStruct(commands,build.structure,build.description);
+            }
             if(build.previous&&build.previous!=build.structure)changed.retiredStructures.push_back(build.previous);
             build.mesh->accelStruct=build.structure;
         }
-        for(const auto& build:builds)commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructBuildBlas);
+        m_directBlasStorage.BuildBatch(GetDevice(),commands,pagedBuilds);
+        for(const auto& build:builds)if(!DirectBlasStorage::Is(build.structure))
+            commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructBuildBlas);
         commands->commitBarriers();
-        if(!builds.empty())m_tlasInstanceDataDirty=true;
+        if(!builds.empty()){m_tlasInstanceDataDirty=true;++m_directBlasRevision;}
     }
     bool RefreshRetainedDirectStructures(Resources::Changes& changed,nvrhi::ICommandList* preparedCommands=nullptr) {
         RtrDiagnostics::Scope structureScope(RtrDiagnostics::Acceleration);

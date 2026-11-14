@@ -25,10 +25,27 @@ NativeLighting、Sparse 和共享同步作为外部桥接能力提供，不等�
 
 5.0.0 的输入尚未全量对齐。有限光照已接通实例角色、帧雾、packedLight 回退、临时几何显式上一姿态，以及宿主覆盖率重建信号；这些能力不代表普通 beauty 路径具备同样语义。
 
-当前仍拒绝自定义 shaderData、旧帧 lightmap、非单样本 AntiAliasingState、非默认纹理 footprint，以及非默认 InstanceRenderState、overlay 和非闭合介质。普通 beauty 还不支持精确投影、帧雾、自定义实例角色与最近邻／clamp 纹理策略。beauty 的顶点颜色、网格 UV2、packedLight、临时几何显式上一姿态和共有 DepthProjectionState 尚未接通，调用方不能依赖这些输入产生效果。
+自定义 shaderData、旧帧 lightmap、帧级多重采样／纹理 footprint、DepthProjectionState、InstanceRenderState、surface overlay 和非物理材质模型已从接口删除。空间缩放、adaptive MFG、RTXMU 配置与未实现的 fallback 旋钮同样删除。非闭合介质仍拒绝。普通 beauty 还不支持精确投影、帧雾、自定义实例角色与最近邻／clamp 纹理策略。beauty 的顶点颜色、网格 UV2、packedLight、临时几何显式上一姿态尚未接通，调用方不能依赖这些输入产生效果。
 
 FG 请求、原生激活状态和实际呈现帧数是不同信息。资产预算、CPU 墙钟和 GPU 查询耗时也不能相互替代。
 
 光学场景支持折射、透射、吸收与嵌套介质；没有公开接通的体散射参数不属于本版接口保证。
 
 实际签名见[API 参考入口](Java-API-Reference.md)，调用方式见[Java 指南](Java.md)。
+
+## Rebased backend and removed contracts
+
+The immutable retained-scene data and direct-buffer ownership start from the 5.0.0
+baseline. The active rendering backend is RTXPT 1.9.0 through the external JNI bridge.
+Primary CPU scene resources use primitive-key hash storage and per-publication change
+journals. Native completion explicitly retires old resource values; stable frames do
+not scan those tables. Failed transaction branches remain isolated.
+
+This is a breaking release. Generic graphics/compute/RT command submission, arbitrary
+scene shaders, CPU-frame polling, explicit GPU selection, per-frame shader data, and
+photon-map caustic controls are removed from the public API. They are not compatibility
+stubs or advertised backend capabilities. Lighting output is available only through
+its explicit GPU lease contract; path-traced beauty uses renderer-owned presentation.
+
+The source migration and CPU-locality checks do not establish 5.0.0 FPS equivalence.
+Use a complete-request, same-input hardware comparison for performance acceptance.

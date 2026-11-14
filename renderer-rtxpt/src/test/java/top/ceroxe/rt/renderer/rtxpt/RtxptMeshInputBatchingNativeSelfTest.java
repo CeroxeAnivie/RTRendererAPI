@@ -6,7 +6,7 @@ import java.nio.file.*;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
-/** This upload's layout clustering, without a resident buffer cache or graph reorder. */
+/** Layout clustering and independent edits, with final-frame command-list ownership. */
 public final class RtxptMeshInputBatchingNativeSelfTest {
     private static final int SIZE=128,COUNT=64;
     private static final float SPACING=.36f,RADIUS=.14f;
@@ -57,7 +57,9 @@ public final class RtxptMeshInputBatchingNativeSelfTest {
             var field=RtxptRenderer.class.getDeclaredField("handle");field.setAccessible(true);long handle=field.getLong(renderer);
             var first=monitor.poll();
             Files.writeString(output.resolve("initial-work.txt"),first.toString(),StandardCharsets.UTF_8);
-            require(work(first,"MeshBufferUpload",false)==10,"40/8/8/8 layouts must use five <=32-mesh batches, not interleaved singleton pairs");
+            require(work(first,"MeshBufferUpload",false)==2,"Five layout batches must occupy distinct slices of one vertex/index page pair");
+            require(work(first,"BufferAllocate",false)==0&&work(first,"DescriptorAllocate",false)==0,
+                    "Small batches did not append to the existing bootstrap pages/descriptors");
             require(work(first,"MeshBufferUpload",true)==gpuBytes,"Layout clustering changed actual channel/index upload sizes");
             require(work(first,"BlasBuild",false)==COUNT,"Layout clustering dropped actual mesh BLAS builds");
             retention(handle,ownedBytes,COUNT);pixels(handle,output,1,false,false);
@@ -65,10 +67,20 @@ public final class RtxptMeshInputBatchingNativeSelfTest {
             for(int index=0;index<COUNT;index++){states[index]=RtxptNative.meshResourceState(handle,"i"+id(index));
                 require(states[index][0]!=0&&states[index][1]!=0,"Missing actual native mesh resources");
                 buffers.computeIfAbsent(layout(index),key->new HashSet<>()).add(states[index][1]);}
-            require(buffers.get(1).size()==2&&buffers.get(3).size()==1&&buffers.get(5).size()==1&&buffers.get(7).size()==1,
-                    "Actual shared vertex-buffer identities violate exact layout or 32-mesh limits");
+            require(buffers.get(1).size()==1&&buffers.get(3).size()==1&&buffers.get(5).size()==1&&buffers.get(7).size()==1,
+                    "Small batches did not share their native vertex page");
             var allBuffers=new HashSet<Double>();for(var group:buffers.values())allBuffers.addAll(group);
-            require(allBuffers.size()==5,"Different input layouts shared one native vertex buffer");
+            require(allBuffers.size()==1,"Different input layouts failed to share disjoint page ranges");
+            var ranges=new long[COUNT][];
+            for(int index=0;index<COUNT;index++){
+                ranges[index]=RtxptNative.meshStorageRanges(handle,"i"+id(index));
+                require(ranges[index][1]-ranges[index][0]==48&&ranges[index][3]-ranges[index][2]==24,
+                        "Page slice no longer matches its exact authored vertex/index counts");
+                for(int other=0;other<index;other++)require(
+                        (ranges[index][1]<=ranges[other][0]||ranges[other][1]<=ranges[index][0])
+                        &&(ranges[index][3]<=ranges[other][2]||ranges[other][3]<=ranges[index][2]),
+                        "Live meshes overlap page position/index ranges");
+            }
             row(rows,1,"alternating-layouts-native-five-batches",first,handle);
             long[] commands=RtxptNative.commandWorkState(handle);
             renderer.apply(SceneTransaction.builder(2).build());render(renderer,access,lighting,2,false);
@@ -78,15 +90,20 @@ public final class RtxptMeshInputBatchingNativeSelfTest {
             commands=RtxptNative.commandWorkState(handle);
             var detach=SceneTransaction.builder(3);for(int index=0;index<COUNT;index+=2)detach.removeInstance(id(index));
             renderer.apply(detach.build());render(renderer,access,lighting,3,true);var removed=monitor.poll();
-            commandDelta(commands,RtxptNative.commandWorkState(handle),1);
+            commandDelta(commands,RtxptNative.commandWorkState(handle),0);
             require(work(removed,"MeshBufferUpload",false)==0&&work(removed,"BlasBuild",false)==0,"Removing shared-buffer users uploaded/rebuilt resident geometry");
             retention(handle,ownedBytes,COUNT);pixels(handle,output,3,true,false);row(rows,3,"remove-users-retains-input-definitions",removed,handle);
             commands=RtxptNative.commandWorkState(handle);
             renderer.apply(SceneTransaction.builder(4).upsert(mesh(1,.45f)).build());render(renderer,access,lighting,4,true);var edited=monitor.poll();
-            commandDelta(commands,RtxptNative.commandWorkState(handle),1);
-            require(work(edited,"MeshBufferUpload",false)==2&&work(edited,"BlasBuild",false)==0,"Shading edit did not replace only its own native buffer pair");
+            commandDelta(commands,RtxptNative.commandWorkState(handle),0);
+            require(work(edited,"MeshBufferUpload",false)==1&&work(edited,"MeshBufferUpload",true)==16
+                    &&work(edited,"BlasBuild",false)==0,"Shading edit must upload only its16-byte normal range");
+            require(work(edited,"BufferAllocate",false)==0&&work(edited,"DescriptorAllocate",false)==0,
+                    "Normal-only edit allocated replacement geometry storage or descriptors");
             var editState=RtxptNative.meshResourceState(handle,"i"+id(1));
-            require(editState[0]==states[1][0]&&editState[1]!=states[1][1],"Shading edit changed BLAS identity or reused an immutable old GPU buffer");
+            require(editState[0]==states[1][0]&&editState[1]==states[1][1],"Shading edit must retain BLAS and native storage position");
+            require(Arrays.equals(ranges[1],RtxptNative.meshStorageRanges(handle,"i"+id(1))),
+                    "Normal-only edit moved the resident vertex/index ranges");
             for(int index=3;index<COUNT;index+=2)require(Arrays.equals(states[index],RtxptNative.meshResourceState(handle,"i"+id(index))),
                     "A neighbour lost native buffer/BLAS identity after one shared-batch mesh changed");
             retention(handle,ownedBytes,COUNT);pixels(handle,output,4,true,true);tlasReused(edited);row(rows,4,"single-shading-edit-preserves-neighbours",edited,handle);
@@ -95,7 +112,7 @@ public final class RtxptMeshInputBatchingNativeSelfTest {
             release.removeMaterials(1,2).removeTexture(101);renderer.apply(release.build());render(renderer,access,lighting,5,true);var last=monitor.poll();
             commandDelta(commands,RtxptNative.commandWorkState(handle),1);retention(handle,0,0);pixelsEmpty(handle,output);row(rows,5,"explicit-final-definition-owner-release",last,handle);
         }finally{Files.write(output.resolve("mesh-input-batching.csv"),rows,StandardCharsets.UTF_8);}
-        System.out.println("MESH_INPUT_BATCHING_NATIVE PASS meshes=64 layouts=4 nativeBufferObjects=10 exactUploadBytes=true freshPixels=true uvCoverage=true immutableOldBuffers=true ownerLifecycle=true lazyPreparationLists=true");
+        System.out.println("MESH_INPUT_BATCHING_NATIVE PASS meshes=64 layouts=4 nativeBufferObjects=2 exactUploadBytes=true freshPixels=true uvCoverage=true stableGeometryRanges=true dirtyNormalBytes=16 geometryAllocations=0 ownerLifecycle=true lazyPreparationLists=true");
     }
     private static void render(Renderer renderer,RtxptAccess access,NativeLightingControl lighting,long sequence,boolean oddOnly){
         var receivers=new ArrayList<NativeLightingPublication.Instance>();
@@ -106,6 +123,8 @@ public final class RtxptMeshInputBatchingNativeSelfTest {
             require(frame.sequence()==sequence&&frame.sceneRevision()==sequence&&frame.attributeGeneration()==sequence+1,"Stale batching output");}
     }
     private static void commandDelta(long[] before,long[] after,long preparations){
+        // Managed direct preparation records into the final frame's own list.
+        // Topology edits share it; the empty-scene lifecycle retains one list.
         require(before.length==10&&after.length==10&&after[0]==before[0]&&after[2]==before[2]
                 &&after[1]-before[1]==preparations&&after[3]==before[3],"Geometry/topology packet opened extra resource or structure command lists");
     }

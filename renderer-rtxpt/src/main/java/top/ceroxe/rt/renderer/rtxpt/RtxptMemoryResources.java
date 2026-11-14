@@ -7,9 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
-/** JNI copies the borrowed packet before return; its queued native owner is independent. */
+/** Java owns the direct packet and pins it while the native owner consumes it. */
 final class RtxptMemoryResources {
-    static final int PROTOCOL=0x5244525b; // Ordered packet input inheritance; 0x52445259/5a remain readable.
+    static final int PROTOCOL=0x5244525c; // Implicit canonical order for a single material; older packets remain readable.
     static final class PacketPool implements AutoCloseable {
         private Arena arena;
         private ByteBuffer buffer;
@@ -22,8 +22,8 @@ final class RtxptMemoryResources {
             if(!event.isEnabled())return;event.action=action;event.pool=Integer.toUnsignedLong(System.identityHashCode(this));
             event.usedBytes=used;event.capacityBytes=buffer==null?0:buffer.capacity();event.releasedBytes=released;event.commit();
         }
-        // Native borrows are synchronous. Pending retries retain this storage,
-        // while replacement and renderer close explicitly release it without GC.
+        // A submitted native prefix borrows this storage through frame completion.
+        // Replacement and renderer close explicitly release it without GC.
         synchronized void clear(){
             if(borrowers!=0)throw new IllegalStateException("Resource packet is borrowed by JNI");
             int capacity=capacity();buffer=null;var old=arena;arena=null;if(old!=null)old.close();
@@ -197,6 +197,7 @@ final class RtxptMemoryResources {
             // The finite-signal adapter consumes this order directly; the native
             // beauty importer builds its ordinary material groups from the map.
             w.ints(g.data.indices());}
+            if(g.groups.size()==1){w.i(0);w.s(g.groups.getFirst().material());continue;}
             w.i(g.groups.size());for(var group:g.groups){w.s(group.material());w.i(group.corners().length/3);
                 if(w.data==null)w.offset+=(long)group.corners().length/3*4;
                 else for(int i=0;i<group.corners().length;i+=3)w.i(group.corners()[i]/3);}}

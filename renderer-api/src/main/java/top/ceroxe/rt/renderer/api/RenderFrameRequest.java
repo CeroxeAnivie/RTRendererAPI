@@ -9,7 +9,6 @@ import java.util.Set;
  * Immutable render request assembled through a stable semantic builder.
  */
 public final class RenderFrameRequest {
-    private final java.util.List<ResourceData> shaderData;
     private final long sequence;
     private final long minimumSceneRevision;
     private final FrameClock clock;
@@ -17,12 +16,7 @@ public final class RenderFrameRequest {
     private final int height;
     private final CameraState camera;
     private final EnvironmentState environment;
-    private final Caustics caustics;
-    private final LightmapState lightmap;
     private final DistanceFogState fog;
-    private final TextureSamplingState textureSampling;
-    private final AntiAliasingState antiAliasing;
-    private final DepthProjectionState depthProjection;
     private final FramePrimitiveBatch primitiveBatch;
     private final Set<HistoryResetReason> temporalHistoryResets;
 
@@ -37,7 +31,6 @@ public final class RenderFrameRequest {
         if (pixels > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("frame extent exceeds supported pixel address space");
         }
-        shaderData = java.util.List.copyOf(builder.shaderData);
         sequence = builder.sequence;
         minimumSceneRevision = builder.minimumSceneRevision;
         clock = Objects.requireNonNull(builder.clock, "clock");
@@ -45,12 +38,7 @@ public final class RenderFrameRequest {
         height = builder.height;
         camera = Objects.requireNonNull(builder.camera, "camera");
         environment = Objects.requireNonNull(builder.environment, "environment");
-        caustics = Objects.requireNonNull(builder.caustics, "caustics");
-        lightmap = Objects.requireNonNull(builder.lightmap, "lightmap");
         fog = Objects.requireNonNull(builder.fog, "fog");
-        textureSampling = Objects.requireNonNull(builder.textureSampling, "textureSampling");
-        antiAliasing = Objects.requireNonNull(builder.antiAliasing, "antiAliasing");
-        depthProjection = Objects.requireNonNull(builder.depthProjection, "depthProjection");
         primitiveBatch = Objects.requireNonNull(builder.primitiveBatch, "primitiveBatch");
         temporalHistoryResets = immutableEnumSet(builder.temporalHistoryResets);
     }
@@ -81,13 +69,6 @@ public final class RenderFrameRequest {
     public Builder toBuilder() {
         return new Builder(this);
     }
-
-    /**
-     * Returns the immutable application storage-buffer values in declared binding order.
-     *
-     * @return immutable, possibly empty shader data
-     */
-    public java.util.List<ResourceData> shaderData() { return shaderData; }
 
     /**
      * Returns the exact frame sequence.
@@ -153,17 +134,7 @@ public final class RenderFrameRequest {
 
 
 
-    /** Returns the optional built-in surface-caustic photon-map policy. */
-    public Caustics caustics() { return caustics; }
 
-    /**
-     * Returns the frame lightmap policy.
-     *
-     * @return non-null lightmap state
-     */
-    public LightmapState lightmap() {
-        return lightmap;
-    }
 
     /**
      * Returns the distance-fog policy.
@@ -174,32 +145,11 @@ public final class RenderFrameRequest {
         return fog;
     }
 
-    /**
-     * Returns the texture-sampling policy.
-     *
-     * @return non-null texture-sampling state
-     */
-    public TextureSamplingState textureSampling() {
-        return textureSampling;
-    }
 
-    /**
-     * Returns the deterministic spatial anti-aliasing policy.
-     *
-     * @return non-null anti-aliasing state
-     */
-    public AntiAliasingState antiAliasing() {
-        return antiAliasing;
-    }
 
-    /**
-     * Returns the exact depth projection for temporal reconstruction, when the host knows it.
-     *
-     * @return immutable non-null projection state
-     */
-    public DepthProjectionState depthProjection() {
-        return depthProjection;
-    }
+
+
+
 
     /**
      * Returns frame-replaced primitive instances referencing persistent mesh assets.
@@ -230,13 +180,7 @@ public final class RenderFrameRequest {
                 && clock.equals(request.clock)
                 && camera.equals(request.camera)
                 && environment.equals(request.environment)
-                && caustics.equals(request.caustics)
-                && lightmap.equals(request.lightmap)
                 && fog.equals(request.fog)
-                && textureSampling.equals(request.textureSampling)
-                && antiAliasing.equals(request.antiAliasing)
-                && depthProjection.equals(request.depthProjection)
-                && shaderData.equals(request.shaderData)
                 && primitiveBatch.equals(request.primitiveBatch)
                 && temporalHistoryResets.equals(request.temporalHistoryResets);
     }
@@ -244,9 +188,9 @@ public final class RenderFrameRequest {
     @Override
     public int hashCode() {
         return Objects.hash(
-                sequence, minimumSceneRevision, width, height, clock, camera, environment, caustics,
-                lightmap, fog, textureSampling, antiAliasing, depthProjection, primitiveBatch,
-                temporalHistoryResets, shaderData
+                sequence, minimumSceneRevision, width, height, clock, camera, environment,
+                fog, primitiveBatch,
+                temporalHistoryResets
         );
     }
 
@@ -259,13 +203,8 @@ public final class RenderFrameRequest {
                 + ", height=" + height
                 + ", camera=" + camera
                 + ", environment=" + environment
-                + ", lightmap=" + lightmap
                 + ", fog=" + fog
-                + ", textureSampling=" + textureSampling
-                + ", antiAliasing=" + antiAliasing
-                + ", depthProjection=" + depthProjection
                 + ", primitiveBatch=" + primitiveBatch
-                + ", shaderData=" + shaderData
                 + ", temporalHistoryResets=" + temporalHistoryResets + ']';
     }
 
@@ -273,7 +212,6 @@ public final class RenderFrameRequest {
      * Single-thread-confined builder for one immutable frame request.
      */
     public static final class Builder {
-        private java.util.List<ResourceData> shaderData = java.util.List.of();
         private final long sequence;
         private final int width;
         private final int height;
@@ -283,12 +221,7 @@ public final class RenderFrameRequest {
         private long minimumSceneRevision;
         private FrameClock clock = FrameClock.of(0, 0);
         private EnvironmentState environment = EnvironmentState.neutral();
-        private Caustics caustics = Caustics.disabled();
-        private LightmapState lightmap = LightmapState.fullIntensity();
         private DistanceFogState fog = DistanceFogState.disabled();
-        private TextureSamplingState textureSampling = TextureSamplingState.pixelStable();
-        private AntiAliasingState antiAliasing = AntiAliasingState.disabled();
-        private DepthProjectionState depthProjection = DepthProjectionState.unknown();
         private FramePrimitiveBatch primitiveBatch = FramePrimitiveBatch.empty();
 
         private Builder(long sequence, int width, int height, CameraState camera) {
@@ -299,7 +232,6 @@ public final class RenderFrameRequest {
         }
 
         private Builder(RenderFrameRequest source) {
-            shaderData = source.shaderData;
             sequence = source.sequence;
             width = source.width;
             height = source.height;
@@ -307,25 +239,9 @@ public final class RenderFrameRequest {
             minimumSceneRevision = source.minimumSceneRevision;
             clock = source.clock;
             environment = source.environment;
-            caustics = source.caustics;
-            lightmap = source.lightmap;
             fog = source.fog;
-            textureSampling = source.textureSampling;
-            antiAliasing = source.antiAliasing;
-            depthProjection = source.depthProjection;
             primitiveBatch = source.primitiveBatch;
             temporalHistoryResets.addAll(source.temporalHistoryResets);
-        }
-
-        /**
-         * Supplies the exact application storage-buffer values declared by the scene shader program.
-         *
-         * @param values immutable payloads in declared binding order
-         * @return this builder
-         */
-        public Builder shaderData(java.util.List<ResourceData> values) {
-            shaderData = java.util.List.copyOf(Objects.requireNonNull(values, "values"));
-            return this;
         }
 
         /**
@@ -356,22 +272,7 @@ public final class RenderFrameRequest {
             return this;
         }
 
-        /** Selects built-in photon-map caustics; disabled by default. */
-        public Builder caustics(Caustics value) {
-            caustics = Objects.requireNonNull(value, "caustics");
-            return this;
-        }
 
-        /**
-         * Selects the frame lightmap policy.
-         *
-         * @param value non-null lightmap state
-         * @return this builder
-         */
-        public Builder lightmap(LightmapState value) {
-            lightmap = Objects.requireNonNull(value, "lightmap");
-            return this;
-        }
 
         /**
          * Selects the distance-fog policy.
@@ -384,41 +285,11 @@ public final class RenderFrameRequest {
             return this;
         }
 
-        /**
-         * Selects the texture-sampling policy.
-         *
-         * @param value non-null texture-sampling state
-         * @return this builder
-         */
-        public Builder textureSampling(TextureSamplingState value) {
-            textureSampling = Objects.requireNonNull(value, "textureSampling");
-            return this;
-        }
 
-        /**
-         * Selects the deterministic spatial anti-aliasing policy.
-         *
-         * @param value non-null anti-aliasing state
-         * @return this builder
-         */
-        public Builder antiAliasing(AntiAliasingState value) {
-            antiAliasing = Objects.requireNonNull(value, "antiAliasing");
-            return this;
-        }
 
-        /**
-         * Supplies the exact finite forward-Z projection used when writing reconstruction depth.
-         *
-         * <p>Leaving this unset retains {@link DepthProjectionState#unknown()}, which is valid
-         * for ordinary rendering but prevents an integration from falsely enabling DLSS/DLAA.</p>
-         *
-         * @param value non-null exact projection state
-         * @return this builder
-         */
-        public Builder depthProjection(DepthProjectionState value) {
-            depthProjection = Objects.requireNonNull(value, "depthProjection");
-            return this;
-        }
+
+
+
 
         /**
          * Replaces the complete frame-scoped primitive batch.

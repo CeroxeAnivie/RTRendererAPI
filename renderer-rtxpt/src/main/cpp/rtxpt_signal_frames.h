@@ -29,7 +29,7 @@ class RtrSignalFrameRing {
     nvrhi::CommandListHandle copy;
     uint64_t adapter=0;
     inline static std::atomic<uint64_t> identities{1};
-    int latest=-1;
+    int latest=-1,recording=-1;
     static void Check(HRESULT hr,const char* operation){if(FAILED(hr)){RtrLatchDeviceFailure(hr);RtrProtocolTrace::Record(4,0,0,0,0,0,0,0,0,0,0,uint32_t(hr));throw std::runtime_error(std::string(operation)+" failed: "+std::to_string(uint32_t(hr)));}}
     bool Available(Slot& slot){
         if(!slot.published)return true;
@@ -47,19 +47,20 @@ class RtrSignalFrameRing {
     }
     void RequireRetiredLocked(){for(auto& slot:slots)if(!Available(slot))throw std::runtime_error("Return native signal leases and complete consumer GPU work before closing");}
 public:
-    bool CanPublish(){std::lock_guard lock(mutex);RtrRequireHealthy();for(auto& slot:slots)if(Available(slot))return true;return false;}
+    bool CanPublish(){std::lock_guard lock(mutex);RtrRequireHealthy();for(size_t i=0;i<slots.size();++i)if(int(i)!=recording&&Available(slots[i]))return true;return false;}
     bool Outstanding() const {std::lock_guard lock(mutex);for(auto& slot:slots)if(slot.published)return true;return false;}
     bool ConsumersRetired(){std::lock_guard lock(mutex);for(auto& slot:slots)if(slot.leased&&(!slot.returned||(slot.consumerImported&&RtrCompletedFence(slot.fence.Get())<slot.completion)))return false;return true;}
-    void Publish(nvrhi::IDevice* device,const std::array<nvrhi::TextureHandle,PlaneCount>& sources,uint64_t sequence,uint64_t revision,uint64_t attributes,int64_t time,int64_t delta,uint32_t encoding=0,float maximumGi=1,const std::array<jlong,4>& provenance={}){
+    void Record(nvrhi::IDevice* device,nvrhi::ICommandList* commands,
+        const std::array<nvrhi::TextureHandle,PlaneCount>& sources,uint64_t sequence,uint64_t revision,uint64_t attributes,int64_t time,int64_t delta,uint32_t encoding=0,float maximumGi=1,const std::array<jlong,4>& provenance={}){
         std::lock_guard lock(mutex);
         RtrRequireHealthy();
+        if(recording>=0)throw std::logic_error("A shared signal recording is already pending");
         int index=-1;for(int i=0;i<3;i++)if(Available(slots[i])){index=i;break;}
         if(index<0)throw std::runtime_error("All native signal slots are awaiting consumer completion");
         auto& slot=slots[index];uint32_t mask=0,width=0,height=0;
         for(unsigned i=0;i<PlaneCount;i++)if(sources[i]){mask|=1u<<i;width=sources[i]->getDesc().width;height=sources[i]->getDesc().height;}
         if(mask==0)throw std::logic_error("Cannot publish an empty signal packet");
         auto* native=static_cast<ID3D12Device*>(device->getNativeObject(nvrhi::ObjectTypes::D3D12_Device).pointer);
-        auto* queue=static_cast<ID3D12CommandQueue*>(device->getNativeQueue(nvrhi::ObjectTypes::D3D12_CommandQueue,nvrhi::CommandQueue::Graphics).pointer);
         bool formatsChanged=false;
         for(unsigned i=0;i<PlaneCount;i++)if(sources[i]){
             if(sources[i]->getDesc().width!=width||sources[i]->getDesc().height!=height)throw std::invalid_argument("All output planes must have one atomic packet extent");
@@ -94,25 +95,41 @@ public:
             Check(native->CreateFence(0,D3D12_FENCE_FLAG_SHARED,IID_PPV_ARGS(&slot.fence)),"Create signal packet fence");
             Check(native->CreateSharedHandle(slot.fence.Get(),nullptr,GENERIC_ALL,nullptr,&slot.fenceHandle),"Export signal packet fence");
         }
-        if(!copy)copy=device->createCommandList();copy->open();
-        const auto copyScope=RtrGpuProfile::Begin(copy,"SharedSignalCopy",-1);
+        const auto copyScope=RtrGpuProfile::Begin(commands,"SharedSignalCopy",-1);
         for(unsigned i=0;i<PlaneCount;i++)if(sources[i]){
-            copy->copyTexture(slot.textures[i],nvrhi::TextureSlice(),sources[i],nvrhi::TextureSlice());
-            copy->setTextureState(slot.textures[i],nvrhi::AllSubresources,nvrhi::ResourceStates::Common);
+            commands->copyTexture(slot.textures[i],nvrhi::TextureSlice(),sources[i],nvrhi::TextureSlice());
+            commands->setTextureState(slot.textures[i],nvrhi::AllSubresources,nvrhi::ResourceStates::Common);
         }
-        copy->commitBarriers();RtrGpuProfile::End(copy,copyScope);copy->close();
-        const auto submitted=device->executeCommandList(copy);
-        // The copy follows Sample's own graphics submission. Its next async
-        // compute prefix must not overwrite the source planes before this copy.
-        device->queueWaitForCommandList(nvrhi::CommandQueue::Compute,
-            nvrhi::CommandQueue::Graphics,submitted);
-        slot.sequence=sequence;slot.revision=revision;slot.completion+=2;
-        slot.attributes=attributes;slot.time=time;slot.delta=delta;
+        commands->commitBarriers();RtrGpuProfile::End(commands,copyScope);
+        slot.sequence=sequence;slot.revision=revision;slot.attributes=attributes;slot.time=time;slot.delta=delta;
         slot.encoding=encoding;std::memcpy(&slot.maximumGiBits,&maximumGi,sizeof(maximumGi));
         slot.provenance=provenance;
-        Check(queue->Signal(slot.fence.Get(),slot.completion-1),"Publish signal packet readiness");
-        slot.published=true;slot.returned=slot.leased=slot.consumerImported=false;latest=index;
-        RtrProtocolTrace::Record(2,adapter,0,index,slot.generation,sequence,revision,slot.completion-1,slot.completion,0,1);
+        // Until SignalSubmitted, Acquire must not return this generation. The
+        // old slot was unleased or its consumer already signalled completion.
+        slot.published=slot.returned=slot.leased=slot.consumerImported=false;
+        if(latest==index)latest=-1;
+        recording=index;
+    }
+    void SignalSubmitted(nvrhi::IDevice* device){
+        std::lock_guard lock(mutex);
+        if(recording<0)throw std::logic_error("No shared signal recording to publish");
+        auto& slot=slots[recording];
+        auto* queue=static_cast<ID3D12CommandQueue*>(device->getNativeQueue(nvrhi::ObjectTypes::D3D12_CommandQueue,nvrhi::CommandQueue::Graphics).pointer);
+        const auto completion=slot.completion+2;
+        Check(queue->Signal(slot.fence.Get(),completion-1),"Publish signal packet readiness");
+        slot.completion=completion;slot.published=true;latest=recording;recording=-1;
+        RtrProtocolTrace::Record(2,adapter,0,latest,slot.generation,slot.sequence,slot.revision,completion-1,completion,0,1);
+    }
+    void Publish(nvrhi::IDevice* device,const std::array<nvrhi::TextureHandle,PlaneCount>& sources,uint64_t sequence,uint64_t revision,
+        uint64_t attributes,int64_t time,int64_t delta,uint32_t encoding=0,float maximumGi=1,const std::array<jlong,4>& provenance={}){
+        if(!copy)copy=device->createCommandList();
+        if(!copy)throw std::runtime_error("Could not allocate shared signal command list");
+        copy->open();Record(device,copy,sources,sequence,revision,attributes,time,delta,encoding,maximumGi,provenance);
+        copy->close();const auto submitted=device->executeCommandList(copy);
+        // The complete renderer can launch its next compute prefix against
+        // these source planes. Its graphics submit did not include this copy.
+        device->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,submitted);
+        SignalSubmitted(device);
     }
     // [abi,slot,generation,sequence,revision,LUID,width,height,mask,fence,ready,done,
     //  attributes,time,delta,count,{signal,format(1=RGBA16F/2=RGBA32UI),allocation,resource}...]
@@ -141,7 +158,7 @@ public:
         RtrProtocolTrace::Record(3,adapter,0,index,slot.generation,sequence,slot.revision,slot.completion-1,slot.completion,0,1|2|4|(imported?8:0));
     }
     void RequireRetired(){std::lock_guard lock(mutex);RequireRetiredLocked();}
-    void Clear(bool deviceRemoved=false){std::lock_guard lock(mutex);if(!deviceRemoved)RequireRetiredLocked();for(auto& slot:slots){slot.textures={};slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=-1;}
+    void Clear(bool deviceRemoved=false){std::lock_guard lock(mutex);if(!deviceRemoved)RequireRetiredLocked();for(auto& slot:slots){slot.textures={};slot.published=slot.leased=slot.returned=false;slot.width=slot.height=slot.mask=0;slot.completion=0;slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=recording=-1;}
 };
 
 using RtrSignalFrames=RtrSignalFrameRing<4>;

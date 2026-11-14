@@ -148,7 +148,7 @@ public final class RtxptBlasCapacityNativeSelfTest {
             if(name.equals("pressure-small-live")) {
                 long threads=snapshot.events().stream().filter(e->e.stage().equals("BlasAllocate"))
                         .map(e->e.thread()).distinct().count();
-                require(threads>1,"Streaming batch still serializes all native BLAS allocations");
+                require(threads==1,"Native BLAS allocation escaped the serialized device owner");
             }
             require(snapshot.lostEvents()==0&&snapshot.events().stream().noneMatch(e->(e.flags()&(2L|512L|1024L))!=0),
                     "Incomplete native diagnostics");

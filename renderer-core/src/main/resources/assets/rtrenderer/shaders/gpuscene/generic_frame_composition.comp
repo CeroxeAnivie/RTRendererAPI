@@ -1,0 +1,44 @@
+#version 460
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+#ifdef RTRENDERER_LINEAR_HDR_OUTPUT
+#define IMAGE_FORMAT rgba16f
+#else
+#define IMAGE_FORMAT rgba8
+#endif
+layout(set = 0, binding = 0, IMAGE_FORMAT) uniform readonly image2D source0;
+layout(set = 0, binding = 1, IMAGE_FORMAT) uniform readonly image2D source1;
+layout(set = 0, binding = 2, IMAGE_FORMAT) uniform readonly image2D source2;
+layout(set = 0, binding = 3, IMAGE_FORMAT) uniform readonly image2D source3;
+layout(set = 0, binding = 4, IMAGE_FORMAT) uniform readonly image2D source4;
+layout(set = 0, binding = 5, IMAGE_FORMAT) uniform readonly image2D source5;
+layout(set = 0, binding = 6, IMAGE_FORMAT) uniform readonly image2D source6;
+layout(set = 0, binding = 7, IMAGE_FORMAT) uniform readonly image2D source7;
+layout(set = 0, binding = 8, IMAGE_FORMAT) uniform writeonly image2D outputImage;
+layout(push_constant) uniform Composition { int layerCount; int operations[8]; } composition;
+
+vec4 sourceAt(int index, ivec2 pixel) {
+    if (index == 0) return imageLoad(source0, pixel);
+    if (index == 1) return imageLoad(source1, pixel);
+    if (index == 2) return imageLoad(source2, pixel);
+    if (index == 3) return imageLoad(source3, pixel);
+    if (index == 4) return imageLoad(source4, pixel);
+    if (index == 5) return imageLoad(source5, pixel);
+    if (index == 6) return imageLoad(source6, pixel);
+    return imageLoad(source7, pixel);
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(outputImage);
+    if (any(greaterThanEqual(pixel, extent))) return;
+    vec4 result = sourceAt(0, pixel);
+    for (int index = 1; index < composition.layerCount; index++) {
+        vec4 layer = sourceAt(index, pixel);
+        int operation = composition.operations[index];
+        if (operation == 0) result = layer;
+        else if (operation == 1) result = layer + result * (1.0 - layer.a);
+        else result += layer;
+    }
+    imageStore(outputImage, pixel, result);
+}

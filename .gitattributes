@@ -4,9 +4,3 @@
 *.cmd text eol=crlf
 *.jar binary
 *.png binary
-
-# Unified diffs retain upstream context indentation, including empty context lines.
-tools/patches/*.patch whitespace=-blank-at-eol
-
-# Pinned source manifests validate exact bytes, including upstream line endings.
-renderer-core/src/main/resources/assets/rtrenderer/medium/luxcore/* -text

@@ -31,13 +31,9 @@ public interface LightingFrameLease extends AutoCloseable {
      * Transfer an active, not-yet-imported lease to another consumer thread.
      * The current owner must call this before publishing the lease to that thread;
      * afterward only the new owner may inspect, import, complete or close it.
-     * Implementations that do not support explicit handoff reject this operation.
      * This changes CPU ownership only and never replaces the required GPU fences.
      */
-    default void transferTo(Thread nextOwner) {
-        java.util.Objects.requireNonNull(nextOwner, "nextOwner");
-        throw new UnsupportedOperationException("Lighting lease ownership transfer is unsupported");
-    }
+    void transferTo(Thread nextOwner);
     /** Call after successful resource import, before enqueueing any consumer GPU reads. */
     void markImported();
     /**

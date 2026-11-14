@@ -37,7 +37,7 @@ public final class RtxptDeferredFrameNativeSelfTest {
             mirror=enqueue(handle,mirror,SceneTransaction.builder(2).upsert(quad(2,0,0,.6f)).build(),packets);
             var finalEdit=SceneTransaction.builder(2).upsert(quad(2,0,0,.6f)).upsert(instance(.35f)).build();renderer.apply(finalEdit);mirror.retain(finalEdit);
             render(renderer,access,lighting,2,64,64);var snapshot=monitor.poll();
-            checkWork(snapshot,2,true);absent(handle,"i44");pose(handle,.35f,0);
+            checkWork(snapshot,1,true);absent(handle,"i44");pose(handle,.35f,0);
             require(receiverBefore[0]==RtxptNative.meshResourceState(handle,"i22")[0],"Final normal-only replacement rebuilt the resident BLAS");
             pixels(handle,output,2,64,64,.6f);row(rows,2,"multiple-packets-final-live-only",snapshot);
 
@@ -61,7 +61,7 @@ public final class RtxptDeferredFrameNativeSelfTest {
             RtxptNative.resize(handle,96,80);lighting.nativeLightingPlan(plan(96,80));
             var resizeEdit=SceneTransaction.builder(6).upsert(quad(2,0,0,.3f)).upsert(instance(.5f)).build();renderer.apply(resizeEdit);mirror.retain(resizeEdit);
             render(renderer,access,lighting,6,96,80);snapshot=monitor.poll();
-            checkWork(snapshot,2,false);absent(handle,"i55");absent(handle,"i66");pose(handle,.5f,-.25f);
+            checkWork(snapshot,1,false);absent(handle,"i55");absent(handle,"i66");pose(handle,.5f,-.25f);
             pixels(handle,output,6,96,80,.3f);row(rows,6,"resize-flushes-final-live-data",snapshot);
 
             renderer.apply(SceneTransaction.builder(7).build());render(renderer,access,lighting,7,96,80);snapshot=monitor.poll();

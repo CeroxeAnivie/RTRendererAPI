@@ -39,13 +39,8 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
     }
     static RendererFeatureProfile profile(RendererConfig c){return new RendererFeatureProfile(c.frameReconstruction(),c.frameGeneration(),c.lowLatency(),c.denoising(),c.rayTracingOptimizations(),c.pathTracing());}
     static RtxptOptions resolve(RendererFeatureProfile p) {
-        if(p.rayTracingOptimizations().memoryOptimization()==RendererFeaturePreference.REQUIRED)
-            throw new IllegalArgumentException("RTXMU memory optimization belongs to the Vulkan backend");
         var r=p.frameReconstruction();
-        boolean spatial=r.mode()==FrameReconstructionOptions.Mode.SPATIAL_UPSCALING;
-        if(spatial && r.preference()==RendererFeaturePreference.REQUIRED)
-            throw new IllegalArgumentException("RTXPT does not expose a spatial reconstruction path");
-        boolean reconstruct=r.preference().requested()&&!spatial,denoise=p.denoising().preference().requested();
+        boolean reconstruct=r.preference().requested(),denoise=p.denoising().preference().requested();
         var path=p.pathTracing();
         if(path.quality().beautyTransport()==PathTracingQualityOptions.BeautyTransport.ANALYTIC_DIRECT
                 && p.rayTracingOptimizations().shaderExecutionReordering()==RendererFeaturePreference.REQUIRED)
@@ -66,23 +61,42 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
             case ULTRA_QUALITY->DlssQuality.ULTRA_QUALITY;
         };
         var frameGeneration=p.frameGeneration();
-        if(frameGeneration.mode()==FrameGenerationOptions.Mode.ADAPTIVE) {
-            if(frameGeneration.preference()==RendererFeaturePreference.REQUIRED)
-                throw new IllegalArgumentException("RTXPT exposes fixed DLSS Frame Generation multipliers, not the API's capped adaptive MFG mode");
-            frameGeneration=FrameGenerationOptions.disabled();
-        }
         return new RtxptOptions(path.samplesPerPixel(),path.maxBounces(),path.diffuseBounces(),aa,quality,denoise,relax,di,gi,
             path.radianceCache().requested(),p.rayTracingOptimizations().shaderExecutionReordering().requested(),p.lowLatency().preference().requested(),frameGeneration,path.quality());
     }
     int frameGenerationMode(){return frameGeneration.preference().requested()?1:0;}
     int generatedFrames(){return frameGeneration.preference().requested()?frameGeneration.multiplier().presentedFramesPerNativeFrame()-1:0;}
     static RendererFeatureProfile normalize(RendererFeatureProfile p) {
-        var resolved=resolve(p);
-        var optimizations=p.rayTracingOptimizations().toBuilder().memoryOptimization(RendererFeaturePreference.DISABLED).build();
-        var reconstruction=p.frameReconstruction().mode()==FrameReconstructionOptions.Mode.SPATIAL_UPSCALING
-            ?FrameReconstructionOptions.disabled():p.frameReconstruction();
-        return p.toBuilder().frameGeneration(resolved.frameGeneration()).rayTracingOptimizations(optimizations)
-            .frameReconstruction(reconstruction).build();
+        resolve(p);
+        return p;
+    }
+    static boolean hasRequiredFeatures(RendererFeatureProfile p) {
+        return p.frameReconstruction().preference()==RendererFeaturePreference.REQUIRED
+            ||p.frameGeneration().preference()==RendererFeaturePreference.REQUIRED
+            ||p.lowLatency().preference()==RendererFeaturePreference.REQUIRED
+            ||p.denoising().preference()==RendererFeaturePreference.REQUIRED
+            ||p.rayTracingOptimizations().shaderExecutionReordering()==RendererFeaturePreference.REQUIRED
+            ||p.pathTracing().directLightResampling()==RendererFeaturePreference.REQUIRED
+            ||p.pathTracing().indirectLightResampling()==RendererFeaturePreference.REQUIRED
+            ||p.pathTracing().radianceCache()==RendererFeaturePreference.REQUIRED;
+    }
+    static void validateRequired(RendererFeatureProfile p,RtxptAccess.RenderingState render,RtxptAccess.PresentationState present) {
+        var expected=resolve(p);
+        require(p.frameReconstruction().preference(),render.reconstruction()==expected.reconstruction()
+            &&render.dlssQuality()==expected.dlssQuality().nativeValue,"DLSS reconstruction");
+        require(p.frameGeneration().preference(),present.frameGenerationSupported()&&present.activeFrameGenerationMode()!=0
+            &&present.generatedFrames()>=expected.generatedFrames(),"DLSS frame generation");
+        require(p.lowLatency().preference(),present.reflexSupported()&&present.activeReflexMode()!=0,"Reflex");
+        require(p.denoising().preference(),render.reconstruction()==Reconstruction.DLSS_RR
+            ||(render.standaloneDenoiser()&&render.denoiserIntegrations()>0),"native denoising");
+        require(p.rayTracingOptimizations().shaderExecutionReordering(),render.dxReorderThreads()||render.nvapiReorderThreads(),"SER");
+        require(p.pathTracing().directLightResampling(),render.restirDi(),"ReSTIR DI");
+        require(p.pathTracing().indirectLightResampling(),render.restirGi(),"ReSTIR GI");
+        require(p.pathTracing().radianceCache(),render.radianceCacheMode()!=0,"radiance cache");
+    }
+    private static void require(RendererFeaturePreference preference,boolean active,String name) {
+        if(preference==RendererFeaturePreference.REQUIRED&&!active)
+            throw new IllegalStateException("Required native feature is inactive: "+name);
     }
     String[] arguments() {
         var a=new java.util.ArrayList<>(List.of("--overrideToRealtimeMode=true","--realtimeSamplesPerPixel",Integer.toString(samplesPerPixel),

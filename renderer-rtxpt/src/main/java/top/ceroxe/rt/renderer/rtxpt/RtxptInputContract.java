@@ -12,15 +12,10 @@ final class RtxptInputContract {
     }
     static void validateFrame(RenderFrameRequest frame,boolean nativeLighting) {
         Objects.requireNonNull(frame, "frame");
-        if ((!nativeLighting&&frame.camera().hasExactProjection()) || !frame.shaderData().isEmpty()
-                || (!nativeLighting&&frame.fog().opacity() > 0) || frame.caustics().enabled())
-            throw new IllegalArgumentException("Exact Vulkan projections, custom shaders, screen fog and photon-map budgets are not native RTXPT controls");
-        if (frame.antiAliasing().samplesPerPixel() != 1)
-            throw new IllegalArgumentException("RTXPT samples are configured with PathTracingOptions, not per-frame deterministic AntiAliasingState");
-        if (!frame.lightmap().texelsRgba8().equals(LightmapState.fullIntensity().texelsRgba8()))
-            throw new IllegalArgumentException("Frame-local LightmapState lookups belong to Vulkan; RTXPT uses native scene lighting");
-        if (!frame.textureSampling().equals(TextureSamplingState.pixelStable()))
-            throw new IllegalArgumentException("Frame-local texture-footprint overrides belong to Vulkan; RTXPT owns texture sampling");
+        if ((!nativeLighting&&frame.camera().hasExactProjection())
+                || (!nativeLighting&&frame.fog().opacity() > 0))
+            throw new IllegalArgumentException("Exact projections and screen fog require the independent native-lighting output contract");
+
 
     }
 

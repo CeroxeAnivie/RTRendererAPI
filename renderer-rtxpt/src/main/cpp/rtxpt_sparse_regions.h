@@ -3,7 +3,6 @@
 #include "rtxpt_diagnostics.h"
 #include <array>
 #include <cstring>
-#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #define RTR_REGION_INCIDENCE 1
@@ -38,10 +37,13 @@ public:
     std::unordered_map<uint32_t,std::vector<Cell>> overflowByHome;
     std::vector<uint32_t> hashHoles;
     std::vector<uint32_t> publishRoots;
-    std::vector<Cell> changedCells;
+    struct CellChange {Cell key;CellEntry* entry;};
+    std::vector<CellChange> changedCells;
     uint64_t linkRemovals=0;
     uint64_t affectedEpoch=0;
-    std::array<std::set<uint32_t>,MaxPoolOrder+1> freeBlocks;
+    struct FreeListNode {uint32_t previous=None,next=None,order=None;};
+    std::array<uint32_t,MaxPoolOrder+1> freeHeads{};
+    std::vector<FreeListNode> freeNodes;
     uint32_t buckets=0,globalWords=GlobalWordCapacity,poolNodes=0,tombstones=0;
     size_t links=0;
     bool dirty=false,full=false,indexed=true,initialized=false;
@@ -52,14 +54,14 @@ public:
     // bounded hash-probe overflows, uploaded bytes.
     std::array<uint64_t,9> work{};
     size_t CpuBytes()const{
-        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity())*4+changedCells.capacity()*sizeof(Cell)+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity()+oldRootEpochs.capacity())*8;
+        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity())*4+changedCells.capacity()*sizeof(CellChange)+freeNodes.capacity()*sizeof(FreeListNode)+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity()+oldRootEpochs.capacity())*8;
         for(const auto& [id,r]:roots)bytes+=sizeof(Root)+r.cells.capacity()*sizeof(Cell)+(r.members.capacity()+r.cellSlots.capacity())*4;
         for(const auto& [cell,e]:cells)bytes+=sizeof(CellEntry)+(e.roots.capacity()+e.rootCellIndices.capacity())*4;
         return bytes; // tracked payload capacity; unordered-map allocator metadata is excluded
     }
     void Clear(){
         roots.clear();cells.clear();global.clear();packed.clear();shapes.clear();owners.clear();affectedEpochs.clear();topologyEpochs.clear();oldRootEpochs.clear();affectedEpoch=0;dirtyNodes.clear();queuedNodes.clear();overflowByHome.clear();hashHoles.clear();changedCells.clear();
-        for(auto& blocks:freeBlocks)blocks.clear();buckets=poolNodes=tombstones=0;globalWords=GlobalWordCapacity;links=0;
+        freeHeads.fill(None);freeNodes.clear();buckets=poolNodes=tombstones=0;globalWords=GlobalWordCapacity;links=0;
         dirty=full=true;indexed=true;initialized=false;for(size_t i=2;i<=6;i++)work[i]=0;
     }
     static std::array<float,7> Bounds(const rtr::LightTreeNode& n){return {n.minimum[0],n.minimum[1],n.minimum[2],n.maximum[0],n.maximum[1],n.maximum[2],n.range};}
@@ -89,8 +91,9 @@ private:
     // epoch. Reuse a contiguous journal instead of allocating another hash
     // node for every affected cell on every source transaction.
     struct ChangedCells {
-        std::vector<Cell>& values;uint64_t epoch;
-        void Add(Cell cell,CellEntry& entry){if(entry.changedEpoch!=epoch){values.push_back(cell);entry.changedEpoch=epoch;}}
+        // Rehash can invalidate iterators, but resident entries keep their address.
+        std::vector<CellChange>& values;uint64_t epoch;
+        void Add(Cell cell,CellEntry& entry){if(entry.changedEpoch!=epoch){values.push_back({cell,&entry});entry.changedEpoch=epoch;}}
         bool empty()const{return values.empty();}size_t size()const{return values.size();}
         auto begin(){return values.begin();}auto end(){return values.end();}
     };
@@ -125,6 +128,13 @@ private:
         for(size_t index=0;index<root.cells.size();++index)Unlink(id,root,index,changed);
         roots.erase(old);
     }
+    bool FitsCells(const std::vector<Cell>& coverage)const{
+        // No speculative map reads when even all-new coverage fits.
+        if(cells.size()+coverage.size()<=CellBudget)return true;
+        size_t newCells=0;
+        for(auto cell:coverage)if(!cells.count(cell)&&cells.size()+(++newCells)>CellBudget)return false;
+        return true;
+    }
     void UpdateRoot(const std::vector<rtr::LightTreeNode>& nodes,uint32_t id,ChangedCells& changed){
         const auto bound=Bounds(nodes[id]);auto old=roots.find(id);std::vector<uint32_t> members;
         // Bounds/refits do not change ownership. Keep the resident membership
@@ -139,15 +149,14 @@ private:
                 old->second.members=members;for(auto member:members)owners[member]=id;
             }
         }
+        if(old!=roots.end()&&old->second.bounds==bound)return;
+        auto coverage=Coverage(bound);
         if(old!=roots.end()){
-            if(old->second.bounds==bound)return;
-            auto coverage=Coverage(bound);
             if(!old->second.global&&old->second.cells==coverage){old->second.bounds=bound;return;}
             // Most moving supports retain nearly all receiver cells. Patch the
             // symmetric difference instead of deleting and reallocating every
             // cell/list shared by the old and new coverage.
-            size_t newCells=0;for(auto cell:coverage)newCells+=!cells.count(cell);
-            if(!old->second.global&&!coverage.empty()&&links-old->second.cells.size()+coverage.size()<=LinkBudget&&cells.size()+newCells<=CellBudget){
+            if(!old->second.global&&!coverage.empty()&&links-old->second.cells.size()+coverage.size()<=LinkBudget&&FitsCells(coverage)){
                 auto less=[](Cell a,Cell b){return a.z!=b.z?a.z<b.z:a.y!=b.y?a.y<b.y:a.x<b.x;};
                 std::vector<uint32_t> nextSlots(coverage.size());size_t a=0,b=0;
                 while(a<old->second.cells.size()||b<coverage.size()){
@@ -162,9 +171,8 @@ private:
             if(members.empty())members=old->second.members;
             RemoveRoot(id,changed);
         }
-        Root root;root.bounds=bound;root.members=std::move(members);root.cells=Coverage(bound);
-        size_t newCells=0;for(auto cell:root.cells)newCells+=!cells.count(cell);
-        if(root.cells.empty()||links+root.cells.size()>LinkBudget||cells.size()+newCells>CellBudget){root.cells.clear();root.global=true;root.globalSlot=uint32_t(global.size());global.push_back(id);}
+        Root root;root.bounds=bound;root.members=std::move(members);root.cells=std::move(coverage);
+        if(root.cells.empty()||links+root.cells.size()>LinkBudget||!FitsCells(root.cells)){root.cells.clear();root.global=true;root.globalSlot=uint32_t(global.size());global.push_back(id);}
         else{root.cellSlots.resize(root.cells.size());for(uint32_t index=0;index<root.cells.size();++index)root.cellSlots[index]=Link(id,root.cells[index],index,changed);}
         for(auto member:root.members)owners[member]=id;roots.emplace(id,std::move(root));++work[1];
     }
@@ -224,6 +232,18 @@ private:
         uint32_t previous;std::memcpy(&previous,words+(offset%16)*4,4);
         if(previous!=value){std::memcpy(words+(offset%16)*4,&value,4);Mark(node);}
     }
+    // Compare and queue a whole upload row at once. The last partial row
+    // leaves unused words intact; newly visible rows must reach GPU slack.
+    void WriteList(uint32_t first,const std::vector<uint32_t>& words,size_t oldRows){
+        for(size_t i=0;i<words.size();i+=16){
+            const uint32_t row=first+uint32_t(i/16);
+            auto* dst=&packed[row];const auto* src=words.data()+i;
+            const auto bytes=std::min<size_t>(16,words.size()-i)*sizeof(uint32_t);
+            if(i/16>=oldRows||std::memcmp(dst,src,bytes)!=0){
+                std::memcpy(static_cast<void*>(dst),src,bytes);Mark(row);
+            }
+        }
+    }
     uint32_t Count(uint32_t slot)const{uint32_t result;std::memcpy(&result,&packed[slot].maximum[0],4);return result;}
     void Bucket(uint32_t slot,Cell cell,uint32_t start,uint32_t count){
         rtr::LightTreeNode next{};std::memcpy(next.minimum,&cell,12);std::memcpy(&next.left,&start,4);std::memcpy(&next.maximum[0],&count,4);
@@ -250,24 +270,41 @@ private:
         }
         Bucket(hole,{INT32_MAX,INT32_MAX,INT32_MAX},0,Empty);entry.slot=None;hashHoles.push_back(hole);
     }
+    void PushFree(uint32_t block,uint32_t order){
+        const auto next=freeHeads[order];
+        freeNodes[block]={None,next,order};
+        if(next!=None)freeNodes[next].previous=block;
+        freeHeads[order]=block;
+    }
+    void UnlinkFree(uint32_t block,uint32_t order){
+        auto& node=freeNodes[block];
+        if(node.previous==None)freeHeads[order]=node.next;else freeNodes[node.previous].next=node.next;
+        if(node.next!=None)freeNodes[node.next].previous=node.previous;
+        node.order=None;
+    }
     void FreeBlock(uint32_t block,uint32_t order){
-        while(order<MaxPoolOrder){uint32_t buddy=block^(1u<<order);auto i=freeBlocks[order].find(buddy);
-            if(i==freeBlocks[order].end())break;freeBlocks[order].erase(i);block=std::min(block,buddy);++order;}
-        freeBlocks[order].insert(block);
+        // Buddy membership and removal are direct indexed operations. Keep
+        // recycled nodes in the pool instead of allocating std::set nodes.
+        while(order<MaxPoolOrder){uint32_t buddy=block^(1u<<order);
+            if(buddy>=poolNodes||freeNodes[buddy].order!=order)break;
+            UnlinkFree(buddy,order);block=std::min(block,buddy);++order;}
+        PushFree(block,order);
     }
     uint32_t AllocateBlock(uint32_t order){
         for(;;){
-            for(uint32_t found=order;found<=MaxPoolOrder;found++)if(!freeBlocks[found].empty()){
-                uint32_t block=*freeBlocks[found].begin();freeBlocks[found].erase(freeBlocks[found].begin());
-                while(found>order){--found;freeBlocks[found].insert(block+(1u<<found));}return block;}
+            for(uint32_t found=order;found<=MaxPoolOrder;found++)if(freeHeads[found]!=None){
+                const uint32_t block=freeHeads[found];UnlinkFree(block,found);
+                while(found>order){--found;PushFree(block+(1u<<found),found);}return block;}
             if(poolNodes>=(1u<<MaxPoolOrder))throw std::length_error("Regional list storage budget exceeded");
-            const uint32_t added=poolNodes?poolNodes:64,first=poolNodes;poolNodes+=added;
-            packed.resize(size_t(buckets)+globalWords/16+poolNodes);
+            const uint32_t added=poolNodes?poolNodes:64,first=poolNodes;
+            packed.resize(size_t(buckets)+globalWords/16+poolNodes+added);
+            freeNodes.resize(poolNodes+added);poolNodes+=added;
             uint32_t growOrder=0;while((1u<<growOrder)<added)++growOrder;FreeBlock(first,growOrder);
         }
     }
     void PublishCell(Cell cell,CellEntry& entry){
-        if(entry.slot==None){
+        const bool inserted=entry.slot==None;
+        if(inserted){
             uint32_t slot=Hash(cell)&(buckets-1),tombstone=None;
             for(uint32_t probe=0;probe<16;probe++,slot=(slot+1)&(buckets-1)){
                 uint32_t count=Count(slot);if(count==Tombstone&&tombstone==None)tombstone=slot;
@@ -278,19 +315,23 @@ private:
             if(Count(entry.slot)==Tombstone)--tombstones;
         }
         ForgetOverflow(cell,entry);
-        uint32_t order=0;while((16u<<order)<entry.roots.size())++order;
-        if(entry.block==None||entry.order<order){
-            if(entry.block!=None)FreeBlock(entry.block,entry.order);entry.block=AllocateBlock(order);entry.order=order;
-            // New CPU storage is zero, while retained GPU capacity is unspecified.
-            // Root id zero must be uploaded even when WriteWord sees no CPU change.
-            for(uint32_t i=0;i<(entry.roots.size()+15)/16;i++)Mark(buckets+globalWords/16+entry.block+i);
+        const auto count=uint32_t(entry.roots.size());
+        const auto previous=inserted?0:Count(entry.slot);
+        const bool relocated=entry.block==None||(16u<<entry.order)<count;
+        if(relocated){
+            uint32_t order=0;while((16u<<order)<count)++order;
+            if(entry.block!=None)FreeBlock(entry.block,entry.order);
+            entry.block=AllocateBlock(order);entry.order=order;
         }
-        // Live incidence order is stable until O(1) swap removal. Sort only
-        // the final transaction publication; never invalidate the backlinks.
-        publishRoots.assign(entry.roots.begin(),entry.roots.end());std::sort(publishRoots.begin(),publishRoots.end());
-        const uint32_t start=globalWords+entry.block*16;
-        for(uint32_t i=0;i<publishRoots.size();++i)WriteWord(start+i,publishRoots[i]);
-        Bucket(entry.slot,cell,start,uint32_t(entry.roots.size()));
+        const std::vector<uint32_t>* ordered=&entry.roots;
+        if(count>1){
+            // Incidence uses swap removal and cannot change order in place.
+            // Preserve the GPU's ascending root traversal order.
+            publishRoots.assign(entry.roots.begin(),entry.roots.end());
+            std::sort(publishRoots.begin(),publishRoots.end());ordered=&publishRoots;
+        }
+        WriteList(buckets+globalWords/16+entry.block,*ordered,relocated||inserted?0:(previous+15)/16);
+        if(inserted||relocated||count!=previous)Bucket(entry.slot,cell,globalWords+entry.block*16,count);
     }
     void RecoverOverflow(){
         if(hashHoles.empty()||overflowByHome.empty()){hashHoles.clear();return;}
@@ -313,7 +354,7 @@ private:
         packed.reserve(MaximumPackedNodes);
         packed.assign(size_t(buckets)+globalWords/16,{});poolNodes=tombstones=0;
         overflowByHome.clear();hashHoles.clear();
-        for(auto& blocks:freeBlocks)blocks.clear();
+        freeHeads.fill(None);freeNodes.clear();
         for(uint32_t slot=0;slot<buckets;slot++){uint32_t empty=Empty;std::memcpy(&packed[slot].maximum[0],&empty,4);}
         for(auto& [cell,entry]:cells){entry.slot=entry.block=None;entry.order=0;entry.overflow=false;PublishCell(cell,entry);}
         for(uint32_t i=0;i<global.size();i++)WriteWord(i,global[i]);
@@ -349,20 +390,20 @@ public:
         initialized=true;
         const bool coverageChanged=!changed.empty();
         {RtrDiagnostics::Scope erase(RtrDiagnostics::SparseHashErase,changed.size());
-        for(auto cell:changed){auto entry=cells.find(cell);
-            if(entry!=cells.end()&&entry->second.roots.empty()){
-                if(entry->second.block!=None)FreeBlock(entry->second.block,entry->second.order);
-                if(buckets)EraseHash(entry->first,entry->second);
-                cells.erase(entry);
+        for(auto& change:changed){auto& entry=*change.entry;
+            if(entry.roots.empty()){
+                if(entry.block!=None)FreeBlock(entry.block,entry.order);
+                if(buckets)EraseHash(change.key,entry);
+                cells.erase(change.key);change.entry=nullptr;
             }}}
         const bool globalChanged=oldGlobal!=global;
         if(rebuilding||!buckets){
             FullPack();
         }else{
             RtrDiagnostics::Scope publish(RtrDiagnostics::SparseRegionPublish,changed.size(),roots.size());
-            for(auto cell:changed){auto entry=cells.find(cell);if(entry!=cells.end())PublishCell(cell,entry->second);}
+            for(const auto& change:changed)if(change.entry)PublishCell(change.key,*change.entry);
             {RtrDiagnostics::Scope recover(RtrDiagnostics::SparseHashRecover,hashHoles.size(),overflowByHome.size());RecoverOverflow();}
-            if(globalChanged)for(uint32_t i=0;i<global.size();i++)WriteWord(i,global[i]);
+            if(globalChanged)WriteList(buckets,global,(oldGlobal.size()+15)/16);
         }
         indexed=!(global.size()>32&&global.size()*8>roots.size());
         if(rebuilding||coverageChanged||globalChanged)++work[0];

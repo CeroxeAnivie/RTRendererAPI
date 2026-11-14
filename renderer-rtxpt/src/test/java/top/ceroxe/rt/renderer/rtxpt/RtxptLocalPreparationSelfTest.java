@@ -34,13 +34,13 @@ public final class RtxptLocalPreparationSelfTest {
         catch(ReflectiveOperationException unavailable){return null;}
     }
     private static Map<String,Object> observe(int count,Path output)throws Exception{
-        var original=new RtxptScene();original.retain(fixture(count));
+        var original=new RtxptScene();original.nativeLighting=true;original.retain(fixture(count));
         var frame=RtxptAdapterSelfTest.frame(0);var items=original.items(frame);
         var stable=new Reads(items);require(RtxptScene.sameStructure(stable,stable),"Same immutable list is structurally equal");
         long stableReads=stable.reads;if(!OBSERVE)require(stableReads==0,"Same-list structure check must not read any item");
         var paths=new HashMap<Long,Path>();for(long id=1;id<=count;id++)paths.put(id,output.resolve("resident-t"+id+".png"));
         var rows=new ArrayList<Object>();
-        for(String kind:List.of("material","texture-rgb","texture-alpha","vertex-color","mesh-baseline","pose","light")){
+        for(String kind:List.of("material","texture-rgb","texture-alpha","vertex-color","mesh-baseline","pose","light","surface-fade")){
             long[] allocations=new long[5],wall=new long[5],oldReads=new long[5],newReads=new long[5];RtxptDelta.Prepared result=null;
             for(int sample=-2;sample<5;sample++){
                 var changed=new RtxptScene(original);var tx=SceneTransaction.builder(2);
@@ -52,6 +52,7 @@ public final class RtxptLocalPreparationSelfTest {
                     case "mesh-baseline"->tx.upsert(original.meshes.get(1L).toBuilder().lightmapCoordinates(new float[]{.1f,.2f,.3f,.4f,.5f,.6f}).build());
                     case "pose"->tx.upsert(SceneInstance.builder(1,1).transform(new AffineTransform(new float[]{1,0,0,2,0,1,0,0,0,0,1,0})).build());
                     case "light"->tx.upsert(SceneLight.point(1,0,0,2).build());
+                    case "surface-fade"->tx.upsert(SceneInstance.builder(1,1).surfaceVisibility(.37f).build());
                     default->throw new AssertionError(kind);
                 }
                 changed.retain(tx.build());var before=new Reads(items);var after=new Reads(changed.items(frame));
@@ -62,7 +63,9 @@ public final class RtxptLocalPreparationSelfTest {
                 if(sample>=0){allocations[sample]=allocated;wall[sample]=elapsed;oldReads[sample]=before.reads;newReads[sample]=after.reads;}
                 if(!OBSERVE){
                     require(before.reads==0&&after.reads==0,"Independent edit must not scan frame lists: "+kind);
-                    if(Set.of("vertex-color","mesh-baseline","light").contains(kind)){
+                    if(count>=1024 && metric(result,"inspectedMapNodes") instanceof Number visited)
+                        require(visited.longValue()<count/4,"Independent edit scanned resource tables: "+kind);
+                    if(Set.of("vertex-color","mesh-baseline","light","surface-fade").contains(kind)){
                         require(!result.hasWork(),"Attribute/light edits must not create an importer delta");
                         try(var files=Files.list(parent)){require(files.findAny().isEmpty(),"No unused export directory or model files");}
                     }
@@ -116,7 +119,7 @@ public final class RtxptLocalPreparationSelfTest {
     }
     private static void transientDependencies(){
         int count=128;
-        var original=new RtxptScene();original.retain(fixture(count));
+        var original=new RtxptScene();original.nativeLighting=true;original.retain(fixture(count));
         var primitives=FramePrimitiveBatch.builder();
         for(long id=1;id<=count;id++)primitives.add(PrimitiveInstance.builder(id).build());
         var frame=RtxptAdapterSelfTest.frame(0).toBuilder().primitiveBatch(primitives.build()).build();
@@ -138,9 +141,25 @@ public final class RtxptLocalPreparationSelfTest {
         require(retired.work().itemReads()<=count*8L,"Retired transient names share the same bounded index");
         System.out.println("LOCAL_PREPARATION_TRANSIENT PASS meshes="+count+" reads="+(before.reads+after.reads));
     }
+    private static void lightingModeSelection(){
+        var beauty=new RtxptScene();beauty.retain(fixture(1));
+        beauty.retain(SceneTransaction.builder(2).upsert(SceneInstance.builder(1,1).surfaceVisibility(.75f).build()).build());
+        var frame=RtxptAdapterSelfTest.frame(0).toBuilder().primitiveBatch(FramePrimitiveBatch.builder()
+                .add(PrimitiveInstance.builder(1).surfaceVisibility(.6f).build()).build()).build();
+        var previous=beauty.items(frame);var lighting=new RtxptScene(beauty);
+        lighting.selectNativeLighting();var selected=lighting.items(frame);
+        require(previous.get(0).visibility()==.75f&&previous.get(1).visibility()==.6f,"Mode selection preserves the imported snapshot");
+        require(selected.get(0).visibility()==1&&selected.get(1).visibility()==1,"Mode selection canonicalizes retained and primitive variants");
+        require(lighting.instances.get(1L).surfaceVisibility()==.75f,"Physical fade remains authored instance data");
+        require(!RtxptScene.sameStructure(previous,selected),"Mode selection publishes the actual geometry identity change");
+        var delta=RtxptDelta.prepare(beauty,lighting,previous,selected,Map.of(),PACKETS);
+        require(delta.hasWork()&&delta.meshes()==1,"One canonical mesh replaces both faded geometry variants");
+        lighting.selectNativeLighting();require(lighting.items(frame)==selected,"Repeated mode selection is a no-op");
+        System.out.println("LOCAL_PREPARATION_MODE_SELECTION PASS retained=true primitive=true residentSnapshot=true");
+    }
     public static void main(String[] arguments)throws Exception{try{
         Path output=Path.of(System.getProperty("localPreparation.output","build/reports/local-scene-preparation"));Files.createDirectories(output);
-        if(!OBSERVE){persistentDiff();sharedResources(output);transientDependencies();}var results=new ArrayList<Object>();for(int count:new int[]{256,4096})results.add(observe(count,output));
+        if(!OBSERVE){persistentDiff();sharedResources(output);transientDependencies();lightingModeSelection();}var results=new ArrayList<Object>();for(int count:new int[]{256,4096})results.add(observe(count,output));
         Files.writeString(output.resolve("result.json"),RtxptJson.encode(RtxptJson.object("observationOnly",OBSERVE,"cases",results)));
         System.out.println("LOCAL_PREPARATION_ALL PASS observationOnly="+OBSERVE+" noGpu=true");
     }finally{PACKETS.close();}}

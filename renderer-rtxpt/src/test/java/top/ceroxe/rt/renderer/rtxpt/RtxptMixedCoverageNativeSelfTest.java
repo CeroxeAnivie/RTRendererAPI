@@ -47,13 +47,17 @@ public final class RtxptMixedCoverageNativeSelfTest {
                     throw new IllegalStateException("Native contract failed at sequence="+sequence,failure);
                 }
                 if(sequence==1)nativeMonitor=access.nativeDiagnosticMonitor();
-                else for(var event:nativeMonitor.poll().events()){
-                    sawBlas|=event.stage().equals("BlasBuild");sawAttributes|=event.stage().equals("AttributePreparation");
+                else {
+                    var events=nativeMonitor.poll().events();
+                    for(var event:events){sawBlas|=event.stage().equals("BlasBuild");sawAttributes|=event.stage().equals("AttributePreparation");}
+                    if(sequence==9&&(events.stream().anyMatch(e->e.stage().equals("BlasBuild"))
+                            ||events.stream().noneMatch(e->e.stage().equals("AttributePreparation"))))
+                        throw new AssertionError("Normal-only edit must upload attributes without rebuilding BLAS");
                 }
                 if(sequence==8)meshBefore=RtxptNative.meshResourceState(handleField.getLong(renderer),"i1");
                 if(sequence==9){
                     var after=RtxptNative.meshResourceState(handleField.getLong(renderer),"i1");
-                    if(meshBefore[0]!=after[0]||meshBefore[1]==after[1])throw new AssertionError("Attribute-only update did not retain BLAS and replace the immutable native vertex buffer");
+                    if(meshBefore[0]!=after[0])throw new AssertionError("Attribute-only update did not retain BLAS");
                 }
                 var actual=RtxptNative.instanceTransformState(handleField.getLong(renderer),"i1");
                 var expected=sequence==1?new float[]{1,0,0,0,0,1,0,0,0,0,1,0}:transform;

@@ -118,12 +118,6 @@ public final class RtxptAdapterSelfTest {
     }
     private static void inputContractRejectsIgnoredControls() {
         RtxptInputContract.validateFrame(frame(0));
-        rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().antiAliasing(AntiAliasingState.multisampled(4)).build()),
-            "Frame-local deterministic multisampling cannot silently become one sample");
-        rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().lightmap(new LightmapState(1,new int[LightmapState.ENTRY_COUNT])).build()),
-            "Authored lightmap cannot silently disappear");
-        rejected(()->RtxptInputContract.validateFrame(frame(0).toBuilder().textureSampling(TextureSamplingState.anisotropic(8)).build()),
-            "Frame-local texture sampling cannot silently disappear");
         RtxptInputContract.validateFrame(frame(0).toBuilder().resetTemporalHistory(HistoryResetReason.EXPLICIT_RESET).build());
         RtxptInputContract.requireAdvancingRevision(0,0,false);
         RtxptInputContract.requireAdvancingRevision(1,0,true);

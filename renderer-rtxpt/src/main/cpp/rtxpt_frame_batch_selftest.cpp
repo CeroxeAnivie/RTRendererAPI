@@ -1,5 +1,6 @@
 #include "rtxpt_frame_batch.h"
 #include <atomic>
+#include <vector>
 #include <iostream>
 #include <mutex>
 #include <set>
@@ -13,7 +14,7 @@ int main(){
         ++visits[i];std::lock_guard lock(mutex);threads.insert(std::this_thread::get_id());
     });
     for(auto value:visits)Require(value==1,"Batch lost or repeated an input");
-    Require(threads.size()>1,"Batch did not execute on independent worker threads");
+    Require(threads.size()==1&&*threads.begin()==std::this_thread::get_id(),"Resource batch left the device owner");
     std::fill(visits.begin(),visits.end(),0);
     bool failed=false;
     try{rtr::upstream::RunFrameBatch(&workers,visits.size(),[&](size_t i){
@@ -24,5 +25,5 @@ int main(){
     const auto owner=std::this_thread::get_id();
     rtr::upstream::RunFrameBatch(&workers,3,[&](size_t){Require(std::this_thread::get_id()==owner,"Small batch left its owner");});
     rtr::upstream::RunFrameBatch(nullptr,96,[&](size_t){Require(std::this_thread::get_id()==owner,"Serial backend left its owner");});
-    std::cout<<"FRAME_BATCH PASS exactInputs=96 concurrent=true deterministicFailure=true joined=true serialFallback=true\n";
+    std::cout<<"FRAME_BATCH PASS exactInputs=96 ownerSerialized=true deterministicFailure=true joined=true serialFallback=true\n";
 }

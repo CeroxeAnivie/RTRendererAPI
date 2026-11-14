@@ -10,12 +10,13 @@
 #include "SampleCommon/BlasPool.h"
 #include "rtxpt_diagnostics.h"
 #include "rtxpt_frame_batch.h"
+#include "rtxpt_direct_blas.h"
 
 namespace rtr::upstream {
 // Cache of completed ordinary native AS objects, not a GPU allocator.
 // RTXPT BlasPool handles are compacted/address-only: NVRHI cannot rebuild
-// them. Only the dual-queue retirement owner calls Retain. No AS wrappers,
-// copied build algorithms, byte allocation, or upstream default changes.
+// them. Only the dual-queue retirement owner calls Retain. Adapter-owned
+// paged handles are excluded here and return ranges to DirectBlasStorage.
 class BlasStorage {
     struct Entry;
     using Retained=std::list<Entry>;
@@ -55,7 +56,7 @@ public:
     BlasStorage& operator=(const BlasStorage&)=delete;
     struct Result {nvrhi::rt::AccelStructHandle structure;bool reused=false;};
     static bool CanRebuild(nvrhi::rt::IAccelStruct* structure,const nvrhi::rt::AccelStructDesc& desc){
-        if(!structure||bvh::PooledAccelStruct::IsPooled(structure)||structure->isCompacted())return false;
+        if(!structure||DirectBlasStorage::Is(structure)||bvh::PooledAccelStruct::IsPooled(structure)||structure->isCompacted())return false;
         uint64_t capacityShape=0,inputShape=0;
         return Shape(structure->getDesc(),capacityShape)&&Shape(desc,inputShape)
             &&capacityShape==inputShape&&Fits(structure->getDesc(),desc);
@@ -114,7 +115,7 @@ public:
     }
     void Retain(nvrhi::IDevice* device,const nvrhi::rt::AccelStructHandle& structure){
         uint64_t hash=0;
-        if(!structure||bvh::PooledAccelStruct::IsPooled(structure)||structure->isCompacted()||!Shape(structure->getDesc(),hash))return;
+        if(!structure||DirectBlasStorage::Is(structure)||bvh::PooledAccelStruct::IsPooled(structure)||structure->isCompacted()||!Shape(structure->getDesc(),hash))return;
         auto [first,last]=m_ready.equal_range(hash);
         for(auto i=first;i!=last;++i)if(i->second->structure.Get()==structure.Get())return;
         const auto bytes=device->getAccelStructMemoryRequirements(structure).size;

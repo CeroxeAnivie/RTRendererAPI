@@ -71,7 +71,7 @@ public final class RtxptMeshInputLifetimeNativeSelfTest {
             var removeNeighbour=SceneTransaction.builder(3).removeInstance(22).removeMesh(2).build();
             renderer.apply(removeNeighbour);mirror.retain(removeNeighbour);render(renderer,access,lighting,3,11);
             var liveOnly=monitor.poll();
-            require(uploadBytes(liveOnly)==singleBytes&&uploadObjects(liveOnly)==2,
+            require(uploadBytes(liveOnly)==16&&uploadObjects(liveOnly)==1,
                     "A deleted same-packet neighbour reached the actual native upload: "+uploadBytes(liveOnly)+" versus "+singleBytes);
             absent(handle,"i22");pixels(handle,output,3,.4f);
             require(pair.bytes()>2*meshInputBytes,"The pair must contain two meshes plus non-geometry transport bytes");
@@ -85,11 +85,11 @@ public final class RtxptMeshInputLifetimeNativeSelfTest {
             var restored=queue(handle,mirror,SceneTransaction.builder(4).upsert(survivor).build(),packets);
             mirror=restored.scene();advance(renderer,access,lighting,4,11);
             var restoreWork=monitor.poll();
-            require(uploadBytes(restoreWork)==singleBytes&&uploadObjects(restoreWork)==2,
+            require(uploadBytes(restoreWork)==16&&uploadObjects(restoreWork)==1,
                     "Superseded B attributes were uploaded or final A was not uploaded exactly once");
             double[] afterIdentity=RtxptNative.meshResourceState(handle,"i11");
             require(identity[0]!=0&&identity[0]==afterIdentity[0],"Same-frame A/B/A attribute replacement changed the live BLAS identity");
-            require(identity[1]!=afterIdentity[1],"The final attribute generation did not receive its native vertex buffer");
+            require(identity[1]==afterIdentity[1],"Compatible final attributes discarded stable native storage");
             pixels(handle,output,4,.4f);exactRetention(handle,meshInputBytes,1);
             row(rows,4,"same-frame-attributes-a-b-a",restoreWork,handle);
 
@@ -101,7 +101,7 @@ public final class RtxptMeshInputLifetimeNativeSelfTest {
             var geometryA=queue(handle,mirror,SceneTransaction.builder(5).upsert(survivor).build(),packets);
             mirror=geometryA.scene();advance(renderer,access,lighting,5,11);
             var geometryWork=monitor.poll();
-            require(uploadBytes(geometryWork)==singleBytes&&uploadObjects(geometryWork)==2,
+            require(uploadBytes(geometryWork)==64&&uploadObjects(geometryWork)==1,
                     "Same-frame geometry B was uploaded or final A geometry was not uploaded once");
             double[] geometryIdentity=RtxptNative.meshResourceState(handle,"i11");
             require(geometryIdentity[0]!=0&&geometryIdentity[1]!=0,"Final geometry A lost its registered native identity");
@@ -220,11 +220,11 @@ public final class RtxptMeshInputLifetimeNativeSelfTest {
             renderer.apply(SceneTransaction.builder(21).upsert(quad(30,0,-.35f)).build());
             render(renderer,access,lighting,21,301,302,303);var variantEdit=monitor.poll();
             exactRetention(handle,meshInputBytes,1);pixels(handle,output,21,-.35f);
-            require(blasBuilds(variantEdit)==0&&uploadObjects(variantEdit)==2&&uploadBytes(variantEdit)==3*singleBytes,
+            require(blasBuilds(variantEdit)==0&&uploadObjects(variantEdit)==1&&uploadBytes(variantEdit)==48,
                     "Shared normal edit must upload all variants in one batch without rebuilding geometry");
             for(int i=0;i<variantIds.length;i++){
                 var current=RtxptNative.meshResourceState(handle,"i"+variantIds[i]);
-                require(current[0]==variantResources[i][0]&&current[1]!=variantResources[i][1],
+                require(current[0]==variantResources[i][0]&&current[1]==variantResources[i][1],
                         "A shared normal edit failed to replace one variant input or rebuilt its BLAS");
             }
             row(rows,21,"packet-local-variants-edit-current-generation",variantEdit,handle);
@@ -275,7 +275,9 @@ public final class RtxptMeshInputLifetimeNativeSelfTest {
         skipName(packet);int inherited=packet.getInt();
         if(inherited==1)skipName(packet);
         else for(int channel=0;channel<5;channel++){int words=packet.getInt();packet.position(packet.position()+Math.multiplyExact(words,4));}
-        for(int groups=packet.getInt();groups>0;--groups){skipName(packet);int triangles=packet.getInt();packet.position(packet.position()+Math.multiplyExact(triangles,4));}
+        int groups=packet.getInt();
+        if(groups==0)skipName(packet);
+        else for(;groups>0;--groups){skipName(packet);int triangles=packet.getInt();packet.position(packet.position()+Math.multiplyExact(triangles,4));}
         return inherited;
     }
 

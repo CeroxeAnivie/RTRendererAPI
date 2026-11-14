@@ -55,6 +55,28 @@ public:
         m_pending.push_back(std::move(action));
     }
 
+    // Apply the frame prefix on the same owner while the caller prepares the
+    // suffix. This never runs a render or continues into later frame actions.
+    bool StartResources(Action resources) {
+        std::lock_guard lock(m_mutex);
+        Check();
+        if (m_requested != m_completed || m_prefixOpen)
+            throw std::logic_error("Concurrent resource prefix");
+        if (!m_canStartResources) return false;
+        m_pending.push_back(std::move(resources));
+        m_prefixActions.swap(m_pending);
+        m_prefixOpen = true;
+        m_condition.notify_all();
+        return true;
+    }
+
+    // Java closes the packet borrow even if preparing the suffix or submitting
+    // the frame throws. Ensure no pending or active prefix can read it again.
+    void WaitResources() {
+        std::unique_lock lock(m_mutex);
+        m_condition.wait(lock, [this] { return !m_prefixOpen || m_stopped; });
+    }
+
     // Queries and lease retirement must run on the same native owner without
     // manufacturing an extra render request or reusing a previous frame.
     void Invoke(Action action) {
@@ -75,11 +97,12 @@ public:
     // The Java submit lane has one owner. This call waits for the exact batch,
     // including asynchronous original scene/shader loading, rather than returning
     // a cached previous frame under the new request's identity.
-    bool Frame(Completed completed = {}) {
+    bool Frame(Completed completed = {},Action prepare = {}) {
         const auto waitBegin = std::chrono::steady_clock::now();
         std::unique_lock lock(m_mutex);
         Check();
         if (m_requested != m_completed) throw std::logic_error("Concurrent upstream frame submission");
+        if(prepare)m_pending.push_back(std::move(prepare));
         m_requestActions.swap(m_pending);
         m_afterRender = std::move(completed);
         const auto request = ++m_requested;
@@ -186,7 +209,7 @@ private:
             RtrGpuProfile::Init(application.DeviceManager().GetDevice());
             bool active = false;
             bool actionsApplied = false;
-            std::vector<Action> actions;
+            std::vector<Action> actions, prefix;
             std::chrono::steady_clock::time_point renderBegin;
             application.ObserveFrames([&](auto& manager, auto) {
                 {
@@ -201,6 +224,19 @@ private:
                     if (m_stop || glfwWindowShouldClose(manager.GetWindow())) {
                         glfwSetWindowShouldClose(manager.GetWindow(), GLFW_TRUE);
                         return;
+                    }
+                    if (m_prefixOpen) {
+                        prefix.swap(m_prefixActions);
+                        lock.unlock();
+                        const auto updateBegin = std::chrono::steady_clock::now();
+                        RtrGpuProfile::Configure(manager.GetDevice(),RtrDiagnostics::level.load(std::memory_order_relaxed),true);
+                        for (auto& action : prefix) action(application);
+                        prefix.clear();
+                        lock.lock();
+                        m_statistics.updateNanoseconds += Nanoseconds(updateBegin);
+                        m_prefixOpen = false;
+                        m_condition.notify_all();
+                        continue;
                     }
                     if (!m_calls.empty()) {
                         m_activeCalls.swap(m_calls);
@@ -263,6 +299,7 @@ private:
                 m_statistics.vsyncEnabled = application.DeviceManager().IsVsyncEnabled();
                 m_afterRender = {};
                 m_completed = m_requested;
+                m_canStartResources = true;
                 active = false;
                 m_condition.notify_all();
             });
@@ -296,7 +333,8 @@ private:
     inline static std::mutex s_lifecycleMutex;
     std::condition_variable m_condition;
     std::thread m_thread;
-    std::vector<Action> m_pending, m_requestActions;
+    std::vector<Action> m_pending, m_requestActions, m_prefixActions;
+    bool m_canStartResources = false, m_prefixOpen = false;
     std::vector<Call> m_calls, m_activeCalls;
     Completed m_afterRender;
     Statistics m_statistics;

@@ -6,6 +6,7 @@ import org.gradle.api.tasks.bundling.Zip
 plugins { `java-library` }
 description = "External consumer bridge to unmodified NVIDIA RTXPT."
 dependencies {
+    implementation("it.unimi.dsi:fastutil:8.5.19")
     api(project(":renderer-api"))
     val lwjgl = rootProject.providers.gradleProperty("lwjgl_version").getOrElse("3.4.3")
     listOf("lwjgl", "lwjgl-vulkan", "lwjgl-shaderc", "lwjgl-glfw", "lwjgl-opengl").forEach {
@@ -30,6 +31,7 @@ tasks.withType<JavaExec>().configureEach {
     }.associateWith(System::getProperty))
 }
 val cpuTests = listOf(
+    "RtxptSceneTableSelfTest", "RtxptApiSurfaceSelfTest",
     "RtxptAdapterSelfTest", "RtxptPacketPoolSelfTest", "RtxptLightMapSelfTest",
     "NativeLightingStyleSelfTest", "RtxptRuntimeBundleSelfTest", "RtxptApplicationDataSelfTest",
     "RtxptBoundaryDiagnosticsSelfTest", "RtxptBudgetContractSelfTest", "RtxptDynamicResourcesSelfTest",
@@ -220,7 +222,7 @@ tasks.register("rtxptReleaseValidationClasspath") {
     dependsOn(tasks.testClasses)
     doLast {
         rootProject.file("build/renderer-validation-classpath.txt").writeText(
-            files(sourceSets.test.get().output, sourceSets.main.get().output, configurations.testCompileClasspath).asPath,
+            files(sourceSets.test.get().output, sourceSets.main.get().output, configurations.testRuntimeClasspath).asPath,
             Charsets.UTF_8)
     }
 }

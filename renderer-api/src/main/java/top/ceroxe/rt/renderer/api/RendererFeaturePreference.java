@@ -1,20 +1,16 @@
 package top.ceroxe.rt.renderer.api;
 
 /**
- * Renderer-lifetime policy for an optional rendering feature.
- *
- * <p>The three states deliberately separate product intent from backend capability. A backend may
- * select a documented fallback only for {@link #PREFERRED}; when no fallback is configured, the
- * renderer keeps its base path and reports the optional feature as unsupported. {@link #REQUIRED}
- * turns an unavailable feature into renderer initialization failure instead of producing a frame
- * with different quality characteristics.</p>
+ * Native feature intent. PREFERRED permits the original RTXPT fallback and the
+ * actual selection remains observable. REQUIRED rejects the first submission
+ * if initialization or rendering cannot activate the requested native feature.
  */
 public enum RendererFeaturePreference {
     /** Do not probe, allocate, or execute the feature. */
     DISABLED,
-    /** Use the feature when available; otherwise use its fallback or retain the base path. */
+    /** Use the feature when available; otherwise retain the native fallback. */
     PREFERRED,
-    /** Require the feature and reject renderer initialization when it cannot be activated. */
+    /** Require the feature and reject its first submission when it cannot be activated. */
     REQUIRED;
 
     /**

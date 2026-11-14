@@ -7,6 +7,7 @@ find_package(JNI REQUIRED COMPONENTS JVM)
 add_library(rtrenderer_rtxpt SHARED "${CMAKE_CURRENT_LIST_DIR}/rtxpt_upstream_jni.cpp")
 target_link_libraries(rtrenderer_rtxpt PRIVATE RtxptCore d3d12 dxgi)
 if(MSVC)
+    target_compile_options(rtrenderer_rtxpt PRIVATE /bigobj)
     # Donut explicitly loads the signed SL DLL only when its session needs it.
     # Standard delay imports keep unused independent-lighting sessions offline.
     target_link_options(rtrenderer_rtxpt PRIVATE "/DELAYLOAD:sl.interposer.dll")

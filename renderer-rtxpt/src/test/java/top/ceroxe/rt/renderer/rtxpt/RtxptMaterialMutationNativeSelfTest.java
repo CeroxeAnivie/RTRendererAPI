@@ -56,18 +56,20 @@ public final class RtxptMaterialMutationNativeSelfTest {
             // RGBA8 colors use the public contract's low-byte red convention.
             MaterialAsset red=material(0xff0000ff,WHITE_TEXTURE,1);
             MaterialAsset rough=initial.toBuilder().roughness(.85f).build();
+            // Retained material/texture updates preserve the existing corner policy cache.
+            // These cases must reach fresh pixels without rebuilding policy metadata.
             List<Mutation> mutations=List.of(
                     change("scalar-red",red,new float[]{1,0,0},0,0),
                     change("scalar-green",material(0xff00ff00,WHITE_TEXTURE,1),new float[]{0,1,0},0,0),
                     change("scalar-white-restored",initial,new float[]{1,1,1},0,0),
-                    change("texture-id-red",material(0xffffffff,RED_TEXTURE,1),new float[]{1,0,0},1,2),
-                    change("texture-id-green",material(0xffffffff,GREEN_TEXTURE,1),new float[]{0,1,0},1,2),
-                    change("texture-id-white-restored",initial,new float[]{1,1,1},1,2),
+                    change("texture-id-red",material(0xffffffff,RED_TEXTURE,1),new float[]{1,0,0},0,0),
+                    change("texture-id-green",material(0xffffffff,GREEN_TEXTURE,1),new float[]{0,1,0},0,0),
+                    change("texture-id-white-restored",initial,new float[]{1,1,1},0,0),
                     change("transmission-quarter",material(0xffffffff,WHITE_TEXTURE,.25f),new float[]{.25f,.25f,.25f},0,0),
                     change("transmission-restored",initial,new float[]{1,1,1},0,0),
                     change("opacity-red-base",red,new float[]{1,0,0},0,0),
-                    change("opacity-half",material(0x800000ff,WHITE_TEXTURE,1),new float[]{1,127/255f,127/255f},0,2),
-                    change("opacity-restored",red,new float[]{1,0,0},0,2),
+                    change("opacity-half",material(0x800000ff,WHITE_TEXTURE,1),new float[]{1,127/255f,127/255f},0,0),
+                    change("opacity-restored",red,new float[]{1,0,0},0,0),
                     change("opacity-white-restored",initial,new float[]{1,1,1},0,0),
                     // Direct shadow does not use roughness or emission. These
                     // cases prove zero metadata work, not their beauty response.
@@ -76,8 +78,8 @@ public final class RtxptMaterialMutationNativeSelfTest {
                     change("scalar-restore-without-policy-work",initial,new float[]{1,1,1},0,0),
                     textureChange("pixel-content-blue",texture(WHITE_TEXTURE,0,0,255),new float[]{0,0,1},0,0),
                     textureChange("pixel-content-white-restored",texture(WHITE_TEXTURE,255,255,255),new float[]{1,1,1},0,0),
-                    textureChange("sampler-linear",texture(WHITE_TEXTURE,255,255,255,TextureAsset.Filter.LINEAR),new float[]{1,1,1},1,2),
-                    textureChange("sampler-nearest-restored",texture(WHITE_TEXTURE,255,255,255),new float[]{1,1,1},1,2));
+                    textureChange("sampler-linear",texture(WHITE_TEXTURE,255,255,255,TextureAsset.Filter.LINEAR),new float[]{1,1,1},0,0),
+                    textureChange("sampler-nearest-restored",texture(WHITE_TEXTURE,255,255,255),new float[]{1,1,1},0,0));
             long sequence=1;
             for(var mutation:mutations) {
                 ++sequence;
