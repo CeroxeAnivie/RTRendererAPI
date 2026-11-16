@@ -138,7 +138,19 @@ public:
                 throw std::invalid_argument("Invalid original RTXPT quality configuration");
         }
     };
+    void ConfigureOfficial(){
+        if(lighting.active||m_analyticBeautyFrames||m_officialPipelineFrames)
+            throw std::logic_error("Select official transport before rendering or configuring extensions");
+        m_officialOnly=true;
+    }
+    bool RequiresOfficialPipeline()const{return m_officialOnly;}
+    std::array<int64_t,5> ExecutionState()const{
+        return {int64_t(m_officialPipelineFrames),int64_t(m_officialGuideFrames),int64_t(m_analyticBeautyFrames),
+            int64_t(lighting.executedFrames),m_officialOnly?1:0};
+    }
     void ConfigureQuality(const Quality& quality){
+        if(m_officialOnly&&quality.beautyTransport!=0)
+            throw std::invalid_argument("Official RTXPT requires original transport");
         quality.Validate();m_quality=quality;m_qualityConfigured=true;ApplyQuality();ResetHistory();
     }
     std::array<float,14> QualityState() const {
@@ -325,6 +337,7 @@ public:
     }
 
     void ConfigureLighting(const std::vector<float>& parameters) {
+        if(m_officialOnly)throw std::logic_error("Adapter lighting is unavailable in an official session");
         lighting.Configure(parameters);
         // This consumer pass performs its own per-hit opacity evaluation. The
         // sample's optional OMM bake is redundant here, and DXR 1.2 cannot build
@@ -474,6 +487,11 @@ public:
         ++lighting.geometryGeneration;
     }
 
+    void PrepareDLSSRRGuides(nvrhi::ICommandList* commands) override {
+        AdvancedPathTracer::PrepareDLSSRRGuides(commands);
+        ++m_officialGuideFrames;
+    }
+
     void SampleRenderCode(nvrhi::IFramebuffer* framebuffer,
         nvrhi::CommandListHandle commands, const SampleConstants& constants,
         bool needNewPasses) override {
@@ -487,6 +505,7 @@ public:
         if (!lighting.active) {
             ++lighting.beautyFrames;
             AdvancedPathTracer::SampleRenderCode(framebuffer, commands, constants, needNewPasses);
+            ++m_officialPipelineFrames;
             // Realtime BUILD/FILL write the denoising layers, not OutputColor.
             // Without NRD, upstream PostProcessAA merges those layers only after
             // AA has already consumed OutputColor. Supply the current radiance
@@ -1349,7 +1368,8 @@ private:
     nvrhi::ComputePipelineHandle m_analyticBeautyPipeline;
     nvrhi::BufferHandle m_analyticBeautyConstants,m_analyticBeautyLights;
     nvrhi::BindingSetHandle m_analyticBeautyBindings;
-    uint64_t m_analyticBeautyFrames=0;
+    uint64_t m_analyticBeautyFrames=0,m_officialPipelineFrames=0,m_officialGuideFrames=0;
+    bool m_officialOnly=false;
 };
 
 class Application final : public SampleBaseApp {

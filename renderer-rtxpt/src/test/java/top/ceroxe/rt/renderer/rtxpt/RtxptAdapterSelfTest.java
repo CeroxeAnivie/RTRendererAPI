@@ -56,23 +56,24 @@ public final class RtxptAdapterSelfTest {
             var bytes=ByteBuffer.allocateDirect(Math.toIntExact(size.offset)).order(ByteOrder.LITTLE_ENDIAN);
             var write=new RtxptMemoryResources.Writer(bytes);write.geometry(value);
             require(size.offset==bytes.position()&&size.offset==write.offset,"Final geometry byte count matches reservation");
-            bytes.flip();boolean expanded=value==flat;
+            bytes.flip();boolean missingNormals=value==flat;
             var positions=channel(bytes);var normals=channel(bytes);var packedTangents=channel(bytes);var packedUv=channel(bytes);
-            int vertices=expanded?36:original.vertexCount();
-            require(positions.remaining()==vertices*3&&normals.remaining()==vertices*3
-                &&packedTangents.remaining()==vertices*4&&packedUv.remaining()==vertices*2,"Exact canonical channel sizes");
+            int vertices=original.vertexCount();
+            require(positions.remaining()==vertices*3&&normals.remaining()==(missingNormals?0:vertices*3)
+                &&packedTangents.remaining()==vertices*4&&packedUv.remaining()==vertices*2,
+                "Indexed canonical channels retain authored data; missing normals stay absent until GPU packing");
             require(bytes.getInt()==36,"Canonical index count");
-            for(int corner=0;corner<36;corner++)require(bytes.getInt()==(expanded?corner:original.triangleIndices().get(corner)),"Preserve winding and triangle order");
+            for(int corner=0;corner<36;corner++)require(bytes.getInt()==original.triangleIndices().get(corner),"Preserve winding and triangle order");
             require(!bytes.hasRemaining(),"No trailing geometry bytes");
             for(int vertex=0;vertex<vertices;vertex++){
-                int input=expanded?original.triangleIndices().get(vertex):vertex;
+                int input=vertex;
                 for(int axis=0;axis<3;axis++)require(positions.get(vertex*3+axis)==original.positions().get(input*3+axis),"Original positions");
                 for(int axis=0;axis<4;axis++)require(packedTangents.get(vertex*4+axis)==tangents[input*4+axis],"Original tangents");
                 require(packedUv.get(vertex*2)==input*.25f&&packedUv.get(vertex*2+1)==input*.25f+.125f,"Original UVs");
-                float x=normals.get(vertex*3),y=normals.get(vertex*3+1),z=normals.get(vertex*3+2);
-                require(expanded?x*x+y*y+z*z==1:x==1&&y==1&&z==1,"Flat or authored normal as requested");
+                if(!missingNormals)require(normals.get(vertex*3)==1&&normals.get(vertex*3+1)==1
+                        &&normals.get(vertex*3+2)==1,"Authored normal components are preserved");
             }
-            require(!expanded||normals.get(2)==1,"First flat normal follows original winding");
+            require(missingNormals?normals.remaining()==0:normals.get(2)==1,"No generated CPU normal channel");
         }
     }
     private static FloatBuffer channel(ByteBuffer packet){

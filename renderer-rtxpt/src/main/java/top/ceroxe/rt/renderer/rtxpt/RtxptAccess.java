@@ -20,6 +20,10 @@ public interface RtxptAccess extends RtxptDiagnosticAccess {
     Denoiser denoiserState();
     /** Actual native modes and shader-path flags, not GPU execution counters. */
     RenderingState renderingState();
+    /** Completed calls to the original rendering hooks, not GPU timings or generated-frame counts. */
+    ExecutionState executionState();
+    record ExecutionState(long officialPipelineFrames,long dlssRrGuideFrames,long analyticBeautyFrames,
+            long independentLightingFrames,boolean officialOnly) { }
     /** Original RTXPT frame statistics, also used in its window title. DLSS-G values marked '*' are multiplier estimates. */
     String frameStatistics();
     enum Denoiser { REBLUR, RELAX }

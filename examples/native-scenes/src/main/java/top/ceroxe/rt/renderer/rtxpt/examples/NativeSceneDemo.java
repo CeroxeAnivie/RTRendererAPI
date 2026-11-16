@@ -26,7 +26,6 @@ import top.ceroxe.rt.renderer.api.EnvironmentMap;
 import top.ceroxe.rt.renderer.api.FrameClock;
 import top.ceroxe.rt.renderer.api.FrameGenerationOptions;
 import top.ceroxe.rt.renderer.api.FrameReconstructionOptions;
-import top.ceroxe.rt.renderer.api.PathTracingOptions;
 import top.ceroxe.rt.renderer.api.PathTracingQualityOptions;
 import top.ceroxe.rt.renderer.api.RenderFrameRequest;
 import top.ceroxe.rt.renderer.api.Renderer;
@@ -49,7 +48,7 @@ public final class NativeSceneDemo {
             System.out.println("NativeSceneDemo --scene balls|mixed|glass|nested|absorption|rough|ior"
                     + " [--material glass|opaque|metal] [--width 1600] [--height 1000] [--frames 0]"
                     + " [--seconds 0] [--native false] [--fg off|2|3|4] [--warmup-frames 120]"
-                    + " [--denoising scene|off|relax|rr]"
+                    + " [--transport scene|official] [--denoising scene|off|relax|rr]"
                     + " [--cycle-frames 0]"
                     + " [--light-sampler auto|uniform|power|adaptive] [--reconstruction-quality scene|performance|balanced|quality]"
                     + " [--diagnostics off|summary|deep] [--output result.json] [--capture image.png]");
@@ -82,9 +81,7 @@ public final class NativeSceneDemo {
                 config.width(), config.height(), config.generation());
         System.out.println("Requested policies are not proof of native activation. Report: " + config.output());
         long openBegin = System.nanoTime();
-        try (Renderer renderer = config.hidden()
-                ? top.ceroxe.rt.renderer.rtxpt.RtxptRenderers.openHiddenWindow(rendererConfig)
-                : Renderer.open("rtxpt", rendererConfig)) {
+        try (Renderer renderer = openRenderer(config,rendererConfig)) {
             stats.rendererOpenMillis = (System.nanoTime() - openBegin) / 1e6;
             RtxptAccess access = renderer.extension(RtxptAccess.class).orElseThrow(
                     () -> new IllegalStateException("RTXPT provider did not expose native window access"));
@@ -243,20 +240,34 @@ public final class NativeSceneDemo {
         if (problem instanceof Error failure) throw failure;
     }
 
+    private static Renderer openRenderer(Config config,RendererConfig rendererConfig){
+        if(config.transport().equals("official"))return config.hidden()
+                ? top.ceroxe.rt.renderer.rtxpt.RtxptRenderers.openOfficialHiddenWindow(rendererConfig)
+                : top.ceroxe.rt.renderer.rtxpt.RtxptRenderers.openOfficial(rendererConfig);
+        if(rendererConfig.pathTracing().quality().beautyTransport()==PathTracingQualityOptions.BeautyTransport.ANALYTIC_DIRECT)
+            return config.hidden()?top.ceroxe.rt.renderer.rtxpt.RtxptRenderers.openAnalyticHiddenWindow(rendererConfig)
+                :top.ceroxe.rt.renderer.rtxpt.RtxptRenderers.openAnalytic(rendererConfig);
+        return config.hidden()?top.ceroxe.rt.renderer.rtxpt.RtxptRenderers.openHiddenWindow(rendererConfig)
+                :Renderer.open("rtxpt",rendererConfig);
+    }
+
     static RendererConfig rendererConfig(Config config) {
         RendererConfig result;
-        if (config.scene().equals("balls")) {
-            var base = RendererConfig.presentation();
-            var quality = PathTracingQualityOptions.defaults().withBeautyTransport(
-                    PathTracingQualityOptions.BeautyTransport.ANALYTIC_DIRECT);
+        if (config.scene().equals("balls") && !config.transport().equals("official")) {
+            var base = top.ceroxe.rt.renderer.rtxpt.RtxptRenderers.analyticConfiguration();
+            var quality = base.pathTracing().quality();
             quality = quality.withPostProcessing(quality.postProcessing().withExposureOffset(exposure(config.material())));
-            result = base.copyBuilder().pathTracing(PathTracingOptions.defaults().withQuality(quality))
+            result = base.copyBuilder().pathTracing(base.pathTracing().withQuality(quality))
                     .frameReconstruction(base.frameReconstruction()).denoising(DenoisingOptions.disabled())
                     .frameGeneration(config.generation()).build();
         } else {
             var base = config.nativeResolution() ? RendererConfig.builder().build()
                     : RendererConfig.pathTracedPresentation();
-            result = base.copyBuilder().frameGeneration(config.generation()).build();
+            var quality = base.pathTracing().quality();
+            if(config.scene().equals("balls"))quality=quality.withPostProcessing(
+                    quality.postProcessing().withExposureOffset(exposure(config.material())));
+            result = base.copyBuilder().pathTracing(base.pathTracing().withQuality(quality))
+                    .frameGeneration(config.generation()).build();
         }
         // Explicit diagnostic comparisons: keep scene defaults until the complete demo is checked.
         // These select upstream denoisers; they do not change SPP, geometry or path budgets.
@@ -393,7 +404,7 @@ public final class NativeSceneDemo {
 
     record Config(String scene, BouncingBallScene.BallMaterial material, int width, int height,
             long frames, double seconds, boolean nativeResolution, FrameGenerationOptions generation,
-            String denoising, String lightSampler, String reconstructionQuality, int cycleFrames, int warmupFrames,
+            String denoising, String lightSampler, String reconstructionQuality, String transport, int cycleFrames, int warmupFrames,
             RtxptDiagnostics.Level diagnostics, Path output, Path capture, boolean hidden, boolean help) {
         static Config parse(String[] args) {
             String scene = "balls";
@@ -403,7 +414,7 @@ public final class NativeSceneDemo {
             long frames = 0;
             double seconds = 0;
             boolean nativeResolution = false, hidden = false, help = false;
-            String denoising = "scene";
+            String denoising = "scene", transport = "scene";
             String lightSampler = "auto", reconstructionQuality = "scene";
             int cycleFrames = 0;
             var diagnostics = RtxptDiagnostics.Level.OFF;
@@ -431,6 +442,10 @@ public final class NativeSceneDemo {
                     }
                     case "--width" -> { width = Integer.parseInt(value); widthSpecified = true; }
                     case "--height" -> { height = Integer.parseInt(value); heightSpecified = true; }
+                    case "--transport" -> transport = switch(value.toLowerCase(Locale.ROOT)){
+                        case "scene", "official" -> value.toLowerCase(Locale.ROOT);
+                        default -> throw new IllegalArgumentException("transport must be scene or official");
+                    };
                     case "--frames" -> frames = Long.parseLong(value);
                     case "--seconds", "--duration-seconds" -> seconds = Double.parseDouble(value);
                     case "--fg" -> fg = NativeSceneDemo.generation(value.toLowerCase(Locale.ROOT));
@@ -470,11 +485,11 @@ public final class NativeSceneDemo {
                 throw new IllegalArgumentException("reconstruction-quality must be scene, performance, balanced or quality");
             if (nativeResolution && denoising.equals("rr"))
                 throw new IllegalArgumentException("rr requires frame reconstruction; use relax for a native-resolution comparison");
-            if (nativeResolution && scene.equals("balls")) throw new IllegalArgumentException("native is an optical-scene comparison option");
+            if (nativeResolution && scene.equals("balls") && !transport.equals("official")) throw new IllegalArgumentException("native is an optical-scene comparison option");
             if (output == null) output = Path.of("build", "reports", "native-scenes",
                     scene + "-" + ProcessHandle.current().pid() + "-" + System.currentTimeMillis() + ".json");
             return new Config(scene, material, width, height, frames, seconds, nativeResolution, fg, denoising,
-                    lightSampler, reconstructionQuality, cycleFrames,
+                    lightSampler, reconstructionQuality, transport, cycleFrames,
                     warmup, diagnostics, output, capture, hidden, help);
         }
     }
@@ -525,6 +540,7 @@ public final class NativeSceneDemo {
         private RtxptAccess.WindowState nativeWindow;
         private RtxptAccess.Denoiser nativeDenoiser;
         private RtxptAccess.RenderingState nativeRendering;
+        private RtxptAccess.ExecutionState nativeExecution;
         private long hudRateAt, hudRateFrames, hudUpdates, selectorPolls;
         private Double hudRate;
         private long nativeStateSequence = -1;
@@ -539,6 +555,7 @@ public final class NativeSceneDemo {
             nativeExposure = exposure;
             nativeWindow = window;
             nativeRendering = rendering;
+            nativeExecution = access.executionState();
             nativeDenoiser = rendering.denoiser();
             nativeStateSequence = sequence;
         }
@@ -598,6 +615,17 @@ public final class NativeSceneDemo {
             quality.put("finalExposureOffsetRequested", config.scene().equals("balls") ? exposure(material) : 0);
             result.put("requestedQuality", quality);
             result.put("allNativeQualitySettingsVerified", false);
+            result.put("requestedTransport",config.transport());
+            if(nativeExecution!=null){
+                var execution=new LinkedHashMap<String,Object>();
+                execution.put("officialOnly",nativeExecution.officialOnly());
+                execution.put("officialPipelineFrames",nativeExecution.officialPipelineFrames());
+                execution.put("dlssRrGuideFrames",nativeExecution.dlssRrGuideFrames());
+                execution.put("analyticBeautyFrames",nativeExecution.analyticBeautyFrames());
+                execution.put("independentLightingFrames",nativeExecution.independentLightingFrames());
+                execution.put("meaning","Completed calls to original render hooks, not GPU timings or generated frames");
+                result.put("observedNativeExecution",execution);
+            }
             result.put("nativeStateObservationSequence", nativeStateSequence < 0 ? null : nativeStateSequence);
             result.put("nativePresentationSettingsObserved", nativePresentation != null);
             result.put("nativeExposureSettingsObserved", nativeExposure != null);

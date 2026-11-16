@@ -29,7 +29,26 @@ public final class RtxptAnalyticTransportSelfTest {
             config.rayTracingOptimizations().toBuilder().shaderExecutionReordering(RendererFeaturePreference.REQUIRED).build()).build()));}
         catch(IllegalArgumentException expected){rejected=true;}
         check(rejected,"reject required SER on inline compute transport");
-        System.out.println("ANALYTIC_TRANSPORT_CPU PASS nativeDefault=true copies=7 resolved=true incompatibleRejected=true requiredSerRejected=true");
+        var entryConfig=RtxptRenderers.analyticConfiguration();
+        check(entryConfig.equals(config),"named analytic configuration preserves existing presentation defaults");
+        RtxptOptions.requireAnalytic(entryConfig);
+        for(var open:java.util.List.<java.util.function.Function<RendererConfig,Renderer>>of(
+                RtxptRenderers::openAnalytic,RtxptRenderers::openAnalyticHiddenWindow)){
+            rejected=false;
+            try{open.apply(RendererConfig.pathTracedPresentation());}
+            catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"analytic entry rejects original transport before loading native code");
+            rejected=false;
+            try{open.apply(entryConfig.copyBuilder().denoising(DenoisingOptions.recommended()).build());}
+            catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"analytic entry rejects incompatible denoising without changing the request");
+        }
+        RtxptOptions.requireOfficial(RendererConfig.pathTracedPresentation());
+        rejected=false;
+        try{RtxptRenderers.openOfficial(config);}
+        catch(IllegalArgumentException expected){rejected=true;}
+        check(rejected,"official entry rejects adapter transport before loading native code");
+        System.out.println("ANALYTIC_TRANSPORT_CPU PASS nativeDefault=true copies=7 resolved=true incompatibleRejected=true requiredSerRejected=true namedEntries=true explicitSelection=true");
     }
     private static void check(boolean condition,String message){if(!condition)throw new AssertionError(message);}
 }

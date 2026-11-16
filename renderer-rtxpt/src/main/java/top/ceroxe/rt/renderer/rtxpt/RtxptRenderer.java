@@ -10,6 +10,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         SparseLightingControl, NativeLightingControl {
     private final Thread owner=Thread.currentThread();
     private final boolean externalPresentation;
+    private final boolean officialOnly;
     private final RendererResourceOptions resources;
     private final RtxptOptions options;
     private final RendererFeatureProfile featureProfile;
@@ -53,8 +54,11 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private int appliedReconstructionDivisor;
 
     RtxptRenderer(RendererConfig config){this(config,false);}
-    RtxptRenderer(RendererConfig config,boolean externalPresentation){
+    RtxptRenderer(RendererConfig config,boolean externalPresentation){this(config,externalPresentation,false);}
+    RtxptRenderer(RendererConfig config,boolean externalPresentation,boolean officialOnly){
         this.externalPresentation=externalPresentation;
+        this.officialOnly=officialOnly;
+        if(officialOnly)RtxptOptions.requireOfficial(config);
         resources=config.resources();
         featureProfile=RtxptOptions.profile(config);
         options=RtxptOptions.resolve(featureProfile);
@@ -75,10 +79,19 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     @Override public RtxptDiagnostics.Snapshot diagnosticSnapshot(long afterOrdinal){ready();return recorder.snapshot(afterOrdinal);}
     @Override public RtxptDiagnostics.Monitor diagnosticMonitor(){ready();return recorder.monitor();}
     @Override public RtxptDiagnostics.NativeMonitor nativeDiagnosticMonitor(){ready();if(handle==0)throw new IllegalStateException("Submit before acquiring native diagnostics");return RtxptDiagnostics.nativeMonitor(handle);}
-    @Override public <T> Optional<T> extension(Class<T> type){Objects.requireNonNull(type);return type.isInstance(this)?Optional.of(type.cast(this)):Optional.empty();}
+    @Override public <T> Optional<T> extension(Class<T> type){
+        Objects.requireNonNull(type);
+        if(officialOnly&&(type==NativeLightingControl.class||type==SparseLightingControl.class))return Optional.empty();
+        return type.isInstance(this)?Optional.of(type.cast(this)):Optional.empty();
+    }
     @Override public SceneUpdateResult apply(SceneTransaction tx){return apply(tx,List.of(),LongBuffer.allocate(0));}
     @Override public SceneUpdateResult apply(SceneTransaction tx,List<SparseLightSource> upserts,LongBuffer removals){
         ready();Objects.requireNonNull(tx);Objects.requireNonNull(upserts);Objects.requireNonNull(removals);
+        if(officialOnly&&(!upserts.isEmpty()||removals.hasRemaining()))
+            throw new UnsupportedOperationException("Official RTXPT accepts SceneLight publications; sparse adapter lights are unavailable");
+        if(officialOnly)for(var light:tx.upserts().lights())
+            if(!light.castsShadow()&&light.intensity()>0)
+                throw new IllegalArgumentException("Official RTXPT has no per-light shadow-disable control");
         if(nativeScene!=null)throw new IllegalStateException("A native file scene does not accept retained transactions");
         RtxptInputContract.requireAdvancingRevision(tx.revision(),revision,scenePublished);
         var next=new RtxptScene(scene);next.retain(tx);
@@ -134,6 +147,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             if(first){
                 sessionRequiresStreamline=nativeLightingPlan==null||lightingReconstruction==NativeLightingReconstruction.DLSS_RR;
                 handle=RtxptNative.createSession(RtxptNative.runtime().toString(),nativeScene==null?null:nativeScene.toString(),nativeWidth,nativeHeight,externalPresentation,sessionRequiresStreamline,options.arguments());
+                if(officialOnly)RtxptNative.officialMode(handle);
                 RtxptNative.diagnosticLevel(handle,recorder.level().ordinal());
                 RtxptNative.presentation(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.generatedFrames());
                 options.applyQuality(handle);
@@ -234,13 +248,14 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         }
         var sources=new ArrayList<SparseLightSource>();var removed=new ArrayList<Long>();
         scene.sparseSources.forEachChanged(before.sparseSources,(id,value)->{if(value==null)removed.add(id);else sources.add(value);});
-        if(reset||!sources.isEmpty()||!removed.isEmpty())RtxptNative.sparseLighting(handle,sources.stream().mapToLong(SparseLightSource::id).toArray(),RtxptSparseSources.pack(sources),removed.stream().mapToLong(Long::longValue).toArray(),reset);
+        if(!officialOnly&&(reset||!sources.isEmpty()||!removed.isEmpty()))RtxptNative.sparseLighting(handle,sources.stream().mapToLong(SparseLightSource::id).toArray(),RtxptSparseSources.pack(sources),removed.stream().mapToLong(Long::longValue).toArray(),reset);
         environment=nextEnvironment;
     }
     private NativeLightingPlan lightingPublicationPlan(){return nativeLightingPlan();}
     @Override public NativeLightingPlan nativeLightingPlan(){ready();if(nativeLightingPlan==null)throw new IllegalStateException("Select native lighting first");return nativeLightingPlan;}
     @Override public void nativeLightingPlan(NativeLightingPlan plan){
         ready();Objects.requireNonNull(plan);
+        if(officialOnly)throw new UnsupportedOperationException("Official RTXPT does not provide adapter lighting-gain outputs");
         if(options.quality().beautyTransport()!=PathTracingQualityOptions.BeautyTransport.NATIVE)
             throw new IllegalArgumentException("Analytic beauty and independent lighting signals are separate output modes");
         if(!externalPresentation||nativeScene!=null||options.reconstruction()!=Reconstruction.NONE||options.standaloneDenoiser()||options.restirDi()||options.restirGi()||options.sharc())throw new IllegalArgumentException("Native lighting requires an external finite-signal configuration");
@@ -406,6 +421,12 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         int n=RtxptNative.denoiserState(handle);
         if(n<0||n>=Denoiser.values().length)throw new IllegalStateException("Invalid native denoiser state");
         return Denoiser.values()[n];
+    }
+    @Override public ExecutionState executionState(){
+        ready();if(handle==0)throw new IllegalStateException("Submit first");
+        var n=RtxptNative.executionState(handle);
+        if(n.length!=5)throw new IllegalStateException("Invalid native execution counters");
+        return new ExecutionState(n[0],n[1],n[2],n[3],n[4]!=0);
     }
     @Override public String frameStatistics(){
         ready();if(handle==0)throw new IllegalStateException("Submit first");

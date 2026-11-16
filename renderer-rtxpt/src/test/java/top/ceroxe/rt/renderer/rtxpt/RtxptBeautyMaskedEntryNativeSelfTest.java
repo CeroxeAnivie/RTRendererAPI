@@ -26,7 +26,7 @@ public final class RtxptBeautyMaskedEntryNativeSelfTest {
         Files.createDirectories(output);
         try(var evidence=new Evidence(output,mode)){
             evidence.mark("renderer-open-enter",0,"");
-            try(var renderer=RtxptRenderers.openHiddenWindow(RtxptRenderers.nativeLightingConfiguration())){
+            try(var renderer=RtxptRenderers.openOfficialHiddenWindow(RtxptRenderers.nativeLightingConfiguration())){
                 evidence.mark("renderer-open-exit",0,"");
                 var access=renderer.extension(RtxptAccess.class).orElseThrow();
                 access.diagnosticLevel(RtxptDiagnostics.Level.DEEP);
@@ -70,6 +70,10 @@ public final class RtxptBeautyMaskedEntryNativeSelfTest {
                     captureCutout(access,output,cutoutSequence,evidence);
                     evidence.mark("rendering-state-enter",cutoutSequence,"");
                     require(!access.renderingState().externalLighting(),"Fixture unexpectedly selected independent lighting");
+                    var execution=access.executionState();
+                    require(execution.officialOnly()&&execution.officialPipelineFrames()>0
+                            &&execution.analyticBeautyFrames()==0&&execution.independentLightingFrames()==0,
+                            "Masked pixels were not produced by the official pipeline");
                     evidence.mark("rendering-state-exit",cutoutSequence,"");
                 }
                 evidence.mark("renderer-close-enter",dormant?4:3,"");

@@ -7,6 +7,7 @@ CheckPaths only validates prepared inputs and does not launch a process.
 #>
 param(
     [ValidateSet('balls','mixed','glass','nested','absorption','rough','ior')][string]$Scene='balls',
+    [ValidateSet('scene','official')][string]$Transport='scene',
     [switch]$Hidden,
     [switch]$CheckPaths
 )
@@ -34,9 +35,9 @@ $demoClassRelativePath='top/ceroxe/rt/renderer/rtxpt/examples/NativeSceneDemo.cl
 if(!($classpath.Split([IO.Path]::PathSeparator)|Where-Object {Test-Path -LiteralPath (Join-Path $_ $demoClassRelativePath)})){
     throw 'Demo classes are not prepared; run :renderer-rtxpt:rtxptReleaseValidationClasspath first'
 }
-$application=@('--scene',$Scene,'--hidden',([bool]$Hidden).ToString().ToLowerInvariant())
+$application=@('--scene',$Scene,'--transport',$Transport,'--hidden',([bool]$Hidden).ToString().ToLowerInvariant())
 if($CheckPaths){
-    [pscustomobject]@{Scene=$Scene;Executable=$hostExe;Main=$main;Hidden=[bool]$Hidden;FrameGeneration='demo default: preferred 2x';AutomaticNextScene=$false;LaunchPerformed=$false}
+    [pscustomobject]@{Scene=$Scene;Transport=$Transport;Executable=$hostExe;Main=$main;Hidden=[bool]$Hidden;FrameGeneration='demo default: preferred 2x';AutomaticNextScene=$false;LaunchPerformed=$false}
     return
 }
 $variables=@{RTR_JVM_DLL=$jvm;RTR_JVM_CLASSPATH=$classpath;RTR_JVM_MAIN=$main;RTR_JVM_ARG_COUNT=[string]$application.Count}

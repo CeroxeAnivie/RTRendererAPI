@@ -176,7 +176,23 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptUpstreamProof_runNative(
 
 extern "C" JNIEXPORT jint JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_bridgeAbiVersion(JNIEnv*, jclass) {
-    return 8;
+    return 9;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_officialMode(JNIEnv* env,jclass,jlong handle){
+    try{Get(handle)->session->Enqueue([](auto& app){app.Renderer().ConfigureOfficial();});}
+    catch(const std::exception& error){Throw(env,error);}
+}
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_executionState(JNIEnv* env,jclass,jlong handle){
+    try{
+        std::array<int64_t,5> values{};
+        Get(handle)->session->Invoke([&](auto& app){values=app.Renderer().ExecutionState();});
+        auto result=env->NewLongArray(static_cast<jsize>(values.size()));
+        if(result)env->SetLongArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());
+        return result;
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
@@ -623,6 +639,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_sparseLighting(JNIEnv* env, jclass, jlong handle, jlongArray ids, jfloatArray records, jlongArray removals, jboolean reset) {
     try { auto changed = Longs(env, ids); auto values = Floats(env, records); auto removed = Longs(env, removals);
         Get(handle)->session->Enqueue([changed = std::move(changed), values = std::move(values), removed = std::move(removed), reset](auto& app) {
+            if(app.Renderer().RequiresOfficialPipeline())throw std::logic_error("Sparse adapter lights are unavailable in an official session");
             app.Renderer().sparse.Apply(changed, values, removed, reset != 0);
         });
     } catch (const std::exception& error) { Throw(env, error); }

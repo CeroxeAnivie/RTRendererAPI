@@ -55,6 +55,15 @@ val nativeSceneDefaults = tasks.register<JavaExec>("nativeSceneDefaultsSelfTest"
     mainClass.set("top.ceroxe.rt.renderer.rtxpt.examples.NativeSceneDefaultsSelfTest")
 }
 tasks.named("check") { dependsOn(nativeSceneDefaults) }
+// Explicit hardware opt-in; ordinary check never opens a graphical session.
+tasks.register<Exec>("rtxptOfficialSessionNativeSelfTest") {
+    group = "verification"
+    description = "Verify original RTXPT execution and unavailable adapter capabilities in a real official session"
+    dependsOn("rtxptReleaseValidationClasspath")
+    workingDir(rootProject.projectDir)
+    commandLine("pwsh", "-NoProfile", "-File", "tools/Invoke-RtxptHost.ps1",
+        "-MainClass", "top.ceroxe.rt.renderer.rtxpt.RtxptOfficialSessionNativeSelfTest")
+}
 val runtimeRoot = rootProject.layout.buildDirectory.dir("upstream-rtxpt/runtime/rtxpt_v.1.9.0_binaries")
 val buildBridge = tasks.register<Exec>("buildRtxptBridge") {
     group = "build"

@@ -32,11 +32,27 @@ public final class NativeSceneDefaultsSelfTest {
             var mediumRenderer = NativeSceneDemo.rendererConfig(optics);
             check(ballRenderer.pathTracing().quality().beautyTransport() == PathTracingQualityOptions.BeautyTransport.ANALYTIC_DIRECT,
                     "ball analytic transport");
+            var legacyBase=RendererConfig.presentation();
+            var legacyQuality=PathTracingQualityOptions.defaults().withBeautyTransport(
+                    PathTracingQualityOptions.BeautyTransport.ANALYTIC_DIRECT);
+            legacyQuality=legacyQuality.withPostProcessing(legacyQuality.postProcessing().withExposureOffset(-1.5f));
+            var legacyBall=legacyBase.copyBuilder().pathTracing(PathTracingOptions.defaults().withQuality(legacyQuality))
+                    .denoising(DenoisingOptions.disabled()).frameGeneration(balls.generation()).build();
+            check(ballRenderer.equals(legacyBall),"named analytic entry preserves the entire accepted ball configuration");
             check(ballRenderer.denoising().preference() == RendererFeaturePreference.DISABLED
                     && ballRenderer.pathTracing().radianceCache() == RendererFeaturePreference.DISABLED, "ball denoise/cache off");
             check(mediumRenderer.pathTracing().quality().beautyTransport() == PathTracingQualityOptions.BeautyTransport.NATIVE
                     && mediumRenderer.pathTracing().radianceCache() == RendererFeaturePreference.PREFERRED
                     && mediumRenderer.denoising().preference() == RendererFeaturePreference.PREFERRED, "native medium denoise/cache");
+            for(var scene:new String[]{"balls","mixed"}){
+                var official=NativeSceneDemo.Config.parse(new String[]{"--scene",scene,"--transport","official","--fg","off"});
+                var config=NativeSceneDemo.rendererConfig(official);
+                check(config.pathTracing().quality().beautyTransport()==PathTracingQualityOptions.BeautyTransport.NATIVE,
+                        "official native transport");
+                check(config.pathTracing().radianceCache()==RendererFeaturePreference.PREFERRED
+                        &&config.denoising().preference()==RendererFeaturePreference.PREFERRED,"official denoise/cache");
+                check(config.pathTracing().samplesPerPixel()==1&&config.pathTracing().maxBounces()==12,"same official path budget");
+            }
             var overridden = NativeSceneDemo.Config.parse(new String[]{"--width", "1600", "--height", "1000", "--fg", "off"});
             check(overridden.width() == 1600 && overridden.height() == 1000
                     && overridden.generation().preference() == RendererFeaturePreference.DISABLED, "explicit overrides");

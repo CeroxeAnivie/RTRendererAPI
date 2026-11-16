@@ -43,3 +43,7 @@ Event 字段为 ordinal、sequence、sceneRevision、stage、beginNanos、durati
 ## 性能报告
 
 按相同入口、规模、配置与采样级别比较，分别给阶段平均、P95、P99、最大值与卡顿频率；冷启动、编译和稳态分开。失败／未完成样本及丢失事件明确列出。GPU 忙或缺基线时，FPS 只作观测，不能据绝对帧率判定收益。诊断本身的成本应单列，并使用完整资源提交到新帧输出的负载比较。
+
+## 原始渲染钩子计数
+
+`RtxptAccess.executionState()` 读取完成调用数：完整官方管线、RR guides、解析光路及独立光照。officialOnly 表示会话禁止扩展输运。这些计数可包含初始化帧；它们证明实际经过了哪个调用入口，不是 GPU 耗时或 FG 呈现数。

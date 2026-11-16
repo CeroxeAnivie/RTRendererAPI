@@ -4,7 +4,8 @@
 
 ## 选择执行入口
 
-- 完整原生场景使用 `Renderer` 与 RTXPT 的原生呈现路径。
+- 完整原生场景使用 `Renderer`；严格官方输运显式调用 `RtxptRenderers.openOfficial`。
+- 解析 beauty 显式调用 `RtxptRenderers.openAnalytic`，配置从 `analyticConfiguration()` 开始。该路线与官方入口并存，由消费方创建会话时选择。
 - 独立光照使用 `RtxptRenderers` 的 NativeLighting 入口，并按共享输出租约完成 GPU 消费和合成。
 - NativeLighting／Sparse 是独立外桥能力，其语义以公开计划、输入和输出契约为准。
 

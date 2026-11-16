@@ -5,7 +5,7 @@ import java.util.Objects;
 import top.ceroxe.rt.renderer.api.*;
 import top.ceroxe.rt.renderer.rtxpt.RtxptAccess.Reconstruction;
 
-/** Native RTXPT controls, applied before the first frame. No second transport implementation. */
+/** Original RTXPT controls and explicit adapter transport restrictions, applied before the first frame. */
 record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
         Reconstruction reconstruction, DlssQuality dlssQuality, boolean standaloneDenoiser, boolean relaxDenoiser,
         boolean restirDi, boolean restirGi, boolean sharc, boolean ser, boolean reflex,
@@ -36,6 +36,16 @@ record RtxptOptions(int samplesPerPixel, int maxBounces, int diffuseBounces,
     public static RtxptOptions nativeOneSample() {
         return new RtxptOptions(1,12,2,Reconstruction.NONE,DlssQuality.DLAA,false,false,false,false,false,true,false,
             FrameGenerationOptions.disabled(),PathTracingQualityOptions.defaults());
+    }
+    static void requireOfficial(RendererConfig config){
+        if(config.pathTracing().quality().beautyTransport()!=PathTracingQualityOptions.BeautyTransport.NATIVE)
+            throw new IllegalArgumentException("Official RTXPT requires NATIVE transport; ANALYTIC_DIRECT is an adapter extension");
+        resolve(profile(config));
+    }
+    static void requireAnalytic(RendererConfig config){
+        if(config.pathTracing().quality().beautyTransport()!=PathTracingQualityOptions.BeautyTransport.ANALYTIC_DIRECT)
+            throw new IllegalArgumentException("Analytic beauty requires explicit ANALYTIC_DIRECT transport");
+        resolve(profile(config));
     }
     static RendererFeatureProfile profile(RendererConfig c){return new RendererFeatureProfile(c.frameReconstruction(),c.frameGeneration(),c.lowLatency(),c.denoising(),c.rayTracingOptimizations(),c.pathTracing());}
     static RtxptOptions resolve(RendererFeatureProfile p) {

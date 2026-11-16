@@ -49,3 +49,7 @@ its explicit GPU lease contract; path-traced beauty uses renderer-owned presenta
 
 The source migration and CPU-locality checks do not establish 5.0.0 FPS equivalence.
 Use a complete-request, same-input hardware comparison for performance acceptance.
+
+严格官方会话可显式通过 `RtxptRenderers.openOfficial` / `openOfficialHiddenWindow` 创建；它不暴露 NativeLighting/Sparse 扩展，并拒绝 ANALYTIC_DIRECT 和官方无对应能力的非零逐灯关闭阴影请求。原有扩展入口仍需显式选择，弹球默认不被静默替换。新执行观测方法与 DLL 使用同一桥接 ABI，必须一起部署；不要单独替换 DLL。详见[官方渲染与扩展边界](official-rendering.md)。
+
+解析 beauty 保留正式显式入口 `openAnalytic` / `openAnalyticHiddenWindow` 及配置工厂 `analyticConfiguration()`，与严格官方入口并存。它接受兼容的 ANALYTIC_DIRECT 配置，不强制消费方转用官方输运。模式在创建 renderer 时选定。

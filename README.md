@@ -35,6 +35,7 @@ provider 会带入同版本的纯契约模块，不要混用不同版本的 JAR 
 
 - [文档首页](docs/Home.md)：接入、配置、运行时与兼容性。
 - [API 参考入口](docs/Java-API-Reference.md)：公开类型与源码。
+- [官方渲染与扩展边界](docs/official-rendering.md)：严格官方入口、画质保留范围和验收规则。
 - [原生场景示例](examples/native-scenes/README.md)：场景启动与操作。
 - [诊断接口](docs/rtxpt-diagnostics.md)：采集级别、事件游标与计时边界。
 - [源码构建工具](tools/README.md)：构建、测试与打包入口；使用成品依赖无需运行这些脚本。

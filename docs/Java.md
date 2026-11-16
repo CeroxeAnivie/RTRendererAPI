@@ -24,6 +24,8 @@ Renderer 只聚合生命周期与场景／帧提交，不再聚合 CPU FrameAcce
 
 完整原生场景由 RTXPT 的原循环执行；RtxptAccess 只保留实际场景、帧、窗口和 capture 访问，以及外部边界诊断。旧内部设置／资源池探针不是 8.0.0 兼容目标。
 
+两种 beauty 路径明确并存：`RtxptRenderers.openOfficial(RendererConfig.pathTracedPresentation())` 选择完整官方输运；`RtxptRenderers.openAnalytic(RtxptRenderers.analyticConfiguration())` 选择保留的解析输运。对应的 `openOfficialHiddenWindow` / `openAnalyticHiddenWindow` 只隐藏原生窗口。消费方创建 renderer 时自行决定，不按应用名称自动选择，不在同一会话中混用两套时序历史。解析路线的降噪、重用与光照边界见[官方渲染与解析扩展](official-rendering.md)。
+
 独立光照通过 RtxptRenderers 的 native-lighting 入口提供计划和必要属性。自有直接光 shader 是外部扩展，不称为原版 RTXPT 光照。
 
 在这个有限信号模式下，MeshAsset 的原始三角形顺序保持稳定，逐三角形材质索引独立上传。材质分组、排序、纹理采样和透明类型变化不改变几何索引；位置或索引真正变化时，仍由原生上传器与 AS 构建器处理。身份替换经过精确内容比较后可以沿用已完成的几何和属性范围；新的公开身份、材质及帧版本照常发布。此路径适用于所有使用该模式的消费者，不依赖应用名称或场景名称。

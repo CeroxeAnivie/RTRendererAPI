@@ -9,6 +9,7 @@
 | 公开类型与源码 | [API 参考入口](Java-API-Reference.md) |
 | 运行时目录与宿主参数 | [运行时与 JVM 宿主](runtime-distribution.md) |
 | provider 与应用职责 | [接入边界](backend-routing.md) |
+| 官方完整渲染与解析扩展 | [官方渲染](official-rendering.md) |
 | 普通接入与专家控制 | [用法选择](ordinary-and-expert.md) |
 | 诊断事件、游标和时间含义 | [诊断](rtxpt-diagnostics.md) |
 | 版本和升级范围 | [兼容性](COMPATIBILITY.md) |

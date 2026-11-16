@@ -4,7 +4,7 @@
 
 ## 场景与操作
 
-准备好 :renderer-rtxpt:rtxptReleaseValidationClasspath 后，使用 tools/Invoke-NativeSceneDemo.ps1 -Scene balls 启动一场；用户关闭后才另行 -Scene mixed。脚本默认显示普通窗口，保留所有演示默认值，不自动串场；后台验证显式加 -Hidden。加 -CheckPaths 只核对可启动输入，不创建进程或窗口。
+准备好 :renderer-rtxpt:rtxptReleaseValidationClasspath 后，使用 tools/Invoke-NativeSceneDemo.ps1 -Scene balls 启动一场；用户关闭后才另行 -Scene mixed。脚本默认显示普通窗口，保留所有演示默认值，不自动串场；后台验证显式加 -Hidden。显式增加 `-Transport official` 可运行严格官方候选；默认 `scene` 保持已验收的弹球解析路径和介质原生路径。官方候选未通过画质及性能验收前，不替换弹球默认值。加 -CheckPaths 只核对可启动输入，不创建进程或窗口。
 
 - 第一轮使用 --scene balls。窗口按 1／2／3 切换玻璃、不透明、金属球，运动状态保留；控制台可输入材质名或 quit。
 - 用户关闭第一轮窗口、确认进程退出后，再由启动方单独启动 --scene mixed。程序不会自动启动第二个场景或进程。
@@ -21,11 +21,12 @@
 
 | 参数 | 实际支持与语义 |
 | --- | --- |
+| --transport | scene、official；默认 scene 保留当前效果。official 使用封闭自有光照扩展的完整 AdvancedSample 路径，弹球使用 RR/SHaRC 并保留材质、曝光和路径深度 |
 | --fg | off、2、3、4；是请求档位，不是测得的输出倍率 |
 | --denoising | scene、off、relax、rr；默认 scene 保留本场景配置。弹球解析模式仅 scene/off；relax/rr 会明确拒绝。其它原生场景保留去噪选择 |
 | --hidden | true/false；默认 false。后台验证显式 true，保留原生渲染及 Present，只隐藏窗口 |
 | --cycle-frames | 默认0；至少120时，在同一个renderer中依次切换全部3种球材质或6个光学预设，每项运行指定帧数后自动结束。--capture按材质／预设分别保存最终窗口图像；用于完整后台巡检，不是无读回性能场次 |
-| --native | 必须带 true 或 false，仅用于光学场景；balls 不支持 true。true 与 denoising=rr 不能组合，原生分辨率对照可显式用 relax |
+| --native | 必须带 true 或 false，用于光学场景和 official 弹球；解析 balls 不支持 true。true 与 denoising=rr 不能组合，原生分辨率对照可显式用 relax |
 | --diagnostics | off、summary、deep；默认 off |
 | --output／--capture | 分别指定 JSON 报告／显式 DisplayColor 读回；capture 有额外开销，不应混入无读回对照 |
 | --spp | 这里只接受 1，不靠增加 SPP 掩盖旧画面差异 |
@@ -33,3 +34,7 @@
 VSync 在启动链／原生配置中控制，示例没有 Java --vsync 参数。原生 nonInteractive 也不属于 Java main 参数。VSync 与 FG 以实际原生状态为准，请求 2×FG 不代表最终呈现 FPS 翻倍。
 
 示例区分冷首帧和稳态 submit 延迟，读取实际 window／framebuffer／render／display 尺寸、曝光及 RenderingState。Scene Combo、键盘和控制台切换同步，HUD 每500ms刷新。原生去噪选择／启用策略／已初始化对象不等于本帧 GPU 执行；未知项显示 NOT MEASURED。日志中的 completed submissions 是原生提交吞吐，SDK 查询区间计数不是 FG 倍率或实际 generated-frame FPS。
+
+官方入口、执行计数及逐项画质边界见[官方渲染与解析扩展](../../docs/official-rendering.md)。执行计数可包含原生初始化帧，不能作为 API 提交数或插帧呈现数。
+
+弹球默认通过公开 `openAnalytic` / `openAnalyticHiddenWindow` 入口启动，配置来自 `analyticConfiguration()`；官方路径使用 `openOfficial` / `openOfficialHiddenWindow`。两条路线并存，消费方可在创建会话时自行选择。这里的解析 beauty 与 NativeLighting 独立光照增益输出不是同一接口。
