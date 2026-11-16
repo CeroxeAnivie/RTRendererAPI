@@ -761,7 +761,7 @@ public:
         renameSet(alphaMeshes);renameSet(dirtyBaselines);renameSet(dirtyColors);renameSet(dirtySurfaces);
         metadataDirty=true;
     }
-    bool CollectGeometryMetadata(const std::shared_ptr<donut::engine::MeshInfo>& mesh,uint32_t group,GeometryMetadata& entry){
+    bool CollectGeometryMetadata(const std::shared_ptr<donut::engine::MeshInfo>& mesh,uint32_t group,GeometryMetadata& entry,bool nativeRowChanged=false){
         if(entry.collected==metadataScan)return false;
         entry.collected=metadataScan;
         const auto& geometry=mesh->geometries[group];const auto& name=entry.name;
@@ -770,7 +770,7 @@ public:
         const auto* mapping=entry.mapping;const auto* previous=mapping?mapping->attributes:nullptr;
         const float opacity=MetadataOpacity(geometry->material);
         if(!previous||previous->maskedOpacity!=opacity)TrackMaskedScalar(name,opacity);
-        const bool changed=!mapping||mapping->index!=uint32_t(geometry->globalGeometryIndex)
+        const bool changed=nativeRowChanged||!mapping||mapping->index!=uint32_t(geometry->globalGeometryIndex)
             ||!previous||previous->triangles*3!=geometry->numIndices
             ||previous->texturePolicies!=entry.texturePolicies||previous->maskedOpacity!=opacity;
         if(changed)metadataGeometryChanges.push_back({mesh,group,&entry});return changed;
@@ -835,7 +835,7 @@ public:
                     metadataGeometryChanges.push_back({mesh,uint32_t(group),&entry,true});
                     continue;
                 }
-                CollectGeometryMetadata(mesh,uint32_t(group),entry);
+                CollectGeometryMetadata(mesh,uint32_t(group),entry,true);
             }
         }
         AppendMaterialMetadataDelta();

@@ -36,13 +36,21 @@ public final class RtxptLightingReentryNativeSelfTest {
             renderer.apply(tx.build());
             Map<Integer,Long> slotOwners=new HashMap<>();Map<Long,Integer> priorSlots=new HashMap<>();
             long[] ids={2,3,2,4,5,4,2,6,5,6,3,2};
+            long revision=1;
             for(int frame=0;frame<ids.length;frame++){
                 long mesh=ids[frame],sequence=frame+1;
+                if(frame==2){
+                    revision++;
+                    renderer.apply(SceneTransaction.builder(revision)
+                        .upsert(TextureAsset.builder(1,1,1).pixelsRgba8(new byte[]{-1,-1,-1,-1}).build())
+                        .upsert(MaterialAsset.builder(2).doubleSided(true).blendMode(MaterialAsset.BlendMode.MASKED)
+                            .baseColorTextureId(1).alphaCutoff(.1f).build()).build());
+                }
                 var batch=FramePrimitiveBatch.builder().add(PrimitiveInstance.builder(mesh).visibilityMask(1).build()).build();
-                renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,CAMERA).minimumSceneRevision(1)
+                renderer.submit(RenderFrameRequest.builder(sequence,SIZE,SIZE,CAMERA).minimumSceneRevision(revision)
                     .primitiveBatch(batch).build());access.awaitIdle();
                 try(var lease=lighting.acquireLightingFrame().orElseThrow()){
-                    if(lease.frame().sequence()!=sequence||lease.frame().sceneRevision()!=1)
+                    if(lease.frame().sequence()!=sequence||lease.frame().sceneRevision()!=revision)
                         throw new AssertionError("Reentry output used a different resource generation");
                 }
                 long handle=field.getLong(renderer);
@@ -65,6 +73,6 @@ public final class RtxptLightingReentryNativeSelfTest {
             }
         }
         if(overwrittenReentries==0)throw new AssertionError("Fixture never reused an overwritten dense slot");
-        System.out.println("LIGHTING_REENTRY_NATIVE PASS frames=12 overwrittenReentries="+overwrittenReentries+" freshFirstFrame=true");
+        System.out.println("LIGHTING_REENTRY_NATIVE PASS frames=12 overwrittenReentries="+overwrittenReentries+" freshFirstFrame=true samePolicyMaterialRebind=true");
     }
 }
