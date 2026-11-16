@@ -175,10 +175,10 @@ public final class RtxptDynamicResourcesSelfTest {
             require(result.work().exportedModels()==0,"No file importer path");
             try(var files=Files.list(path)){require(files.findAny().isEmpty(),"Resource planning creates no files");}
             var mesh=scene.meshes.get(1L);var groups=RtxptAttributeBatch.groups(mesh);
-            require(groups.size()==2&&groups.stream().mapToInt(g->g.corners().length).sum()==mesh.triangleCount()*3,"Multi-material primitive groups preserve every corner");
+            require(groups.size()==2&&groups.stream().mapToInt(g->g.triangleCount()*3).sum()==mesh.triangleCount()*3,"Multi-material primitive groups preserve every corner");
             boolean[] seen=new boolean[mesh.triangleCount()*3];
             for(var group:groups){var entry=RtxptAttributeBatch.convert("mesh",mesh,group,null,true,true);
-                for(int i=0;i<group.corners().length;i++){int corner=group.corners()[i];require(!seen[corner],"Unique corner mapping");seen[corner]=true;
+                for(int i=0;i<group.triangleCount()*3;i++){int corner=group.corner(i);require(!seen[corner],"Unique corner mapping");seen[corner]=true;
                     require(mesh.triangleMaterialIds().get(corner/3)==group.material()&&entry.colors()[i]==0xffa0b0c0,"Group and authored color preserved");}}
         }finally{Files.delete(path);}
     }

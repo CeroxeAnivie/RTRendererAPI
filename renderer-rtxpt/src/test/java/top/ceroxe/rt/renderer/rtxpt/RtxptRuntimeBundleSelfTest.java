@@ -268,7 +268,7 @@ public final class RtxptRuntimeBundleSelfTest {
                 "bin/ShaderDynamic/Source/External/fixture.hlsli"})
             entries.put(path, bytes("non-executable fixture: " + path));
         entries.put("Assets/EnvironmentMaps/", new byte[0]);
-        for (var shader : new String[]{"RtrNativeLighting", "RtrNativeLightingReconstruct",
+        for (var shader : new String[]{"RtrNativeLighting", "RtrNativeDirectLighting", "RtrNativeLightingReconstruct",
                 "RtrNativeDynamicLighting", "RtrNativeDynamicLightingReconstruct",
                 "RtrNativeLightingDeep", "RtrNativeLightingEncode", "RtrNativeLightingResolve",
                 "RtrNativeGiReduce", "RtrNativeGiUpsample"})

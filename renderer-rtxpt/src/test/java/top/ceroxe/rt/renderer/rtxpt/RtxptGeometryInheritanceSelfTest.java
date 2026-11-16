@@ -23,12 +23,14 @@ public final class RtxptGeometryInheritanceSelfTest {
         var result=new ArrayList<Input>();
         for(int count=data.getInt();count>0;count--){
             String name=string(data),source=null;int bytes=0,kind=data.getInt();
-            require(kind==0||kind==1,"Defined geometry transport kind");
+            require(kind>=0&&kind<=2,"Defined geometry transport kind");
             if(kind==1)source=string(data);
             else for(int channel=0;channel<5;channel++){
                 int length=Math.multiplyExact(data.getInt(),4);bytes+=length;data.position(data.position()+length);
             }
-            for(int groups=data.getInt();groups>0;groups--){string(data);int triangles=data.getInt();data.position(data.position()+triangles*4);}
+            int groups=data.getInt();
+            if(groups==0)string(data); // Single material has an implicit full-triangle range.
+            else for(int group=0;group<groups;group++){string(data);int triangles=data.getInt();data.position(data.position()+triangles*4);}
             result.add(new Input(name,source,bytes));
         }
         return result;

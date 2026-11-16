@@ -7,6 +7,7 @@
 #include "rtxpt_native_application_ranges.h"
 #include "rtxpt_attribute_ranges.h"
 #include "rtxpt_attribute_capacity.h"
+#include "rtxpt_receiver_upload.h"
 #include "rtxpt_allocation_failure.h"
 #include "rtxpt_host_response_lookup.h"
 #include "rtxpt_gpu_profile.h"
@@ -20,12 +21,12 @@ public:
     static constexpr uint32_t AbiVersion=1;
     struct alignas(16) Constants {std::array<float,88> words{};};
     struct InstanceAttributes {float4 rolesVisibility={23,1,0,0};float4 baseline={1,1,0,0};std::array<float4,3> explicitPrevious{};float4 surfaceVisibility={1,0,0,0};};
-    struct GeometryAttributes {uint32_t offset=0,triangles=0;std::array<uint32_t,4> texturePolicies{};float maskedOpacity=1.f;};
-    struct VertexAttributes {float2 baseline={0,0};uint32_t color=0xffffffff,reserved=0;};
+    struct GeometryAttributes {uint32_t offset=0,triangles=0;std::array<uint32_t,4> texturePolicies{};float maskedOpacity=1.f;uint32_t surfaceSelector=0;};
+    using VertexAttributes=rtr::upstream::ReceiverVertex;
     static_assert(sizeof(VertexAttributes)==16);
-    static_assert(sizeof(Constants)==352&&sizeof(InstanceAttributes)==96&&sizeof(GeometryAttributes)==28);
+    static_assert(sizeof(Constants)==352&&sizeof(InstanceAttributes)==96&&sizeof(GeometryAttributes)==32);
     std::function<std::array<uint32_t,4>(const std::string&)> texturePolicies;
-    std::function<const std::vector<uint32_t>*(const std::string&)> surfaceSlots;
+    std::function<rtr::upstream::MeshSurfaceSlots(const std::string&)> surfaceSlots;
     std::function<void(std::vector<rtr::upstream::SurfaceMaterialRow>&,std::vector<uint32_t>&)> surfaceUpdates;
     std::vector<rtr::upstream::SurfaceMaterialRow> surfaceRows;
     std::vector<uint32_t> surfaceDirty;
@@ -35,6 +36,10 @@ public:
     nvrhi::BufferHandle surfaceIndices;
     std::unordered_set<std::string> dirtySurfaces;
     std::vector<uint32_t> surfaceUploadScratch;
+    struct SurfaceUploadRun {uint32_t offset;const std::vector<uint32_t>* slots;};
+    std::vector<SurfaceUploadRun> surfaceUploadRuns;
+    static constexpr uint32_t MixedSurfaceBit=0x80000000u;
+    rtr::AttributeRanges surfaceRanges;
     std::array<nvrhi::SamplerHandle,8> textureSamplers;
     Constants constants;
     RtrSceneDelta sceneDelta;
@@ -102,13 +107,95 @@ public:
     nvrhi::ComputePipelineHandle singleGroupPipeline;
     nvrhi::ComputePipelineHandle sparseOnlyPipeline,sparseOnlySingleGroupPipeline,smallGroupPipeline,sparseOnlySmallGroupPipeline;
     nvrhi::ComputePipelineHandle pairGroupPipeline,sparseOnlyPairGroupPipeline;
-    std::array<nvrhi::ComputePipelineHandle,8> uninstrumentedPipelines;
+    std::array<nvrhi::ComputePipelineHandle,8> uninstrumentedPipelines,directPipelines,directChannelPipelines;
+    bool UseDirectPipeline(bool maximum) const{return mask==1&&!reconstruction.requested&&!maximum;}
     std::array<nvrhi::ComputePipelineHandle,16> maxPipelines;
     std::array<nvrhi::ComputePipelineHandle,8> countedMaxPipelines;
     std::array<nvrhi::ComputePipelineHandle,16> channelMaxPipelines;
     std::unordered_map<std::string,InstanceAttributes> instanceAttributes;
-    std::unordered_map<std::string,std::vector<float2>> meshBaselines;
+    std::unordered_map<std::string,std::vector<float>> meshBaselines; // two floats per corner
     std::unordered_map<std::string,std::vector<uint32_t>> meshColors;
+    std::unordered_map<std::string,rtr::upstream::ReceiverGeometry> meshReceivers;
+    bool SameBaseline(const std::string& name,const std::vector<float>& values)const{
+        if(const auto old=meshBaselines.find(name);old!=meshBaselines.end())
+            return old->second.size()==values.size()&&(values.empty()||std::memcmp(old->second.data(),values.data(),values.size()*sizeof(float))==0);
+        const auto found=meshReceivers.find(name);
+        if(found==meshReceivers.end()||values.size()!=found->second.indices.size()*2)return false;
+        const auto& receiver=found->second;
+        for(size_t i=0;i<receiver.indices.size();++i)for(unsigned axis=0;axis<2;++axis){
+            const float previous=receiver.baseline.empty()?0:receiver.baseline[size_t(receiver.indices[i])*2+axis];
+            if(std::memcmp(&previous,&values[i*2+axis],sizeof(float))!=0)return false;
+        }
+        return true;
+    }
+    bool SameColors(const std::string& name,const std::vector<uint32_t>& values)const{
+        if(const auto old=meshColors.find(name);old!=meshColors.end())return old->second==values;
+        const auto found=meshReceivers.find(name);
+        if(found==meshReceivers.end()||values.size()!=found->second.indices.size())return false;
+        const auto& receiver=found->second;
+        for(size_t i=0;i<values.size();++i)
+            if(values[i]!=(receiver.colors.empty()?0xffffffffu:receiver.colors[receiver.indices[i]]))return false;
+        return true;
+    }
+    void PublishReceivers(std::vector<rtr::upstream::ReceiverGeometry>& values){
+        for(auto& value:values){
+            // A geometry/identity packet republishes canonical receiver input,
+            // but it need not rewrite unchanged corner attributes. Compare the
+            // actual effective channels, including preceding public overrides.
+            auto previous=meshReceivers.find(value.name);
+            auto baseline=meshBaselines.find(value.name);auto colors=meshColors.find(value.name);
+            const auto exact=[](const auto& a,const auto& b){
+                return a.size()==b.size()&&(a.empty()||std::memcmp(a.data(),b.data(),a.size()*sizeof(a[0]))==0);
+            };
+            bool baselineChanged=true,colorsChanged=true;
+            if(previous!=meshReceivers.end()&&previous->second.indices.size()==value.indices.size()){
+                const auto& old=previous->second;
+                baselineChanged=baseline!=meshBaselines.end()||!exact(old.baseline,value.baseline);
+                colorsChanged=colors!=meshColors.end()||old.colors!=value.colors;
+                const bool sameMap=old.indices==value.indices;
+                baselineChanged|=!sameMap&&(!old.baseline.empty()||!value.baseline.empty());
+                colorsChanged|=!sameMap&&(!old.colors.empty()||!value.colors.empty());
+                if(baselineChanged){
+                    baselineChanged=false;
+                    for(size_t i=0;i<value.indices.size()&&!baselineChanged;++i)for(unsigned axis=0;axis<2;++axis){
+                        const float before=baseline!=meshBaselines.end()?baseline->second.at(i*2+axis)
+                            :old.baseline.empty()?0:old.baseline[size_t(old.indices[i])*2+axis];
+                        const float after=value.baseline.empty()?0:value.baseline[size_t(value.indices[i])*2+axis];
+                        if(std::memcmp(&before,&after,sizeof(float))!=0){baselineChanged=true;break;}
+                    }
+                }
+                if(colorsChanged){
+                    colorsChanged=false;
+                    for(size_t i=0;i<value.indices.size();++i){
+                        const uint32_t before=colors!=meshColors.end()?colors->second.at(i)
+                            :old.colors.empty()?0xffffffffu:old.colors[old.indices[i]];
+                        const uint32_t after=value.colors.empty()?0xffffffffu:value.colors[value.indices[i]];
+                        if(before!=after){colorsChanged=true;break;}
+                    }
+                }
+            }else{
+                // A public clear/reset may leave only expanded overrides. They
+                // remain the actual previous GPU inputs until this publication.
+                if(baseline!=meshBaselines.end()&&baseline->second.size()==value.indices.size()*2){
+                    baselineChanged=false;
+                    for(size_t i=0;i<value.indices.size()&&!baselineChanged;++i)for(unsigned axis=0;axis<2;++axis){
+                        const float after=value.baseline.empty()?0:value.baseline[size_t(value.indices[i])*2+axis];
+                        if(std::memcmp(&baseline->second[i*2+axis],&after,sizeof(float))!=0){baselineChanged=true;break;}
+                    }
+                }
+                if(colors!=meshColors.end()&&colors->second.size()==value.indices.size()){
+                    colorsChanged=false;
+                    for(size_t i=0;i<value.indices.size();++i)
+                        if(colors->second[i]!=(value.colors.empty()?0xffffffffu:value.colors[value.indices[i]])){colorsChanged=true;break;}
+                }
+            }
+            meshBaselines.erase(value.name);meshColors.erase(value.name);
+            if(value.alpha)alphaMeshes.insert(value.name);else alphaMeshes.erase(value.name);
+            if(baselineChanged)dirtyBaselines.insert(value.name);
+            if(colorsChanged)dirtyColors.insert(value.name);
+            auto name=std::move(value.name);meshReceivers.insert_or_assign(std::move(name),std::move(value));
+        }
+    }
     std::unordered_set<std::string> alphaMeshes;
     std::unordered_map<std::string,uint32_t> instanceSlots;
     std::unordered_map<std::string,GeometryAttributes> geometrySlots;
@@ -128,6 +215,7 @@ public:
     struct MeshMetadata {
         std::weak_ptr<donut::engine::MeshInfo> owner;
         std::vector<GeometryMetadata> groups;
+        bool seenInSnapshot=false;
     };
     // Reindexing preserves the native mesh owner even when its dense slot moves.
     // The weak owner guards address reuse without keeping the mesh/BLAS alive.
@@ -224,12 +312,12 @@ public:
         maskedScalarCandidates=!maskedScalarGeometries.empty();
     }
     uint64_t geometryIndexEpoch=0;
-    struct GeometryEntry {std::string name;uint32_t index=0,corners=0;bool indexChanged=false;GeometryIndex* slot=nullptr;std::array<uint32_t,4> texturePolicies{};float maskedOpacity=1.f;};
+    struct GeometryEntry {std::string name;uint32_t index=0,corners=0;bool indexChanged=false;GeometryIndex* slot=nullptr;std::array<uint32_t,4> texturePolicies{};float maskedOpacity=1.f;rtr::upstream::MeshSurfaceSlots surfaces;};
     std::vector<GeometryEntry> geometryEntriesScratch;
     std::unordered_set<std::string> dirtyInstances,dirtyBaselines,dirtyColors;
     std::vector<InstanceAttributes> instanceUploadScratch;
     std::vector<GeometryAttributes> geometryUploadScratch;
-    std::vector<VertexAttributes> vertexUploadScratch;
+    rtr::ReceiverUploadStorage<VertexAttributes> vertexUploadScratch;
     struct VertexUploadRun {const std::string* name;GeometryAttributes attributes;};
     std::vector<VertexUploadRun> vertexUploadRuns;
     std::vector<uint32_t> instanceUploadIndices,geometryUploadIndices;
@@ -267,21 +355,22 @@ public:
     }
     // Cumulative operational counts, independent of optional diagnostic recording.
     std::array<uint64_t,5> attributeWork{}; // layout builds, corners packed, instance writes, attribute bytes, local geometry writes
-    void AppendVertices(const std::string& name,size_t count){
-        // NVRHI writeBuffer consumes its CPU source during the call. The owner
-        // can reuse this staging view after each call without a second pool or
-        // retaining a separate vector for every geometry publication.
-        auto baseline=meshBaselines.find(name);auto colors=meshColors.find(name);
-        if(baseline!=meshBaselines.end()&&baseline->second.size()!=count)throw std::invalid_argument("Baseline update changes geometry layout");
+    void PackVertices(const std::string& name,size_t count,VertexAttributes* target){
+        const auto baseline=meshBaselines.find(name);const auto colors=meshColors.find(name);
+        if(baseline!=meshBaselines.end()&&baseline->second.size()!=count*2)throw std::invalid_argument("Baseline update changes geometry layout");
         if(colors!=meshColors.end()&&colors->second.size()!=count)throw std::invalid_argument("Vertex color update changes geometry layout");
-        const size_t begin=vertexUploadScratch.size();vertexUploadScratch.resize(begin+count);
-        auto* target=vertexUploadScratch.data()+begin;
-        if(baseline!=meshBaselines.end())for(size_t i=0;i<count;++i)target[i].baseline=baseline->second[i];
-        if(colors!=meshColors.end())for(size_t i=0;i<count;++i)target[i].color=colors->second[i];
+        RtrInputSpan<uint32_t> indices,receiverColors;RtrInputSpan<float> receiverBaseline;
+        if(auto receiver=meshReceivers.find(name);receiver!=meshReceivers.end()){
+            const auto& value=receiver->second;
+            if(value.indices.size()!=count)throw std::invalid_argument("Receiver update changes geometry layout");
+            indices=value.indices;receiverBaseline=value.baseline;receiverColors=value.colors;
+        }
+        rtr::PackReceiverUpload(target,count,indices,receiverBaseline,receiverColors,
+            baseline==meshBaselines.end()?nullptr:baseline->second.data(),
+            colors==meshColors.end()?nullptr:colors->second.data());
         attributeWork[1]+=count;
     }
     void UploadVertexRuns(nvrhi::ICommandList* command,const std::unordered_set<std::string>& names){
-        dirtySurfaces.insert(names.begin(),names.end());
         vertexUploadRuns.clear();
         for(const auto& name:names)if(auto found=geometrySlots.find(name);found!=geometrySlots.end())
             vertexUploadRuns.push_back({&found->first,found->second});
@@ -290,44 +379,94 @@ public:
         // fences and GPU resources; no second upload allocator is introduced.
         constexpr size_t batchCorners=1024*1024/sizeof(VertexAttributes);
         for(size_t begin=0;begin<vertexUploadRuns.size();){
-            const size_t offset=vertexUploadRuns[begin].attributes.offset;size_t end=begin;
-            vertexUploadScratch.clear();
-            do{
-                const auto& run=vertexUploadRuns[end];
-                AppendVertices(*run.name,size_t(run.attributes.triangles)*3);++attributeWork[4];++end;
-            }while(end<vertexUploadRuns.size()
-                &&vertexUploadRuns[end].attributes.offset==offset+vertexUploadScratch.size()
-                &&vertexUploadScratch.size()+size_t(vertexUploadRuns[end].attributes.triangles)*3<=batchCorners);
-            const size_t bytes=vertexUploadScratch.size()*sizeof(VertexAttributes);
+            const size_t offset=vertexUploadRuns[begin].attributes.offset;
+            size_t end=begin+1,corners=size_t(vertexUploadRuns[begin].attributes.triangles)*3;
+            while(end<vertexUploadRuns.size()
+                &&vertexUploadRuns[end].attributes.offset==offset+corners
+                &&size_t(vertexUploadRuns[end].attributes.triangles)*3<=batchCorners-std::min(corners,batchCorners)){
+                corners+=size_t(vertexUploadRuns[end].attributes.triangles)*3;++end;
+            }
+            vertexUploadScratch.reserve(corners);size_t written=0;
+            for(size_t at=begin;at<end;++at){
+                const auto& run=vertexUploadRuns[at];const size_t count=size_t(run.attributes.triangles)*3;
+                PackVertices(*run.name,count,vertexUploadScratch.data()+written);written+=count;++attributeWork[4];
+            }
+            const size_t bytes=corners*sizeof(VertexAttributes);
             if(bytes){
-                RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,vertexUploadScratch.size(),bytes,1,0,0,0,RtrDiagnostics::Attributes,bytes);
+                RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,corners,bytes,1,0,0,0,RtrDiagnostics::Attributes,bytes);
                 command->writeBuffer(baselineCoordinates,vertexUploadScratch.data(),bytes,offset*sizeof(VertexAttributes));
                 attributeWork[3]+=bytes;
             }
             begin=end;
         }
     }
-    void UploadSurfaceRuns(nvrhi::IDevice* device,nvrhi::ICommandList* command){
-        EnsureAttributeBuffer(device,command,surfaceIndices,std::max<size_t>(1,attributeRanges.end/3)*sizeof(uint32_t),sizeof(uint32_t),"Finite-signal triangle surfaces");
-        vertexUploadRuns.clear();
-        for(const auto& name:dirtySurfaces)if(auto found=geometrySlots.find(name);found!=geometrySlots.end())
-            vertexUploadRuns.push_back({&found->first,found->second});
-        std::sort(vertexUploadRuns.begin(),vertexUploadRuns.end(),[](const auto& a,const auto& b){return a.attributes.offset<b.attributes.offset;});
-        for(size_t begin=0;begin<vertexUploadRuns.size();){
-            const size_t offset=vertexUploadRuns[begin].attributes.offset/3;size_t end=begin;surfaceUploadScratch.clear();
-            do{
-                const auto& run=vertexUploadRuns[end];const auto* slots=surfaceSlots?surfaceSlots(*run.name):nullptr;
-                if(slots&&slots->size()!=run.attributes.triangles)throw std::invalid_argument("Surface update changes triangle layout");
-                const size_t first=surfaceUploadScratch.size();surfaceUploadScratch.resize(first+run.attributes.triangles,0);
-                if(slots)for(size_t triangle=0;triangle<slots->size();++triangle)surfaceUploadScratch[first+triangle]=slots->at(triangle)+1;
-                ++end;
-            }while(end<vertexUploadRuns.size()&&vertexUploadRuns[end].attributes.offset/3==offset+surfaceUploadScratch.size()
-                &&surfaceUploadScratch.size()+vertexUploadRuns[end].attributes.triangles<=262144);
-            const size_t bytes=surfaceUploadScratch.size()*sizeof(uint32_t);
-            RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,surfaceUploadScratch.size(),bytes,1,0,0,0,RtrDiagnostics::Material|RtrDiagnostics::Attributes,bytes);
-            command->writeBuffer(surfaceIndices,surfaceUploadScratch.data(),bytes,offset*sizeof(uint32_t));attributeWork[3]+=bytes;begin=end;
+    void ReleaseGeometryRanges(const GeometryAttributes& attributes){
+        FreeAttributeRangeAt(attributes.offset,attributes.triangles*3);
+        if(attributes.surfaceSelector&MixedSurfaceBit)
+            surfaceRanges.Release(attributes.surfaceSelector&~MixedSurfaceBit,attributes.triangles);
+    }
+    bool SetSurfaceMapping(GeometryAttributes& attributes,rtr::upstream::MeshSurfaceSlots slots){
+        const auto before=attributes.surfaceSelector;
+        if(slots.mixed){
+            if(slots.mixed->size()!=attributes.triangles)throw std::invalid_argument("Surface update changes triangle layout");
+            // Mixed ranges are a subset of the live corner ranges, but churn can
+            // leave holes. The tag bit is reserved even if the arena fragments.
+            if(!(before&MixedSurfaceBit)){
+                const auto offset=surfaceRanges.Allocate(attributes.triangles);
+                if(uint64_t(offset)+attributes.triangles>MixedSurfaceBit)throw std::length_error("Triangle surfaces exceed selector capacity");
+                attributes.surfaceSelector=MixedSurfaceBit|offset;
+            }
+            surfaceUploadRuns.push_back({attributes.surfaceSelector&~MixedSurfaceBit,slots.mixed});
+        }else{
+            if(before&MixedSurfaceBit)surfaceRanges.Release(before&~MixedSurfaceBit,attributes.triangles);
+            attributes.surfaceSelector=slots.uniform;
         }
-        if(!dirtySurfaces.empty())++metadataUploads;dirtySurfaces.clear();
+        return before!=attributes.surfaceSelector;
+    }
+    bool StageChangedSurfaces(){
+        bool staged=false;
+        for(const auto& name:dirtySurfaces){
+            auto found=geometryIndices.find(name);
+            if(found==geometryIndices.end()||!found->second.attributes)continue;
+            auto& attributes=*found->second.attributes;
+            if(!SetSurfaceMapping(attributes,surfaceSlots(name)))continue;
+            geometryUploadScratch.at(found->second.index)=attributes;
+            geometryUploadIndices.push_back(found->second.index);attributeWork[3]+=sizeof(attributes);staged=true;
+        }
+        dirtySurfaces.clear();return staged;
+    }
+    void UploadGeometryRows(nvrhi::ICommandList* command){
+        const bool overlap=!geometryUploadIndices.empty();
+        if(StageChangedSurfaces()&&overlap){
+            std::sort(geometryUploadIndices.begin(),geometryUploadIndices.end());
+            geometryUploadIndices.erase(std::unique(geometryUploadIndices.begin(),geometryUploadIndices.end()),geometryUploadIndices.end());
+        }
+        UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
+        geometryUploadIndices.clear();
+    }
+    void UploadSurfaceRuns(nvrhi::IDevice* device,nvrhi::ICommandList* command){
+        EnsureAttributeBuffer(device,command,surfaceIndices,surfaceRanges.end*sizeof(uint32_t),sizeof(uint32_t),"Finite-signal triangle surfaces");
+        std::sort(surfaceUploadRuns.begin(),surfaceUploadRuns.end(),[](const auto& a,const auto& b){return a.offset<b.offset;});
+        for(size_t begin=0;begin<surfaceUploadRuns.size();){
+            const auto& first=surfaceUploadRuns[begin];size_t count=first.slots->size(),end=begin+1;
+            for(;end<surfaceUploadRuns.size();++end){
+                const auto& next=surfaceUploadRuns[end];
+                if(next.offset!=first.offset+count||count+next.slots->size()>262144)break;
+                count+=next.slots->size();
+            }
+            const uint32_t* data=first.slots->data();
+            if(end>begin+1){
+                surfaceUploadScratch.clear();surfaceUploadScratch.reserve(count);
+                for(size_t i=begin;i<end;++i){const auto& slots=*surfaceUploadRuns[i].slots;
+                    surfaceUploadScratch.insert(surfaceUploadScratch.end(),slots.begin(),slots.end());}
+                data=surfaceUploadScratch.data();
+            }
+            const size_t bytes=count*sizeof(uint32_t);
+            RtrDiagnostics::Scope upload(RtrDiagnostics::BufferUpload,count,bytes,1,0,0,0,RtrDiagnostics::Material|RtrDiagnostics::Attributes,bytes);
+            command->writeBuffer(surfaceIndices,data,bytes,size_t(first.offset)*sizeof(uint32_t));attributeWork[3]+=bytes;begin=end;
+        }
+        if(!surfaceUploadRuns.empty())++metadataUploads;
+        surfaceUploadRuns.clear();
     }
     std::vector<uint8_t> applicationData;
     std::vector<RtrNativeApplicationRange> applicationDirtyRanges;
@@ -483,16 +622,19 @@ public:
                 target=device->createComputePipeline(pso);if(!target)throw std::runtime_error("Diagnostic lighting pipeline unavailable");
             }
         }
-        for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!uninstrumentedPipelines[i]){
+        const bool maximum=sources&&sources->VisibleMax();
+        const bool directOnly=UseDirectPipeline(maximum);
+        const char* directShader="app/ProcessingPasses/RtrNativeDirectLighting.hlsl";
+        auto& productionPipelines=directOnly?directPipelines:uninstrumentedPipelines;
+        for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!productionPipelines[i]){
             RtrDiagnostics::Scope prepare(RtrDiagnostics::Pipeline,1);
             std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
                 {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","0"}};
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
-            pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-            uninstrumentedPipelines[i]=device->createComputePipeline(pso);
-            if(!uninstrumentedPipelines[i])throw std::runtime_error("Production lighting pipeline unavailable");
+            pso.CS=factory.CreateShader(directOnly?directShader:"app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+            productionPipelines[i]=device->createComputePipeline(pso);
+            if(!productionPipelines[i])throw std::runtime_error("Production lighting pipeline unavailable");
         }
-        const bool maximum=sources&&sources->VisibleMax();
         const bool allDynamic=sources&&sources->dynamicCount==sources->records.size();
         const unsigned maxOffset=allDynamic?8:0;
         const unsigned capacity=groupVariant==1?1:groupVariant==6?2:groupVariant==4?4:32;
@@ -534,13 +676,16 @@ public:
         // CHANNEL_MAX has independent RGB winners and needs neither scalar
         // luminance/ID arrays nor a dynamically indexed per-ray stack.
         if(!reconstruction.requested&&sources&&sources->ChannelExecutor())for(unsigned instrumented=0;instrumented<2;++instrumented)
-            for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!channelMaxPipelines[instrumented*8+i]){
+            for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)}){
+                const bool directChannel=directOnly&&!instrumented;
+                auto& target=directChannel?directChannelPipelines[i]:channelMaxPipelines[instrumented*8+i];
+                if(target)continue;
                 std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
                     {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS",instrumented?"1":"0"},{"RTR_MAX_COMPOSITION","2"}};
                 nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
-                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-                channelMaxPipelines[instrumented*8+i]=device->createComputePipeline(pso);
-                if(!channelMaxPipelines[instrumented*8+i])throw std::runtime_error("Channel-maximum lighting pipeline unavailable");
+                pso.CS=factory.CreateShader(directChannel?directShader:"app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+                target=device->createComputePipeline(pso);
+                if(!target)throw std::runtime_error("Channel-maximum lighting pipeline unavailable");
             }
         reconstruction.Prepare(device,factory,layout,bindlessLayout,sourceHistoryLayout,width,height,groupVariant,maximum,allDynamic,sources&&sources->ChannelExecutor());
     }
@@ -603,15 +748,15 @@ public:
     void RetireGeometry(const std::string& name){
         dirtySurfaces.erase(name);
         if(auto found=geometrySlots.find(name);found!=geometrySlots.end()){
-            FreeAttributeRangeAt(found->second.offset,found->second.triangles*3);geometrySlots.erase(found);
+            ReleaseGeometryRanges(found->second);geometrySlots.erase(found);
         }
-        geometryIndices.erase(name);meshBaselines.erase(name);meshColors.erase(name);alphaMeshes.erase(name);dirtyBaselines.erase(name);dirtyColors.erase(name);metadataDirty=true;
+        geometryIndices.erase(name);meshBaselines.erase(name);meshColors.erase(name);meshReceivers.erase(name);alphaMeshes.erase(name);dirtyBaselines.erase(name);dirtyColors.erase(name);metadataDirty=true;
     }
     void RenameGeometry(const std::string& before,const std::string& after){
         if(before==after)return;
         if(geometrySlots.contains(after)||geometryIndices.contains(after))throw std::logic_error("Geometry metadata rename target is live");
         auto rename=[&](auto& map){auto item=map.extract(before);if(!item.empty()){item.key()=after;map.insert(std::move(item));}};
-        rename(geometrySlots);rename(geometryIndices);rename(meshBaselines);rename(meshColors);
+        rename(geometrySlots);rename(geometryIndices);rename(meshBaselines);rename(meshColors);rename(meshReceivers);
         auto renameSet=[&](auto& values){if(values.erase(before))values.insert(after);};
         renameSet(alphaMeshes);renameSet(dirtyBaselines);renameSet(dirtyColors);renameSet(dirtySurfaces);
         metadataDirty=true;
@@ -669,7 +814,6 @@ public:
             if(previous==instanceSlots.end()||previous->second!=uint32_t(slot))
                 sceneDelta.instances.push_back({instance,previous==instanceSlots.end()?nullptr:&previous->second});
         }
-        const bool materialStable=materialMetadataChanges.empty();
         for(const auto& mesh:rows.meshes) {
             auto& cached=MetadataLayout(mesh);
             for(size_t group=0;group<mesh->geometries.size();++group) {
@@ -678,6 +822,8 @@ public:
                 const auto* mapping=entry.mapping;
                 // Dense relocation only changes where the existing row lives.
                 // Preserve its attribute arena and already published payload.
+                const bool materialStable=materialMetadataChanges.empty()
+                    ||!materialMetadataChanges.contains(entry.materialName);
                 if(materialStable&&entry.policiesInitialized&&mapping&&mapping->attributes
                     &&mapping->attributes->triangles*3==geometry.numIndices
                     &&!entry.material.owner_before(geometry.material)&&!geometry.material.owner_before(entry.material)){
@@ -727,8 +873,9 @@ public:
             // index movement changes its index, not its attribute allocation.
             auto* mapping=metadata.mapping;auto* attributes=mapping?mapping->attributes:nullptr;
             if(!attributes||attributes->triangles*3!=geometry->numIndices){
-                if(attributes)FreeAttributeRangeAt(attributes->offset,attributes->triangles*3);
+                if(attributes)ReleaseGeometryRanges(*attributes);
                 attributes=&geometrySlots.insert_or_assign(key,GeometryAttributes{AllocateAttributeRange(geometry->numIndices),geometry->numIndices/3}).first->second;upload.insert(key);
+                SetSurfaceMapping(*attributes,rtr::upstream::MeshSurfaces(*mesh));dirtySurfaces.erase(key);
             }
             if(!mapping)mapping=&geometryIndices.try_emplace(key,GeometryIndex{}).first->second;
             *mapping=GeometryIndex{index,geometryIndexEpoch,attributes};metadata.mapping=mapping;
@@ -741,7 +888,7 @@ public:
         for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found==instanceSlots.end())continue;
             stageInstance(name,found->second);
         }
-        UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
+        UploadGeometryRows(command);
         UploadAttributeRuns(command,instances,instanceUploadScratch,instanceUploadIndices);
         specialRoleCount=specialInstances.size();
         EnsureAttributeBuffer(device,command,baselineCoordinates,attributeRanges.end*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
@@ -762,14 +909,33 @@ public:
         }
         if(!metadataDirty){
             bool changed=!dirtyInstances.empty()||!dirtyBaselines.empty()||!dirtyColors.empty()||lookupDirty||applicationDirty||!applicationDirtyRanges.empty();
+            instanceUploadScratch.resize(instanceCount);instanceUploadIndices.clear();
             for(const auto& name:dirtyInstances){auto found=instanceSlots.find(name);if(found!=instanceSlots.end()){
-                const auto& value=instanceAttributes.at(name);command->writeBuffer(instances,&value,sizeof(value),found->second*sizeof(value));TrackInstanceRole(name,value);++attributeWork[2];attributeWork[3]+=sizeof(value);}}
+                const auto& value=instanceAttributes.at(name);const auto slot=found->second;
+                if(slot>=instanceUploadScratch.size())throw std::runtime_error("Invalid retained instance index");
+                instanceUploadScratch[slot]=value;instanceUploadIndices.push_back(slot);
+                TrackInstanceRole(name,value);++attributeWork[2];attributeWork[3]+=sizeof(value);}}
+            UploadAttributeRuns(command,instances,instanceUploadScratch,instanceUploadIndices);
             auto changedGeometry=dirtyBaselines;changedGeometry.insert(dirtyColors.begin(),dirtyColors.end());
             UploadVertexRuns(command,changedGeometry);
+            if(!dirtySurfaces.empty()){UploadGeometryRows(command);changed=true;}
             UploadPublications(device,command);dirtyInstances.clear();dirtyBaselines.clear();dirtyColors.clear();if(changed)++metadataUploads;return;
         }
         RtrDiagnostics::Scope indexScope(RtrDiagnostics::ResourceIndex);
-        metadataLayouts.clear();materialGeometryUsers.clear();maskedScalarGeometries.clear();++metadataScan;
+        ++metadataScan;
+        // Donut can replace its dense tables without replacing any of the mesh
+        // owners. Keep the adapter's group names and material dependency index.
+        // Drop absent owners before collecting rows, so a retired name cannot
+        // erase a new owner's material registration later in this snapshot.
+        for(const auto& mesh:rows.meshes){
+            auto cached=metadataLayouts.find(mesh.get());
+            if(cached!=metadataLayouts.end()&&!cached->second.owner.owner_before(mesh)
+                &&!mesh.owner_before(cached->second.owner))cached->second.seenInSnapshot=true;
+        }
+        for(auto cached=metadataLayouts.begin();cached!=metadataLayouts.end();){
+            if(!cached->second.seenInSnapshot){ForgetMetadataLayout(cached->second);cached=metadataLayouts.erase(cached);}
+            else{cached->second.seenInSnapshot=false;++cached;}
+        }
         EnsureAttributeBuffer(device,command,instances,std::max<size_t>(1,instanceCount)*sizeof(InstanceAttributes),sizeof(InstanceAttributes),"Native receiver roles");
         instanceUploadScratch.resize(instanceCount);instanceUploadIndices.clear();
         instanceNamesScratch.assign(instanceCount,nullptr);
@@ -797,7 +963,7 @@ public:
         // Reuse names and map nodes. A dense-index migration must still inspect
         // the complete table, but it need not allocate a temporary hash set for it.
         if(++geometryIndexEpoch==0){for(auto& [name,index]:geometryIndices)index.epoch=0;++geometryIndexEpoch;}
-        geometryEntriesScratch.resize(geometryCount);size_t entryCount=0;maskedScalarCandidates=false;
+        geometryEntriesScratch.resize(geometryCount);size_t entryCount=0;
         for(const auto& mesh:rows.meshes){
             auto& layout=MetadataLayout(mesh);
             for(size_t j=0;j<mesh->geometries.size();j++){
@@ -805,6 +971,7 @@ public:
                 const auto& g=mesh->geometries[j];auto& entry=geometryEntriesScratch[entryCount++];
                 auto& metadata=layout.groups[j];entry.name=metadata.name;
                 entry.index=uint32_t(g->globalGeometryIndex);entry.corners=g->numIndices;
+                entry.surfaces=rtr::upstream::MeshSurfaces(*mesh);
                 RefreshMetadataPolicy(metadata,g->material,mesh,uint32_t(j));entry.texturePolicies=metadata.texturePolicies;
                 // Donut normalizes masked MaterialConstants.opacity to one. Its
                 // original Material object still retains the consumer's float scalar.
@@ -820,8 +987,8 @@ public:
         if(entryCount!=geometryCount)throw std::runtime_error("Invalid dense geometry count");
         // Release only retired identities. Same-size replacements keep their stable range.
         for(auto i=geometryIndices.begin();i!=geometryIndices.end();)if(i->second.epoch!=geometryIndexEpoch){
-            if(auto* attributes=i->second.attributes)FreeAttributeRangeAt(attributes->offset,attributes->triangles*3);
-            meshBaselines.erase(i->first);meshColors.erase(i->first);alphaMeshes.erase(i->first);geometrySlots.erase(i->first);
+            if(auto* attributes=i->second.attributes)ReleaseGeometryRanges(*attributes);
+            meshBaselines.erase(i->first);meshColors.erase(i->first);meshReceivers.erase(i->first);alphaMeshes.erase(i->first);geometrySlots.erase(i->first);
             i=geometryIndices.erase(i);
         }else ++i;
         EnsureAttributeBuffer(device,command,geometryBaselines,std::max<size_t>(1,geometryCount)*sizeof(GeometryAttributes),sizeof(GeometryAttributes),"Native receiver geometry mapping");
@@ -830,9 +997,10 @@ public:
         for(const auto& entry:geometryEntriesScratch){auto*& attributes=entry.slot->attributes;
             bool mappingChanged=!attributes||attributes->triangles*3!=entry.corners;
             if(mappingChanged){
-                if(attributes)FreeAttributeRangeAt(attributes->offset,attributes->triangles*3);
+                if(attributes)ReleaseGeometryRanges(*attributes);
                 auto [found,inserted]=geometrySlots.insert_or_assign(entry.name,GeometryAttributes{AllocateAttributeRange(entry.corners),entry.corners/3});
                 attributes=&found->second;upload.insert(entry.name);
+                SetSurfaceMapping(*attributes,entry.surfaces);dirtySurfaces.erase(entry.name);
             }
             const bool policiesChanged=attributes->texturePolicies!=entry.texturePolicies;
             const bool opacityChanged=attributes->maskedOpacity!=entry.maskedOpacity;
@@ -842,7 +1010,7 @@ public:
                 if(entry.index>=geometryUploadScratch.size())throw std::runtime_error("Invalid dense geometry index");
                 geometryUploadScratch[entry.index]=value;geometryUploadIndices.push_back(entry.index);attributeWork[3]+=sizeof(value);}
         }
-        UploadAttributeRuns(command,geometryBaselines,geometryUploadScratch,geometryUploadIndices);
+        UploadGeometryRows(command);
         EnsureAttributeBuffer(device,command,baselineCoordinates,attributeRanges.end*sizeof(VertexAttributes),sizeof(VertexAttributes),"Native receiver attributes arena");
         UploadVertexRuns(command,upload);
         ++attributeWork[0];
@@ -983,12 +1151,13 @@ public:
                 const unsigned variant=sources.SingleGroup()?1+(lightCount<=1?2:0):sources.PairGroups()?6+(lightCount<=1?1:0):sources.SmallGroups()?4+(lightCount<=1?1:0):(lightCount<=1?2:0);
                 state.pipeline=reconstruction.requested?reconstruction.countedMaxPipelines[variant]:countedMaxPipelines[variant];
             }
+            const bool directOnly=!workStatisticsEnabled&&UseDirectPipeline(sources.VisibleMax());
             if(!workStatisticsEnabled){
                 const unsigned variant=sources.SingleGroup()?1+(lightCount<=1?2:0):sources.PairGroups()?6+(lightCount<=1?1:0):sources.SmallGroups()?4+(lightCount<=1?1:0):(lightCount<=1?2:0);
                 const unsigned maxVariant=variant+(sources.dynamicCount==sources.records.size()?8:0);
                 state.pipeline=reconstruction.requested
                     ?(sources.VisibleMax()?reconstruction.maxPipelines[maxVariant]:reconstruction.uninstrumentedPipelines[variant])
-                    :(sources.VisibleMax()?maxPipelines[maxVariant]:uninstrumentedPipelines[variant]);
+                    :(sources.VisibleMax()?maxPipelines[maxVariant]:(directOnly?directPipelines:uninstrumentedPipelines)[variant]);
                 if(sources.VisibleMax()){
                     nvrhi::BindingSetDesc history;
                     history.bindings={nvrhi::BindingSetItem::Texture_SRV(0,sourceHistory[sourceHistoryRead]),
@@ -998,7 +1167,8 @@ public:
             }
             if(sources.ChannelExecutor()){
                 const unsigned variant=sources.SingleGroup()?1+(lightCount<=1?2:0):sources.PairGroups()?6+(lightCount<=1?1:0):sources.SmallGroups()?4+(lightCount<=1?1:0):(lightCount<=1?2:0);
-                state.pipeline=(reconstruction.requested?reconstruction.channelMaxPipelines:channelMaxPipelines)[(workStatisticsEnabled?8:0)+variant];
+                state.pipeline=directOnly?directChannelPipelines[variant]
+                    :(reconstruction.requested?reconstruction.channelMaxPipelines:channelMaxPipelines)[(workStatisticsEnabled?8:0)+variant];
             }
             command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);}
         RtrGpuProfile::End(command,dispatchScope);

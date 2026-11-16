@@ -11,7 +11,7 @@ struct RtrSource {float4 position,direction,color,extent,cone,identity;};
 struct RtrNode {float4 lower,left,upper,right;};
 struct RtrInstance {float4 rolesVisibility;float4 baseline;row_major float3x4 explicitPrevious;float4 surfaceVisibility;};
 struct RtrVertexAttributes {float2 baseline;uint color;uint reserved;};
-struct RtrGeometryAttributes {uint offset,triangles,basePolicy,normalPolicy,ormPolicy,emissivePolicy;float maskedOpacity;};
+struct RtrGeometryAttributes {uint offset,triangles,basePolicy,normalPolicy,ormPolicy,emissivePolicy;float maskedOpacity;uint surfaceSelector;};
 struct RtrSurfaceMaterial {MaterialConstants material;uint4 policies;float maskedOpacity;uint active;};
 struct RtrAnalytic {float4 position,direction,color,cone;};
 struct RtrNativeConstants
@@ -120,8 +120,14 @@ float3 RtrPosition(ByteAddressBuffer vertices,GeometryData geometry,uint i){retu
 float2 RtrUv(ByteAddressBuffer vertices,GeometryData geometry,uint i)
 {return geometry.texCoord1Offset==0xffffffff?0:asfloat(vertices.Load2(geometry.texCoord1Offset+i*8));}
 float4 RtrVertexColor(uint packed){return float4(packed&255,(packed>>8)&255,(packed>>16)&255,packed>>24)/255.0;}
+static const uint RtrMixedSurfaceBit=0x80000000u;
+uint RtrSurfaceIndex(RtrGeometryAttributes attributes,uint primitive){
+    uint selector=attributes.surfaceSelector;
+    if((selector&RtrMixedSurfaceBit)!=0)return t_SurfaceIndices[(selector&~RtrMixedSurfaceBit)+primitive];
+    return selector;
+}
 MaterialConstants RtrMaterial(GeometryData geometry,uint primitive,inout RtrGeometryAttributes attributes){
-    uint surface=primitive<attributes.triangles?t_SurfaceIndices[attributes.offset/3+primitive]:0;
+    uint surface=primitive<attributes.triangles?RtrSurfaceIndex(attributes,primitive):0;
     if(surface!=0){
         RtrSurfaceMaterial row=t_SurfaceMaterials[surface-1];
         attributes.basePolicy=row.policies.x;attributes.normalPolicy=row.policies.y;
@@ -161,6 +167,16 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
         base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,r.uv,geometryAttributes.basePolicy);
     if((mat.flags&MaterialFlags_UseOpacityTexture)!=0)
         base.a*=t_Textures[NonUniformResourceIndex(mat.opacityTextureIndex)].SampleLevel(s_Material,r.uv,0).r;
+#ifdef RTR_DIRECT_ONLY
+    float2 coordinates=0;
+    if(primitive<geometryAttributes.triangles){
+        uint first=geometryAttributes.offset+primitive*3;
+        RtrVertexAttributes va=t_Baselines[first],vb=t_Baselines[first+1],vc=t_Baselines[first+2];
+        base*=RtrVertexColor(va.color)*bary.x+RtrVertexColor(vb.color)*bary.y+RtrVertexColor(vc.color)*bary.z;
+        coordinates=va.baseline*bary.x+vb.baseline*bary.y+vc.baseline*bary.z;
+    }
+    r.opacity=saturate(base.a);
+#else
     if(primitive<geometryAttributes.triangles){uint first=geometryAttributes.offset+primitive*3;
         base*=RtrVertexColor(t_Baselines[first].color)*bary.x+RtrVertexColor(t_Baselines[first+1].color)*bary.y+RtrVertexColor(t_Baselines[first+2].color)*bary.z;}
     r.albedo=max(base.rgb,0);r.opacity=saturate(base.a);
@@ -171,6 +187,7 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
     if((mat.flags&MaterialFlags_UseTransmissionTexture)!=0)r.transmission*=t_Textures[NonUniformResourceIndex(mat.transmissionTextureIndex)].SampleLevel(s_Material,r.uv,0).r;
     r.roughness=saturate(r.roughness);r.metalness=saturate(r.metalness);r.transmission=saturate(r.transmission);
     r.diffuseWeight=(1-r.metalness)*(1-r.transmission);
+#endif
     if((mat.flags&MaterialFlags_UseNormalTexture)!=0&&geom.tangentOffset!=0xffffffff)
     {
         float4 tangent=Unpack_RGBA8_SNORM(vertices.Load(geom.tangentOffset+tri.x*4))*bary.x
@@ -190,45 +207,31 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
         float cf=cylindrical<=g.fogRanges.z?0:cylindrical>=g.fogRanges.w?1:(cylindrical-g.fogRanges.z)/(g.fogRanges.w-g.fogRanges.z);
         r.fog=max(r.fog,max(sf,cf)*g.fogControl.x);
     }
+#ifndef RTR_DIRECT_ONLY
     float2 coordinates=0;
     if(primitive<geometryAttributes.triangles){uint offset=geometryAttributes.offset+primitive*3;
         coordinates=t_Baselines[offset].baseline*bary.x+t_Baselines[offset+1].baseline*bary.y+t_Baselines[offset+2].baseline*bary.z;}
+#endif
     coordinates=saturate(coordinates*data.baseline.xy+data.baseline.zw);
     float2 p=coordinates*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
     r.baseline=lerp(lerp(t_BaselineLookup[lo.y*16+lo.x],t_BaselineLookup[lo.y*16+hi.x],f.x),
         lerp(t_BaselineLookup[hi.y*16+lo.x],t_BaselineLookup[hi.y*16+hi.x],f.x),f.y);
     return r;
 }
-bool RtrAccept(RtrReceiver receiver,bool frontFace,uint role)
-{
-    RtrInstance attributes=t_InstanceAttributes[receiver.instance];uint flags=uint(attributes.rolesVisibility.x);
-    if((flags&role)==0)return false;
-    if(role==1&&(flags&8)!=0&&!frontFace)return false;
-    if(role==2&&(flags&16)==0&&!frontFace)return false;
-    uint geometryIndex=t_Instances[receiver.instance].firstGeometryIndex+receiver.geometry;
-    GeometryData geom=t_Geometry[geometryIndex];RtrGeometryAttributes geometryAttributes=t_GeometryBaselines[geometryIndex];
-    MaterialConstants mat=RtrMaterial(geom,receiver.primitive,geometryAttributes);
-    if(mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested)return receiver.opacity>=mat.alphaCutoff;
-    return receiver.opacity>0;
-}
 // Candidate acceptance needs coverage and roles, not a fully shaded receiver.
 // In particular, shadow rays must not fetch normals, tangent frames or baseline
 // lookups for every candidate they visit.
-bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attributes,bool frontFace,uint role,
+bool RtrAcceptCandidateSurface(RtrInstance instance,uint primitive,float2 attributes,uint role,
+    GeometryData geom,RtrGeometryAttributes geometryAttributes,MaterialConstants mat,
     out float3 transmission,out bool opaque)
 {
     transmission=1;opaque=false;
-    uint roles=uint(t_InstanceAttributes[instance].rolesVisibility.x);
-    if((roles&role)==0||(role==1&&(roles&8)!=0&&!frontFace)||(role==2&&(roles&16)==0&&!frontFace))return false;
     // Per-instance coverage classification is part of the same attribute commit.
     // Role-only opaque candidates need no material, UV or corner color reads.
-    InstanceData inst=t_Instances[instance];uint geometryIndex=inst.firstGeometryIndex+geometry;
-    GeometryData geom=t_Geometry[geometryIndex];RtrGeometryAttributes geometryAttributes=t_GeometryBaselines[geometryIndex];
-    MaterialConstants mat=RtrMaterial(geom,primitive,geometryAttributes);
     bool masked=mat.domain==MaterialDomain_AlphaTested||mat.domain==MaterialDomain_TransmissiveAlphaTested;
-    if((g.publication.w&4)!=0&&t_InstanceAttributes[instance].rolesVisibility.w==0&&t_InstanceAttributes[instance].surfaceVisibility.x==1&&mat.domain==MaterialDomain_Opaque&&mat.opacity==1)
+    if((g.publication.w&4)!=0&&instance.rolesVisibility.w==0&&instance.surfaceVisibility.x==1&&mat.domain==MaterialDomain_Opaque&&mat.opacity==1)
         {opaque=role==2;return true;}
-    float4 base=float4(mat.baseOrDiffuseColor,(masked?geometryAttributes.maskedOpacity:mat.opacity)*t_InstanceAttributes[instance].surfaceVisibility.x);
+    float4 base=float4(mat.baseOrDiffuseColor,(masked?geometryAttributes.maskedOpacity:mat.opacity)*instance.surfaceVisibility.x);
     float3 bary=float3(1-attributes.x-attributes.y,attributes);float2 uv=0;
     const uint textureMask=MaterialFlags_UseBaseOrDiffuseTexture|MaterialFlags_UseOpacityTexture|MaterialFlags_UseTransmissionTexture;
     if((mat.flags&textureMask)!=0){
@@ -255,6 +258,16 @@ bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attrib
     }
     return true;
 }
+bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attributes,bool frontFace,uint role)
+{
+    RtrInstance data=t_InstanceAttributes[instance];uint roles=uint(data.rolesVisibility.x);
+    if((roles&role)==0||(role==1&&(roles&8)!=0&&!frontFace))return false;
+    uint index=t_Instances[instance].firstGeometryIndex+geometry;
+    GeometryData geom=t_Geometry[index];RtrGeometryAttributes mapping=t_GeometryBaselines[index];
+    MaterialConstants material=RtrMaterial(geom,primitive,mapping);
+    float3 transmission;bool opaque;
+    return RtrAcceptCandidateSurface(data,primitive,attributes,role,geom,mapping,material,transmission,opaque);
+}
 #include "RtrNativeCoverage.hlsli"
 bool RtrTrace(float3 origin,float3 direction,float distance,uint role,out RtrReceiver receiver)
 {
@@ -262,9 +275,8 @@ bool RtrTrace(float3 origin,float3 direction,float distance,uint role,out RtrRec
     RayQuery<RAY_FLAG_NONE> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),1,ray);
     while(query.Proceed())if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE)
     {
-        float3 transmission;bool opaque;
         if(RtrAcceptCandidate(query.CandidateInstanceIndex(),query.CandidateGeometryIndex(),query.CandidatePrimitiveIndex(),
-            query.CandidateTriangleBarycentrics(),query.CandidateTriangleFrontFace(),role,transmission,opaque))query.CommitNonOpaqueTriangleHit();
+            query.CandidateTriangleBarycentrics(),query.CandidateTriangleFrontFace(),role))query.CommitNonOpaqueTriangleHit();
     }
     receiver=(RtrReceiver)0;
     if(query.CommittedStatus()!=COMMITTED_TRIANGLE_HIT)return false;
@@ -278,11 +290,18 @@ float3 RtrShadowRaySample(RayDesc ray,float lightDistance,bool filtering,out uin
     partialCount=0;float partialCoverage=0;
     while(query.Proceed())if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE)
     {
+        uint instanceIndex=query.CandidateInstanceIndex(),primitive=query.CandidatePrimitiveIndex();
+        RtrInstance data=t_InstanceAttributes[instanceIndex];uint roles=uint(data.rolesVisibility.x);
+        if((roles&2)==0||((roles&16)==0&&!query.CandidateTriangleFrontFace()))continue;
+        InstanceData instance=t_Instances[instanceIndex];uint index=instance.firstGeometryIndex+query.CandidateGeometryIndex();
+        GeometryData geometry=t_Geometry[index];RtrGeometryAttributes mapping=t_GeometryBaselines[index];
+        MaterialConstants material=RtrMaterial(geometry,primitive,mapping);
+        float2 bary=query.CandidateTriangleBarycentrics();
+        // A visited surface has one resolved material for footprint sampling,
+        // center opacity/transmission, and the moving coverage classification.
         if(filtering){
-            uint role=uint(t_InstanceAttributes[query.CandidateInstanceIndex()].rolesVisibility.x);
-            if((role&2)==0||((role&16)==0&&!query.CandidateTriangleFrontFace()))continue;
-            float coverage=RtrCandidateCoverage(ray,query.CandidateInstanceIndex(),query.CandidateGeometryIndex(),query.CandidatePrimitiveIndex(),
-                query.CandidateTriangleBarycentrics(),query.CandidateTriangleRayT(),lightDistance,true);
+            float coverage=RtrCandidateCoverage(ray,query.CandidateTriangleRayT(),lightDistance,
+                data,instance,geometry,mapping,material,primitive,bary);
             if(coverage>=0){
                 if(coverage==0)continue;
                 if(coverage==1){visibility=0;query.Abort();break;}
@@ -291,15 +310,9 @@ float3 RtrShadowRaySample(RayDesc ray,float lightDistance,bool filtering,out uin
             }
         }
         float3 transmission;bool opaque;
-        if(!RtrAcceptCandidate(query.CandidateInstanceIndex(),query.CandidateGeometryIndex(),query.CandidatePrimitiveIndex(),
-            query.CandidateTriangleBarycentrics(),query.CandidateTriangleFrontFace(),2,transmission,opaque))continue;
-        if(rtrCoverageFiltering){
-            uint index=t_Instances[query.CandidateInstanceIndex()].firstGeometryIndex+query.CandidateGeometryIndex();
-            GeometryData geometry=t_Geometry[index];RtrGeometryAttributes attributes=t_GeometryBaselines[index];
-            MaterialConstants material=RtrMaterial(geometry,query.CandidatePrimitiveIndex(),attributes);
-            rtrMovingCoverage|=t_InstanceAttributes[query.CandidateInstanceIndex()].rolesVisibility.w!=0
-                ||material.domain==MaterialDomain_AlphaTested||material.domain==MaterialDomain_TransmissiveAlphaTested;
-        }
+        if(!RtrAcceptCandidateSurface(data,primitive,bary,2,geometry,mapping,material,transmission,opaque))continue;
+        if(rtrCoverageFiltering)rtrMovingCoverage|=data.rolesVisibility.w!=0
+            ||material.domain==MaterialDomain_AlphaTested||material.domain==MaterialDomain_TransmissiveAlphaTested;
         if(opaque){visibility=0;query.Abort();}else visibility*=transmission;
     }
     if(query.CommittedStatus()==COMMITTED_TRIANGLE_HIT)return 0;
@@ -711,6 +724,20 @@ float RtrHostResponseSample(uint channel,float2 levels)
     return lerp(lerp(RtrHostResponseValue(channel,lo.x,lo.y),RtrHostResponseValue(channel,hi.x,lo.y),f.x),
         lerp(RtrHostResponseValue(channel,lo.x,hi.y),RtrHostResponseValue(channel,hi.x,hi.y),f.x),f.y);
 }
+#ifdef RTR_DIRECT_ONLY
+float3 RtrHostResponseRgb(uint2 index)
+{
+    uint scalar=(index.y*16+index.x)*3;
+    float2 a=t_BaselineLookup[256+scalar/2],b=t_BaselineLookup[257+scalar/2];
+    return (scalar&1)!=0?float3(a.y,b):float3(a,b.x);
+}
+float3 RtrHostResponseSampleRgb(float2 levels)
+{
+    float2 p=saturate(levels)*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
+    return lerp(lerp(RtrHostResponseRgb(lo),RtrHostResponseRgb(uint2(hi.x,lo.y)),f.x),
+        lerp(RtrHostResponseRgb(uint2(lo.x,hi.y)),RtrHostResponseRgb(hi),f.x),f.y);
+}
+#endif
 float3 RtrHostResponseGain(RtrReceiver receiver,float3 local,float3 dynamic,bool staticCovered,float3 sunVisibility,float3 moonVisibility)
 {
     float3 targetLocal=staticCovered?saturate(local):max(receiver.baseline.x,saturate(dynamic));
@@ -722,8 +749,15 @@ float3 RtrHostResponseGain(RtrReceiver receiver,float3 local,float3 dynamic,bool
             +g.style.correction.w*g.moon.w*g.style.moonAndMode.rgb*(1-moonVisibility);
         targetSky=receiver.baseline.y*(1-saturate((1-receiver.baseline.x)*blocked));
     }
+#ifdef RTR_DIRECT_ONLY
+    float3 baselineResponse=RtrHostResponseSampleRgb(receiver.baseline);
+#endif
     [unroll]for(uint channel=0;channel<3;channel++){
+#ifdef RTR_DIRECT_ONLY
+        float before=baselineResponse[channel];
+#else
         float before=RtrHostResponseSample(channel,receiver.baseline);
+#endif
         float after=RtrHostResponseSample(channel,float2(targetLocal[channel],targetSky[channel]));
         gain[channel]=before>0?after/before:(g.style.moonAndMode.w==3||after==0?1:g.style.limits.y);
     }
@@ -757,7 +791,9 @@ float3 RtrOneBounce(RtrReceiver receiver)
 float3 RtrDirectGain(RtrReceiver receiver)
 {
     float3 gain=1;
+#ifndef RTR_DIRECT_ONLY
     if((g.grid.z&1)!=0)
+#endif
     {
         bool response=g.style.moonAndMode.w>=2,staticCovered;
         float3 local,dynamic;RtrLocalWithCoverage(receiver,local,dynamic,staticCovered,true,true,response);float3 sunVisibility=1,moonVisibility=1;
@@ -784,7 +820,13 @@ void main(uint2 pixel:SV_DispatchThreadID)
     float2 ndc=(float2(pixel)+.5)/float2(g.grid.xy)*float2(2,-2)+float2(-1,1)+g.farJitter.yz;
     float4 nearView=mul(g.inverseClip,float4(ndc,g.cameraNear.w,1)),farView=mul(g.inverseClip,float4(ndc,g.farJitter.x,1));
     float3 direction=RtrNormalize(mul((float3x3)g.cameraToWorld,farView.xyz/farView.w-nearView.xyz/nearView.w));
-    RtrReceiver receiver;float3 gain=1,indirect=0;bool valid=RtrTrace(g.cameraNear.xyz,direction,1e20,1,receiver);
+    RtrReceiver receiver;float3 gain=1;bool valid=RtrTrace(g.cameraNear.xyz,direction,1e20,1,receiver);
+#ifdef RTR_DIRECT_ONLY
+    if(valid){RtrPrepareCoverage(receiver,pixel);gain=RtrDirectGain(receiver);}
+    gain=float3(isfinite(gain.x)?clamp(gain.x,0,65504):1,isfinite(gain.y)?clamp(gain.y,0,65504):1,isfinite(gain.z)?clamp(gain.z,0,65504):1);
+    u_Direct[pixel]=float4(gain,RtrDirectAlpha(valid,receiver.opacity));
+#else
+    float3 indirect=0;
     if((g.grid.z&4)!=0)u_Geometry[pixel]=valid?float4(receiver.normal,receiver.distance):0;
     if((g.grid.z&8)!=0)u_Identity[pixel]=valid?uint4(receiver.instance,receiver.geometry,receiver.primitive,1):uint4(0xffffffff,0xffffffff,0xffffffff,0);
     if(valid){RtrCount(1);RtrPrepareCoverage(receiver,pixel);RtrEvaluateReceiver(receiver,gain,indirect);}
@@ -793,5 +835,6 @@ void main(uint2 pixel:SV_DispatchThreadID)
     if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,RtrDirectAlpha(valid,receiver.opacity));
     if((g.grid.z&2)!=0)u_Indirect[pixel]=float4(indirect,valid?receiver.opacity:0);
     RtrFlushWork();
+#endif
 }
 #endif // RTR_NATIVE_LIGHTING_LIBRARY

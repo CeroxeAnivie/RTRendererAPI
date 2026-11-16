@@ -1,5 +1,6 @@
 package top.ceroxe.rt.renderer.rtxpt;
 
+import java.nio.*;
 import java.util.*;
 import top.ceroxe.rt.renderer.api.*;
 
@@ -27,17 +28,7 @@ public final class RtxptAdapterSelfTest {
         RtxptLightingSelfTest.run();
         var source=new RtxptScene();source.retain(scene(1));
         var frame=frame(0);var items=source.items(frame);
-        var mesh=source.meshes.get(1L);var expanded=RtxptScene.ExportGeometry.from(mesh);
-        require(expanded.vertexCount()==36&&expanded.normals().remaining()==108,"Missing normals retain flat triangle-corner geometry");
-        for(int corner=0;corner<36;corner++) {
-            int original=mesh.triangleIndices().get(corner);
-            require(expanded.indices().get(corner)==corner,"Triangle order survives conversion");
-            for(int axis=0;axis<3;axis++)require(expanded.positions().get(corner*3+axis)==mesh.positions().get(original*3+axis),"Positions survive conversion");
-            float x=expanded.normals().get(corner*3),y=expanded.normals().get(corner*3+1),z=expanded.normals().get(corner*3+2);
-            require(Math.abs(x*x+y*y+z*z-1)<1e-6,"Fallback normals are finite unit vectors");
-        }
-        float[] authored=new float[mesh.vertexCount()*3];Arrays.fill(authored,1);
-        require(RtxptScene.ExportGeometry.from(mesh.toBuilder().normals(authored).build()).vertexCount()==mesh.vertexCount(),"Authored normals preserve indexing");
+        geometryWireAndBuilderOwnership(source.meshes.get(1L));
         var moved=new RtxptScene(source);
         moved.retain(SceneTransaction.builder(2).upsert(SceneInstance.builder(1,1)
                 .mediumBoundary(source.instances.get(1L).mediumBoundary().orElseThrow())
@@ -48,6 +39,44 @@ public final class RtxptAdapterSelfTest {
         require(source.instances.get(1L)!=moved.instances.get(1L),"Retained snapshots remain independent");
         require(RtxptOptions.resolve(RendererFeatureProfile.disabled()).reconstruction()==RtxptAccess.Reconstruction.NONE,"Disabled reconstruction stays disabled");
         System.out.println("RTXPT_ADAPTER_CPU PASS geometry=true retainedIdentity=true inputRejection=true lighting=true noNativeLoading=true");
+    }
+    private static void geometryWireAndBuilderOwnership(MeshAsset original) {
+        float[] authored=new float[original.vertexCount()*3];Arrays.fill(authored,1);
+        float[] uvs=new float[original.vertexCount()*2],tangents=new float[original.vertexCount()*4];
+        for(int i=0;i<uvs.length;i++)uvs[i]=i*.125f;
+        for(int i=0;i<tangents.length;i++)tangents[i]=i*.0625f;
+        var builder=original.toBuilder().textureCoordinates(uvs).tangents(tangents);
+        var flat=builder.build();var mesh=builder.normals(authored).build();
+        authored[0]=99;uvs[1]=99;builder.normals(new float[0]).textureCoordinates(new float[0]);
+        require(mesh.normals().get(0)==1&&mesh.textureCoordinates().get(1)==.125f
+            &&!flat.normals().hasRemaining()&&flat.textureCoordinates().get(1)==.125f,"Builder snapshots survive caller and builder changes");
+        require(flat.positions().isReadOnly()&&mesh.triangleIndices().isReadOnly(),"Shared builder snapshots are read-only");
+        for(var value:List.of(flat,mesh)){
+            var size=new RtxptMemoryResources.Writer(null);size.geometry(value);
+            var bytes=ByteBuffer.allocateDirect(Math.toIntExact(size.offset)).order(ByteOrder.LITTLE_ENDIAN);
+            var write=new RtxptMemoryResources.Writer(bytes);write.geometry(value);
+            require(size.offset==bytes.position()&&size.offset==write.offset,"Final geometry byte count matches reservation");
+            bytes.flip();boolean expanded=value==flat;
+            var positions=channel(bytes);var normals=channel(bytes);var packedTangents=channel(bytes);var packedUv=channel(bytes);
+            int vertices=expanded?36:original.vertexCount();
+            require(positions.remaining()==vertices*3&&normals.remaining()==vertices*3
+                &&packedTangents.remaining()==vertices*4&&packedUv.remaining()==vertices*2,"Exact canonical channel sizes");
+            require(bytes.getInt()==36,"Canonical index count");
+            for(int corner=0;corner<36;corner++)require(bytes.getInt()==(expanded?corner:original.triangleIndices().get(corner)),"Preserve winding and triangle order");
+            require(!bytes.hasRemaining(),"No trailing geometry bytes");
+            for(int vertex=0;vertex<vertices;vertex++){
+                int input=expanded?original.triangleIndices().get(vertex):vertex;
+                for(int axis=0;axis<3;axis++)require(positions.get(vertex*3+axis)==original.positions().get(input*3+axis),"Original positions");
+                for(int axis=0;axis<4;axis++)require(packedTangents.get(vertex*4+axis)==tangents[input*4+axis],"Original tangents");
+                require(packedUv.get(vertex*2)==input*.25f&&packedUv.get(vertex*2+1)==input*.25f+.125f,"Original UVs");
+                float x=normals.get(vertex*3),y=normals.get(vertex*3+1),z=normals.get(vertex*3+2);
+                require(expanded?x*x+y*y+z*z==1:x==1&&y==1&&z==1,"Flat or authored normal as requested");
+            }
+            require(!expanded||normals.get(2)==1,"First flat normal follows original winding");
+        }
+    }
+    private static FloatBuffer channel(ByteBuffer packet){
+        int count=packet.getInt();var channel=packet.asFloatBuffer().limit(count);packet.position(packet.position()+count*4);return channel;
     }
     private static void nativeLightingPackedLight() {
         var scene=new RtxptScene();scene.retain(scene(1));var mesh=scene.meshes.get(1L);

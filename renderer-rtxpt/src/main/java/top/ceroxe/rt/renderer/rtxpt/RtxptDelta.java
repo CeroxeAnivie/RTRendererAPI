@@ -103,6 +103,13 @@ final class RtxptDelta {
             List<RtxptScene.Item> items,Map<Long,TextureAsset> residentTextures,
             Map<Long,Map<String,RtxptScene.Variant>> residentMaterials,
             Map<Long,Map<String,RtxptScene.Item>> residentMeshes,RtxptMemoryResources.PacketPool packets) {
+        return prepare(old,scene,previous,items,residentTextures,residentMaterials,residentMeshes,packets,null);
+    }
+    static Prepared prepare(RtxptScene old,RtxptScene scene,List<RtxptScene.Item> previous,
+            List<RtxptScene.Item> items,Map<Long,TextureAsset> residentTextures,
+            Map<Long,Map<String,RtxptScene.Variant>> residentMaterials,
+            Map<Long,Map<String,RtxptScene.Item>> residentMeshes,RtxptMemoryResources.PacketPool packets,
+            Map<Long,float[]> receiverBaselines) {
         var changedTextures=new HashSet<Long>();var changedMaterials=new HashSet<Long>();var changedGeometry=new HashSet<Long>();
         long nodes=scene.textures.forEachChanged(old.textures,(id,value)->{if(!Objects.equals(value,old.textures.get(id)))changedTextures.add(id);});
         nodes+=scene.materials.forEachChanged(old.materials,(id,value)->{if(!Objects.equals(value,old.materials.get(id)))changedMaterials.add(id);});
@@ -228,7 +235,7 @@ final class RtxptDelta {
                 }
             }
         }
-        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged,residentTextures,packets,removedMaterials,inputSources.values(),List.copyOf(removedMeshItems.keySet()));
+        var memory=RtxptMemoryResources.pack(old,scene,meshItems.values(),variants.values(),updates.values(),changes.removals(),coverageChanged,residentTextures,packets,removedMaterials,inputSources.values(),List.copyOf(removedMeshItems.keySet()),receiverBaselines);
         long dependencies=current.dependencies+prior.dependencies,reads=current.reads+prior.reads+changes.itemReads();
         return new Prepared(translated,meshItems.size(),variants.size(),changedTextures.size(),true,mappingsChanged,new Work(reads,dependencies,nodes,0),memory,List.copyOf(meshItems.values()),List.copyOf(variants.values()),List.copyOf(removedMaterials),List.copyOf(removedMeshItems.values()));
     }

@@ -55,6 +55,18 @@ struct Renderer {
     RtrSignalFrames signals;
     uint64_t sequence = 0, revision = 0;
 };
+// Transfer tickets contain one independently owned allocation per mesh. No JVM
+// address is retained after handoff, and no surviving mesh can pin its neighbors.
+std::mutex meshTransferMutex;
+std::unordered_map<jlong,std::shared_ptr<const rtr::upstream::MeshInputBlocks>> meshTransfers;
+jlong nextMeshTransfer=1;
+std::shared_ptr<const rtr::upstream::MeshInputBlocks> FindMeshTransfer(jlong ticket){
+    std::lock_guard lock(meshTransferMutex);auto found=meshTransfers.find(ticket);
+    if(found==meshTransfers.end())throw std::invalid_argument("Unknown mesh input transfer");
+    return found->second;
+}
+void ReleaseMeshTransfer(jlong ticket){std::lock_guard lock(meshTransferMutex);meshTransfers.erase(ticket);}
+
 std::mutex rendererMutex;
 std::unordered_map<jlong, std::shared_ptr<Renderer>> renderers;
 jlong nextRenderer = 1;
@@ -354,15 +366,75 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingSurfaceState(JNIEnv* env,j
     try{
         const auto geometry=String(env,geometryName);std::array<double,9> state{};
         Get(handle)->session->Invoke([&](auto& app){
-            const auto& pass=app.Renderer().lighting;const auto* slots=pass.surfaceSlots?pass.surfaceSlots(geometry):nullptr;
-            if(!slots||primitive<0||size_t(primitive)>=slots->size())throw std::invalid_argument("No published triangle surface");
-            const auto slot=slots->at(primitive);const auto& row=pass.surfaceRows.at(slot);state[0]=slot;
+            const auto& pass=app.Renderer().lighting;
+            const auto mapping=pass.geometryIndices.find(geometry);
+            if(mapping==pass.geometryIndices.end()||!mapping->second.attributes||primitive<0
+                ||uint32_t(primitive)>=mapping->second.attributes->triangles)
+                throw std::invalid_argument("No published triangle surface");
+            const auto slots=pass.surfaceSlots?pass.surfaceSlots(geometry):rtr::upstream::MeshSurfaceSlots{};
+            const auto encoded=slots.mixed?slots.mixed->at(primitive):slots.uniform;
+            if(!encoded)throw std::invalid_argument("No published triangle surface");
+            const auto slot=encoded-1;const auto& row=pass.surfaceRows.at(slot);state[0]=slot;
             for(size_t i=0;i<4;++i)state[1+i]=row.policies[i];
             state[5]=row.maskedOpacity;state[6]=row.material.domain;state[7]=row.material.opacity;state[8]=row.material.alphaCutoff;
         });
         auto result=env->NewDoubleArray(static_cast<jsize>(state.size()));
         if(result)env->SetDoubleArrayRegion(result,0,static_cast<jsize>(state.size()),state.data());return result;
     }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_allocateMeshInputs(JNIEnv* env,jclass,jintArray extents){
+    try{
+        if(!extents)throw std::invalid_argument("Missing mesh input extents");
+        const auto count=env->GetArrayLength(extents);
+        if(count<=0||count>1000000)throw std::invalid_argument("Invalid mesh input count");
+        std::vector<jint> sizes(count);env->GetIntArrayRegion(extents,0,count,sizes.data());
+        if(env->ExceptionCheck())throw std::runtime_error("Cannot read mesh input extents");
+        size_t total=0;
+        for(auto bytes:sizes){if(bytes<=0||size_t(bytes)>512ull*1024*1024-total)throw std::invalid_argument("Mesh input transfers exceed capacity");total+=size_t(bytes);}
+        auto blocks=std::make_shared<rtr::upstream::MeshInputBlocks>();blocks->reserve(count);
+        for(auto bytes:sizes)blocks->push_back(std::make_shared<const rtr::upstream::MeshInputBlock>(size_t(bytes)));
+        std::lock_guard lock(meshTransferMutex);
+        if(nextMeshTransfer==std::numeric_limits<jlong>::max())throw std::length_error("Mesh input tickets exhausted");
+        const auto ticket=nextMeshTransfer++;meshTransfers.emplace(ticket,std::move(blocks));return ticket;
+    }catch(const std::exception& error){Throw(env,error);return 0;}
+}
+extern "C" JNIEXPORT jobject JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_meshInputBuffer(JNIEnv* env,jclass,jlong ticket,jint index){
+    try{
+        const auto blocks=FindMeshTransfer(ticket);
+        if(index<0||size_t(index)>=blocks->size())throw std::invalid_argument("Invalid mesh input block index");
+        const auto& block=blocks->at(size_t(index));
+        return env->NewDirectByteBuffer(block->data.get(),jlong(block->size));
+    }catch(const std::exception& error){Throw(env,error);return nullptr;}
+}
+extern "C" JNIEXPORT void JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_releaseMeshInputs(JNIEnv*,jclass,jlong ticket){ReleaseMeshTransfer(ticket);}
+extern "C" JNIEXPORT void JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_resourcesMemoryOwned(JNIEnv* env,jclass,jlong handle,jlong,jobject packet,jlong ticket){
+    try{
+        const auto size=packet?env->GetDirectBufferCapacity(packet):0;
+        const auto* bytes=packet?static_cast<const uint8_t*>(env->GetDirectBufferAddress(packet)):nullptr;
+        if(!bytes||size<=0||size>512ll*1024*1024)throw std::invalid_argument("Invalid resource packet");
+        const auto blocks=FindMeshTransfer(ticket);
+        auto owned=std::make_shared<const std::vector<uint8_t>>(bytes,bytes+size);
+        Get(handle)->session->Enqueue([owned,blocks](auto& app){app.Renderer().ApplyResources(*owned,blocks);});
+        ReleaseMeshTransfer(ticket);
+    }catch(const std::exception& error){Throw(env,error);}
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_startResourcesOwned(JNIEnv* env,jclass,jlong handle,jobject packet,jlong ticket){
+    try{
+        const auto size=packet?env->GetDirectBufferCapacity(packet):0;
+        const auto* bytes=packet?static_cast<const uint8_t*>(env->GetDirectBufferAddress(packet)):nullptr;
+        if(!bytes||size<=0||size>512ll*1024*1024)throw std::invalid_argument("Invalid borrowed resource packet");
+        auto blocks=FindMeshTransfer(ticket);
+        const bool accepted=Get(handle)->session->StartResources([view=std::span(bytes,size_t(size)),blocks](auto& app){
+            app.Renderer().ApplyResources(view,blocks);
+        });
+        if(accepted)ReleaseMeshTransfer(ticket);return accepted?JNI_TRUE:JNI_FALSE;
+    }catch(const std::exception& error){Throw(env,error);return JNI_FALSE;}
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -429,33 +501,32 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributeBatch(JNIEn
         auto keys=Strings(env,names);
         if(revision<0 || !baselines || !colors || env->GetArrayLength(baselines)!=keys.size() || env->GetArrayLength(colors)!=keys.size())
             throw std::invalid_argument("Invalid geometry attribute batch");
-        struct Record {std::string key;std::vector<float2> baseline;std::vector<uint32_t> colors;bool hasBaseline=false,hasColors=false;};
+        struct Record {std::string key;std::vector<float> baseline;std::vector<uint32_t> colors;bool hasBaseline=false,hasColors=false;};
         std::vector<Record> records;std::unordered_set<std::string> seen;
         for(jsize i=0;i<jsize(keys.size());++i) {
             Record record;record.key=keys[i];if(!seen.insert(record.key).second)throw std::invalid_argument("Duplicate attribute geometry");
             auto b=static_cast<jfloatArray>(env->GetObjectArrayElement(baselines,i));
             auto c=static_cast<jintArray>(env->GetObjectArrayElement(colors,i));
-            if(b){auto values=Floats(env,b);if(values.size()%6)throw std::invalid_argument("Invalid baseline triangle layout");
-                for(auto value:values)if(value<0||value>1)throw std::invalid_argument("Baseline outside [0,1]");
-                record.baseline.resize(values.size()/2);std::memcpy(record.baseline.data(),values.data(),values.size()*4);record.hasBaseline=true;env->DeleteLocalRef(b);}
+            if(b){record.baseline=Floats(env,b);if(record.baseline.size()%6)throw std::invalid_argument("Invalid baseline triangle layout");
+                for(auto value:record.baseline)if(value<0||value>1)throw std::invalid_argument("Baseline outside [0,1]");
+                record.hasBaseline=true;env->DeleteLocalRef(b);}
             if(c){const auto count=env->GetArrayLength(c);if(count%3)throw std::invalid_argument("Invalid color triangle layout");record.colors.resize(count);
                 env->GetIntArrayRegion(c,0,count,reinterpret_cast<jint*>(record.colors.data()));record.hasColors=true;env->DeleteLocalRef(c);}
             if(env->ExceptionCheck())throw std::runtime_error("Cannot copy geometry attributes");records.push_back(std::move(record));
         }
-        Get(handle)->session->Enqueue([records=std::move(records)](auto& app) {
+        Get(handle)->session->Enqueue([records=std::move(records)](auto& app) mutable {
             auto& renderer=app.Renderer();auto& pass=renderer.lighting;
             for(const auto& record:records){const auto corners=renderer.GeometryCorners(record.key);
-                if((record.hasBaseline&&record.baseline.size()!=corners)||(record.hasColors&&record.colors.size()!=corners))
+                if((record.hasBaseline&&record.baseline.size()/2!=corners)||(record.hasColors&&record.colors.size()!=corners))
                     throw std::invalid_argument("Geometry attribute layout mismatch");}
-            for(const auto& record:records){
-                if(record.hasBaseline){auto found=pass.meshBaselines.find(record.key);
-                    if(found==pass.meshBaselines.end()||found->second.size()!=record.baseline.size()
-                        ||(!record.baseline.empty()&&std::memcmp(found->second.data(),record.baseline.data(),record.baseline.size()*sizeof(donut::math::float2))!=0)){
-                        pass.meshBaselines[record.key]=record.baseline;pass.dirtyBaselines.insert(record.key);}}
-                if(record.hasColors){auto found=pass.meshColors.find(record.key);
-                    if(found!=pass.meshColors.end()&&found->second==record.colors)continue;
-                    pass.meshColors[record.key]=record.colors;pass.dirtyColors.insert(record.key);
-                    if(std::any_of(record.colors.begin(),record.colors.end(),[](auto color){return (color>>24)!=255;}))pass.alphaMeshes.insert(record.key);else pass.alphaMeshes.erase(record.key);}
+            // Validation above covers the entire batch before any payload changes owner.
+            for(auto& record:records){
+                if(record.hasBaseline&&!pass.SameBaseline(record.key,record.baseline)){
+                    pass.meshBaselines.insert_or_assign(record.key,std::move(record.baseline));pass.dirtyBaselines.insert(record.key);}
+                if(record.hasColors){
+                    if(pass.SameColors(record.key,record.colors))continue;
+                    if(std::any_of(record.colors.begin(),record.colors.end(),[](auto color){return (color>>24)!=255;}))pass.alphaMeshes.insert(record.key);else pass.alphaMeshes.erase(record.key);
+                    pass.meshColors.insert_or_assign(record.key,std::move(record.colors));pass.dirtyColors.insert(record.key);}
             }
         });
     } catch(const std::exception& error) { Throw(env,error); }
@@ -470,7 +541,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingApplicationPatch(JNI
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingClearAttributes(JNIEnv* env,jclass,jlong handle) {
     try {Get(handle)->session->Enqueue([](auto& app){auto& pass=app.Renderer().lighting;
-        pass.instanceAttributes.clear();pass.meshBaselines.clear();pass.meshColors.clear();pass.alphaMeshes.clear();
+        pass.instanceAttributes.clear();pass.meshBaselines.clear();pass.meshColors.clear();pass.meshReceivers.clear();pass.alphaMeshes.clear();
         pass.dirtyInstances.clear();pass.dirtyBaselines.clear();pass.dirtyColors.clear();pass.specialInstances.clear();pass.specialRoleCount=0;
         pass.metadataDirty=true;pass.metadataInitialized=false;
     });}catch(const std::exception& error){Throw(env,error);}

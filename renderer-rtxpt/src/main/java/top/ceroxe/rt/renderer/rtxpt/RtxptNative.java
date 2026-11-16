@@ -82,6 +82,11 @@ final class RtxptNative {
     static native void nativeLightingRelease(long handle,int slot,long generation,long sequence,boolean imported);
     static native void resetHistory(long handle);
     static native int frame(long handle);
+    static native long allocateMeshInputs(int[] sizes);
+    static native ByteBuffer meshInputBuffer(long ticket,int index);
+    static native void releaseMeshInputs(long ticket);
+    static native void resourcesMemoryOwned(long handle,long revision,ByteBuffer packet,long ticket);
+    static native boolean startResourcesOwned(long handle,ByteBuffer packet,long ticket);
     static native boolean startResources(long handle,ByteBuffer packet);
     static native void waitResources(long handle);
     static native void resize(long handle,int width,int height);

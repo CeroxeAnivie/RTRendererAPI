@@ -20,8 +20,9 @@ public final class RtxptMaterialLifetimeSelfTest {
         require(data.getInt()==RtxptMemoryResources.PROTOCOL,"Current resource protocol");
         for(int count=data.getInt();count>0;count--){
             data.getLong();data.position(data.position()+7*4);data.getLong();
-            if(data.getInt()!=0){data.getLong();data.position(data.position()+6*4);}
-            bytes(data,1);
+            int transport=data.getInt();
+            if(transport==2)data.getLong();
+            else{if(transport==1){data.getLong();data.position(data.position()+6*4);}bytes(data,1);}
         }
         var materials=new ArrayList<String>();
         for(int count=data.getInt();count>0;count--){
@@ -31,7 +32,7 @@ public final class RtxptMaterialLifetimeSelfTest {
         for(int count=data.getInt();count>0;count--){
             string(data);
             if(data.getInt()==1)string(data);else for(int attribute=0;attribute<5;attribute++)bytes(data,4);
-            for(int groups=data.getInt();groups>0;groups--){string(data);bytes(data,4);}
+            int groups=data.getInt();if(groups==0)string(data);else for(;groups>0;groups--){string(data);bytes(data,4);}
         }
         for(int count=data.getInt();count>0;count--)string(data);
         for(int count=data.getInt();count>0;count--){string(data);string(data);bytes(data,4);}

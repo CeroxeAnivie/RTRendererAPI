@@ -24,9 +24,10 @@ class DirectFrameInputs final {
     bool m_policy=false,m_valid=false;
 public:
     void Reset(){m_instances=nullptr;m_rows.clear();m_dirty.clear();m_marks.clear();m_valid=false;}
+    template<class CopyCurrentPose>
     void Build(nvrhi::IDevice* device,nvrhi::ICommandList* commands,
         nvrhi::rt::IAccelStruct* tlas,const donut::engine::SceneGraph& graph,bool forceOpaque,
-        const RtrSceneRowChanges& changes,uint64_t blasRevision){
+        const RtrSceneRowChanges& changes,uint64_t blasRevision,CopyCurrentPose&& copyCurrentPose){
         const auto& instances=graph.GetMeshInstances();
         if(instances.empty()||!tlas||!graph.GetSkinnedMeshInstances().empty())
             throw std::logic_error("Direct frame requires live authored non-skinned instances");
@@ -40,11 +41,11 @@ public:
             desc.keepInitialState=true;m_instances=device->createBuffer(desc);
             if(!m_instances)throw std::runtime_error("Direct TLAS input allocation failed");
         }
-        // Reindexing, policy and BLAS-address changes retain the complete native
-        // reconciliation. Pose-only frames consume the already prepared rows;
-        // they must not reconstruct every unchanged instance just to compare it.
+        // Native reindexing, policy changes and complete AS recreation retain
+        // full reconciliation. Local BLAS-address and pose edits use the exact
+        // instance users recorded by Resources, without inspecting other rows.
         const bool full=allocate||!m_valid||previousCount!=instances.size()||m_policy!=forceOpaque
-            ||m_blasRevision!=blasRevision||changes.snapshot||!changes.meshes.empty()||!changes.instances.empty();
+            ||m_blasRevision!=blasRevision||changes.snapshot||!changes.instances.empty();
         m_marks.resize(instances.size());if(++m_epoch==0){std::fill(m_marks.begin(),m_marks.end(),0);++m_epoch;}
         {RtrDiagnostics::Scope pack(RtrDiagnostics::PayloadPack,full?instances.size():changes.tlasInstances.size(),0,1,0,
             RtrDiagnostics::Identity("Direct TLAS input rows"));
@@ -53,14 +54,13 @@ public:
             if(i>=instances.size()||instances[i]!=instance)throw std::logic_error("Stale direct TLAS row journal");
             if(m_marks[i]==m_epoch)return;m_marks[i]=m_epoch;++examined;
             const auto& mesh=instance->GetMesh();
-            const auto node=instance->GetNode();
-            if(!node||!mesh->accelStruct)throw std::logic_error("Direct TLAS input is not prepared");
+            if(!mesh->accelStruct)throw std::logic_error("Direct TLAS input is not prepared");
             nvrhi::rt::InstanceDesc row;
             row.blasDeviceAddress=mesh->accelStruct->getDeviceAddress();row.instanceMask=1;
             row.instanceID=instance->GetGeometryInstanceIndex();
             row.instanceContributionToHitGroupIndex=instance->GetGeometryInstanceIndex();
             row.flags=forceOpaque?nvrhi::rt::InstanceFlags::ForceOpaque:nvrhi::rt::InstanceFlags::None;
-            donut::math::affineToColumnMajor(node->GetLocalToWorldTransformFloat(),row.transform);
+            copyCurrentPose(instance,row.transform);
             if(allocate||i>=previousCount||std::memcmp(&m_rows[i],&row,sizeof(row))!=0){
                 m_rows[i]=row;m_dirty.push_back(uint32_t(i));
             }

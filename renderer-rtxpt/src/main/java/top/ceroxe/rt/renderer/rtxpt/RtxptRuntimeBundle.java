@@ -96,7 +96,7 @@ final class RtxptRuntimeBundle {
             if (!Files.isRegularFile(bin.resolve(file))) throw new IOException("Missing RTXPT runtime file: " + file);
         for (var dir : new String[]{"ShaderPrecompiled/Rtxpt", "ShaderDynamic/Source/External"})
             if (!Files.isDirectory(bin.resolve(dir))) throw new IOException("Missing RTXPT shader directory: " + dir);
-        for (var shader : new String[]{"RtrNativeLighting", "RtrNativeLightingReconstruct",
+        for (var shader : new String[]{"RtrNativeLighting", "RtrNativeDirectLighting", "RtrNativeLightingReconstruct",
                 "RtrNativeDynamicLighting", "RtrNativeDynamicLightingReconstruct",
                 "RtrNativeLightingDeep", "RtrNativeLightingEncode", "RtrNativeLightingResolve",
                 "RtrNativeGiReduce", "RtrNativeGiUpsample"}) {

@@ -41,6 +41,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private final Map<Long,float[]> lightingBaselines=new HashMap<>();
     private final Set<Long> pendingLightingInstances=new HashSet<>(),pendingLightingBaselines=new HashSet<>(),pendingLightingColors=new HashSet<>();
     private List<RtxptScene.Item> pendingGeometryVariants=List.of();
+    private boolean geometryReceiversPacked;
     private float[] pendingBaselineLookup,lightingBaselineLookup;
     private NativeLightingHostResponse lightingHostResponse;
     private final RtxptApplicationData applicationData=new RtxptApplicationData();
@@ -155,16 +156,25 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             if(resourcesChanged){
                 begin=recorder.clock();
                 if(reset){memoryTextures.clear();memoryMaterialVariants.clear();memoryMeshVariants.clear();}
-                var delta=RtxptDelta.prepare(before,scene,reset?List.of():previous,items,memoryTextures,memoryMaterialVariants,memoryMeshVariants,resourcePackets);
+                geometryReceiversPacked=nativeLightingPlan!=null&&!lightingAttributeReset;
+                resourcePackets.meshTransfers(geometryReceiversPacked);
+                var delta=RtxptDelta.prepare(before,scene,reset?List.of():previous,items,memoryTextures,memoryMaterialVariants,memoryMeshVariants,resourcePackets,
+                        geometryReceiversPacked?lightingBaselines:null);
                 recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.TRANSLATION,begin,delta.work().itemReads(),delta.memory()==null?0:delta.memory().remaining(),false);
                 pendingGeometryVariants=delta.changedVariants();
                 if(delta.hasWork()){
                     begin=recorder.clock();boolean failed=true;
                     try{
                         resourceBorrow=resourcePackets.borrow(delta.memory());
-                        if(first||reset||extentChanged||nativeLightingPlan==null||delta.meshes()==0
-                                ||!RtxptNative.startResources(handle,resourceBorrow.buffer())){
-                            RtxptNative.resourcesMemory(handle,revision,resourceBorrow.buffer());
+                        long meshTransfer=resourcePackets.pendingMeshTransfer();
+                        boolean prefix=false;
+                        if(!first&&!reset&&!extentChanged&&nativeLightingPlan!=null&&delta.meshes()!=0)
+                            prefix=meshTransfer!=0?RtxptNative.startResourcesOwned(handle,resourceBorrow.buffer(),meshTransfer)
+                                    :RtxptNative.startResources(handle,resourceBorrow.buffer());
+                        if(prefix){if(meshTransfer!=0)resourcePackets.transferred();}
+                        else{
+                            if(meshTransfer!=0){RtxptNative.resourcesMemoryOwned(handle,revision,resourceBorrow.buffer(),meshTransfer);resourcePackets.transferred();}
+                            else RtxptNative.resourcesMemory(handle,revision,resourceBorrow.buffer());
                             resourceBorrow.close();resourceBorrow=null;
                         }
                         failed=false;
@@ -208,6 +218,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             return FrameSubmissionResult.accepted(submitted,revision,reasons);
         }catch(RuntimeException|Error failure){
             if(resourceBorrow!=null){RtxptNative.waitResources(handle);resourceBorrow.close();}
+            resourcePackets.releaseMeshTransfer();
             try{close();}catch(RuntimeException|Error cleanup){failure.addSuppressed(cleanup);}
             throw failure;
         }
@@ -292,7 +303,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         var variants=new LinkedHashMap<String,RtxptScene.Item>();
         if(reset)for(var item:items)variants.putIfAbsent(RtxptScene.meshName(item),item);
         else {
-            for(var item:pendingGeometryVariants)variants.putIfAbsent(RtxptScene.meshName(item),item);
+            if(!geometryReceiversPacked)for(var item:pendingGeometryVariants)variants.putIfAbsent(RtxptScene.meshName(item),item);
             var meshIds=new HashSet<>(pendingLightingBaselines);meshIds.addAll(pendingLightingColors);
             for(long mesh:meshIds)for(long id:scene.instancesUsingMesh(mesh)){
                 var item=scene.item(id);variants.putIfAbsent(RtxptScene.meshName(item),item);
@@ -305,13 +316,14 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         var batch=new ArrayList<RtxptAttributeBatch.Entry>();
         for(var item:variants.values()){
             String name=RtxptScene.meshName(item);
+            if(geometryReceiversPacked&&geometryNames.contains(name))continue;
             boolean baseline=reset||geometryNames.contains(name)||pendingLightingBaselines.contains(item.mesh());
             boolean color=reset||geometryNames.contains(name)||pendingLightingColors.contains(item.mesh());
             var mesh=scene.meshes.get(item.mesh());
             batch.add(RtxptAttributeBatch.canonical(name+":0",mesh,lightingBaselines.get(item.mesh()),baseline,color));
         }
         RtxptAttributeBatch.submit(handle,revision,batch);
-        pendingGeometryVariants=List.of();
+        pendingGeometryVariants=List.of();geometryReceiversPacked=false;
         applicationData.flushPatches(lightingAttributeGeneration,(generation,offset,bytes)->RtxptNative.nativeLightingApplicationPatch(handle,generation,offset,bytes));
         var primitiveBatch=frame.primitiveBatch();
         for(long mesh:pendingLightingBaselines)pendingLightingInstances.addAll(scene.instancesUsingMesh(mesh));

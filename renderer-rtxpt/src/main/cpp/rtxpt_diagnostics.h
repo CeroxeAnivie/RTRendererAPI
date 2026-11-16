@@ -35,9 +35,9 @@ enum Stage : uint64_t { Frame=1, InstanceCache, SubInstances, Dispatch, Caller,
     CommandAcquire, CommandSubmit, CompletionPoll, ReclaimEnqueue, DriverRelease, IndexRebuild, TextureAllocate, TextureUpload,
     RuntimeInitialize, DeviceInitialize, SceneInitialize, LightingInitialize, PoolAcquire, TlasAllocate,
     HeapAllocate, ResourcePrebuild, AllocationInfo, PlacedBind, PoolEvict, StagingAcquire, StagingAllocate, StagingMap, StagingCopy, StagingBarrier, StagingRecord, SparseRegions, SceneGraphRefresh, SceneFullRefresh, SceneTopologyFallback, SceneMeshPreparation, SceneMaterialRows, SceneGeometryRows, SceneInstanceRows, SceneTableUpload, SparseQueryPreparation, SparseRegionInitialize, SparseHashErase, SparseHashRecover, SparseRegionPublish, SparseUpload,
-    DefaultBufferAllocate, DefaultBufferCommitted, DefaultBufferPostCreate, SceneCpuResize, SceneMaterialPrepare, SceneOmmDebugRefresh, DiagnosticMutexWait, DiagnosticMutexHold, TlasBuild, MeshBufferUpload };
+    DefaultBufferAllocate, DefaultBufferCommitted, DefaultBufferPostCreate, SceneCpuResize, SceneMaterialPrepare, SceneOmmDebugRefresh, DiagnosticMutexWait, DiagnosticMutexHold, TlasBuild, MeshBufferUpload, ImportDefinitions, ImportMeshObjects, ImportAttributes, ImportReceivers, ImportNormals, ImportOwnership, ImportSurfaces, ImportNodeRemovals, ImportTransforms, ImportFinalRemovals };
 enum Flag : uint64_t { QueueWaitEnqueue=1, Failed=2, CacheHit=4, CacheMiss=8,
-    Active=256, Truncated=512, Cancelled=1024, EnteredNativeFrame=2048 };
+    Active=256, Truncated=512, Cancelled=1024, EnteredNativeFrame=2048, Aggregated=4096 };
 enum SubmissionKind : uint64_t { Initial=0, Update, Steady, Resized, Waited, KindCount };
 constexpr size_t Capacity=8192, Width=27, Header=19, ActiveCapacity=512, SubmissionCapacity=1024;
 constexpr size_t CaptureCapacity=65536, CaptureSlots=2, SlowGroupCapacity=4, SlowDescriptorWidth=10;
@@ -374,6 +374,45 @@ struct Scope {
         if(parentGeneration==epoch&&parentId==event[12]){parentId=Find(previousId)?previousId:0;parentGeneration=generation.load();}
     }
     Scope(const Scope&)=delete;Scope& operator=(const Scope&)=delete;
+};
+// Disjoint code regions can repeat thousands of times in a resource packet.
+// Sum them without per-mesh recorder locks or ring entries. Aggregated events
+// use their first begin time and the sum of all spans, not a contiguous interval.
+// Their CPU duration is unavailable; never derive a timeline from these events.
+template<size_t N> struct AggregateScopes {
+    struct Sample {uint64_t first=0,nanos=0,items=0,bytes=0;};
+    const std::array<Stage,N> stages;
+    std::array<Sample,N> samples{};
+    uint64_t epoch=0,parent=0,begin=0;size_t current=N;
+    bool enabled=false;
+    explicit AggregateScopes(const std::array<Stage,N>& values):stages(values){
+        if(level.load(std::memory_order_acquire)<2)return;
+        epoch=generation.load(std::memory_order_acquire);
+        parent=parentGeneration==epoch?parentId:0;enabled=parent!=0;
+    }
+    void Next(size_t index,uint64_t items=0,uint64_t bytes=0){
+        if(!enabled)return;
+        const auto now=Now();if(current<N)samples[current].nanos+=now-begin;
+        current=index;begin=now;
+        if(index<N){auto& sample=samples[index];if(!sample.first)sample.first=now;sample.items+=items;sample.bytes+=bytes;}
+    }
+    ~AggregateScopes(){
+        if(!enabled)return;
+        Next(N);
+        if(epoch!=generation.load(std::memory_order_acquire)||level.load(std::memory_order_acquire)<2)return;
+        DiagnosticLock lock(RecordEvent);
+        if(epoch!=generation.load(std::memory_order_acquire))return;
+        auto* owner=Find(parent);if(!owner)return;
+        for(size_t i=0;i<N;++i){const auto& sample=samples[i];if(!sample.first)continue;
+            Event event=owner->event;
+            event[4]=stages[i];event[5]=sample.first;event[6]=event[7]=sample.nanos;
+            event[8]=sample.items;event[9]=0;event[10]=owner->event[2];event[11]=Aggregated;
+            event[12]=nextId.fetch_add(1)*ActiveCapacity;event[13]=parent;
+            event[16]=event[17]=UINT64_MAX;event[18]=event[19]=event[20]=0;event[21]=sample.bytes;
+            owner->children+=sample.nanos;RecordLocked(event,owner->traits);
+        }
+    }
+    AggregateScopes(const AggregateScopes&)=delete;
 };
 inline thread_local std::optional<Scope> submission;
 inline void BeginSubmit(uint64_t sequence,uint64_t rev,uint64_t elapsed){

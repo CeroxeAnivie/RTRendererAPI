@@ -211,42 +211,6 @@ final class RtxptScene {
         for(int index=scene.instances.size();index<current.size();index++){var item=current.get(index);if(!item.equals(oldDynamic.remove(item.name())))upserts.add(item);reads++;}
         removals.addAll(oldDynamic.keySet());return new ItemChanges(upserts,removals,nodes,reads);
     }
-    static FloatBuffer floats(int n){return ByteBuffer.allocateDirect(Math.multiplyExact(n,4)).order(ByteOrder.nativeOrder()).asFloatBuffer();}
-    /** Missing normals require flat triangle corners in the resident mesh representation.
-     * Authored shading and all vertex attributes stay intact during memory packing. */
-    record ExportGeometry(FloatBuffer positions,FloatBuffer normals,FloatBuffer tangents,
-                          FloatBuffer uvs,IntBuffer colors,IntBuffer indices,int vertexCount) {
-        static ExportGeometry from(MeshAsset mesh) {
-            var positions=mesh.positions();var normals=mesh.normals();var tangents=mesh.tangents();
-            var uvs=mesh.textureCoordinates();var colors=mesh.vertexColorsRgba8();var indices=mesh.triangleIndices();
-            if(normals.hasRemaining())return new ExportGeometry(positions,normals,tangents,uvs,colors,indices,mesh.vertexCount());
-            int corners=indices.remaining();
-            var p=FloatBuffer.allocate(Math.multiplyExact(corners,3));
-            var n=FloatBuffer.allocate(Math.multiplyExact(corners,3));
-            var t=FloatBuffer.allocate(tangents.hasRemaining()?Math.multiplyExact(corners,4):0);
-            var uv=FloatBuffer.allocate(uvs.hasRemaining()?Math.multiplyExact(corners,2):0);
-            var c=IntBuffer.allocate(colors.hasRemaining()?corners:0);var remapped=IntBuffer.allocate(corners);
-            for(int first=0;first<corners;first+=3) {
-                int a=indices.get(first)*3,b=indices.get(first+1)*3,d=indices.get(first+2)*3;
-                double ux=(double)positions.get(b)-positions.get(a),uy=(double)positions.get(b+1)-positions.get(a+1),uz=(double)positions.get(b+2)-positions.get(a+2);
-                double vx=(double)positions.get(d)-positions.get(a),vy=(double)positions.get(d+1)-positions.get(a+1),vz=(double)positions.get(d+2)-positions.get(a+2);
-                double nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,length=Math.sqrt(nx*nx+ny*ny+nz*nz);
-                // A zero-area primitive cannot be hit; keep its exported attributes finite.
-                if(length==0){nx=0;ny=0;nz=1;length=1;}
-                for(int j=0;j<3;j++) {
-                    int vertex=indices.get(first+j);copyVertex(positions,p,vertex,3);
-                    n.put((float)(nx/length)).put((float)(ny/length)).put((float)(nz/length));
-                    if(t.capacity()!=0)copyVertex(tangents,t,vertex,4);
-                    if(uv.capacity()!=0)copyVertex(uvs,uv,vertex,2);
-                    if(c.capacity()!=0)c.put(colors.get(vertex));remapped.put(first+j);
-                }
-            }
-            return new ExportGeometry(p.flip(),n.flip(),t.flip(),uv.flip(),c.flip(),remapped.flip(),corners);
-        }
-        private static void copyVertex(FloatBuffer source,FloatBuffer target,int vertex,int components) {
-            for(int component=0;component<components;component++)target.put(source.get(vertex*components+component));
-        }
-    }
     record Variant(long material,MediumBoundary boundary,float visibility) {
         String name(){return "m"+material+suffix(boundary,visibility);}
     }

@@ -31,7 +31,7 @@ float4 RtrCoverageLevel(int textureIndex,float2 uv,uint policy,float lod){
 bool RtrCoverageQuad(InstanceData instance,GeometryData geometry,RtrGeometryAttributes mapping,uint primitive,uint3 indices,
         float3 b,float3 dx,float3 dy,ByteAddressBuffer vertices,ByteAddressBuffer indexBuffer,float materialAlpha,float cutoff){
     uint partner=primitive^1;if(partner>=mapping.triangles)return false;
-    if(t_SurfaceIndices[mapping.offset/3+partner]!=t_SurfaceIndices[mapping.offset/3+primitive])return false;
+    if((mapping.surfaceSelector&RtrMixedSurfaceBit)!=0&&RtrSurfaceIndex(mapping,partner)!=RtrSurfaceIndex(mapping,primitive))return false;
     uint3 q=indexBuffer.Load3(geometry.indexOffset+partner*12);int opposite=-1;uint other=0;int unique=0;
     [unroll]for(int i=0;i<3;i++){
         if(all(indices[i]!=q)){if(opposite>=0)return false;opposite=i;}
@@ -55,22 +55,14 @@ bool RtrCoverageQuad(InstanceData instance,GeometryData geometry,RtrGeometryAttr
 }
 // -1 keeps the ordinary candidate, [0,1] is proven footprint coverage, and
 // 2 requests correlated real-ray fallback. No mean-alpha multiplication.
-float RtrCandidateCoverage(RayDesc ray,uint instanceIndex,uint geometryIndex,uint primitive,float2 attributes,
-        float hitDistance,float lightDistance,bool filtering,bool shadowRole=true){
-    if(!RtrCoverageEnabled())return -1;
-    RtrInstance roles=t_InstanceAttributes[instanceIndex];
-    if(shadowRole&&(uint(roles.rolesVisibility.x)&2)==0)return -1;
-    InstanceData instance=t_Instances[instanceIndex];GeometryData geometry=t_Geometry[instance.firstGeometryIndex+geometryIndex];
-    RtrGeometryAttributes mapping=t_GeometryBaselines[instance.firstGeometryIndex+geometryIndex];
-    MaterialConstants material=RtrMaterial(geometry,primitive,mapping);
+float RtrCandidateCoverage(RayDesc ray,float hitDistance,float lightDistance,RtrInstance roles,
+        InstanceData instance,GeometryData geometry,RtrGeometryAttributes mapping,MaterialConstants material,
+        uint primitive,float2 attributes){
     bool masked=material.domain==MaterialDomain_AlphaTested||material.domain==MaterialDomain_TransmissiveAlphaTested;
-    if(!masked)return -1;
+    if(!masked||(material.flags&MaterialFlags_UseBaseOrDiffuseTexture)==0)return -1;
     ByteAddressBuffer indices=t_Buffers[NonUniformResourceIndex(geometry.indexBufferIndex)];
     ByteAddressBuffer vertices=t_Buffers[NonUniformResourceIndex(geometry.vertexBufferIndex)];
     uint3 tri=indices.Load3(geometry.indexOffset+primitive*12);float3 bary=float3(1-attributes.x-attributes.y,attributes);
-    float3 vertexAlpha=float3(RtrVertexColor(t_Baselines[mapping.offset+primitive*3].color).a,
-        RtrVertexColor(t_Baselines[mapping.offset+primitive*3+1].color).a,RtrVertexColor(t_Baselines[mapping.offset+primitive*3+2].color).a);
-    if(!filtering||(material.flags&MaterialFlags_UseBaseOrDiffuseTexture)==0)return -1;
     float3 p0=mul(instance.transform,float4(RtrPosition(vertices,geometry,tri.x),1));
     float3 p1=mul(instance.transform,float4(RtrPosition(vertices,geometry,tri.y),1));
     float3 p2=mul(instance.transform,float4(RtrPosition(vertices,geometry,tri.z),1));
@@ -84,6 +76,8 @@ float RtrCandidateCoverage(RayDesc ray,uint instanceIndex,uint geometryIndex,uin
     float span=max(length(du*float2(width,height)),length(dv*float2(width,height)));
     if(span<=1.25)return -1;
     rtrComplexCoverage=true;
+    float3 vertexAlpha=float3(RtrVertexColor(t_Baselines[mapping.offset+primitive*3].color).a,
+        RtrVertexColor(t_Baselines[mapping.offset+primitive*3+1].color).a,RtrVertexColor(t_Baselines[mapping.offset+primitive*3+2].color).a);
     bool interior=all(bary>.5*(abs(bx-bary)+abs(by-bary))+1e-5);
     float materialAlpha=mapping.maskedOpacity*roles.surfaceVisibility.x;
     float minimumAlpha=materialAlpha*min(vertexAlpha.x,min(vertexAlpha.y,vertexAlpha.z));
@@ -105,15 +99,16 @@ void RtrPrepareCoverage(RtrReceiver receiver,uint2 pixel){
     float3 dx=RtrCameraDirection(float2(pixel)+float2(1.5,.5)),dy=RtrCameraDirection(float2(pixel)+float2(.5,1.5));
     float nx=dot(dx,receiver.geometricNormal),ny=dot(dy,receiver.geometricNormal);
     rtrReceiverDx=abs(nx)>1e-6?dx*(plane/nx)-delta:0;rtrReceiverDy=abs(ny)>1e-6?dy*(plane/ny)-delta:0;
-    uint index=t_Instances[receiver.instance].firstGeometryIndex+receiver.geometry;
+    InstanceData instance=t_Instances[receiver.instance];uint index=instance.firstGeometryIndex+receiver.geometry;
+    RtrInstance data=t_InstanceAttributes[receiver.instance];
     GeometryData geometry=t_Geometry[index];RtrGeometryAttributes mapping=t_GeometryBaselines[index];
     MaterialConstants material=RtrMaterial(geometry,receiver.primitive,mapping);
     // Cutout receivers and frame primitives can animate without moving the
     // receiving plane. They never supply reusable temporal edge geometry.
-    rtrMovingCoverage=t_InstanceAttributes[receiver.instance].rolesVisibility.w!=0
+    rtrMovingCoverage=data.rolesVisibility.w!=0
         ||material.domain==MaterialDomain_AlphaTested||material.domain==MaterialDomain_TransmissiveAlphaTested;
     RayDesc ray;ray.Origin=g.cameraNear.xyz;ray.Direction=RtrNormalize(delta);ray.TMin=.001;ray.TMax=receiver.distance;
-    RtrCandidateCoverage(ray,receiver.instance,receiver.geometry,receiver.primitive,receiver.barycentrics,receiver.distance,0,true,false);
+    RtrCandidateCoverage(ray,receiver.distance,0,data,instance,geometry,mapping,material,receiver.primitive,receiver.barycentrics);
 }
 float RtrDirectAlpha(bool valid,float opacity){
     if(!RtrCoverageEnabled())return valid?opacity:0;

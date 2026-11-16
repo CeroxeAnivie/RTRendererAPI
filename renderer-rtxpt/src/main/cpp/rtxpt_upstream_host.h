@@ -579,7 +579,7 @@ public:
         return true;
     }
 
-    void ApplyResources(std::span<const uint8_t> packet) {
+    void ApplyResources(std::span<const uint8_t> packet,std::shared_ptr<const MeshInputBlocks> transferred={}) {
         if (!m_managedScene || !m_scene || !IsSceneLoaded())
             throw std::logic_error("In-memory resources require the loaded managed scene");
         RtrDiagnostics::Scope resourceScope(RtrDiagnostics::ResourcePlan);
@@ -607,7 +607,7 @@ public:
                     m_ommBaker->UIData().TriggerRebuild=true;
                     dormantOmmInvalidated=true;
                 }
-            });
+            },transferred.get());
         if(changed.topology||changed.transforms||changed.materialDomainsChanged||changed.requiresCoverageRebuild
             ||!changed.deformedMeshes.empty()||!changed.reshapedMeshes.empty())m_directTlasDirty=true;
         if(lighting.active)m_resources.ConfigureMaterials(m_importedMaterials,false,true);
@@ -634,6 +634,7 @@ public:
         for(const auto& name:changed.surfaceGeometries)lighting.dirtySurfaces.insert(name);
         for(const auto& name:changed.retiredInstances)lighting.RetireInstance(name);
         for(const auto& name:changed.retiredGeometries)lighting.RetireGeometry(name);
+        lighting.PublishReceivers(changed.receivers);
         if(commands){
             commands->close();
             const auto submitted=GetDevice()->executeCommandList(commands);
@@ -839,7 +840,8 @@ private:
             const auto tlasTiming=buildTlas?RtrGpuProfile::Begin(m_commandList,"NativeTlas",-1):RtrGpuProfile::Token{};
             if(buildTlas){
                 if(retainedDirectInputs)m_directFrameInputs.Build(GetDevice(),m_commandList,m_topLevelAS,*graph,m_ui.AS.ForceOpaque,
-                    static_cast<ManagedScene&>(*m_scene).RowChanges(),m_directBlasRevision);
+                    static_cast<ManagedScene&>(*m_scene).RowChanges(),m_directBlasRevision,
+                    [](const auto& instance,float* transform){ManagedScene::CopyPublishedCurrentPose(instance,transform);});
                 else UpdateTLAS(m_commandList);
             }
             RtrGpuProfile::End(m_commandList,tlasTiming);}
@@ -1054,13 +1056,15 @@ private:
                 nvrhi::utils::BuildBottomLevelAccelStruct(commands,build.structure,build.description);
             }
             if(build.previous&&build.previous!=build.structure)changed.retiredStructures.push_back(build.previous);
+            if(!build.previous||build.previous->getDeviceAddress()!=build.structure->getDeviceAddress())
+                m_resources.RecordAccelerationUsers(*m_scene,build.mesh);
             build.mesh->accelStruct=build.structure;
         }
         m_directBlasStorage.BuildBatch(GetDevice(),commands,pagedBuilds);
         for(const auto& build:builds)if(!DirectBlasStorage::Is(build.structure))
             commands->setAccelStructState(build.structure,nvrhi::ResourceStates::AccelStructBuildBlas);
         commands->commitBarriers();
-        if(!builds.empty()){m_tlasInstanceDataDirty=true;++m_directBlasRevision;}
+        if(!builds.empty())m_tlasInstanceDataDirty=true;
     }
     bool RefreshRetainedDirectStructures(Resources::Changes& changed,nvrhi::ICommandList* preparedCommands=nullptr) {
         RtrDiagnostics::Scope structureScope(RtrDiagnostics::Acceleration);

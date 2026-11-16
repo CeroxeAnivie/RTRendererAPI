@@ -34,6 +34,8 @@
 #include "rtxpt_scene_delta.h"
 #include "rtxpt_scene_table_upload.h"
 #include "rtxpt_mesh_input_lease.h"
+#include "rtxpt_flat_normals.h"
+#include <optional>
 
 namespace rtr::upstream {
 // Surface transport for the independent finite-signal pass. The embedded
@@ -46,33 +48,77 @@ struct SurfaceMaterialRow {
 };
 // Immutable canonical channels survive until their final mesh generation.
 // They never retain unrelated transaction, texture, material or node bytes.
+struct ReceiverVertex {donut::math::float2 baseline={0,0};uint32_t color=0xffffffff,reserved=0;};
+static_assert(sizeof(ReceiverVertex)==16);
+struct ReceiverGeometry {
+    std::string name;
+    // Keep source vertices indexed until the final GPU attribute write. No
+    // permanent corner-expanded copy is needed for newly published geometry.
+    RtrInputSpan<float> baseline;
+    RtrInputSpan<uint32_t> colors,indices;
+    std::shared_ptr<const uint8_t[]> channels;
+    std::shared_ptr<const MeshInputLease> indexOwner;
+    bool alpha=false;
+};
 struct AuthoredMeshInputs {
     using FloatView=RtrResourceReader::FloatView;
     struct Indices {const uint8_t* data=nullptr;uint32_t count=0;};
     std::shared_ptr<const MeshInputLease> lease;
     FloatView positions{nullptr,0},normals{nullptr,0},tangents{nullptr,0},uv{nullptr,0};
     std::vector<Indices> indices;
-    Indices canonicalIndices;
+    Indices canonicalIndices,packedNormals;
     std::vector<uint32_t> groupedIndices;
     uint32_t indexCount=0;
-    void OwnGeometry(const std::shared_ptr<MeshInputRetention>& accounting){
-        const std::array<MeshInputLease::Range,5> ranges{{
+    bool flatExpanded=false;
+    size_t OutputVertices()const{return flatExpanded?canonicalIndices.count:positions.size()/3;}
+    uint32_t SourceVertex(size_t vertex)const{
+        if(!flatExpanded)return uint32_t(vertex);
+        uint32_t result;std::memcpy(&result,canonicalIndices.data+vertex*4,4);return result;
+    }
+    size_t NormalVertex(size_t vertex)const{return flatExpanded?vertex/3:vertex;}
+    uint32_t PackedNormal(size_t vertex)const{
+        const size_t source=NormalVertex(vertex);
+        if(packedNormals.count){uint32_t value;std::memcpy(&value,packedNormals.data+source*4,4);return value;}
+        return donut::math::vectorToSnorm8(donut::math::float3(normals[source*3],normals[source*3+1],normals[source*3+2]));
+    }
+    void OwnGeometry(const std::shared_ptr<MeshInputRetention>& accounting,std::shared_ptr<const std::vector<uint32_t>> generated={},ReceiverGeometry* receiver=nullptr){
+        const std::array<MeshInputLease::Range,7> ranges{{
             {positions.data(),positions.size()*sizeof(float)},
-            {normals.data(),normals.size()*sizeof(float)},
+            {generated?nullptr:packedNormals.count?packedNormals.data:normals.data(),generated?0:packedNormals.count?size_t(packedNormals.count)*4:normals.size()*sizeof(float)},
             {tangents.data(),tangents.size()*sizeof(float)},
             {uv.data(),uv.size()*sizeof(float)},
-            {canonicalIndices.data,size_t(canonicalIndices.count)*sizeof(uint32_t)}}};
-        auto owner=std::make_shared<const MeshInputLease>(ranges,accounting);
+            {canonicalIndices.data,size_t(canonicalIndices.count)*sizeof(uint32_t)},
+            {receiver?receiver->baseline.data():nullptr,receiver?receiver->baseline.size()*sizeof(float):0},
+            {receiver?receiver->colors.data():nullptr,receiver?receiver->colors.size()*sizeof(uint32_t):0}}};
+        auto owner=generated?std::make_shared<const MeshInputLease>(ranges,generated,generated->size()*sizeof(uint32_t),accounting)
+            :std::make_shared<const MeshInputLease>(ranges,accounting);
         const auto* data=owner->bytes.data();size_t offset=0;
         auto bind=[&](FloatView& view){
             const auto count=view.size();view=FloatView(data+offset,count);offset+=count*sizeof(float);
         };
-        bind(positions);bind(normals);bind(tangents);bind(uv);
-        canonicalIndices.data=data+offset;lease=std::move(owner);
+        bind(positions);
+        if(generated)packedNormals={reinterpret_cast<const uint8_t*>(generated->data()),uint32_t(generated->size())};
+        else if(packedNormals.count){packedNormals.data=data+offset;offset+=size_t(packedNormals.count)*4;}
+        else bind(normals);
+        bind(tangents);bind(uv);
+        canonicalIndices.data=data+offset;offset+=size_t(canonicalIndices.count)*sizeof(uint32_t);
+        if(receiver){
+            receiver->baseline={data+offset,receiver->baseline.size()};offset+=receiver->baseline.size()*sizeof(float);
+            receiver->colors={data+offset,receiver->colors.size()};receiver->indexOwner=owner;
+        }
+        lease=std::move(owner);
+    }
+    void AdoptGeometry(const std::shared_ptr<const MeshInputBlock>& block,const std::shared_ptr<MeshInputRetention>& accounting,
+            std::shared_ptr<const std::vector<uint32_t>> generated={},ReceiverGeometry* receiver=nullptr){
+        auto owner=std::make_shared<const MeshInputLease>(block,generated,generated?generated->size()*sizeof(uint32_t):0,accounting);
+        if(generated)packedNormals={reinterpret_cast<const uint8_t*>(generated->data()),uint32_t(generated->size())};
+        if(receiver)receiver->indexOwner=owner;
+        lease=std::move(owner);
     }
     uint32_t Layout()const{return 1u|(!tangents.empty()?2u:0u)|(!uv.empty()?4u:0u);}
     std::array<size_t,4> AttributeSizes()const{
-        const size_t vertices=positions.size()/3;
+        const size_t vertices=OutputVertices();
+
         return {vertices*sizeof(donut::math::float3),vertices*sizeof(uint32_t),
             tangents.empty()?0:vertices*sizeof(uint32_t),uv.empty()?0:vertices*sizeof(donut::math::float2)};
     }
@@ -85,11 +131,31 @@ struct AuthoredMeshInfo final : MeshInfoEx {
     uint32_t directDirtyChannels=31;
     std::array<size_t,4> directAttributeSizes{};
     std::vector<std::string> surfaceMaterials;
-    std::vector<uint32_t> triangleMaterials,surfaceSlots;
+    // Zero selects the scene material; otherwise the slot is stored plus one.
+    uint32_t uniformSurface=0;
+    std::vector<uint32_t> triangleSurfaces;
+};
+struct MeshSurfaceSlots {
+    uint32_t uniform=0;
+    const std::vector<uint32_t>* mixed=nullptr;
+};
+inline MeshSurfaceSlots MeshSurfaces(const donut::engine::MeshInfo& mesh){
+    const auto* authored=dynamic_cast<const AuthoredMeshInfo*>(&mesh);
+    return authored?MeshSurfaceSlots{authored->uniformSurface,authored->triangleSurfaces.empty()?nullptr:&authored->triangleSurfaces}:MeshSurfaceSlots{};
+}
+// The published pose belongs to its actual native leaf, not its transient
+// dense row. Reindexing another leaf cannot invalidate this immutable input.
+struct AuthoredMeshInstance final : MeshInstanceEx {
+    using MeshInstanceEx::MeshInstanceEx;
+    std::array<float,24> publishedPose{};
+    bool publishedPoseValid=false;
 };
 class AuthoredSceneTypeFactory final : public ExtendedSceneTypeFactory {
 public:
     std::shared_ptr<donut::engine::MeshInfo> CreateMesh()override{return std::make_shared<AuthoredMeshInfo>();}
+    std::shared_ptr<donut::engine::MeshInstance> CreateMeshInstance(const std::shared_ptr<donut::engine::MeshInfo>& mesh)override{
+        return std::make_shared<AuthoredMeshInstance>(mesh);
+    }
 };
 inline const std::shared_ptr<const AuthoredMeshInputs>& PendingMeshInputs(const donut::engine::MeshInfo& mesh){
     static const std::shared_ptr<const AuthoredMeshInputs> empty;
@@ -181,6 +247,17 @@ public:
     void RecordMeshIdentityChange(const std::shared_ptr<donut::engine::MeshInfo>& mesh){
         RecordChangedMesh(mesh);m_rowChangesNeedDedup=true;
     }
+    void RecordAccelerationInput(const std::shared_ptr<donut::engine::MeshInstance>& instance){
+        if(instance)m_rowChanges.tlasInstances.push_back(instance);
+    }
+    static void CopyPublishedCurrentPose(const std::shared_ptr<donut::engine::MeshInstance>& instance,float* transform){
+        if(const auto* authored=dynamic_cast<const AuthoredMeshInstance*>(instance.get());authored&&authored->publishedPoseValid){
+            std::memcpy(transform,authored->publishedPose.data(),12*sizeof(float));return;
+        }
+        const auto* node=instance->GetNode();
+        if(!node)throw std::logic_error("Missing live native instance pose");
+        donut::math::affineToColumnMajor(node->GetLocalToWorldTransformFloat(),transform);
+    }
     void SetFrameWorkers(donut::engine::ThreadPool* workers){m_frameWorkers=workers;}
     void PrepareDirectGeometryPages(){m_directGeometry.PreparePages(m_Device,m_DescriptorTable);}
     void SetDirectGeometry(bool enabled,bool inPlace){
@@ -253,7 +330,7 @@ public:
             rows.event[8]=written;rows.event[9]=examined;rows.event[11]|=RtrDiagnostics::CacheHit;
         }
         WriteChangedGeometryRows(commands,changedMeshes);
-        RefreshInstanceRows(commands,true,structurePending||rootTransformPending);CompleteRowPublication();
+        RefreshInstanceRows(commands,true,structurePending||rootTransformPending,rootTransformPending);CompleteRowPublication();
         m_preparedFrameIndex=frameIndex;m_preparedFrameValid=finalFramePreparation;
     }
     bool RefreshPreparedTransforms(nvrhi::ICommandList* commands,uint32_t frameIndex){
@@ -278,7 +355,7 @@ public:
         const bool rootTransformPending=root&&(root->GetDirtyFlags()&Dirty::LocalTransform)!=0;
         {RtrDiagnostics::Scope graphScope(RtrDiagnostics::SceneGraphRefresh);RefreshSceneGraph(frameIndex);}
         // Native animation can dirty materials independently of resource input.
-        RefreshMaterialRows(commands);RefreshInstanceRows(commands,transformsPending,rootTransformPending);
+        RefreshMaterialRows(commands);RefreshInstanceRows(commands,transformsPending,rootTransformPending,rootTransformPending);
         CompleteRowPublication();
         m_preparedFrameIndex=frameIndex;m_preparedFrameValid=true;return true;
     }
@@ -364,6 +441,11 @@ private:
         }
         RecordChangedMesh(mesh);
     }
+    static std::array<uint32_t,4> InstanceGeometry(const std::shared_ptr<donut::engine::MeshInstance>& instance) {
+        const auto& mesh=instance->GetMesh();
+        return {uint32_t(instance->GetGeometryInstanceIndex()),uint32_t(mesh->geometries.size()),
+            mesh->geometries.empty()?~0u:uint32_t(mesh->geometries.front()->globalGeometryIndex),uint32_t(mesh->type)};
+    }
     static InstanceJournal InstanceRow(const std::shared_ptr<donut::engine::MeshInstance>& instance) {
         InstanceJournal result;result.owner=instance;
         const auto* node=instance->GetNode();
@@ -372,10 +454,7 @@ private:
             for(unsigned c=0;c<3;++c){result.pose[r*4+c]=current.m_linear[c][r];result.pose[12+r*4+c]=previous.m_linear[c][r];}
             result.pose[r*4+3]=current.m_translation[r];result.pose[12+r*4+3]=previous.m_translation[r];
         }
-        const auto& mesh=instance->GetMesh();
-        result.geometry={uint32_t(instance->GetGeometryInstanceIndex()),uint32_t(mesh->geometries.size()),
-            mesh->geometries.empty()?~0u:uint32_t(mesh->geometries.front()->globalGeometryIndex),uint32_t(mesh->type)};
-        return result;
+        result.geometry=InstanceGeometry(instance);return result;
     }
     static bool NeedsPoseConvergence(const InstanceJournal& row){
         return !std::equal(row.pose.begin(),row.pose.begin()+12,row.pose.begin()+12);
@@ -391,8 +470,11 @@ private:
         m_dirtyInstanceInputs.clear();m_convergingInstances.clear();
         m_instanceJournal.resize(GetSceneGraph()->GetMeshInstances().size());
         for(const auto& instance:GetSceneGraph()->GetMeshInstances()){
-            m_instanceJournal.at(instance->GetInstanceIndex())=InstanceRow(instance);RecordChangedInstance(instance);
-            if(NeedsPoseConvergence(m_instanceJournal.at(instance->GetInstanceIndex())))m_convergingInstances.push_back(instance);
+            auto& row=m_instanceJournal.at(instance->GetInstanceIndex());row=InstanceRow(instance);RecordChangedInstance(instance);
+            if(auto* authored=dynamic_cast<AuthoredMeshInstance*>(instance.get())){
+                authored->publishedPose=row.pose;authored->publishedPoseValid=true;
+            }
+            if(NeedsPoseConvergence(row))m_convergingInstances.push_back(instance);
         }
         m_tableJournalReady=true;m_materialRowsPending=false;CompleteRowPublication();
     }
@@ -432,7 +514,7 @@ private:
         }
         m_materialRowsPending=false;
     }
-    void RefreshInstanceRows(nvrhi::ICommandList* commands,bool transformsPending=true,bool structureChanged=false){
+    void RefreshInstanceRows(nvrhi::ICommandList* commands,bool transformsPending=true,bool structureChanged=false,bool rootTransformChanged=false){
         uint64_t written=0;m_dirtyInstanceRows.clear();
         RtrDiagnostics::Scope rows(RtrDiagnostics::SceneInstanceRows);
         rows.event[11]|=RtrDiagnostics::CacheHit;
@@ -454,10 +536,26 @@ private:
             collect(m_dirtyInstanceInputs);if(!all)collect(m_convergingInstances);
             if(selected.empty())all=true;
         }
+        // Dense table relocation does not change an existing node's pose. All
+        // authored pose/leaf-bounds edits and previous-pose convergence already
+        // enter these journals. Reuse the published pose only for the same owner
+        // in the same row; new/recycled rows still read the original graph.
+        std::unordered_set<const donut::engine::MeshInstance*> poseInputs;
+        const bool retainedPoses=structureChanged&&!rootTransformChanged;
+        if(retainedPoses){
+            const auto collectPose=[&](const auto& inputs){for(const auto& input:inputs)if(auto instance=input.lock())poseInputs.insert(instance.get());};
+            collectPose(m_dirtyInstanceInputs);collectPose(m_convergingInstances);
+        }
         m_dirtyInstanceInputs.clear();m_convergingInstances.clear();
         const auto& candidates=all?live:selected;
         for(const auto& instance:candidates) {
-            auto row=InstanceRow(instance);auto& old=m_instanceJournal.at(instance->GetInstanceIndex());
+            auto& old=m_instanceJournal.at(instance->GetInstanceIndex());
+            auto* authored=dynamic_cast<AuthoredMeshInstance*>(instance.get());
+            const bool retainedPose=retainedPoses&&authored&&authored->publishedPoseValid&&!poseInputs.contains(instance.get());
+            InstanceJournal row;
+            if(retainedPose){row.owner=instance;row.pose=authored->publishedPose;row.geometry=InstanceGeometry(instance);}
+            else row=InstanceRow(instance);
+            if(authored){authored->publishedPose=row.pose;authored->publishedPoseValid=true;}
             if(NeedsPoseConvergence(row))m_convergingInstances.push_back(instance);
             const bool ownerChanged=!SameOwner(old.owner,instance);
             if(ownerChanged)RecordChangedInstance(instance);
@@ -558,14 +656,17 @@ private:
                 const auto& segment=batch[at];const auto& mesh=*segment.mesh;const auto& input=*segment.inputs;
                 const auto [vertexOffset,indexOffset]=offsets[at];
                 for(size_t v=0;v<mesh.totalVertices;++v){
-                    shared->positionData[vertexOffset+v]=donut::math::float3(input.positions[v*3],input.positions[v*3+1],input.positions[v*3+2]);
-                    if(layout&1)shared->normalData[vertexOffset+v]=donut::math::vectorToSnorm8(donut::math::float3(input.normals[v*3],input.normals[v*3+1],input.normals[v*3+2]));
-                    if(layout&2)shared->tangentData[vertexOffset+v]=donut::math::vectorToSnorm8(donut::math::float4(input.tangents[v*4],input.tangents[v*4+1],input.tangents[v*4+2],input.tangents[v*4+3]));
-                    if(layout&4)shared->texcoord1Data[vertexOffset+v]=donut::math::float2(input.uv[v*2],input.uv[v*2+1]);
+                    const auto source=input.SourceVertex(v);const auto normal=input.NormalVertex(v);
+                    shared->positionData[vertexOffset+v]=donut::math::float3(input.positions[source*3],input.positions[source*3+1],input.positions[source*3+2]);
+                    if(layout&1)shared->normalData[vertexOffset+v]=input.PackedNormal(v);
+                    if(layout&2)shared->tangentData[vertexOffset+v]=donut::math::vectorToSnorm8(donut::math::float4(input.tangents[source*4],input.tangents[source*4+1],input.tangents[source*4+2],input.tangents[source*4+3]));
+                    if(layout&4)shared->texcoord1Data[vertexOffset+v]=donut::math::float2(input.uv[source*2],input.uv[source*2+1]);
                 }
-                size_t localIndex=0;
-                for(const auto& part:input.indices){
-                    std::memcpy(shared->indexData.data()+indexOffset+localIndex,part.data,size_t(part.count)*sizeof(uint32_t));localIndex+=part.count;
+                if(input.flatExpanded)for(uint32_t corner=0;corner<input.indexCount;++corner)shared->indexData[indexOffset+corner]=corner;
+                else {size_t localIndex=0;
+                    for(const auto& part:input.indices){
+                        std::memcpy(shared->indexData.data()+indexOffset+localIndex,part.data,size_t(part.count)*sizeof(uint32_t));localIndex+=part.count;
+                    }
                 }
             });
             for(size_t at=0;at<batch.size();++at){
@@ -650,6 +751,7 @@ public:
         std::vector<std::shared_ptr<donut::engine::MeshInfo>> reboundMeshes;
         std::vector<std::pair<std::string,std::string>> renamedGeometries;
         std::vector<std::string> surfaceGeometries;
+        std::vector<ReceiverGeometry> receivers;
     };
 
     void SetTextureResources(nvrhi::IDevice* device,
@@ -756,11 +858,10 @@ public:
             m_pendingIndependentMaterials.insert(SurfaceCarrierName);
         }
     }
-    const std::vector<uint32_t>* SurfaceSlots(const std::string& geometry)const{
-        const auto separator=geometry.rfind(':');if(separator==std::string::npos)return nullptr;
-        auto found=m_meshes.find(geometry.substr(0,separator));if(found==m_meshes.end())return nullptr;
-        const auto& mesh=static_cast<const AuthoredMeshInfo&>(*found->second);
-        return mesh.surfaceMaterials.empty()?nullptr:&mesh.surfaceSlots;
+    MeshSurfaceSlots SurfaceSlots(const std::string& geometry)const{
+        const auto separator=geometry.rfind(':');if(separator==std::string::npos)return {};
+        auto found=m_meshes.find(geometry.substr(0,separator));
+        return found==m_meshes.end()?MeshSurfaceSlots{}:MeshSurfaces(*found->second);
     }
     void SurfaceUpdates(const ManagedScene& scene,std::vector<SurfaceMaterialRow>& rows,std::vector<uint32_t>& dirty){
         rows.resize(m_surfaceNames.size());dirty.clear();
@@ -823,6 +924,18 @@ public:
                 SetPose(node->second,input);
             }
         m_pendingTransforms.clear();
+    }
+
+    // A local BLAS replacement invalidates only its real graph users. Keep
+    // native row indices authoritative; DirectFrameInputs deduplicates these
+    // users against pose/geometry edits before translating a row.
+    void RecordAccelerationUsers(donut::engine::Scene& scene,const std::shared_ptr<donut::engine::MeshInfo>& mesh){
+        if(auto users=m_meshNodes.find(mesh->name);users!=m_meshNodes.end())
+            for(const auto& name:users->second){
+                auto node=m_nodes.find(name);
+                if(node!=m_nodes.end())static_cast<ManagedScene&>(scene).RecordAccelerationInput(
+                    std::dynamic_pointer_cast<donut::engine::MeshInstance>(node->second.node->GetLeaf()));
+            }
     }
 
     // Donut Material has no IOR/volume fields. After the original SceneLoaded /
@@ -941,7 +1054,7 @@ public:
     Changes Apply(const void* bytes, size_t size, donut::engine::Scene& scene,
         const std::function<nvrhi::ICommandList*()>& acquireCommands, uint32_t frameIndex,
         const std::function<void(bool)>& beforeStructural = {},bool deferTopologyRefresh=false,
-        const std::function<void(const MeshInfoEx&)>& beforeDormantMesh={}) {
+        const std::function<void(const MeshInfoEx&)>& beforeDormantMesh={},const MeshInputBlocks* transferred=nullptr) {
         if (!bytes || !size || !acquireCommands)
             throw std::invalid_argument("A resource packet and command-list provider are required");
         auto graph = scene.GetSceneGraph();
@@ -954,7 +1067,7 @@ public:
         // and gives retained mesh channels and texture pixels independent storage
         // before changing any scene object.
         RtrDiagnostics::Scope applyScope(RtrDiagnostics::Resources,0,0,1,0,0,0,0,size);
-        Packet packet;{RtrDiagnostics::Scope decodeScope(RtrDiagnostics::Import);packet=Decode(bytes,size);}
+        Packet packet;{RtrDiagnostics::Scope decodeScope(RtrDiagnostics::Import);packet=Decode(bytes,size,transferred);}
         ValidateReferences(packet);
         // A resident pose publication has no GPU resource work. Keep its complete
         // packet/reference validation, then stage the exact authored transforms
@@ -1167,7 +1280,10 @@ public:
         for (auto& [name, entry] : packet.materials) {
             if(m_externalTextureSampling){
                 if(entry.surfaceSlot==~0u){
-                    if(m_surfaceFree.empty()){entry.surfaceSlot=uint32_t(m_surfaceNames.size());m_surfaceNames.push_back(name);}
+                    if(m_surfaceFree.empty()){
+                        if(m_surfaceNames.size()>=0x7fffffffu)throw std::length_error("Surface slots exceed selector capacity");
+                        entry.surfaceSlot=uint32_t(m_surfaceNames.size());m_surfaceNames.push_back(name);
+                    }
                     else{entry.surfaceSlot=m_surfaceFree.back();m_surfaceFree.pop_back();m_surfaceNames[entry.surfaceSlot]=name;}
                 }
                 m_surfaceDirty.insert(entry.surfaceSlot);
@@ -1201,23 +1317,25 @@ public:
                 // Resolve material identities once per group, not once per
                 // triangle. The decoder already proved every group index valid.
                 if(authored.surfaceMaterials.size()==1){
-                    const auto slot=m_materials.at(authored.surfaceMaterials.front()).surfaceSlot;
-                    if(slot)std::fill(authored.triangleMaterials.begin(),authored.triangleMaterials.end(),slot);
+                    authored.uniformSurface=m_materials.at(authored.surfaceMaterials.front()).surfaceSlot+1;
                 }else{
                     std::vector<uint32_t> slots;
                     slots.reserve(authored.surfaceMaterials.size());
-                    for(const auto& material:authored.surfaceMaterials)slots.push_back(m_materials.at(material).surfaceSlot);
-                    for(auto& group:authored.triangleMaterials)group=slots[group];
+                    for(const auto& material:authored.surfaceMaterials)slots.push_back(m_materials.at(material).surfaceSlot+1);
+                    for(auto& group:authored.triangleSurfaces)group=slots[group];
                 }
-                authored.surfaceSlots=std::move(authored.triangleMaterials);
                 if(attributeMeshes.contains(name)){
                     auto& resident=static_cast<AuthoredMeshInfo&>(*m_meshes.at(name));
-                    if(resident.surfaceSlots!=authored.surfaceSlots)changes.surfaceGeometries.push_back(name+":0");
-                    UnlinkMeshMaterials(name,resident,touchedMaterials);
-                    resident.surfaceMaterials=std::move(authored.surfaceMaterials);
-                    resident.triangleMaterials=std::move(authored.triangleMaterials);
-                    resident.surfaceSlots=std::move(authored.surfaceSlots);
-                    LinkMeshMaterials(name,resident);
+                    if(resident.uniformSurface!=authored.uniformSurface||resident.triangleSurfaces!=authored.triangleSurfaces){
+                        changes.surfaceGeometries.push_back(name+":0");
+                        resident.uniformSurface=authored.uniformSurface;
+                        resident.triangleSurfaces=std::move(authored.triangleSurfaces);
+                    }
+                    if(resident.surfaceMaterials!=authored.surfaceMaterials){
+                        UnlinkMeshMaterials(name,resident,touchedMaterials);
+                        resident.surfaceMaterials=std::move(authored.surfaceMaterials);
+                        LinkMeshMaterials(name,resident);
+                    }
                 }
             }
             // A public identity replacement is not a geometric edit. The
@@ -1458,6 +1576,7 @@ public:
             }else {RtrDiagnostics::Scope attributeScope(RtrDiagnostics::AttributePreparation,attributeUpdates.size());
                 dynamic_cast<ManagedScene&>(scene).RefreshAttributes(gpuCommands(),attributeUpdates);}
         }
+        changes.receivers=std::move(packet.receivers);
         return changes;
     }
 
@@ -1630,6 +1749,7 @@ private:
         std::vector<std::string> removeNodes, coverage, removeMaterials,removeMeshes;
         std::vector<int64_t> removeTextures;
         std::vector<NodeInput> nodes;
+        std::vector<ReceiverGeometry> receivers;
     };
 
     struct ContainerReuse {std::string oldNode,oldMesh,newNode,newMesh;bool retainNode;};
@@ -1655,13 +1775,28 @@ private:
         }
         return key;
     }
+    static size_t PoseHash(const AffinePose& pose) {
+        // SamePose treats signed zero as equal, so normalize it before hashing.
+        size_t value=pose.split;
+        const auto append=[&](double part){
+            const auto hash=std::hash<double>{}(part==0.?0.:part);
+            value^=hash+size_t(0x9e3779b97f4a7c15ull)+(value<<6)+(value>>2);
+        };
+        for(unsigned i=0;i<3;++i){append(pose.translation[i]);append(pose.scaling[i]);}
+        append(pose.rotation.w);append(pose.rotation.x);append(pose.rotation.y);append(pose.rotation.z);
+        append(pose.inner.w);append(pose.inner.x);append(pose.inner.y);append(pose.inner.z);
+        return value;
+    }
     std::vector<ContainerReuse> PlanContainerReuses(const Packet& packet,
         const std::unordered_set<std::string>& domainChanges) const {
         std::vector<ContainerReuse> result;
         if(!m_externalTextureSampling||packet.removeNodes.empty()||packet.meshes.empty())return result;
         std::unordered_map<std::string,size_t> incomingUsers;
         for(const auto& input:packet.nodes)++incomingUsers[input.mesh];
-        std::unordered_map<std::string,std::vector<std::string>> available;
+        struct Candidate {const std::string* name;const Instance* instance;bool stationary,used=false;};
+        struct Available {std::vector<size_t> all;std::unordered_map<size_t,std::vector<size_t>> poses;};
+        std::vector<Candidate> candidates;candidates.reserve(packet.removeNodes.size());
+        std::unordered_map<std::string,Available> available;
         uint64_t notVacant=0,layoutMismatch=0;
         const std::unordered_set<std::string> removedDefinitions(packet.removeMeshes.begin(),packet.removeMeshes.end());
         for(const auto& name:packet.removeNodes) {
@@ -1671,35 +1806,45 @@ private:
             if(packet.retainedDefinitions&&!removedDefinitions.contains(meshName)){++notVacant;continue;}
             const auto users=m_meshNodes.find(meshName);
             if(users==m_meshNodes.end()||users->second.size()!=1||packet.meshes.contains(meshName)||incomingUsers.contains(meshName)){++notVacant;continue;}
-            available[ContainerLayout(*m_meshes.at(meshName))].push_back(name);
+            const auto& mesh=*m_meshes.at(meshName);
+            // The layout key covers type, ordered geometry groups and materials.
+            // Validate source ownership/skin exclusions once per outgoing mesh.
+            if(!CanRetainGeometryLayout(meshName,mesh)){++layoutMismatch;continue;}
+            const bool stationary=!m_pendingTransforms.contains(name)&&StationaryPose(old->second);
+            const size_t index=candidates.size();candidates.push_back({&name,&old->second,stationary});
+            auto& bucket=available[ContainerLayout(mesh)];bucket.all.push_back(index);
+            if(stationary)bucket.poses[PoseHash(old->second.pose)].push_back(index);
         }
         for(const auto& input:packet.nodes) {
             if(m_nodes.contains(input.name)||m_meshes.contains(input.mesh)||incomingUsers.at(input.mesh)!=1)continue;
             const auto incoming=packet.meshes.find(input.mesh);if(incoming==packet.meshes.end())continue;
             const auto& mesh=*incoming->second;
+            if(mesh.isSkinPrototype||mesh.skinPrototype.use_count()!=0)continue;
             if(std::any_of(mesh.geometries.begin(),mesh.geometries.end(),[&](const auto& geometry){return domainChanges.contains(geometry->material->name);}))continue;
             auto bucket=available.find(ContainerLayout(mesh));if(bucket==available.end()){++layoutMismatch;continue;}
-            auto& candidates=bucket->second;
-            // Geometry lives in local space. A different instance pose does
-            // not invalidate its native buffers or BLAS. Prefer retaining a
-            // same-pose node; otherwise use the ordinary detach/attach lifecycle
-            // below to give the new instance its own previous transform.
-            for(unsigned pass=0;pass<2;++pass) {
-              bool matched=false;
-              for(size_t i=candidates.size();i>0;--i) {
-                const auto& old=m_nodes.at(candidates[i-1]);
-                const bool retainNode=SamePose(old.pose,input.pose)&&StationaryPose(old)
-                    &&!m_pendingTransforms.contains(candidates[i-1]);
-                if(retainNode!=(pass==0))continue;
-                if(!CanRetainGeometryLayout(old.mesh,mesh)){++layoutMismatch;continue;}
-                result.push_back({candidates[i-1],old.mesh,input.name,input.mesh,retainNode});
-                candidates.erase(candidates.begin()+i-1);matched=true;break;
-              }
-              if(matched)break;
+            auto& entries=bucket->second;size_t selected=candidates.size();
+            // Preserve newest same-pose/stationary preference. Hash collisions
+            // still require exact SamePose; a hash never establishes identity.
+            if(auto poses=entries.poses.find(PoseHash(input.pose));poses!=entries.poses.end()) {
+                auto& matches=poses->second;
+                while(!matches.empty()&&candidates[matches.back()].used)matches.pop_back();
+                for(size_t i=matches.size();i>0;--i) {
+                    auto& candidate=candidates[matches[i-1]];
+                    if(!candidate.used&&SamePose(candidate.instance->pose,input.pose)){
+                        selected=matches[i-1];matches.erase(matches.begin()+i-1);break;
+                    }
+                }
             }
+            if(selected==candidates.size()) {
+                while(!entries.all.empty()&&candidates[entries.all.back()].used)entries.all.pop_back();
+                if(entries.all.empty())continue;
+                selected=entries.all.back();entries.all.pop_back();
+            }
+            auto& candidate=candidates[selected];candidate.used=true;
+            const auto& old=*candidate.instance;
+            const bool retainNode=candidate.stationary&&SamePose(old.pose,input.pose);
+            result.push_back({*candidate.name,old.mesh,input.name,input.mesh,retainNode});
         }
-        // Counts reuse rejections, not original RefreshBuffers invocations.
-        // The reason mask distinguishes these from capacity/skin fallback.
         const auto rejected=[&](uint64_t count,uint64_t reason){if(count){
             RtrDiagnostics::Scope miss(RtrDiagnostics::SceneTopologyFallback,count,packet.removeNodes.size(),1,0,0,0,reason);
             miss.event[11]|=RtrDiagnostics::CacheMiss;
@@ -1901,11 +2046,15 @@ private:
         return i->second;
     }
 
-    Packet Decode(const void* bytes, size_t size) {
+    Packet Decode(const void* bytes, size_t size,const MeshInputBlocks* transferred=nullptr) {
+        RtrDiagnostics::AggregateScopes<10> decodeWork({RtrDiagnostics::ImportDefinitions,RtrDiagnostics::ImportMeshObjects,RtrDiagnostics::ImportAttributes,RtrDiagnostics::ImportReceivers,RtrDiagnostics::ImportNormals,RtrDiagnostics::ImportOwnership,RtrDiagnostics::ImportSurfaces,RtrDiagnostics::ImportNodeRemovals,RtrDiagnostics::ImportTransforms,RtrDiagnostics::ImportFinalRemovals});
+        decodeWork.Next(0);
         RtrResourceReader reader(bytes, size);
         const auto protocol=reader.value<uint32_t>();
-        if (protocol != 0x52445259&&protocol != 0x5244525a&&protocol != 0x5244525b&&protocol != 0x5244525c)
+        if (protocol < 0x52445259||protocol > 0x5244525f)
             throw std::invalid_argument("Unknown resource transport");
+        std::vector<uint8_t> transferUsed(transferred?transferred->size():0);
+        size_t usedTransfers=0;
         Packet packet;
         packet.retainedDefinitions=protocol!=0x52445259;
         const bool packetInputSources=protocol>=0x5244525b;
@@ -2043,13 +2192,29 @@ private:
         }
         const auto meshCount=reader.count();
         for (uint32_t n = meshCount; n; --n) {
+            decodeWork.Next(1,1);
             auto mesh = m_factory.CreateMesh();
             mesh->name = Name(reader);
             auto inputs=std::make_shared<AuthoredMeshInputs>();
             auto& positions=inputs->positions;auto& normals=inputs->normals;
             auto& tangents=inputs->tangents;auto& uv=inputs->uv;
-            const auto inherited=reader.value<uint32_t>();
-            if(inherited>1)throw std::invalid_argument("Invalid geometry input transport");
+            decodeWork.Next(2,1);
+            auto transport=reader.value<uint32_t>();
+            std::shared_ptr<const MeshInputBlock> transferredBlock;
+            std::optional<RtrResourceReader> blockReader;
+            if(transport==3){
+                if(protocol<0x5244525f||!m_externalTextureSampling)throw std::invalid_argument("Invalid transferred geometry transport");
+                const auto block=reader.value<uint32_t>();
+                if(block>=transferUsed.size()||transferUsed[block]++)throw std::invalid_argument("Missing or repeated mesh input transfer");
+                transferredBlock=transferred->at(block);++usedTransfers;
+                if(!transferredBlock||!transferredBlock->size)throw std::invalid_argument("Empty transferred mesh input block");
+                blockReader.emplace(transferredBlock->data.get(),transferredBlock->size);
+                transport=blockReader->value<uint32_t>();
+                if(transport!=0&&transport!=2)throw std::invalid_argument("Transferred geometry must own its complete channels");
+            }
+            auto& meshReader=blockReader?*blockReader:reader;
+            const bool inherited=transport==1,flatNormals=transport==2;
+            if(transport>(protocol>=0x5244525d?2u:1u))throw std::invalid_argument("Invalid geometry input transport");
             if(inherited){
                 const auto source=Name(reader);
                 std::shared_ptr<const AuthoredMeshInputs> baseInputs;
@@ -2070,54 +2235,125 @@ private:
                 // Retain the original byte owner directly, never a chain of
                 // replacement MeshInfo objects or borrowed JVM addresses.
                 inputs->lease=base.lease;positions=base.positions;normals=base.normals;
-                tangents=base.tangents;uv=base.uv;inputs->canonicalIndices=base.canonicalIndices;
+                tangents=base.tangents;uv=base.uv;inputs->canonicalIndices=base.canonicalIndices;inputs->flatExpanded=base.flatExpanded;inputs->packedNormals=base.packedNormals;
                 mesh->objectSpaceBounds=sourceMesh->objectSpaceBounds;
             }else{
-                positions=reader.readFloatSpan();normals=reader.floatView();
-                tangents=reader.floatView();uv=reader.floatView();
+                positions=meshReader.readFloatSpan();normals=meshReader.floatView();
+                tangents=meshReader.floatView();uv=meshReader.floatView();
             }
-            if (positions.empty() || positions.size() % 3 || normals.size() != positions.size()
+            if (positions.empty() || positions.size() % 3 || (!inherited&&(flatNormals?!normals.empty():normals.size()!=positions.size()))
                 || (!tangents.empty() && tangents.size() != positions.size() / 3 * 4)
                 || (!uv.empty() && uv.size() != positions.size() / 3 * 2))
                 throw std::invalid_argument("Invalid mesh attributes");
-            const auto vertices = positions.size() / 3;
+            auto vertices = positions.size() / 3;
             mesh->buffers = std::make_shared<donut::engine::BufferGroup>();
             if(!inherited){
-                mesh->objectSpaceBounds = donut::math::box3::empty();
-                uint32_t invalid=0;
-                for(size_t v=0;v<vertices;++v){
-                    std::array<float,3> p;
-                    std::memcpy(p.data(),positions.data()+v*3*sizeof(float),sizeof(p));
-                    for(float value:p){uint32_t bits;std::memcpy(&bits,&value,4);
-                        invalid|=uint32_t((bits&0x7f800000u)==0x7f800000u);}
-                    mesh->objectSpaceBounds|=donut::math::float3(p[0],p[1],p[2]);
-                }
-                if(invalid)throw std::invalid_argument("Nonfinite resource position");
-                const auto count=reader.count();
-                inputs->canonicalIndices={reader.take(size_t(count)*sizeof(uint32_t)),count};
+                const auto bounds=RtrValidatedPositionBounds(positions);
+                mesh->objectSpaceBounds=donut::math::box3(
+                    donut::math::float3(bounds.minimum[0],bounds.minimum[1],bounds.minimum[2]),
+                    donut::math::float3(bounds.maximum[0],bounds.maximum[1],bounds.maximum[2]));
+                const auto count=meshReader.count();
+                inputs->canonicalIndices={meshReader.take(size_t(count)*sizeof(uint32_t)),count};
             }
             const auto indexCount=inputs->canonicalIndices.count;
             if(!indexCount||indexCount%3)throw std::invalid_argument("Invalid canonical triangle indices");
             const auto* canonical=inputs->canonicalIndices.data;
             auto indexAt=[&](uint32_t corner){uint32_t value;std::memcpy(&value,canonical+size_t(corner)*4,4);return value;};
-            if(!inherited){
-                uint32_t largest=0;
-                for(uint32_t corner=0;corner<indexCount;++corner)largest=std::max(largest,indexAt(corner));
-                if(largest>=vertices)throw std::invalid_argument("Triangle index exceeds vertices");
+            const bool independentQuads=!inherited&&RtrValidateTriangleIndices(canonical,indexCount,vertices);
+            ReceiverGeometry* decodedReceiver=nullptr;
+            decodeWork.Next(3,1);
+            if(protocol>=0x5244525e){
+                if(!m_externalTextureSampling)throw std::invalid_argument("Receiver geometry requires independent lighting");
+                const auto sourceVertices=meshReader.count();const auto baseline=meshReader.readFloatSpan();
+                const auto colorCount=meshReader.count();const auto* colors=meshReader.take(size_t(colorCount)*4);
+                if(!sourceVertices||(!inherited&&sourceVertices!=vertices)
+                    ||(!baseline.empty()&&baseline.size()!=size_t(sourceVertices)*2)
+                    ||(colorCount&&colorCount!=sourceVertices))throw std::invalid_argument("Invalid indexed receiver channels");
+                auto receiverIndex=inputs->canonicalIndices;
+                if(inherited){const auto count=meshReader.count();receiverIndex={meshReader.take(size_t(count)*4),count};
+                    if(count!=indexCount)throw std::invalid_argument("Invalid inherited receiver indices");}
+                RtrValidateBaselineChannel(baseline.data(),baseline.size());
+                ReceiverGeometry receiver;receiver.name=mesh->name+":0";
+                const size_t baselineBytes=baseline.size()*sizeof(float),colorBytes=size_t(colorCount)*sizeof(uint32_t);
+                const size_t inheritedIndexBytes=inherited?size_t(indexCount)*sizeof(uint32_t):0;
+                // Fresh geometry and its receiver share one immutable per-mesh
+                // allocation below. Inherited geometry keeps independent receiver
+                // channels, so it never pins an unrelated prior receiver generation.
+                std::shared_ptr<uint8_t[]> channels;
+                if(inherited){
+                    channels=std::make_shared_for_overwrite<uint8_t[]>(baselineBytes+colorBytes+inheritedIndexBytes);
+                    if(baselineBytes)std::memcpy(channels.get(),baseline.data(),baselineBytes);
+                    if(colorBytes)std::memcpy(channels.get()+baselineBytes,colors,colorBytes);
+                    receiver.baseline={channels.get(),baseline.size()};receiver.colors={channels.get()+baselineBytes,colorCount};
+                    std::memcpy(channels.get()+baselineBytes+colorBytes,receiverIndex.data,inheritedIndexBytes);
+                    receiver.indices={channels.get()+baselineBytes+colorBytes,indexCount};
+                }else{receiver.baseline={baseline.data(),baseline.size()};receiver.colors={colors,colorCount};}
+                // Newly authored receiver indices are the already validated
+                // canonical geometry map. Bind its final owned location below.
+                uint32_t largestReceiver=0;
+                for(uint32_t corner=0;(inherited||colorCount)&&corner<indexCount;++corner){uint32_t vertex;std::memcpy(&vertex,receiverIndex.data+size_t(corner)*4,4);
+                    largestReceiver=std::max(largestReceiver,vertex);
+                    if(vertex<sourceVertices&&colorCount)receiver.alpha|=(receiver.colors[vertex]>>24)!=255;
+                }
+                if(largestReceiver>=sourceVertices)throw std::invalid_argument("Receiver index exceeds source vertices");
+                receiver.channels=std::move(channels);packet.receivers.push_back(std::move(receiver));
+                decodedReceiver=&packet.receivers.back();
             }
+            decodeWork.Next(4,1);
             if(!inherited){
-                inputs->OwnGeometry(m_meshInputRetention);
+                if(flatNormals&&m_externalTextureSampling){
+                    // Preserve the exact old expanded GPU representation without
+                    // constructing expanded CPU position/UV/index generations.
+                    auto plan=RtrFlatNormals::PlanPackedCanonical(positions,uv,indexCount,indexAt,independentQuads,[](const auto& normal){
+                        return donut::math::vectorToSnorm8(donut::math::float3(normal[0],normal[1],normal[2]));
+                    });
+                    const auto packed=std::make_shared<const std::vector<uint32_t>>(std::move(plan.normals));
+                    inputs->flatExpanded=plan.expanded;
+                    if(plan.expanded&&!independentQuads){
+                        mesh->objectSpaceBounds=donut::math::box3::empty();
+                        for(uint32_t corner=0;corner<indexCount;++corner){
+                            const size_t vertex=indexAt(corner);
+                            mesh->objectSpaceBounds|=donut::math::float3(positions[vertex*3],positions[vertex*3+1],positions[vertex*3+2]);
+                        }
+                    }
+                    decodeWork.Next(5,1);
+                    if(transferredBlock)inputs->AdoptGeometry(transferredBlock,m_meshInputRetention,packed,decodedReceiver);
+                    else inputs->OwnGeometry(m_meshInputRetention,packed,decodedReceiver);
+                }else if(flatNormals){
+                    auto decoded=std::make_shared<const RtrFlatNormals::Channels>(RtrFlatNormals::Generate(positions,tangents,uv,indexCount,indexAt));
+                    auto view=[](const std::vector<float>& values){
+                        return RtrResourceReader::FloatView(reinterpret_cast<const uint8_t*>(values.data()),values.size());
+                    };
+                    normals=view(decoded->normals);positions=view(decoded->positions);
+                    tangents=view(decoded->tangents);uv=view(decoded->uv);
+                    inputs->canonicalIndices.data=reinterpret_cast<const uint8_t*>(decoded->indices.data());
+                    vertices=positions.size()/3;
+                    if(decoded->expanded){
+                        mesh->objectSpaceBounds=donut::math::box3::empty();
+                        for(size_t v=0;v<vertices;++v)mesh->objectSpaceBounds|=donut::math::float3(positions[v*3],positions[v*3+1],positions[v*3+2]);
+                    }
+                    const size_t owned=(positions.size()+normals.size()+tangents.size()+uv.size())*sizeof(float)+size_t(indexCount)*sizeof(uint32_t);
+                    inputs->lease=std::make_shared<const MeshInputLease>(std::move(decoded),owned,m_meshInputRetention);
+                }else {decodeWork.Next(5,1);
+                    if(transferredBlock)inputs->AdoptGeometry(transferredBlock,m_meshInputRetention,{},decodedReceiver);
+                    else inputs->OwnGeometry(m_meshInputRetention,{},decodedReceiver);
+                }
                 canonical=inputs->canonicalIndices.data;
             }
+            if(decodedReceiver&&!inherited){
+                decodedReceiver->indices={inputs->canonicalIndices.data,indexCount};decodedReceiver->indexOwner=inputs->lease;
+            }
+            if(blockReader)blockReader->finish();
+            decodeWork.Next(6,1);
+            vertices=inputs->OutputVertices();
             const auto groupCount=reader.count();
-            const bool implicitGroup=groupCount==0&&protocol==0x5244525c;
+            const bool implicitGroup=groupCount==0&&protocol>=0x5244525c;
             if(!groupCount&&!implicitGroup)throw std::invalid_argument("Mesh requires geometry groups");
             const auto groups=implicitGroup?1u:groupCount;
             auto& authored=static_cast<AuthoredMeshInfo&>(*mesh);
             const auto triangleCount=indexCount/3;
             std::vector<uint32_t> triangleGroups;
             if(!implicitGroup)triangleGroups.assign(triangleCount,~0u);
-            else if(m_externalTextureSampling)triangleGroups.resize(triangleCount);
             if(m_externalTextureSampling)authored.surfaceMaterials.reserve(groups);
             else if(!implicitGroup)inputs->groupedIndices.reserve(indexCount);
             inputs->indices.reserve(groups);mesh->geometries.reserve(groups);
@@ -2149,7 +2385,7 @@ private:
             if(mappedTriangles!=triangleCount)
                 throw std::invalid_argument("Surface mapping omits a triangle");
             if(m_externalTextureSampling){
-                authored.triangleMaterials=std::move(triangleGroups);
+                if(groups>1)authored.triangleSurfaces=std::move(triangleGroups);
                 auto geometry=m_factory.CreateMeshGeometry();geometry->material=m_materials.at(SurfaceCarrierName).material;
                 geometry->numIndices=indexCount;geometry->numVertices=uint32_t(vertices);geometry->objectSpaceBounds=mesh->objectSpaceBounds;
                 inputs->indices.push_back({canonical,indexCount});mesh->geometries.push_back(std::move(geometry));
@@ -2161,6 +2397,8 @@ private:
             if (!packet.meshes.emplace(name, std::move(mesh)).second)
                 throw std::invalid_argument("Duplicate mesh identity");
         }
+        if(usedTransfers!=transferUsed.size())throw std::invalid_argument("Unreferenced mesh input transfer");
+        decodeWork.Next(7);
         std::unordered_set<std::string> removals, nodes;
         for (uint32_t n = reader.count(); n; --n) {
             auto name = Name(reader);
@@ -2168,6 +2406,7 @@ private:
             packet.removeNodes.push_back(std::move(name));
         }
         for (uint32_t n = reader.count(); n; --n) {
+            decodeWork.Next(8,1);
             NodeInput input;
             input.name = Name(reader); input.mesh = Name(reader);
             if (!nodes.insert(input.name).second || removals.count(input.name))
@@ -2186,6 +2425,7 @@ private:
             input.pose=AffinePose::Decode(transform);
             packet.nodes.push_back(std::move(input));
         }
+        decodeWork.Next(9);
         for (uint32_t n = reader.count(); n; --n) packet.coverage.push_back(Name(reader));
         std::unordered_set<int64_t> removedTextures;
         for (uint32_t n = reader.count(); n; --n) {
@@ -2239,17 +2479,17 @@ private:
                     throw std::invalid_argument("Cannot remove a texture referenced by a declared material");
         auto validateMesh = [&](const std::shared_ptr<Mesh>& mesh) {
             const auto& authored=static_cast<const AuthoredMeshInfo&>(*mesh);
-            std::vector<std::string> names=authored.surfaceMaterials;
-            if(names.empty())for(const auto& geometry:mesh->geometries)names.push_back(geometry->material->name);
-            for (const auto& name:names) {
+            const auto& pending=PendingMeshInputs(*mesh);
+            const auto validateSurface=[&](const std::string& name){
                 if(removedMaterials.contains(name))
                     throw std::invalid_argument("Cannot remove a referenced material");
                 const auto& entry = FindMaterial(name, packet);
-                const auto& pending=PendingMeshInputs(*mesh);
                 if (entry.textures[1] >= 0 && (!pending||pending->tangents.empty())&&mesh->buffers->tangentData.empty()
                     && !mesh->buffers->hasAttribute(donut::engine::VertexAttribute::Tangent))
                     throw std::invalid_argument("Normal-mapped meshes require explicit tangents on the original scene path");
-            }
+            };
+            if(authored.surfaceMaterials.empty())for(const auto& geometry:mesh->geometries)validateSurface(geometry->material->name);
+            else for(const auto& name:authored.surfaceMaterials)validateSurface(name);
         };
         for (const auto& [name, mesh] : packet.meshes) validateMesh(mesh);
         for(const auto& name:packet.removeMaterials)if(auto users=m_materialMeshes.find(name);users!=m_materialMeshes.end())

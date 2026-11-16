@@ -86,21 +86,41 @@ class DirectGeometry final {
             ||std::memcmp(a.indices[i].data,b.indices[i].data,size_t(a.indices[i].count)*4)!=0)return false;
         return true;
     }
+    static bool SameNormals(const AuthoredMeshInputs& before,const AuthoredMeshInputs& after){
+        if(before.packedNormals.count||after.packedNormals.count){
+            // The authored/generated transition keeps its real input update.
+            // Generated values already use the official final GPU encoding.
+            return before.packedNormals.count==after.packedNormals.count
+                &&before.packedNormals.count
+                &&std::memcmp(before.packedNormals.data,after.packedNormals.data,size_t(before.packedNormals.count)*4)==0;
+        }
+        return Same(before.normals,after.normals);
+    }
     static size_t Stride(Attribute attribute){
         switch(attribute){case Attribute::Position:return 12;case Attribute::TexCoord1:return 8;default:return 4;}
     }
     static void Pack(uint8_t* target,const AuthoredMeshInputs& input,Attribute attribute){
-        const size_t vertices=input.positions.size()/3;
-        if(attribute==Attribute::Position){std::memcpy(target,input.positions.data(),vertices*12);return;}
-        if(attribute==Attribute::TexCoord1){std::memcpy(target,input.uv.data(),vertices*8);return;}
+        const size_t vertices=input.OutputVertices();
+        if(attribute==Attribute::Position){
+            if(!input.flatExpanded)std::memcpy(target,input.positions.data(),vertices*12);
+            else for(size_t v=0;v<vertices;++v)std::memcpy(target+v*12,input.positions.data()+size_t(input.SourceVertex(v))*12,12);
+            return;
+        }
+        if(attribute==Attribute::TexCoord1){
+            if(!input.flatExpanded)std::memcpy(target,input.uv.data(),vertices*8);
+            else for(size_t v=0;v<vertices;++v)std::memcpy(target+v*8,input.uv.data()+size_t(input.SourceVertex(v))*8,8);
+            return;
+        }
         for(size_t v=0;v<vertices;++v){
+            const auto source=attribute==Attribute::Normal?input.NormalVertex(v):input.SourceVertex(v);
             uint32_t packed=attribute==Attribute::Normal
-                ?donut::math::vectorToSnorm8(donut::math::float3(input.normals[v*3],input.normals[v*3+1],input.normals[v*3+2]))
-                :donut::math::vectorToSnorm8(donut::math::float4(input.tangents[v*4],input.tangents[v*4+1],input.tangents[v*4+2],input.tangents[v*4+3]));
+                ?input.PackedNormal(v)
+                :donut::math::vectorToSnorm8(donut::math::float4(input.tangents[source*4],input.tangents[source*4+1],input.tangents[source*4+2],input.tangents[source*4+3]));
             std::memcpy(target+v*4,&packed,4);
         }
     }
     static void PackIndices(uint32_t* target,const AuthoredMeshInputs& input){
+        if(input.flatExpanded){for(uint32_t corner=0;corner<input.indexCount;++corner)target[corner]=corner;return;}
         size_t offset=0;
         for(const auto& part:input.indices){std::memcpy(target+offset,part.data,size_t(part.count)*4);offset+=part.count;}
     }
@@ -191,7 +211,11 @@ public:
         if(!ordered){m_vertexPage={};m_indexPage={};}
     }
     static uint32_t ChangedChannels(const AuthoredMeshInputs& before,const AuthoredMeshInputs& after){
-        return (!Same(before.positions,after.positions)?1u:0u)|(!Same(before.normals,after.normals)?2u:0u)
+        // The output expansion map changes every packed channel even when its
+        // canonical position/UV spans are identical. Keep that edit explicit.
+        if(before.flatExpanded!=after.flatExpanded)return 31;
+        if(before.flatExpanded&&!SameIndices(before,after))return 31;
+        return (!Same(before.positions,after.positions)?1u:0u)|(!SameNormals(before,after)?2u:0u)
             |(!Same(before.tangents,after.tangents)?4u:0u)|(!Same(before.uv,after.uv)?8u:0u)
             |(!SameIndices(before,after)?16u:0u);
     }

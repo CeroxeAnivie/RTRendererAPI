@@ -15,6 +15,7 @@ import java.util.Objects;
  * {@link #wrapImmutableDirect} to avoid that copy under an explicit ownership contract.</p>
  */
 public final class MeshAsset {
+    private static final FloatBuffer EMPTY_FLOAT_CHANNEL = FloatBuffer.allocate(0).asReadOnlyBuffer();
     private final long id;
     private final FloatBuffer positions;
     private final FloatBuffer normals;
@@ -25,31 +26,6 @@ public final class MeshAsset {
     private final IntBuffer triangleIndices;
     private final LongBuffer triangleMaterialIds;
     private volatile int closedTopology;
-
-    private MeshAsset(
-            long id,
-            float[] positions,
-            float[] normals,
-            float[] tangents,
-            float[] textureCoordinates,
-            float[] lightmapCoordinates,
-            int[] vertexColorsRgba8,
-            int[] triangleIndices,
-            long[] triangleMaterialIds
-    ) {
-        this(
-                id,
-                copied(positions, "positions"),
-                copied(normals, "normals"),
-                copied(tangents, "tangents"),
-                copied(textureCoordinates, "textureCoordinates"),
-                copied(lightmapCoordinates, "lightmapCoordinates"),
-                copied(vertexColorsRgba8, "vertexColorsRgba8"),
-                copied(triangleIndices, "triangleIndices"),
-                copied(triangleMaterialIds, "triangleMaterialIds"),
-                false
-        );
-    }
 
     private MeshAsset(
             long id,
@@ -98,6 +74,32 @@ public final class MeshAsset {
             long[] triangleMaterialIds
     ) {
         return new Builder(id, positions, triangleIndices, triangleMaterialIds);
+    }
+
+    /**
+     * Adopts immutable heap storage produced for one mesh generation, without copying.
+     * Callers must stop writing to all supplied arrays before calling this method and
+     * must never mutate them through another alias. Use {@link #builder} when that
+     * ownership contract cannot be guaranteed. The same mesh validation applies.
+     * Optional channels use empty arrays, in the same formats as the builder.
+     *
+     * @param id mesh identifier
+     * @param positions xyz positions
+     * @param normals optional xyz normals
+     * @param textureCoordinates optional uv texture coordinates
+     * @param lightmapCoordinates optional uv lightmap coordinates
+     * @param vertexColorsRgba8 optional packed colors
+     * @param triangleIndices vertex indices in groups of three
+     * @param triangleMaterialIds one material identifier per triangle
+     * @return mesh using the supplied immutable arrays
+     */
+    public static MeshAsset adoptImmutableArrays(long id, float[] positions, float[] normals,
+            float[] textureCoordinates, float[] lightmapCoordinates, int[] vertexColorsRgba8,
+            int[] triangleIndices, long[] triangleMaterialIds) {
+        return new MeshAsset(id, FloatBuffer.wrap(positions), FloatBuffer.wrap(normals), EMPTY_FLOAT_CHANNEL,
+                FloatBuffer.wrap(textureCoordinates), FloatBuffer.wrap(lightmapCoordinates),
+                IntBuffer.wrap(vertexColorsRgba8), IntBuffer.wrap(triangleIndices),
+                LongBuffer.wrap(triangleMaterialIds), false);
     }
 
     /**
@@ -166,18 +168,6 @@ public final class MeshAsset {
 
     private static void requireOptionalSize(int actual, int expected, String message) {
         if (actual != 0 && actual != expected) throw new IllegalArgumentException(message);
-    }
-
-    private static FloatBuffer copied(float[] values, String name) {
-        return FloatBuffer.wrap(Objects.requireNonNull(values, name).clone()).asReadOnlyBuffer();
-    }
-
-    private static IntBuffer copied(int[] values, String name) {
-        return IntBuffer.wrap(Objects.requireNonNull(values, name).clone()).asReadOnlyBuffer();
-    }
-
-    private static LongBuffer copied(long[] values, String name) {
-        return LongBuffer.wrap(Objects.requireNonNull(values, name).clone()).asReadOnlyBuffer();
     }
 
     private static float[] copiedArray(FloatBuffer values) {
@@ -551,16 +541,18 @@ public final class MeshAsset {
         /**
          * Validates and returns an immutable mesh generation.
          *
-         * <p>Every array is copied again so a reusable builder cannot retain a writable alias to
-         * storage owned by a previously built asset.</p>
+         * <p>The builder owns its array snapshots. Later setters replace entire arrays,
+         * so a reusable builder cannot mutate a previously built asset.</p>
          *
          * @return immutable validated mesh
          * @throws IllegalArgumentException if shapes, indices, identifiers, or values are invalid
          */
         public MeshAsset build() {
             return new MeshAsset(
-                    id, positions, normals, tangents, textureCoordinates, lightmapCoordinates,
-                    vertexColorsRgba8, triangleIndices, triangleMaterialIds
+                    id, FloatBuffer.wrap(positions), FloatBuffer.wrap(normals), FloatBuffer.wrap(tangents),
+                    FloatBuffer.wrap(textureCoordinates), FloatBuffer.wrap(lightmapCoordinates),
+                    IntBuffer.wrap(vertexColorsRgba8), IntBuffer.wrap(triangleIndices),
+                    LongBuffer.wrap(triangleMaterialIds), false
             );
         }
     }
