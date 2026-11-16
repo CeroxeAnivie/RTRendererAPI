@@ -820,15 +820,19 @@ public:
                 auto& entry=cached.groups[group];
                 const auto& geometry=*mesh->geometries[group];
                 const auto* mapping=entry.mapping;
-                // Dense relocation only changes where the existing row lives.
-                // Preserve its attribute arena and already published payload.
+                // A native row publication needs its matching metadata row.
+                // Stable material inputs can reuse their packed attribute arena.
                 const bool materialStable=materialMetadataChanges.empty()
                     ||!materialMetadataChanges.contains(entry.materialName);
                 if(materialStable&&entry.policiesInitialized&&mapping&&mapping->attributes
                     &&mapping->attributes->triangles*3==geometry.numIndices
                     &&!entry.material.owner_before(geometry.material)&&!geometry.material.owner_before(entry.material)){
-                    if(mapping->index!=uint32_t(geometry.globalGeometryIndex))
-                        metadataGeometryChanges.push_back({mesh,uint32_t(group),&entry,true});
+                    // This native row changed owner or payload. A geometry can
+                    // leave the live graph while retaining its cached attributes,
+                    // then return to its old dense index after another geometry
+                    // overwrote that slot. Its cached index alone cannot prove
+                    // the GPU row still contains this identity's metadata.
+                    metadataGeometryChanges.push_back({mesh,uint32_t(group),&entry,true});
                     continue;
                 }
                 CollectGeometryMetadata(mesh,uint32_t(group),entry);
@@ -944,7 +948,7 @@ public:
             if(index>=instanceNamesScratch.size()||instanceNamesScratch[index])throw std::runtime_error("Invalid dense instance index");
             instanceNamesScratch[index]=&name;
             auto old=instanceSlots.find(name);
-            const bool changed=old==instanceSlots.end()||old->second!=index||dirtyInstances.count(name);
+            const bool changed=!metadataInitialized||rows.snapshot||old==instanceSlots.end()||old->second!=index||dirtyInstances.count(name);
             instanceSlots.insert_or_assign(name,index);
             if(changed){
                 auto found=instanceAttributes.find(name);InstanceAttributes value=found==instanceAttributes.end()?InstanceAttributes{}:found->second;
@@ -1000,13 +1004,17 @@ public:
                 if(attributes)ReleaseGeometryRanges(*attributes);
                 auto [found,inserted]=geometrySlots.insert_or_assign(entry.name,GeometryAttributes{AllocateAttributeRange(entry.corners),entry.corners/3});
                 attributes=&found->second;upload.insert(entry.name);
-                SetSurfaceMapping(*attributes,entry.surfaces);dirtySurfaces.erase(entry.name);
             }
+            // Full native table publication and resource resets invalidate dense
+            // row ownership, even for the same logical name and triangle count.
+            // Rebind the current surface namespace and republish snapshot rows.
+            const bool surfacesChanged=SetSurfaceMapping(*attributes,entry.surfaces);
+            dirtySurfaces.erase(entry.name);
             const bool policiesChanged=attributes->texturePolicies!=entry.texturePolicies;
             const bool opacityChanged=attributes->maskedOpacity!=entry.maskedOpacity;
             attributes->texturePolicies=entry.texturePolicies;
             attributes->maskedOpacity=entry.maskedOpacity;
-            if(mappingChanged||entry.indexChanged||policiesChanged||opacityChanged){auto value=*attributes;
+            if(!metadataInitialized||rows.snapshot||mappingChanged||surfacesChanged||entry.indexChanged||policiesChanged||opacityChanged){auto value=*attributes;
                 if(entry.index>=geometryUploadScratch.size())throw std::runtime_error("Invalid dense geometry index");
                 geometryUploadScratch[entry.index]=value;geometryUploadIndices.push_back(entry.index);attributeWork[3]+=sizeof(value);}
         }

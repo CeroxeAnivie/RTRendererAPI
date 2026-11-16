@@ -67,3 +67,9 @@ IntroSample 是教学入口，官方明确不以性能与最终画质为目标�
 运动玻璃在 1 SPP 下可能出现随机噪声及 RR 时序失真。静态截图、去噪启用标志或很小的帧间变化，都不能单独证明没有拖影或“融化”。官方候选必须通过实际运动画面验收后，才可以替换当前默认。
 
 显式硬件契约入口为 `:renderer-rtxpt:rtxptOfficialSessionNativeSelfTest`，不会随普通 CPU `check` 自动打开图形场景。画质巡检仍由两个 demo 和专项像素测试完成。
+
+## 独立光照元数据的生命周期
+
+`openNativeLighting` 的材质编号和密集 GPU 行属于当前原生场景发布。资源重置后，即使网格逻辑名称和三角数相同，也必须重绑本代材质表；网格暂时离开场景后重新进入，即使回到原来的行编号，也不能沿用已被其他网格覆盖的 GPU 元数据。桥接层消费原生行变化列表，仅重发受影响的实例、几何和表面映射；完整表发布则重发相应完整元数据。
+
+显式 GPU 回归入口为 `:renderer-rtxpt:rtxptLightingResetNativeSelfTest` 和 `:renderer-rtxpt:rtxptLightingReentryNativeSelfTest`。前者覆盖多次重置和同名同布局复用，后者覆盖帧图元撤出、密集槽复用和重新进入。它们不会随普通 CPU `check` 自动启动。

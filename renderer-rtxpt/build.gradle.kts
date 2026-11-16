@@ -64,6 +64,16 @@ tasks.register<Exec>("rtxptOfficialSessionNativeSelfTest") {
     commandLine("pwsh", "-NoProfile", "-File", "tools/Invoke-RtxptHost.ps1",
         "-MainClass", "top.ceroxe.rt.renderer.rtxpt.RtxptOfficialSessionNativeSelfTest")
 }
+listOf("RtxptLightingResetNativeSelfTest", "RtxptLightingReentryNativeSelfTest").forEach { name ->
+    tasks.register<Exec>(name.replaceFirstChar { it.lowercase() }) {
+        group = "verification"
+        description = "Verify lighting metadata lifecycle on the GPU: $name"
+        dependsOn("rtxptReleaseValidationClasspath")
+        workingDir(rootProject.projectDir)
+        commandLine("pwsh", "-NoProfile", "-File", "tools/Invoke-RtxptHost.ps1",
+            "-MainClass", "top.ceroxe.rt.renderer.rtxpt.$name")
+    }
+}
 val runtimeRoot = rootProject.layout.buildDirectory.dir("upstream-rtxpt/runtime/rtxpt_v.1.9.0_binaries")
 val buildBridge = tasks.register<Exec>("buildRtxptBridge") {
     group = "build"

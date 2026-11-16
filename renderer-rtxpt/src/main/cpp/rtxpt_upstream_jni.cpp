@@ -380,7 +380,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingMetadataState(
 extern "C" JNIEXPORT jdoubleArray JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingSurfaceState(JNIEnv* env,jclass,jlong handle,jstring geometryName,jint primitive){
     try{
-        const auto geometry=String(env,geometryName);std::array<double,9> state{};
+        const auto geometry=String(env,geometryName);std::array<double,13> state{};
         Get(handle)->session->Invoke([&](auto& app){
             const auto& pass=app.Renderer().lighting;
             const auto mapping=pass.geometryIndices.find(geometry);
@@ -389,10 +389,16 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingSurfaceState(JNIEnv* env,j
                 throw std::invalid_argument("No published triangle surface");
             const auto slots=pass.surfaceSlots?pass.surfaceSlots(geometry):rtr::upstream::MeshSurfaceSlots{};
             const auto encoded=slots.mixed?slots.mixed->at(primitive):slots.uniform;
+            const auto selector=mapping->second.attributes->surfaceSelector;
+            if((slots.mixed&&(selector&RtrNativeLightingPass::MixedSurfaceBit)==0)
+                ||(!slots.mixed&&selector!=encoded))
+                throw std::logic_error("Published triangle surface mapping belongs to a stale resource namespace");
             if(!encoded)throw std::invalid_argument("No published triangle surface");
             const auto slot=encoded-1;const auto& row=pass.surfaceRows.at(slot);state[0]=slot;
             for(size_t i=0;i<4;++i)state[1+i]=row.policies[i];
             state[5]=row.maskedOpacity;state[6]=row.material.domain;state[7]=row.material.opacity;state[8]=row.material.alphaCutoff;
+            state[9]=row.material.baseOrDiffuseTextureIndex;state[10]=row.material.flags;
+            state[11]=selector;state[12]=mapping->second.index;
         });
         auto result=env->NewDoubleArray(static_cast<jsize>(state.size()));
         if(result)env->SetDoubleArrayRegion(result,0,static_cast<jsize>(state.size()),state.data());return result;
