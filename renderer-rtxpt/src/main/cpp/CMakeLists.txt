@@ -46,3 +46,13 @@ if(RTR_RUNTIME_DIRECTORY)
             RUNTIME_OUTPUT_DIRECTORY_RELEASE "${RTR_RUNTIME_DIRECTORY}")
     endforeach()
 endif()
+
+add_executable(rtr_receiver_arena_selftest EXCLUDE_FROM_ALL
+    "${CMAKE_CURRENT_LIST_DIR}/rtxpt_receiver_arena_selftest.cpp")
+target_compile_features(rtr_receiver_arena_selftest PRIVATE cxx_std_20)
+target_link_libraries(rtr_receiver_arena_selftest PRIVATE nvrhi nvrhi_d3d12 DirectX-Headers d3d12 dxgi psapi)
+if(RTR_RUNTIME_DIRECTORY)
+    set_target_properties(rtr_receiver_arena_selftest PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${RTR_RUNTIME_DIRECTORY}"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${RTR_RUNTIME_DIRECTORY}")
+endif()

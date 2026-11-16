@@ -7,6 +7,7 @@
 #include "rtxpt_native_application_ranges.h"
 #include "rtxpt_attribute_ranges.h"
 #include "rtxpt_attribute_capacity.h"
+#include "rtxpt_receiver_arena.h"
 #include "rtxpt_receiver_upload.h"
 #include "rtxpt_allocation_failure.h"
 #include "rtxpt_host_response_lookup.h"
@@ -336,11 +337,14 @@ public:
         }
     }
     rtr::AttributeRanges attributeRanges;
+    RtrReceiverArena receiverArena;
     uint64_t attributeMigrationBytes=0,attributeTableVisits=0;
     void FreeAttributeRangeAt(uint32_t offset,uint32_t count){attributeRanges.Release(offset,count);}
     uint32_t AllocateAttributeRange(uint32_t count){return attributeRanges.Allocate(count);}
     void EnsureAttributeBuffer(nvrhi::IDevice* device,nvrhi::ICommandList* command,nvrhi::BufferHandle& buffer,size_t bytes,size_t stride,const char* name){
-        bytes=std::max(bytes,stride);if(buffer&&buffer->getDesc().byteSize>=bytes)return;
+        bytes=std::max(bytes,stride);
+        if(std::addressof(buffer)==std::addressof(baselineCoordinates)&&receiverArena.Ensure(device,buffer,bytes,stride,name))return;
+        if(buffer&&buffer->getDesc().byteSize>=bytes)return;
         const size_t oldCapacity=buffer?buffer->getDesc().byteSize:0;
         const size_t capacity=rtr::AttributeBufferCapacity(bytes,oldCapacity,stride);
         nvrhi::BufferHandle next;
