@@ -1,4 +1,3 @@
-@chcp 65001 >nul 2>&1
 @rem
 @rem Copyright 2015 the original author or authors.
 @rem
