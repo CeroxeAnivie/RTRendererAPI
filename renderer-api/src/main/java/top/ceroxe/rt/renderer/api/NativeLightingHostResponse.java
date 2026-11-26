@@ -30,6 +30,13 @@ public record NativeLightingHostResponse(float[] values) {
         float c=values[(y1*16+x0)*3+channel],d=values[(y1*16+x1)*3+channel];
         return (a+(b-a)*(x-x0))*(1-(y-y0))+(c+(d-c)*(x-x0))*(y-y0);
     }
+    /** Host response sampled at triangle vertices before interpolation, as in a host vertex shader. */
+    public float sampleTriangle(int channel,float localA,float skyA,float localB,float skyB,float localC,float skyC,
+            float weightA,float weightB,float weightC) {
+        unit(weightA);unit(weightB);unit(weightC);
+        if(Math.abs(weightA+weightB+weightC-1)>2e-6f)throw new IllegalArgumentException("Triangle weights must sum to one");
+        return sample(channel,localA,skyA)*weightA+sample(channel,localB,skyB)*weightB+sample(channel,localC,skyC)*weightC;
+    }
     /** CPU reference for HOST_RESPONSE_RATIO_V1, for one RGB channel. */
     public float directGain(NativeLightingStyle style,int channel,float baselineLocal,float baselineSky,
             float visibility,float fog,float local,float dynamic,boolean staticCovered,

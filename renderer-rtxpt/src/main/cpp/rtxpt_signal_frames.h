@@ -143,7 +143,7 @@ public:
         for(unsigned i=0;i<PlaneCount;i++)if(slot.textures[i]){
             result.insert(result.end(),{jlong(i),slot.formats[i],jlong(slot.allocation[i]),slot.handles[i]});++result[15];
         }
-        if constexpr(PlaneCount==4){result[0]=2;result.push_back(slot.encoding);result.push_back(slot.maximumGiBits);}
+        if constexpr(PlaneCount==6){result[0]=2;result.push_back(slot.encoding);result.push_back(slot.maximumGiBits);}
         if constexpr(PlaneCount==8)result.insert(result.end(),slot.provenance.begin(),slot.provenance.end());
         slot.leased=true;RtrProtocolTrace::Record(5,adapter,0,latest,slot.generation,slot.sequence,slot.revision,slot.completion-1,slot.completion,0,3);return result;
     }
@@ -161,5 +161,5 @@ public:
     void Clear(bool deviceRemoved=false){std::lock_guard lock(mutex);if(!deviceRemoved)RequireRetiredLocked();for(auto& slot:slots){slot.textures={};slot.published=slot.leased=slot.returned=false;slot.width=slot.height=slot.mask=0;slot.completion=0;slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=recording=-1;}
 };
 
-using RtrSignalFrames=RtrSignalFrameRing<4>;
+using RtrSignalFrames=RtrSignalFrameRing<6>;
 using RtrSurfaceSignalFrames=RtrSignalFrameRing<8>;

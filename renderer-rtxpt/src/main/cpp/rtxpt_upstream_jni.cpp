@@ -454,6 +454,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_startResourcesOwned(JNIEnv* env,jc
         auto blocks=FindMeshTransfer(ticket);
         const bool accepted=Get(handle)->session->StartResources([view=std::span(bytes,size_t(size)),blocks](auto& app){
             app.Renderer().ApplyResources(view,blocks);
+            app.Renderer().PrepareNewDirectMeshes();
         });
         if(accepted)ReleaseMeshTransfer(ticket);return accepted?JNI_TRUE:JNI_FALSE;
     }catch(const std::exception& error){Throw(env,error);return JNI_FALSE;}
@@ -507,7 +508,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributes(JNIEnv* e
             }
             for(size_t i=0;i<keys.size();++i) {
                 RtrNativeLightingPass::InstanceAttributes value; std::memcpy(&value,values.data()+i*stride,stride*sizeof(float));
-                pass.instanceAttributes.insert_or_assign(keys[i],value); pass.dirtyInstances.insert(keys[i]); pass.TrackInstanceRole(keys[i],value);
+                pass.PublishInstanceAttributes(keys[i],value);
             }
             if(hasLookup) { std::memcpy(pass.baselineLookup.data(),table.data(),table.size()*sizeof(float)); pass.lookupDirty=true; }
             if(hasApplication) { pass.applicationData=bytes; pass.applicationDirty=true; }
@@ -563,7 +564,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingApplicationPatch(JNI
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingClearAttributes(JNIEnv* env,jclass,jlong handle) {
     try {Get(handle)->session->Enqueue([](auto& app){auto& pass=app.Renderer().lighting;
-        pass.instanceAttributes.clear();pass.meshBaselines.clear();pass.meshColors.clear();pass.meshReceivers.clear();pass.alphaMeshes.clear();
+        pass.ClearTraversalMasks();pass.instanceAttributes.clear();pass.meshBaselines.clear();pass.meshColors.clear();pass.meshReceivers.clear();pass.alphaMeshes.clear();
         pass.dirtyInstances.clear();pass.dirtyBaselines.clear();pass.dirtyColors.clear();pass.specialInstances.clear();pass.specialRoleCount=0;
         pass.metadataDirty=true;pass.metadataInitialized=false;
     });}catch(const std::exception& error){Throw(env,error);}
@@ -669,6 +670,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_startResources(JNIEnv* env,jclass,
             throw std::invalid_argument("Invalid borrowed resource packet");
         return Get(handle)->session->StartResources([view=std::span(bytes,size_t(size))](auto& app){
             app.Renderer().ApplyResources(view);
+            app.Renderer().PrepareNewDirectMeshes();
         });
     }catch(const std::exception& error){Throw(env,error);return JNI_FALSE;}
 }

@@ -24,10 +24,11 @@ class DirectFrameInputs final {
     bool m_policy=false,m_valid=false;
 public:
     void Reset(){m_instances=nullptr;m_rows.clear();m_dirty.clear();m_marks.clear();m_valid=false;}
-    template<class CopyCurrentPose>
+    template<class CopyCurrentPose,class FindInstance,class MaskLookup,class ChangedMasks>
     void Build(nvrhi::IDevice* device,nvrhi::ICommandList* commands,
         nvrhi::rt::IAccelStruct* tlas,const donut::engine::SceneGraph& graph,bool forceOpaque,
-        const RtrSceneRowChanges& changes,uint64_t blasRevision,CopyCurrentPose&& copyCurrentPose){
+        const RtrSceneRowChanges& changes,uint64_t blasRevision,CopyCurrentPose&& copyCurrentPose,
+        FindInstance&& findInstance,MaskLookup&& instanceMask,const ChangedMasks& changedMasks){
         const auto& instances=graph.GetMeshInstances();
         if(instances.empty()||!tlas||!graph.GetSkinnedMeshInstances().empty())
             throw std::logic_error("Direct frame requires live authored non-skinned instances");
@@ -47,7 +48,7 @@ public:
         const bool full=allocate||!m_valid||previousCount!=instances.size()||m_policy!=forceOpaque
             ||m_blasRevision!=blasRevision||changes.snapshot||!changes.instances.empty();
         m_marks.resize(instances.size());if(++m_epoch==0){std::fill(m_marks.begin(),m_marks.end(),0);++m_epoch;}
-        {RtrDiagnostics::Scope pack(RtrDiagnostics::PayloadPack,full?instances.size():changes.tlasInstances.size(),0,1,0,
+        {RtrDiagnostics::Scope pack(RtrDiagnostics::PayloadPack,full?instances.size():changes.tlasInstances.size()+changedMasks.size(),0,1,0,
             RtrDiagnostics::Identity("Direct TLAS input rows"));
         size_t examined=0;
         const auto reconcile=[&](size_t i,const auto& instance){
@@ -56,7 +57,7 @@ public:
             const auto& mesh=instance->GetMesh();
             if(!mesh->accelStruct)throw std::logic_error("Direct TLAS input is not prepared");
             nvrhi::rt::InstanceDesc row;
-            row.blasDeviceAddress=mesh->accelStruct->getDeviceAddress();row.instanceMask=1;
+            row.blasDeviceAddress=mesh->accelStruct->getDeviceAddress();row.instanceMask=instanceMask(instance);
             row.instanceID=instance->GetGeometryInstanceIndex();
             row.instanceContributionToHitGroupIndex=instance->GetGeometryInstanceIndex();
             row.flags=forceOpaque?nvrhi::rt::InstanceFlags::ForceOpaque:nvrhi::rt::InstanceFlags::None;
@@ -66,7 +67,10 @@ public:
             }
         };
         if(full)for(size_t i=0;i<instances.size();++i)reconcile(i,instances[i]);
-        else for(const auto& instance:changes.tlasInstances)reconcile(size_t(instance->GetInstanceIndex()),instance);
+        else{
+            for(const auto& instance:changes.tlasInstances)reconcile(size_t(instance->GetInstanceIndex()),instance);
+            for(const auto& name:changedMasks)if(auto instance=findInstance(name))reconcile(size_t(instance->GetInstanceIndex()),instance);
+        }
         std::sort(m_dirty.begin(),m_dirty.end());pack.event[8]=m_dirty.size();pack.event[9]=examined;}
         m_policy=forceOpaque;m_blasRevision=blasRevision;m_valid=true;
         // Like the 5.0 upload planner, combine adjacent dirty rows. A fragmented

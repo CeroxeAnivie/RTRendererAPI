@@ -5,7 +5,9 @@ import top.ceroxe.rt.renderer.api.*;
 /** Canonical row-major matrices and dynamic shader ABI v1 parameter publication. */
 final class RtxptNativeLightingParameters {
     static float[] pack(NativeLightingPlan plan,RenderFrameRequest frame) {
-        float[] values=new float[88];var camera=frame.camera();
+        var sky=plan.skyOcclusion();
+        boolean skyActive=sky!=null&&sky.strength()>0;
+        float[] values=new float[96];var camera=frame.camera();
         if(camera.hasExactProjection()) {
             var exact=camera.exactProjection();
             if(!exact.hasPerspectiveProjection())
@@ -43,6 +45,16 @@ final class RtxptNativeLightingParameters {
         values[68]=style.minimumGain();values[69]=style.maximumGain();values[70]=style.maximumGi();
         values[71]=(plan.opaqueFastPath()?0:1)|(plan.directAlphaMode()==NativeLightingPlan.DirectAlphaMode.RECONSTRUCTION_COVERAGE_V1?2:0);
         var fog=frame.fog();values[80]=fog.sphericalStart();values[81]=fog.sphericalEnd();
-        values[82]=fog.cylindricalStart();values[83]=fog.cylindricalEnd();values[84]=fog.opacity();return values;
+        values[82]=fog.cylindricalStart();values[83]=fog.cylindricalEnd();values[84]=fog.opacity();
+        values[85]=plan.signals().contains(NativeLightingPlan.Signal.SUN_SHADOW_PENUMBRA)?(float)Math.tan(plan.sunAngularRadius()):0;
+        if(plan.surfaceWetness()>0&&plan.signals().contains(NativeLightingPlan.Signal.DIRECTIONAL_SPECULAR)){
+            values[86]=plan.surfaceWetness();
+            // The sky is the incident radiance. Ambient intensity controls a separate diffuse term.
+            values[87]=Math.min(1,.2126f*environment.skyRed()+.7152f*environment.skyGreen()+.0722f*environment.skyBlue());
+        }
+        values[88]=skyActive?sky.strength():0;values[89]=skyActive?sky.reach():1;
+        var response=plan.wetFilmRoughnessResponse();
+        values[92]=response.start();values[93]=response.end();values[94]=response.scale();
+        return values;
     }
 }

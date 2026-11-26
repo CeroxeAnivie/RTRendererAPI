@@ -22,7 +22,7 @@ public final class RtxptRetainedVisibilityNativeSelfTest {
             renderer.apply(tx.build());
             byte[][] visible=null,hidden=null,empty=null;
             long revision=1;
-            for(int sequence=1;sequence<=7;sequence++){
+            for(int sequence=1;sequence<=10;sequence++){
                 if(sequence==3||sequence==6){var edit=SceneTransaction.builder(++revision);
                     for(int i=1;i<=COUNT;i++)if(sequence==6||i%2==0)edit.removeInstance(i);
                     renderer.apply(edit.build());}
@@ -32,7 +32,7 @@ public final class RtxptRetainedVisibilityNativeSelfTest {
                 var roles=new ArrayList<NativeLightingPublication.Instance>();
                 for(int i=1;i<=COUNT;i++){
                     if(sequence==6||(sequence==3&&i%2==0))continue;
-                    boolean hide=sequence==5||sequence==2&&i%2==0;
+                    boolean hide=sequence==5||sequence==2&&i%2==0||sequence==8&&i==2;
                     roles.add(new NativeLightingPublication.Instance(i,hide?0:23,hide?0:1,0,1,1,0,0));
                 }
                 var monitor=sequence==1?null:access.nativeDiagnosticMonitor();if(monitor!=null)monitor.poll();
@@ -43,8 +43,15 @@ public final class RtxptRetainedVisibilityNativeSelfTest {
                 }
                 var events=(monitor==null?access.nativeDiagnosticMonitor():monitor).poll();require(events.lostEvents()==0,"Lost role diagnostics");
                 Files.write(output.resolve(sequence+"-events.csv"),events.events().stream().map(e->e.stage()+","+e.items()+","+e.flags()).toList());
-                if(sequence==2||sequence==5){
-                    require(events.events().stream().noneMatch(e->Set.of("Resources","SceneFullRefresh","BlasBuild").contains(e.stage())||e.stage().equals("TlasBuild")&&e.items()!=0),"Role change rebuilt native structure");
+                if(sequence==2||sequence==5||sequence>=8){
+                    require(events.events().stream().noneMatch(e->Set.of("Resources","SceneFullRefresh","BlasBuild").contains(e.stage())),"Role change rebuilt native structure");
+                    var builds=events.events().stream().filter(e->e.stage().equals("TlasBuild")&&e.items()==1).toList();
+                    int expected=switch(sequence){case 2->COUNT/2;case 5->COUNT;case 10->0;default->1;};
+                    require(builds.size()==(expected==0?0:1),"Unexpected mask TLAS build at "+sequence);
+                    if(expected!=0){
+                        var pack=events.events().stream().filter(e->e.stage().equals("PayloadPack")&&e.parentScopeId()==builds.getFirst().scopeId()).findFirst().orElseThrow();
+                        require(pack.tasks()==expected&&pack.items()==expected,"Mask update touched unexpected rows at "+sequence+": "+pack.tasks()+" / "+pack.items());
+                    }
                 }
                 byte[][] images=new byte[2][];int[] planes={0,2};
                 for(int p=0;p<2;p++){
@@ -56,10 +63,15 @@ public final class RtxptRetainedVisibilityNativeSelfTest {
                 if(sequence==4||sequence==7)equal(visible,images,"Restored retained identity changed pixels");
                 if(sequence==5)empty=images;
                 if(sequence==6)equal(empty,images,"All-hidden scene differs from empty native scene");
+                if(sequence==8){
+                    require(events.events().stream().anyMatch(e->e.stage().equals("SceneInstanceRows")&&e.items()>1),"Expected previous-pose convergence alongside mask change");
+                    equal(hidden,images,"Single disabled visible instance differs from removal");
+                }
+                if(sequence>=9)equal(visible,images,"Restored slot changed pixels");
                 System.out.println("RETAINED_VISIBILITY sequence="+sequence+" PASS");
             }
         }
-        System.out.println("RETAINED_VISIBILITY_NATIVE PASS frames=7 instances=129 exactPixels=true zeroTopologyRoleChanges=true allHidden=true restored=true");
+        System.out.println("RETAINED_VISIBILITY_NATIVE PASS frames=10 instances=129 exactPixels=true sparseMaskRows=true previousPosePreserved=true allHidden=true restored=true");
     }
     private static SceneInstance instance(int i){return SceneInstance.builder(i,i==2?2:1).transform(new AffineTransform(new float[]{1,0,0,i<=2?0:1000+i*5,0,1,0,0,0,0,1,0})).build();}
     private static MeshAsset quad(long id,float z,float ny,float nz){return MeshAsset.builder(id,new float[]{-2,-2,z,2,-2,z,2,2,z,-2,2,z},new int[]{0,1,2,2,3,0},new long[]{1,1}).normals(new float[]{0,ny,nz,0,ny,nz,0,ny,nz,0,ny,nz}).build();}

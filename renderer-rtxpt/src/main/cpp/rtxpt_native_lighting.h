@@ -1,6 +1,8 @@
 #pragma once
 #include "rtxpt_scene_delta.h"
 #include <array>
+#include <chrono>
+#include <cstdio>
 #include <unordered_map>
 #include <unordered_set>
 #include <cstdlib>
@@ -20,12 +22,12 @@
 class RtrNativeLightingPass {
 public:
     static constexpr uint32_t AbiVersion=1;
-    struct alignas(16) Constants {std::array<float,88> words{};};
+    struct alignas(16) Constants {std::array<float,96> words{};};
     struct InstanceAttributes {float4 rolesVisibility={23,1,0,0};float4 baseline={1,1,0,0};std::array<float4,3> explicitPrevious{};float4 surfaceVisibility={1,0,0,0};};
     struct GeometryAttributes {uint32_t offset=0,triangles=0;std::array<uint32_t,4> texturePolicies{};float maskedOpacity=1.f;uint32_t surfaceSelector=0;};
     using VertexAttributes=rtr::upstream::ReceiverVertex;
     static_assert(sizeof(VertexAttributes)==16);
-    static_assert(sizeof(Constants)==352&&sizeof(InstanceAttributes)==96&&sizeof(GeometryAttributes)==32);
+    static_assert(sizeof(Constants)==384&&sizeof(InstanceAttributes)==96&&sizeof(GeometryAttributes)==32);
     std::function<std::array<uint32_t,4>(const std::string&)> texturePolicies;
     std::function<rtr::upstream::MeshSurfaceSlots(const std::string&)> surfaceSlots;
     std::function<void(std::vector<rtr::upstream::SurfaceMaterialRow>&,std::vector<uint32_t>&)> surfaceUpdates;
@@ -54,7 +56,7 @@ public:
     nvrhi::ComputePipelineHandle deepPipeline;
     nvrhi::BufferHandle deepReceivers;
     std::array<nvrhi::BufferHandle,3> deepConstants;
-    RtrCachedBindings dispatchBindings,encodeBindings;
+    RtrCachedBindings dispatchBindings,encodeBindings,penumbraDispatchBindings;
     std::array<RtrCachedBindings,2> sourceHistoryBindings;
     nvrhi::BindingLayoutHandle sourceHistoryLayout;
     std::array<nvrhi::TextureHandle,2> sourceHistory;
@@ -94,7 +96,10 @@ public:
             device->setEventQuery(slot.done,nvrhi::CommandQueue::Graphics);++workCopies;++workQueries;slot.sequence=sequence;slot.revision=sceneRevision;slot.pending=true;break;
         }
     }
-    nvrhi::TextureHandle direct,indirect,geometry,identity,dummyColor,dummyIdentity;
+    nvrhi::TextureHandle direct,indirect,geometry,identity,directionalSpecular,dummyColor,dummyIdentity;
+    nvrhi::TextureHandle sunPenumbra,sunEvidence;
+    nvrhi::BindingLayoutHandle penumbraLayout;
+    nvrhi::ComputePipelineHandle penumbraPipeline;
     bool compactEncoding=false;
     bool compactResponseEncoding=false;
     nvrhi::TextureHandle compactDirect,compactIndirect,compactDummy;
@@ -104,16 +109,16 @@ public:
     nvrhi::BufferHandle constantBuffer,instances,baselineCoordinates,geometryBaselines,lookup,application,work;
     nvrhi::BindingLayoutHandle layout;
     nvrhi::ComputePipelineHandle pipeline;
-    nvrhi::ComputePipelineHandle defaultPipeline;
     nvrhi::ComputePipelineHandle singleGroupPipeline;
     nvrhi::ComputePipelineHandle sparseOnlyPipeline,sparseOnlySingleGroupPipeline,smallGroupPipeline,sparseOnlySmallGroupPipeline;
     nvrhi::ComputePipelineHandle pairGroupPipeline,sparseOnlyPairGroupPipeline;
     std::array<nvrhi::ComputePipelineHandle,8> uninstrumentedPipelines,directPipelines,directChannelPipelines;
-    bool UseDirectPipeline(bool maximum) const{return mask==1&&!reconstruction.requested&&!maximum;}
+    bool UseDirectPipeline(bool maximum) const{return (mask&~48u)==1&&!reconstruction.requested&&!maximum;}
     std::array<nvrhi::ComputePipelineHandle,16> maxPipelines;
     std::array<nvrhi::ComputePipelineHandle,8> countedMaxPipelines;
     std::array<nvrhi::ComputePipelineHandle,16> channelMaxPipelines;
     std::unordered_map<std::string,InstanceAttributes> instanceAttributes;
+    std::unordered_set<std::string> traversalDisabled, traversalMaskChanges;
     std::unordered_map<std::string,std::vector<float>> meshBaselines; // two floats per corner
     std::unordered_map<std::string,std::vector<uint32_t>> meshColors;
     std::unordered_map<std::string,rtr::upstream::ReceiverGeometry> meshReceivers;
@@ -506,11 +511,17 @@ public:
         }
     }
     void Configure(const std::vector<float>& parameters){
-        if(parameters.size()!=80&&parameters.size()!=88)throw std::invalid_argument("Native-lighting parameters require 80 legacy or 88 extended words");
+        if(parameters.size()!=96)throw std::invalid_argument("Native-lighting parameters require 96 words");
         for(auto v:parameters)if(!std::isfinite(v))throw std::invalid_argument("Non-finite native-lighting parameter");
         auto integer=[&](size_t i,uint32_t minimum,uint32_t maximum){float value=parameters[i];
             if(value<float(minimum)||value>float(maximum)||float(uint32_t(value))!=value)throw std::invalid_argument("Invalid native-lighting integer parameter");return uint32_t(value);};
-        uint32_t w=integer(40,1,16384),h=integer(41,1,16384),outputs=integer(42,1,15),samples=integer(43,0,8);
+        uint32_t w=integer(40,1,16384),h=integer(41,1,16384),outputs=integer(42,1,63),samples=integer(43,0,8);
+        if((outputs&48)&&!(outputs&1))throw std::invalid_argument("Directional lighting evidence requires direct gain");
+        if(parameters[85]<0)throw std::invalid_argument("Invalid directional source angular radius");
+        if(parameters[88]<0||parameters[88]>1||parameters[89]<=0)
+            throw std::invalid_argument("Invalid diffuse sky occlusion parameters");
+        if(parameters[92]<0||parameters[93]>1||parameters[92]>=parameters[93]
+            ||parameters[94]<0||parameters[94]>65504)throw std::invalid_argument("Invalid native wet-film roughness response");
         if(parameters[56]<=0||parameters[57]<0||parameters[58]<=0||parameters[58]>.1f)
             throw std::invalid_argument("Invalid native-lighting GI budget or offset");
         if(parameters[47]<0||parameters[47]>1||parameters[55]<0||parameters[55]>1)
@@ -544,7 +555,7 @@ public:
                 if(matches){old.bindings.push_back(std::move(cache.value));return;}
             }
         };
-        retireBindings(dispatchBindings);retireBindings(encodeBindings);
+        retireBindings(dispatchBindings);retireBindings(encodeBindings);retireBindings(penumbraDispatchBindings);
         for(auto& cache:sourceHistoryBindings)retireBindings(cache);
         for(auto& cache:phaseBindings)retireBindings(cache);
         retireBindings(reconstruction.resolveBindings);retireBindings(reconstruction.reduceBindings);retireBindings(reconstruction.upsampleBindings);
@@ -553,12 +564,25 @@ public:
         if(!old.done||!old.computeDone)throw std::runtime_error("Lighting completion query allocation failed");
         device->setEventQuery(old.done,nvrhi::CommandQueue::Graphics);device->setEventQuery(old.computeDone,nvrhi::CommandQueue::Compute);retired.push_back(std::move(old));
     }
+    static nvrhi::ComputePipelineHandle CreateLightingPipeline(nvrhi::IDevice* device,const nvrhi::ComputePipelineDesc& desc,
+        const char* name,unsigned variant=0){
+        if(!desc.CS)throw std::runtime_error(std::string("Missing precompiled lighting shader: ")+name);
+        using Clock=std::chrono::steady_clock;
+        std::fprintf(stderr,"RTXPT lighting PSO begin: %s variant=%u\n",name,variant);
+        std::fflush(stderr);
+        const auto start=Clock::now();
+        auto result=device->createComputePipeline(desc);
+        const auto elapsed=std::chrono::duration<double,std::milli>(Clock::now()-start).count();
+        std::fprintf(stderr,"RTXPT lighting PSO end: %s variant=%u ms=%.3f ready=%d\n",name,variant,elapsed,result?1:0);
+        std::fflush(stderr);
+        return result;
+    }
     void Prepare(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory,nvrhi::IBindingLayout* bindlessLayout,const RtrSparseLighting* sources=nullptr){
         // Retirement must advance on stable and empty frames too. Polling only
         // from Retire keeps the final replaced buffers alive indefinitely once
         // growth stops; the same two-queue completion checks remain mandatory.
         PollRetired(device);
-        if(!pipeline){
+        if(!layout){
             RtrDiagnostics::Scope initialize(RtrDiagnostics::LightingInitialize);
             nvrhi::BindingLayoutDesc desc;desc.visibility=nvrhi::ShaderType::Compute;
             desc.bindings={nvrhi::BindingLayoutItem::ConstantBuffer(0),nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
@@ -570,15 +594,12 @@ public:
                 nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
                 nvrhi::BindingLayoutItem::StructuredBuffer_SRV(13),
                 nvrhi::BindingLayoutItem::Sampler(0),nvrhi::BindingLayoutItem::Texture_UAV(0),nvrhi::BindingLayoutItem::Texture_UAV(1),
-                nvrhi::BindingLayoutItem::Texture_UAV(2),nvrhi::BindingLayoutItem::Texture_UAV(3),nvrhi::BindingLayoutItem::RawBuffer_UAV(4)};
+                nvrhi::BindingLayoutItem::Texture_UAV(2),nvrhi::BindingLayoutItem::Texture_UAV(3),nvrhi::BindingLayoutItem::RawBuffer_UAV(4),
+                nvrhi::BindingLayoutItem::Texture_UAV(12)};
             for(uint32_t i=0;i<8;++i)desc.bindings.push_back(nvrhi::BindingLayoutItem::Sampler(i+1));
+            desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(13));
             auto preparedLayout=device->createBindingLayout(desc);
-            std::vector<donut::engine::ShaderMacro> defaultMacros{{"RTR_LIGHT_GROUP_CAPACITY","32"},{"RTR_ANALYTIC_LIGHTS","1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
-            auto shader=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&defaultMacros,nvrhi::ShaderType::Compute);
-            if(!shader)throw std::runtime_error("Native-lighting shader ABI v1 is unavailable");
-            nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={preparedLayout,bindlessLayout};pso.CS=shader;
-            auto preparedPipeline=device->createComputePipeline(pso);
-            if(!preparedPipeline)throw std::runtime_error("Could not prepare native-lighting pipeline");
+            if(!preparedLayout)throw std::runtime_error("Could not prepare native-lighting bindings");
             nvrhi::BufferDesc cb;cb.byteSize=sizeof(Constants);cb.isConstantBuffer=true;cb.debugName="Native lighting parameters";
             cb.initialState=nvrhi::ResourceStates::ConstantBuffer;cb.keepInitialState=true;constantBuffer=device->createBuffer(cb);
             application=Buffer(device,4,0,"Native lighting application data",true);
@@ -588,55 +609,79 @@ public:
             auto td=nvrhi::TextureDesc().setWidth(1).setHeight(1).setFormat(nvrhi::Format::RGBA16_FLOAT).setIsUAV(true)
                 .setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);
             dummyColor=device->createTexture(td);td.format=nvrhi::Format::RGBA32_UINT;dummyIdentity=device->createTexture(td);
-            layout=preparedLayout;pipeline=defaultPipeline=preparedPipeline;
+            if(!constantBuffer||!application||!lookup||!work||!dummyColor||!dummyIdentity)
+                throw std::runtime_error("Could not allocate native-lighting common resources");
+            layout=preparedLayout;
         }
         if(diagnosticDecomposition&&RtrDiagnostics::level.load()==2&&!deepPipeline){
             auto desc=*layout->getDesc();desc.bindings.push_back(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(5));
             auto next=device->createBindingLayout(desc);auto shader=factory.CreateShader("app/ProcessingPasses/RtrNativeLightingDeep.hlsl","main",nullptr,nvrhi::ShaderType::Compute);
             if(!shader||!next)throw std::runtime_error("DEEP receiver decomposition shader unavailable");
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={next,bindlessLayout};pso.CS=shader;
-            auto nextPipeline=device->createComputePipeline(pso);if(!nextPipeline)throw std::runtime_error("DEEP receiver decomposition pipeline unavailable");deepLayout=next;deepPipeline=nextPipeline;
+            auto nextPipeline=CreateLightingPipeline(device,pso,"receiver-decomposition");if(!nextPipeline)throw std::runtime_error("DEEP receiver decomposition pipeline unavailable");deepLayout=next;deepPipeline=nextPipeline;
         }
         const auto* integers=reinterpret_cast<const uint32_t*>(constants.words.data());
         if(width!=integers[40]||height!=integers[41]||mask!=integers[42]){
-            std::array<nvrhi::TextureHandle,4> next{};
-            for(unsigned i=0;i<4;i++)if((integers[42]&(1u<<i))!=0){
+            std::array<nvrhi::TextureHandle,6> next{};
+            for(unsigned i=0;i<next.size();i++)if((integers[42]&(1u<<i))!=0){
                 auto desc=nvrhi::TextureDesc().setWidth(integers[40]).setHeight(integers[41])
                     .setFormat(i==3?nvrhi::Format::RGBA32_UINT:i==2?nvrhi::Format::RGBA32_FLOAT:nvrhi::Format::RGBA16_FLOAT).setIsUAV(true)
                     .setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);
                 desc.debugName="Native lighting requested signal";next[i]=device->createTexture(desc);
                 if(!next[i])throw std::runtime_error("Could not allocate native-lighting output");
             }
-            Retire(device,{}, {direct,indirect,geometry,identity});direct=next[0];indirect=next[1];geometry=next[2];identity=next[3];
+            nvrhi::TextureHandle evidence;
+            if(next[5]){
+                auto desc=next[5]->getDesc();desc.format=nvrhi::Format::RGBA32_FLOAT;desc.debugName="Directional shadow evidence";
+                evidence=device->createTexture(desc);
+                if(!evidence)throw std::runtime_error("Could not allocate directional shadow evidence");
+            }
+            Retire(device,{}, {direct,indirect,geometry,identity,directionalSpecular,sunPenumbra,sunEvidence});
+            direct=next[0];indirect=next[1];geometry=next[2];identity=next[3];directionalSpecular=next[4];sunPenumbra=next[5];sunEvidence=evidence;
             width=integers[40];height=integers[41];mask=integers[42];
         }
+        if(sunPenumbra&&!penumbraPipeline){
+            auto desc=*layout->getDesc();
+            desc.bindings.pop_back(); // u13 is written by direct lighting and read as t14 here.
+            desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(14));
+            desc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(14));
+            auto nextLayout=device->createBindingLayout(desc);
+            auto shader=factory.CreateShader("app/ProcessingPasses/RtrSunPenumbra.hlsl","main",nullptr,nvrhi::ShaderType::Compute);
+            if(!shader||!nextLayout)throw std::runtime_error("Directional shadow penumbra shader unavailable");
+            nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={nextLayout,bindlessLayout};pso.CS=shader;
+            auto nextPipeline=CreateLightingPipeline(device,pso,"sun-penumbra");
+            if(!nextPipeline)throw std::runtime_error("Could not prepare directional shadow penumbra");
+            penumbraLayout=nextLayout;penumbraPipeline=nextPipeline;
+        }
         PrepareCompact(device,factory);
+        const bool maximum=sources&&sources->VisibleMax();
+        const bool channelMaximum=sources&&sources->ChannelExecutor();
         const unsigned groupVariant=!sources?0:sources->SingleGroup()?1:sources->PairGroups()?6:sources->SmallGroups()?4:0;
         const unsigned instrumentedCapacity=groupVariant==1?1:groupVariant==6?2:groupVariant==4?4:32;
         for(unsigned analytic=0;analytic<2;++analytic){
             auto& target=instrumentedCapacity==1?(analytic?singleGroupPipeline:sparseOnlySingleGroupPipeline):
                 instrumentedCapacity==2?(analytic?pairGroupPipeline:sparseOnlyPairGroupPipeline):
                 instrumentedCapacity==4?(analytic?smallGroupPipeline:sparseOnlySmallGroupPipeline):(analytic?pipeline:sparseOnlyPipeline);
-            if(RtrDiagnostics::level.load()==2&&!target){
+            if(workStatisticsEnabled&&!reconstruction.requested&&!maximum&&!channelMaximum&&!target){
                 RtrDiagnostics::Scope prepare(RtrDiagnostics::Pipeline,1);
                 std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",std::to_string(instrumentedCapacity)},
                     {"RTR_ANALYTIC_LIGHTS",analytic?"1":"0"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","0"}};
                 nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
                 pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-                target=device->createComputePipeline(pso);if(!target)throw std::runtime_error("Diagnostic lighting pipeline unavailable");
+                target=CreateLightingPipeline(device,pso,"counted-sum",instrumentedCapacity*2+analytic);if(!target)throw std::runtime_error("Diagnostic lighting pipeline unavailable");
             }
         }
-        const bool maximum=sources&&sources->VisibleMax();
         const bool directOnly=UseDirectPipeline(maximum);
         const char* directShader="app/ProcessingPasses/RtrNativeDirectLighting.hlsl";
         auto& productionPipelines=directOnly?directPipelines:uninstrumentedPipelines;
+        if(!reconstruction.requested&&!workStatisticsEnabled&&!maximum&&!channelMaximum)
         for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!productionPipelines[i]){
             RtrDiagnostics::Scope prepare(RtrDiagnostics::Pipeline,1);
             std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
                 {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","0"}};
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
             pso.CS=factory.CreateShader(directOnly?directShader:"app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-            productionPipelines[i]=device->createComputePipeline(pso);
+            productionPipelines[i]=CreateLightingPipeline(device,pso,directOnly?"direct-sum":"sum",i);
             if(!productionPipelines[i])throw std::runtime_error("Production lighting pipeline unavailable");
         }
         const bool allDynamic=sources&&sources->dynamicCount==sources->records.size();
@@ -660,26 +705,27 @@ public:
             if(sourceHistory[0])Retire(device,{}, {sourceHistory[0],sourceHistory[1]});
             sourceHistory=std::move(next);sourceHistoryRead=0;sourceHistoryClear=true;
         }
-        if(!reconstruction.requested&&maximum)for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!maxPipelines[maxOffset+i]){
+        if(!reconstruction.requested&&maximum&&!workStatisticsEnabled)for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!maxPipelines[maxOffset+i]){
             std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},{"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","0"},{"RTR_MAX_COMPOSITION","1"}};
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout,sourceHistoryLayout};
-            pso.CS=factory.CreateShader(allDynamic?"app/ProcessingPasses/RtrNativeDynamicLighting.hlsl":"app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);maxPipelines[maxOffset+i]=device->createComputePipeline(pso);
+            pso.CS=factory.CreateShader(allDynamic?"app/ProcessingPasses/RtrNativeDynamicLighting.hlsl":"app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);maxPipelines[maxOffset+i]=CreateLightingPipeline(device,pso,"maximum",maxOffset+i);
             if(!maxPipelines[maxOffset+i])throw std::runtime_error("Max-composition native lighting pipeline unavailable");
         }
         // Diagnostic observation must not force a different composition
         // executor. Count actual work in the exact maximum-only path, with no
         // previous-frame winner seed or extra history binding.
-        if(!reconstruction.requested&&maximum&&RtrDiagnostics::level.load()==2)for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!countedMaxPipelines[i]){
+        if(!reconstruction.requested&&maximum&&workStatisticsEnabled)for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)})if(!countedMaxPipelines[i]){
             std::vector<donut::engine::ShaderMacro> macros{{"RTR_LIGHT_GROUP_CAPACITY",i>=6?"2":i>=4?"4":(i&1)?"1":"32"},
                 {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS","1"},{"RTR_MAX_COMPOSITION","1"}};
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-            countedMaxPipelines[i]=device->createComputePipeline(pso);
+            countedMaxPipelines[i]=CreateLightingPipeline(device,pso,"counted-maximum",i);
             if(!countedMaxPipelines[i])throw std::runtime_error("Counted maximum-composition lighting pipeline unavailable");
         }
         // CHANNEL_MAX has independent RGB winners and needs neither scalar
         // luminance/ID arrays nor a dynamically indexed per-ray stack.
-        if(!reconstruction.requested&&sources&&sources->ChannelExecutor())for(unsigned instrumented=0;instrumented<2;++instrumented)
+        const unsigned instrumented=workStatisticsEnabled?1:0;
+        if(!reconstruction.requested&&channelMaximum)
             for(unsigned i:{groupVariant,groupVariant+(groupVariant<4?2u:1u)}){
                 const bool directChannel=directOnly&&!instrumented;
                 auto& target=directChannel?directChannelPipelines[i]:channelMaxPipelines[instrumented*8+i];
@@ -688,14 +734,14 @@ public:
                     {"RTR_ANALYTIC_LIGHTS",(i>=4?(i&1)!=0:(i&2)!=0)?"0":"1"},{"RTR_WORK_STATISTICS",instrumented?"1":"0"},{"RTR_MAX_COMPOSITION","2"}};
                 nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={layout,bindlessLayout};
                 pso.CS=factory.CreateShader(directChannel?directShader:"app/ProcessingPasses/RtrNativeLighting.hlsl","main",&macros,nvrhi::ShaderType::Compute);
-                target=device->createComputePipeline(pso);
+                target=CreateLightingPipeline(device,pso,directChannel?"direct-channel-maximum":"channel-maximum",instrumented*8+i);
                 if(!target)throw std::runtime_error("Channel-maximum lighting pipeline unavailable");
             }
-        reconstruction.Prepare(device,factory,layout,bindlessLayout,sourceHistoryLayout,width,height,groupVariant,maximum,allDynamic,sources&&sources->ChannelExecutor());
+        reconstruction.Prepare(device,factory,layout,bindlessLayout,sourceHistoryLayout,width,height,groupVariant,maximum,allDynamic,channelMaximum);
     }
     float maximumGi()const{return constants.words[70];}
-    std::array<nvrhi::TextureHandle,4> Outputs()const{
-        return {compactEncoding?compactDirect:direct,compactEncoding?compactIndirect:(reconstruction.requested&&reconstruction.valid?reconstruction.result:indirect),geometry,identity};
+    std::array<nvrhi::TextureHandle,6> Outputs()const{
+        return {compactEncoding?compactDirect:direct,compactEncoding?compactIndirect:(reconstruction.requested&&reconstruction.valid?reconstruction.result:indirect),geometry,identity,directionalSpecular,sunPenumbra};
     }
     void PrepareCompact(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory){
         if(!compactEncoding||!(mask&3)){
@@ -746,7 +792,19 @@ public:
         if(value.rolesVisibility.x!=23||value.surfaceVisibility.x!=1)specialInstances.insert(name);else specialInstances.erase(name);
         specialRoleCount=specialInstances.size();
     }
+    void PublishInstanceAttributes(const std::string& name,const InstanceAttributes& value){
+        const bool disabled=(uint32_t(value.rolesVisibility.x)&7u)==0;
+        const bool changed=disabled?traversalDisabled.insert(name).second:traversalDisabled.erase(name)!=0;
+        if(changed)traversalMaskChanges.insert(name);
+        instanceAttributes.insert_or_assign(name,value);
+        dirtyInstances.insert(name);TrackInstanceRole(name,value);
+    }
+    void ClearTraversalMasks(){
+        traversalMaskChanges.insert(traversalDisabled.begin(),traversalDisabled.end());
+        traversalDisabled.clear();
+    }
     void RetireInstance(const std::string& name){
+        traversalDisabled.erase(name);traversalMaskChanges.erase(name);
         instanceAttributes.erase(name);instanceSlots.erase(name);dirtyInstances.erase(name);specialInstances.erase(name);specialRoleCount=specialInstances.size();metadataDirty=true;
     }
     void RetireGeometry(const std::string& name){
@@ -1085,7 +1143,7 @@ public:
             &&retainedAnalyticGeneration==analyticGeneration
             &&retainedSourceGeneration==sources.work[1]&&retainedMetadata==metadataUploads
             &&std::memcmp(constants.words.data(),retainedConstants.words.data(),72*sizeof(float))==0
-            &&std::memcmp(constants.words.data()+80,retainedConstants.words.data()+80,8*sizeof(float))==0
+            &&std::memcmp(constants.words.data()+80,retainedConstants.words.data()+80,12*sizeof(float))==0
             &&(words[75]&~16u)==(reinterpret_cast<const uint32_t*>(retainedConstants.words.data())[75]&~16u);
         if(reuse){
             RtrGpuProfile::End(command,uploadScope);
@@ -1114,15 +1172,23 @@ public:
             nvrhi::BindingSetItem::StructuredBuffer_SRV(12,surfaceMaterials),nvrhi::BindingSetItem::Sampler(0,sampler),
             nvrhi::BindingSetItem::StructuredBuffer_SRV(13,surfaceIndices),
             nvrhi::BindingSetItem::Texture_UAV(0,direct?direct:dummyColor),nvrhi::BindingSetItem::Texture_UAV(1,indirect?indirect:dummyColor),
-            nvrhi::BindingSetItem::Texture_UAV(2,geometry?geometry:dummyColor),nvrhi::BindingSetItem::Texture_UAV(3,identity?identity:dummyIdentity),nvrhi::BindingSetItem::RawBuffer_UAV(4,work)};
+            nvrhi::BindingSetItem::Texture_UAV(2,geometry?geometry:dummyColor),nvrhi::BindingSetItem::Texture_UAV(3,identity?identity:dummyIdentity),nvrhi::BindingSetItem::RawBuffer_UAV(4,work),
+            nvrhi::BindingSetItem::Texture_UAV(12,directionalSpecular?directionalSpecular:dummyColor)};
         for(uint32_t i=0;i<8;++i){if(!textureSamplers[i])throw std::runtime_error("Adapter texture sampler is not configured");bindings.bindings.push_back(nvrhi::BindingSetItem::Sampler(i+1,textureSamplers[i]));}
+        nvrhi::BindingSetDesc penumbraBindings;
+        if(sunPenumbra){
+            penumbraBindings=bindings;
+            penumbraBindings.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(14,sunEvidence));
+            penumbraBindings.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(14,sunPenumbra));
+        }
+        bindings.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(13,sunEvidence?sunEvidence:dummyColor));
         const bool deep=diagnosticDecomposition&&RtrDiagnostics::level.load()==2;
         if(reconstruction.requested)reconstruction.Bind(command,bindings,constants.words.data(),sequence);
         if(deep){
-            // HLSL structured layout: 29 scalar words in RtrReceiver plus valid.
-            const size_t bytes=size_t(width)*height*120;
+            // HLSL structured layout: 32 scalar words in RtrReceiver plus valid.
+            const size_t bytes=size_t(width)*height*132;
             if(!deepReceivers||deepReceivers->getDesc().byteSize<bytes){
-                nvrhi::BufferDesc desc;desc.byteSize=bytes;desc.structStride=120;desc.canHaveUAVs=true;
+                nvrhi::BufferDesc desc;desc.byteSize=bytes;desc.structStride=132;desc.canHaveUAVs=true;
                 desc.initialState=nvrhi::ResourceStates::UnorderedAccess;desc.keepInitialState=true;desc.debugName="DEEP receiver storage";
                 auto next=device->createBuffer(desc);if(!next)throw std::runtime_error("Could not allocate DEEP receiver storage");
                 Retire(device,{deepReceivers});deepReceivers=next;
@@ -1184,6 +1250,13 @@ public:
             }
             command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);}
         RtrGpuProfile::End(command,dispatchScope);
+        if(sunPenumbra){
+            const auto scope=RtrGpuProfile::Begin(command,"DirectionalEdgePenumbra",-1);
+            auto edgeBindings=penumbraDispatchBindings.Get(device,penumbraBindings,penumbraLayout);
+            nvrhi::ComputeState edge;edge.pipeline=penumbraPipeline;edge.bindings={edgeBindings,scene->GetDescriptorTable()};
+            command->setComputeState(edge);command->dispatch((width+7)/8,(height+7)/8);
+            RtrGpuProfile::End(command,scope);
+        }
         if(retain){retainedConstants=constants;retainedReconstruction=reconstruction.requested;retainedInputGeneration=inputGeneration;
             retainedAnalyticGeneration=analyticGeneration;
             retainedSourceGeneration=sources.work[1];retainedMetadata=metadataUploads;retainedSignals=true;}

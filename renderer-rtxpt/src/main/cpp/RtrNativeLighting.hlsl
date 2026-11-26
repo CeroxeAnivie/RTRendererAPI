@@ -29,7 +29,9 @@ struct RtrNativeConstants
     uint4 publication; // app-data bytes,generation low/high,diagnostic counts enabled
     uint4 clock; // time nanos low/high, delta nanos low/high
     float4 fogRanges; // spherical start/end, cylindrical start/end
-    float4 fogControl; // opacity, reserved
+    float4 fogControl; // opacity, tangent of sun angular radius, surface wetness, sky luminance
+    float4 skyOcclusion; // diffuse obscurance strength, finite reach, reserved
+    float4 wetFilmResponse; // roughness transition start/end, wet-film reflection scale
 };
 ConstantBuffer<RtrNativeConstants> g : register(b0);
 RaytracingAccelerationStructure t_Scene : register(t0);
@@ -62,6 +64,8 @@ RWTexture2D<float4> u_Indirect : register(u1);
 RWTexture2D<float4> u_Geometry : register(u2);
 RWTexture2D<uint4> u_Identity : register(u3);
 RWByteAddressBuffer u_Work : register(u4);
+RWTexture2D<float4> u_DirectionalSpecular : register(u12);
+RWTexture2D<float4> u_SunEvidence : register(u13);
 
 // Adapter-owned slot metadata: clamp U, clamp V, nearest. Material flags stay upstream-owned.
 float4 RtrSampleTexture(int textureIndex,float2 uv,uint policy){
@@ -77,9 +81,36 @@ float4 RtrSampleTexture(int textureIndex,float2 uv,uint policy){
     }
 }
 
+float RtrHostResponseValue(uint channel,uint local,uint sky)
+{
+    uint scalar=(sky*16+local)*3+channel;float2 packed=t_BaselineLookup[256+scalar/2];
+    return (scalar&1)!=0?packed.y:packed.x;
+}
+float RtrHostResponseSample(uint channel,float2 levels)
+{
+    float2 p=saturate(levels)*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
+    return lerp(lerp(RtrHostResponseValue(channel,lo.x,lo.y),RtrHostResponseValue(channel,hi.x,lo.y),f.x),
+        lerp(RtrHostResponseValue(channel,lo.x,hi.y),RtrHostResponseValue(channel,hi.x,hi.y),f.x),f.y);
+}
+float3 RtrHostResponseRgb(uint2 index)
+{
+    uint scalar=(index.y*16+index.x)*3;
+    float2 a=t_BaselineLookup[256+scalar/2],b=t_BaselineLookup[257+scalar/2];
+    return (scalar&1)!=0?float3(a.y,b):float3(a,b.x);
+}
+float3 RtrHostResponseSampleRgb(float2 levels)
+{
+    float2 p=saturate(levels)*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
+    return lerp(lerp(RtrHostResponseRgb(lo),RtrHostResponseRgb(uint2(hi.x,lo.y)),f.x),
+        lerp(RtrHostResponseRgb(uint2(lo.x,hi.y)),RtrHostResponseRgb(hi),f.x),f.y);
+}
+
 struct RtrReceiver
 {
-    float3 position,normal,geometricNormal,albedo;
+    float3 position,normal,geometricNormal,albedo,specularF0;
+#ifdef RTR_DIRECT_ONLY
+    float3 vertexResponse;
+#endif
     float2 uv,baseline,barycentrics;
     float opacity,diffuseWeight,distance,visibility,fog,roughness,metalness,transmission;
     uint instance,geometry,primitive;
@@ -176,16 +207,29 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
         coordinates=va.baseline*bary.x+vb.baseline*bary.y+vc.baseline*bary.z;
     }
     r.opacity=saturate(base.a);
+    if(g.fogControl.z>0)r.albedo=max(base.rgb,0);
+    // A material with zero diffuse reflectance and authored emission is an
+    // emissive-only receiver. Its host emission must not be relit or shadowed.
+    r.diffuseWeight=all(mat.baseOrDiffuseColor==0)&&any(mat.emissiveColor>0)?0:1;
 #else
     if(primitive<geometryAttributes.triangles){uint first=geometryAttributes.offset+primitive*3;
         base*=RtrVertexColor(t_Baselines[first].color)*bary.x+RtrVertexColor(t_Baselines[first+1].color)*bary.y+RtrVertexColor(t_Baselines[first+2].color)*bary.z;}
     r.albedo=max(base.rgb,0);r.opacity=saturate(base.a);
+#endif
+#ifdef RTR_DIRECT_ONLY
+    if((g.grid.z&16)!=0){
+#endif
     r.roughness=mat.roughness;r.metalness=mat.metalness;r.transmission=mat.transmissionFactor;
     if((mat.flags&MaterialFlags_UseMetalRoughOrSpecularTexture)!=0&&(mat.flags&MaterialFlags_UseSpecularGlossModel)==0){
         float4 sampled=RtrSampleTexture(mat.metalRoughOrSpecularTextureIndex,r.uv,geometryAttributes.ormPolicy);
         r.roughness*=sampled.g;r.metalness*=(mat.flags&MaterialFlags_MetalnessInRedChannel)!=0?sampled.r:sampled.b;}
-    if((mat.flags&MaterialFlags_UseTransmissionTexture)!=0)r.transmission*=t_Textures[NonUniformResourceIndex(mat.transmissionTextureIndex)].SampleLevel(s_Material,r.uv,0).r;
     r.roughness=saturate(r.roughness);r.metalness=saturate(r.metalness);r.transmission=saturate(r.transmission);
+    if((g.grid.z&16)!=0)r.specularF0=lerp(float3(.04,.04,.04),saturate(base.rgb),r.metalness);
+#ifdef RTR_DIRECT_ONLY
+    }
+#else
+    if((mat.flags&MaterialFlags_UseTransmissionTexture)!=0)r.transmission*=t_Textures[NonUniformResourceIndex(mat.transmissionTextureIndex)].SampleLevel(s_Material,r.uv,0).r;
+    r.transmission=saturate(r.transmission);
     r.diffuseWeight=(1-r.metalness)*(1-r.transmission);
 #endif
     if((mat.flags&MaterialFlags_UseNormalTexture)!=0&&geom.tangentOffset!=0xffffffff)
@@ -216,6 +260,19 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
     float2 p=coordinates*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
     r.baseline=lerp(lerp(t_BaselineLookup[lo.y*16+lo.x],t_BaselineLookup[lo.y*16+hi.x],f.x),
         lerp(t_BaselineLookup[hi.y*16+lo.x],t_BaselineLookup[hi.y*16+hi.x],f.x),f.y);
+#ifdef RTR_DIRECT_ONLY
+    if(g.style.moonAndMode.w==4&&primitive<geometryAttributes.triangles){
+        uint first=geometryAttributes.offset+primitive*3;
+        r.vertexResponse=0;
+        [unroll]for(uint corner=0;corner<3;corner++){
+            float2 q=saturate(t_Baselines[first+corner].baseline*data.baseline.xy+data.baseline.zw)*15;
+            uint2 a=uint2(q),b=min(a+1,15);float2 f=frac(q);
+            float2 resolved=lerp(lerp(t_BaselineLookup[a.y*16+a.x],t_BaselineLookup[a.y*16+b.x],f.x),
+                lerp(t_BaselineLookup[b.y*16+a.x],t_BaselineLookup[b.y*16+b.x],f.x),f.y);
+            r.vertexResponse+=RtrHostResponseSampleRgb(resolved)*bary[corner];
+        }
+    }
+#endif
     return r;
 }
 // Candidate acceptance needs coverage and roles, not a fully shaded receiver.
@@ -713,53 +770,53 @@ void RtrLocal(RtrReceiver receiver,out float3 local,out float3 dynamic,bool need
 {
     bool ignored;RtrLocalWithCoverage(receiver,local,dynamic,ignored,needDynamic,primary,false);
 }
-float RtrHostResponseValue(uint channel,uint local,uint sky)
+float3 RtrVertexBaselineResponse(RtrReceiver receiver)
 {
-    uint scalar=(sky*16+local)*3+channel;float2 packed=t_BaselineLookup[256+scalar/2];
-    return (scalar&1)!=0?packed.y:packed.x;
-}
-float RtrHostResponseSample(uint channel,float2 levels)
-{
-    float2 p=saturate(levels)*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
-    return lerp(lerp(RtrHostResponseValue(channel,lo.x,lo.y),RtrHostResponseValue(channel,hi.x,lo.y),f.x),
-        lerp(RtrHostResponseValue(channel,lo.x,hi.y),RtrHostResponseValue(channel,hi.x,hi.y),f.x),f.y);
-}
 #ifdef RTR_DIRECT_ONLY
-float3 RtrHostResponseRgb(uint2 index)
-{
-    uint scalar=(index.y*16+index.x)*3;
-    float2 a=t_BaselineLookup[256+scalar/2],b=t_BaselineLookup[257+scalar/2];
-    return (scalar&1)!=0?float3(a.y,b):float3(a,b.x);
-}
-float3 RtrHostResponseSampleRgb(float2 levels)
-{
-    float2 p=saturate(levels)*15;uint2 lo=uint2(p),hi=min(lo+1,15);float2 f=frac(p);
-    return lerp(lerp(RtrHostResponseRgb(lo),RtrHostResponseRgb(uint2(hi.x,lo.y)),f.x),
-        lerp(RtrHostResponseRgb(uint2(lo.x,hi.y)),RtrHostResponseRgb(hi),f.x),f.y);
-}
+    return receiver.vertexResponse;
+#else
+    InstanceData instance=t_Instances[receiver.instance];
+    RtrGeometryAttributes geometry=t_GeometryBaselines[instance.firstGeometryIndex+receiver.geometry];
+    if(receiver.primitive>=geometry.triangles)return RtrHostResponseSampleRgb(receiver.baseline);
+    RtrInstance attributes=t_InstanceAttributes[receiver.instance];uint first=geometry.offset+receiver.primitive*3;
+    float3 bary=float3(1-receiver.barycentrics.x-receiver.barycentrics.y,receiver.barycentrics),result=0;
+    [unroll]for(uint corner=0;corner<3;corner++){
+        float2 q=saturate(t_Baselines[first+corner].baseline*attributes.baseline.xy+attributes.baseline.zw)*15;
+        uint2 a=uint2(q),b=min(a+1,15);float2 f=frac(q);
+        float2 resolved=lerp(lerp(t_BaselineLookup[a.y*16+a.x],t_BaselineLookup[a.y*16+b.x],f.x),
+            lerp(t_BaselineLookup[b.y*16+a.x],t_BaselineLookup[b.y*16+b.x],f.x),f.y);
+        result+=RtrHostResponseSampleRgb(resolved)*bary[corner];
+    }
+    return result;
 #endif
-float3 RtrHostResponseGain(RtrReceiver receiver,float3 local,float3 dynamic,bool staticCovered,float3 sunVisibility,float3 moonVisibility)
+}
+float3 RtrHostLitResponse(RtrReceiver receiver,float3 local,float3 dynamic,bool staticCovered,float3 sunVisibility,float3 moonVisibility,float3 skyBlocked)
 {
     float3 targetLocal=staticCovered?saturate(local):max(receiver.baseline.x,saturate(dynamic));
     float weight=g.sun.w>0?saturate(g.sun.w):saturate(g.moon.w);
     float3 directionalVisibility=g.sun.w>0?sunVisibility:moonVisibility;
-    float3 targetSky=receiver.baseline.y*lerp(1,directionalVisibility,weight),gain=1;
-    if(g.style.moonAndMode.w==3){
+    float3 targetSky=receiver.baseline.y*lerp(1,directionalVisibility,weight);
+    if(g.style.moonAndMode.w>=3){
         float3 blocked=g.style.correction.z*g.sun.w*(1-sunVisibility)
             +g.style.correction.w*g.moon.w*g.style.moonAndMode.rgb*(1-moonVisibility);
-        targetSky=receiver.baseline.y*(1-saturate((1-receiver.baseline.x)*blocked));
+        targetSky=receiver.baseline.y*(1-saturate((1-receiver.baseline.x)*(blocked+skyBlocked)));
+    }else{
+        targetSky*=1-saturate((1-receiver.baseline.x)*skyBlocked);
     }
-#ifdef RTR_DIRECT_ONLY
-    float3 baselineResponse=RtrHostResponseSampleRgb(receiver.baseline);
-#endif
+    float3 response;
+    [unroll]for(uint channel=0;channel<3;channel++)
+        response[channel]=RtrHostResponseSample(channel,float2(targetLocal[channel],targetSky[channel]));
+    return response;
+}
+float3 RtrHostResponseGain(RtrReceiver receiver,float3 local,float3 dynamic,bool staticCovered,float3 sunVisibility,float3 moonVisibility,float3 skyBlocked)
+{
+    float3 baselineResponse=g.style.moonAndMode.w==4?RtrVertexBaselineResponse(receiver):RtrHostResponseSampleRgb(receiver.baseline);
+    float3 targetResponse=RtrHostLitResponse(receiver,local,dynamic,staticCovered,sunVisibility,moonVisibility,skyBlocked);
+    float3 gain;
     [unroll]for(uint channel=0;channel<3;channel++){
-#ifdef RTR_DIRECT_ONLY
         float before=baselineResponse[channel];
-#else
-        float before=RtrHostResponseSample(channel,receiver.baseline);
-#endif
-        float after=RtrHostResponseSample(channel,float2(targetLocal[channel],targetSky[channel]));
-        gain[channel]=before>0?after/before:(g.style.moonAndMode.w==3||after==0?1:g.style.limits.y);
+        float after=targetResponse[channel];
+        gain[channel]=before>0?after/before:(g.style.moonAndMode.w>=3||after==0?1:g.style.limits.y);
     }
     float influence=saturate(receiver.visibility)*(1-saturate(receiver.fog));
     return clamp(lerp(1,gain,influence),g.style.limits.x,g.style.limits.y);
@@ -788,8 +845,136 @@ float3 RtrOneBounce(RtrReceiver receiver)
     return receiver.albedo*receiver.diffuseWeight*sum*(g.gi.y/g.grid.w)*receiver.visibility*(1-receiver.fog);
 }
 #ifndef RTR_LIGHTING_EXTENSION
+static float3 rtrDirectionalSpecular;
+static float rtrSunClass;
+
+bool RtrSunIsPrimary()
+{
+    return g.sun.w>0 && (g.moon.w<=0 || g.sun.w*g.style.correction.z>=g.moon.w*g.style.correction.w);
+}
+
+void RtrStoreSunEvidence(uint2 pixel,bool valid,RtrReceiver receiver)
+{
+    if((g.grid.z&32)!=0)
+        u_SunEvidence[pixel]=valid&&rtrSunClass!=0?float4(receiver.distance*rtrSunClass,receiver.geometricNormal):0;
+}
+
+float3 RtrDiffuseSkyBlocked(RtrReceiver receiver)
+{
+    // The host light map already handles deep interiors. Limit the additional
+    // physically traced obscurance to sky-lit receivers which can show it.
+    if(g.skyOcclusion.x<=0||receiver.baseline.y<=.05||receiver.baseline.x>=.92
+        ||receiver.visibility*(1-receiver.fog)<=.01)return 0;
+    // Two fixed samples of a zenith-bright diffuse dome. They are independent
+    // of camera and frame number, so moving across a roof does not introduce
+    // stochastic noise. Clip to published local caster reach on the host.
+    static const float3 directions[2]={float3(.42,.8,.4289522),float3(-.42,.8,-.4289522)};
+    float3 blocked=0;
+    float weight=0;
+    [unroll]for(uint i=0;i<2;i++){
+        float cosine=max(0,dot(receiver.geometricNormal,directions[i]));
+        if(cosine>0){
+            RayDesc ray;ray.Origin=receiver.position+receiver.geometricNormal*g.gi.z;
+            ray.Direction=directions[i];ray.TMin=g.gi.z;ray.TMax=max(g.gi.z,g.skyOcclusion.y);
+            uint partial;
+            blocked+=cosine*(1-RtrShadowRaySample(ray,0,false,partial));
+            weight+=cosine;
+        }
+    }
+    return g.skyOcclusion.x*blocked/max(.8,weight);
+}
+
+// Isotropic GGX, height-correlated Smith and Schlick Fresnel. The point-on-disk
+// approximation evaluates the central direction, not a new visibility ray.
+float3 RtrDirectionalReflection(RtrReceiver r,float3 view,float3 light)
+{
+    float NoL=dot(r.normal,light),NoV=dot(r.normal,view);
+    if(NoL<=0||NoV<=0||dot(r.geometricNormal,light)<=0||dot(r.geometricNormal,view)<=0)return 0;
+    float3 halfVector=RtrNormalize(view+light);
+    float NoH=saturate(dot(r.normal,halfVector)),VoH=saturate(dot(view,halfVector));
+    float alpha=max(.002,r.roughness*r.roughness),a2=alpha*alpha;
+    float d=(1-NoH*NoH)+NoH*NoH*a2;
+    float distribution=a2/(3.14159265*d*d);
+    float visibility=.5/max(1e-6,NoL*sqrt(a2+(1-a2)*NoV*NoV)+NoV*sqrt(a2+(1-a2)*NoL*NoL));
+    float f=1-VoH,f2=f*f;
+    return (r.specularF0+(1-r.specularF0)*f2*f2*f)*(distribution*visibility*NoL);
+}
+
+void RtrStoreDirectionalSpecular(uint2 pixel,bool valid,float opacity)
+{
+    if((g.grid.z&16)!=0){
+        float3 color=valid?rtrDirectionalSpecular:0;
+        color=float3(isfinite(color.x)?clamp(color.x,0,65504):0,isfinite(color.y)?clamp(color.y,0,65504):0,isfinite(color.z)?clamp(color.z,0,65504):0);
+        u_DirectionalSpecular[pixel]=float4(color,valid?opacity:0);
+    }
+}
+
+float3 RtrReflectedSurface(RtrReceiver hit,bool resolveLighting)
+{
+    if(g.style.moonAndMode.w>=2){
+        // Native terrain color and the reflection must use the same host light
+        // response. Physical sky luma alone omits the host's ambient fill.
+        float3 response=RtrHostResponseSampleRgb(hit.baseline);
+        [branch]if(resolveLighting){
+            float3 local,dynamic;
+            bool covered;
+            RtrLocalWithCoverage(hit,local,dynamic,covered,true,false,true);
+            float3 sunVisibility=1,moonVisibility=1;
+            if(g.sun.w>0&&dot(hit.normal,g.sun.xyz)>0) sunVisibility=RtrShadow(hit,g.sun.xyz,1e20);
+            if(g.moon.w>0&&dot(hit.normal,g.moon.xyz)>0) moonVisibility=RtrShadow(hit,g.moon.xyz,1e20);
+            response=RtrHostLitResponse(hit,local,dynamic,covered,sunVisibility,moonVisibility,0);
+        }
+        float3 linearResponse=lerp(response/12.92,pow((response+.055)/1.055,2.4),step(.04045,response));
+        return hit.albedo*linearResponse;
+    }
+    float local=hit.baseline.x*hit.baseline.x;
+    float3 incident=hit.baseline.y*g.fogControl.w+local;
+    if(resolveLighting) incident=hit.baseline.y*g.fogControl.w+RtrIncident(hit);
+    return hit.albedo*incident;
+}
+
+float3 RtrFilmScene(float3 origin,float3 direction,float reach,float sky,bool resolveLighting)
+{
+    RtrReceiver hit;
+    if(!RtrTrace(origin,direction,reach,1,hit))return sky;
+    float3 surface=RtrReflectedSurface(hit,resolveLighting);
+    float coverage=(1-smoothstep(reach*.7,reach,hit.distance))*hit.opacity*hit.visibility;
+    return lerp(sky,surface,coverage);
+}
+
+float3 RtrFilmEnvironment(RtrReceiver receiver,float3 view,float film,float filmRoughness,float wetF0,float NoV)
+{
+    float3 reflected=reflect(-view,receiver.normal);
+    if(dot(reflected,receiver.geometricNormal)<=0)
+        reflected=reflect(-view,receiver.geometricNormal);
+    float zenith=saturate(reflected.y);
+    float blur=filmRoughness*filmRoughness;
+    // A broad lobe integrates the sky gradient and spreads grazing response across more angles.
+    float sky=g.fogControl.w*lerp(lerp(.68,1.32,zenith),1.,blur);
+    float grazing=1-NoV;
+    float grazing2=grazing*grazing;
+    float grazingPeak=grazing2*grazing2*grazing;
+    float filmWeight=film*(wetF0+lerp((1-wetF0)*grazingPeak,.30*grazing2,blur));
+    float3 radiance=sky;
+    // Broad lobes keep nearby scene color with low contrast. Reuse one hit per
+    // wet pixel; rough surfaces mix more of the stable sky environment into it.
+    float sceneWeight=lerp(.38,.85,1-smoothstep(.22,.62,filmRoughness));
+    [branch]if(sceneWeight*filmWeight>.003&&zenith>0){
+        const float resolvedLightingRoughness=.42;
+        float spread=smoothstep(resolvedLightingRoughness,.78,filmRoughness);
+        float3 origin=receiver.position+receiver.geometricNormal*g.gi.z;
+        float reach=lerp(16.,8.,spread);
+        float3 scene=RtrFilmScene(origin,reflected,reach,sky,filmRoughness<resolvedLightingRoughness);
+        radiance=lerp(sky,scene,sceneWeight);
+    }
+    return filmWeight*radiance;
+}
+
 float3 RtrDirectGain(RtrReceiver receiver)
 {
+    rtrDirectionalSpecular=0;
+    rtrSunClass=0;
+    if(g.style.moonAndMode.w==4&&receiver.diffuseWeight<=0)return 1;
     float3 gain=1;
 #ifndef RTR_DIRECT_ONLY
     if((g.grid.z&1)!=0)
@@ -797,10 +982,46 @@ float3 RtrDirectGain(RtrReceiver receiver)
     {
         bool response=g.style.moonAndMode.w>=2,staticCovered;
         float3 local,dynamic;RtrLocalWithCoverage(receiver,local,dynamic,staticCovered,true,true,response);float3 sunVisibility=1,moonVisibility=1;
-        if(g.sun.w>0&&dot(receiver.normal,g.sun.xyz)>0)sunVisibility=RtrShadow(receiver,g.sun.xyz,1e20);
+        if(g.sun.w>0&&dot(receiver.normal,g.sun.xyz)>0){
+            sunVisibility=RtrShadow(receiver,g.sun.xyz,1e20);
+        }
         if(g.moon.w>0&&dot(receiver.normal,g.moon.xyz)>0)moonVisibility=RtrShadow(receiver,g.moon.xyz,1e20);
-        gain=response?RtrHostResponseGain(receiver,local,dynamic,staticCovered,sunVisibility,moonVisibility)
+        if((g.grid.z&32)!=0&&receiver.opacity>=.99&&(g.sun.w>0||g.moon.w>0)){
+            bool useSun=RtrSunIsPrimary();
+            float3 direction=useSun?g.sun.xyz:g.moon.xyz;
+            if(dot(receiver.geometricNormal,direction)>.005&&dot(receiver.normal,direction)>0){
+                float3 visibility=useSun?sunVisibility:moonVisibility;
+                if(all(visibility==0))rtrSunClass=-1;
+                else if(all(visibility==1))rtrSunClass=1;
+            }
+        }
+        if((g.grid.z&16)!=0){
+            float3 view=RtrNormalize(g.cameraNear.xyz-receiver.position);
+            float influence=saturate(receiver.visibility)*(1-saturate(receiver.fog));
+            float NoV=dot(receiver.geometricNormal,view);
+            [branch]if(g.fogControl.z>0&&receiver.opacity>=.99&&receiver.transmission<.01&&NoV>0&&influence>.01){
+                float exposure=smoothstep(.04,.22,receiver.baseline.y)*smoothstep(.55,.95,receiver.geometricNormal.y);
+                float wet=g.fogControl.z*exposure;
+                [branch]if(wet>0){
+                    // Roughness is the fallback proxy for absorption when the host has no porosity map.
+                    float porosity=receiver.roughness*receiver.roughness*(1-receiver.metalness);
+                    float film=wet*lerp(1,.80,porosity);
+                    float filmRoughness=receiver.roughness*lerp(1,.64,film);
+                    float wetF0=lerp(.18,.065,smoothstep(.25,.85,receiver.roughness));
+                    float roughnessScale=lerp(1,g.wetFilmResponse.z,smoothstep(g.wetFilmResponse.x,g.wetFilmResponse.y,receiver.roughness));
+                    rtrDirectionalSpecular=RtrFilmEnvironment(receiver,view,film,filmRoughness,wetF0,saturate(NoV))*roughnessScale;
+                    receiver.roughness=lerp(receiver.roughness,max(.16,filmRoughness),film);
+                    receiver.specularF0=lerp(receiver.specularF0,wetF0,film);
+                }
+            }
+            if(g.sun.w>0&&any(sunVisibility>0))rtrDirectionalSpecular+=RtrDirectionalReflection(receiver,view,g.sun.xyz)*g.sunColor.rgb*sunVisibility*g.sun.w;
+            if(g.moon.w>0&&any(moonVisibility>0))rtrDirectionalSpecular+=RtrDirectionalReflection(receiver,view,g.moon.xyz)*g.style.moonAndMode.rgb*moonVisibility*g.moon.w;
+            rtrDirectionalSpecular*=influence;
+        }
+        float3 skyBlocked=RtrDiffuseSkyBlocked(receiver);
+        gain=response?RtrHostResponseGain(receiver,local,dynamic,staticCovered,sunVisibility,moonVisibility,skyBlocked)
             :RtrStyleGain(g.style,receiver.baseline,receiver.visibility,receiver.fog,local,dynamic,g.sun.w,sunVisibility,g.moon.w,moonVisibility);
+        if(!response)gain=max(g.style.limits.x,gain-skyBlocked*receiver.baseline.y*(1-receiver.baseline.x)*receiver.visibility*(1-receiver.fog));
     }
     rtrCoverageFiltering=false;
     return gain;
@@ -825,6 +1046,8 @@ void main(uint2 pixel:SV_DispatchThreadID)
     if(valid){RtrPrepareCoverage(receiver,pixel);gain=RtrDirectGain(receiver);}
     gain=float3(isfinite(gain.x)?clamp(gain.x,0,65504):1,isfinite(gain.y)?clamp(gain.y,0,65504):1,isfinite(gain.z)?clamp(gain.z,0,65504):1);
     u_Direct[pixel]=float4(gain,RtrDirectAlpha(valid,receiver.opacity));
+    RtrStoreDirectionalSpecular(pixel,valid,receiver.opacity);
+    RtrStoreSunEvidence(pixel,valid,receiver);
 #else
     float3 indirect=0;
     if((g.grid.z&4)!=0)u_Geometry[pixel]=valid?float4(receiver.normal,receiver.distance):0;
@@ -834,6 +1057,8 @@ void main(uint2 pixel:SV_DispatchThreadID)
     indirect=float3(isfinite(indirect.x)?clamp(indirect.x,0,65504):0,isfinite(indirect.y)?clamp(indirect.y,0,65504):0,isfinite(indirect.z)?clamp(indirect.z,0,65504):0);
     if((g.grid.z&1)!=0)u_Direct[pixel]=float4(gain,RtrDirectAlpha(valid,receiver.opacity));
     if((g.grid.z&2)!=0)u_Indirect[pixel]=float4(indirect,valid?receiver.opacity:0);
+    RtrStoreDirectionalSpecular(pixel,valid,receiver.opacity);
+    RtrStoreSunEvidence(pixel,valid,receiver);
     RtrFlushWork();
 #endif
 }

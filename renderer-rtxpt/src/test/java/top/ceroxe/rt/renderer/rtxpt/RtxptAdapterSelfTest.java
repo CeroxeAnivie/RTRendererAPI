@@ -122,9 +122,25 @@ public final class RtxptAdapterSelfTest {
         rejected(()->RtxptInputContract.validateFrame(frame),"Beauty cannot silently accept frame-local signal fog");
         RtxptInputContract.validateFrame(frame,true);
         var words=RtxptNativeLightingParameters.pack(coverage,frame);
-        require(words.length==88&&words[71]==2&&words[80]==5&&words[81]==10&&words[82]==8&&words[83]==20&&words[84]==.75f,
+        require(words.length==96&&words[71]==2&&words[80]==5&&words[81]==10&&words[82]==8&&words[83]==20&&words[84]==.75f,
             "Coverage flags and both distance-fog ranges reach the extended shader ABI");
         require(RtxptNativeLightingParameters.pack(original,frame(0))[71]==0,"Default plan retains its original fast-path flag");
+        var sky=coverage.withSkyOcclusion(.28f,16).withEncoding(NativeLightingPlan.Encoding.HDR_FLOAT16)
+            .withSurfaceWetness(.6f);
+        var skyWords=RtxptNativeLightingParameters.pack(sky,frame);
+        require(skyWords.length==96&&skyWords[71]==2&&skyWords[84]==.75f&&skyWords[88]==.28f&&skyWords[89]==16,
+            "Diffuse sky obscurance and host-selected material response share the native lighting ABI");
+        require(RtxptNativeLightingParameters.pack(sky.withSkyOcclusion(0,16),frame)[89]==1,
+            "Disabled sky obscurance publishes a valid neutral reach");
+        rejected(()->coverage.withSkyOcclusion(.28f,0),"Sky obscurance must have a positive finite reach");
+        rejected(()->coverage.withSkyOcclusion(Float.NaN,16),"Sky obscurance must have a finite normalized strength");
+        var roughFilm=sky.withWetFilmRoughnessResponse(.55f,.72f,1.15f);
+        var roughFilmWords=RtxptNativeLightingParameters.pack(roughFilm,frame);
+        require(roughFilmWords[92]==.55f&&roughFilmWords[93]==.72f&&roughFilmWords[94]==1.15f,
+            "Host-selected wet-film roughness response reaches the optional native ABI tail");
+        require(RtxptNativeLightingParameters.pack(original,frame)[94]==1,
+            "Unconfigured host material response is neutral");
+        rejected(()->sky.withWetFilmRoughnessResponse(.8f,.2f,1.15f),"Wet-film roughness interval must be ordered");
     }
     private static void nativeLightingRoles() {
         var source=new RtxptScene();source.retain(scene(1));

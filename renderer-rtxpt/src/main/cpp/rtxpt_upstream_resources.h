@@ -270,6 +270,10 @@ public:
             &&resident.totalVertices==incoming.totalVertices&&resident.totalIndices==incoming.totalIndices
             &&a.directAttributeSizes==input->AttributeSizes();
     }
+    void UploadDirectPreparation(nvrhi::ICommandList* commands,
+        const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
+        UploadMeshes(commands,meshes);
+    }
     void PrepareMeshInputs(const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){BatchMeshInputs(meshes);}
     void RefreshAttributes(nvrhi::ICommandList* commands,
         const std::vector<std::shared_ptr<donut::engine::MeshInfo>>& meshes){
@@ -559,8 +563,9 @@ private:
             if(NeedsPoseConvergence(row))m_convergingInstances.push_back(instance);
             const bool ownerChanged=!SameOwner(old.owner,instance);
             if(ownerChanged)RecordChangedInstance(instance);
-            if(ownerChanged||old.pose!=row.pose||old.geometry!=row.geometry) {
+            if(ownerChanged||old.geometry!=row.geometry||!std::equal(old.pose.begin(),old.pose.begin()+12,row.pose.begin()))
                 m_rowChanges.tlasInstances.push_back(instance);
+            if(ownerChanged||old.pose!=row.pose||old.geometry!=row.geometry) {
                 UpdateInstance(instance);old=std::move(row);++written;
                 m_dirtyInstanceRows.push_back(uint32_t(instance->GetInstanceIndex()));
             }
@@ -790,6 +795,10 @@ public:
         }
     }
     bool HasInstance(const std::string& name) const { return m_nodes.contains(name); }
+    std::shared_ptr<donut::engine::MeshInstance> FindMeshInstance(const std::string& name)const{
+        const auto found=m_nodes.find(name);
+        return found==m_nodes.end()?nullptr:std::dynamic_pointer_cast<donut::engine::MeshInstance>(found->second.node->GetLeaf());
+    }
     bool IsLiveMesh(const std::shared_ptr<donut::engine::MeshInfo>& mesh)const{
         const auto current=m_meshes.find(mesh->name);const auto users=m_meshNodes.find(mesh->name);
         return current!=m_meshes.end()&&current->second==mesh&&users!=m_meshNodes.end()&&!users->second.empty();
@@ -2264,7 +2273,8 @@ private:
             decodeWork.Next(3,1);
             if(protocol>=0x5244525e){
                 if(!m_externalTextureSampling)throw std::invalid_argument("Receiver geometry requires independent lighting");
-                const auto sourceVertices=meshReader.count();const auto baseline=meshReader.readFloatSpan();
+                // Logical domain, not an inline array length. Both receiver channels may be absent.
+                const auto sourceVertices=meshReader.value<uint32_t>();const auto baseline=meshReader.readFloatSpan();
                 const auto colorCount=meshReader.count();const auto* colors=meshReader.take(size_t(colorCount)*4);
                 if(!sourceVertices||(!inherited&&sourceVertices!=vertices)
                     ||(!baseline.empty()&&baseline.size()!=size_t(sourceVertices)*2)

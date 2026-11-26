@@ -51,8 +51,6 @@ final class RtxptScene {
         cachedResidentItems=null;cachedPrimitiveMeshes=null;
     }
     List<SceneLight> sortedLights(){if(sortedLights==null)sortedLights=List.copyOf(lights.values());return sortedLights;}
-    final Map<String,MediumBoundary> interiors=new LinkedHashMap<>();
-    final Map<String,Float> materialIors=new LinkedHashMap<>();
     RtxptScene() {
         textures=new RtxptSceneTable<>();materials=new RtxptSceneTable<>();meshes=new RtxptSceneTable<>();instances=new RtxptSceneTable<>();
         meshMaterials=new RtxptPersistentMap<>();textureUsers=new RtxptPersistentMap<>();materialUsers=new RtxptPersistentMap<>();meshUsers=new RtxptPersistentMap<>();
@@ -164,7 +162,11 @@ final class RtxptScene {
         // AffineTransform already enforces finite, invertible input. The native
         // adapter composes two original TRS nodes when a shear needs both.
     }
-    record Item(String name,long mesh,AffineTransform transform,MediumBoundary boundary,float visibility) { }
+    record Item(String name,long mesh,AffineTransform transform,MediumBoundary boundary,float visibility,String meshName) {
+        Item(String name,long mesh,AffineTransform transform,MediumBoundary boundary,float visibility){
+            this(name,mesh,transform,boundary,visibility,"mesh"+mesh+suffix(boundary,visibility));
+        }
+    }
     private static final class Items extends AbstractList<Item> implements RandomAccess {
         final RtxptPersistentMap<Item> values;final Object structure;final List<Item> dynamic;
         Items(RtxptPersistentMap<Item> source,Object structure){values=new RtxptPersistentMap<>(source);this.structure=structure;dynamic=List.of();}
@@ -211,8 +213,10 @@ final class RtxptScene {
         for(int index=scene.instances.size();index<current.size();index++){var item=current.get(index);if(!item.equals(oldDynamic.remove(item.name())))upserts.add(item);reads++;}
         removals.addAll(oldDynamic.keySet());return new ItemChanges(upserts,removals,nodes,reads);
     }
-    record Variant(long material,MediumBoundary boundary,float visibility) {
-        String name(){return "m"+material+suffix(boundary,visibility);}
+    record Variant(long material,MediumBoundary boundary,float visibility,String name) {
+        Variant(long material,MediumBoundary boundary,float visibility){
+            this(material,boundary,visibility,"m"+material+suffix(boundary,visibility));
+        }
     }
     static String suffix(MediumBoundary boundary,float visibility) {
         String value="_v"+Integer.toHexString(Float.floatToIntBits(visibility));
@@ -221,5 +225,5 @@ final class RtxptScene {
         return value+"_b"+Integer.toHexString(Float.floatToIntBits(m.indexOfRefraction()))+"_"+boundary.priority()
             +"_"+Integer.toHexString(Float.floatToIntBits(a.red()))+"_"+Integer.toHexString(Float.floatToIntBits(a.green()))+"_"+Integer.toHexString(Float.floatToIntBits(a.blue()));
     }
-    static String meshName(Item i){return "mesh"+i.mesh()+suffix(i.boundary(),i.visibility());}
+    static String meshName(Item i){return i.meshName();}
 }

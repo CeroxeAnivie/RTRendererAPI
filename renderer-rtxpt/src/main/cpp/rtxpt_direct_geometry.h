@@ -19,11 +19,30 @@ class DirectGeometry final {
         uint64_t used=0;
     };
     Page m_vertexPage,m_indexPage;
+    // Mixed-size batches often leave useful space in a page. Append only past
+    // its high-water mark: live meshes and GPU readers keep their exact ranges.
+    std::array<std::array<Page,8>,2> m_openTails;
+    static uint64_t Remaining(const Page& p){return p.buffer?p.buffer->getDesc().byteSize-p.used:0;}
+    static void KeepTail(std::array<Page,8>& tails,Page page){
+        const auto free=Remaining(page);
+        if(free<256)return;
+        auto least=tails.begin();
+        for(auto it=tails.begin();it!=tails.end();++it){
+            if(!it->buffer){*it=std::move(page);return;}
+            if(Remaining(*it)<Remaining(*least))least=it;
+        }
+        if(free>Remaining(*least))*least=std::move(page);
+    }
     struct Pages {
         std::vector<Page> slots;
         size_t next=0;
     };
     std::array<Pages,4> m_pages;
+    // Keep overflow in the same fence-aware pool instead of repeatedly creating
+    // disposable buffers during sustained streaming. Bound extra retained storage
+    // to 96 MiB of vertices and 24 MiB of indices per managed scene.
+    std::array<Pages,2> m_overflow;
+    static constexpr size_t OverflowCapacity=24;
     bool m_pagesPrepared=false;
     struct Slice {nvrhi::BufferHandle buffer;std::shared_ptr<donut::engine::DescriptorHandle> descriptor;uint64_t offset;};
     static constexpr uint64_t PageBytes(bool indices){return indices?256*1024:1024*1024;}
@@ -67,10 +86,27 @@ class DirectGeometry final {
             const auto minimum=PageBytes(indices);
             const size_t type=indices?1:0;
             Page next;
-            if(stride<=minimum)next=Take(m_pages[type]);
-            if(!next.buffer&&stride<=4*minimum)next=Take(m_pages[type+2]);
+            auto& tails=m_openTails[type];
+            auto best=tails.end();
+            for(auto it=tails.begin();it!=tails.end();++it){
+                const auto free=Remaining(*it);
+                if(it->buffer&&free>=stride&&(best==tails.end()||free<Remaining(*best)))best=it;
+            }
+            if(best!=tails.end())next=std::exchange(*best,Page{});
+            // Oversize one-off pages must not pin arbitrarily large buffers here.
+            if(page.buffer&&page.buffer->getDesc().byteSize<=4*minimum)KeepTail(tails,std::move(page));
+            if(!next.buffer&&stride<=minimum)next=Take(m_pages[type]);
+            if(!next.buffer&&stride<=4*minimum){
+                next=Take(m_pages[type+2]);
+                if(!next.buffer)next=Take(m_overflow[type]);
+            }
             {RtrDiagnostics::Scope acquire(RtrDiagnostics::PoolAcquire,1,0,2,0,0,0,0,stride);
                 acquire.event[11]|=next.buffer?RtrDiagnostics::CacheHit:RtrDiagnostics::CacheMiss;}
+            auto& overflow=m_overflow[type].slots;
+            if(!next.buffer&&stride<=4*minimum&&overflow.size()<OverflowCapacity){
+                next=CreatePage(device,descriptors,4*minimum,indices,false);
+                if(next.buffer)overflow.push_back(next);
+            }
             if(!next.buffer)next=CreatePage(device,descriptors,stride,indices,false);
             if(!next.buffer)throw std::runtime_error("Direct geometry page allocation failed");
             page=std::move(next);
@@ -208,7 +244,7 @@ public:
         // Separate queues transition whole resources, even for disjoint ranges.
         // After an asynchronous reader, append only to fresh resources; older
         // BufferGroups and native submissions continue owning their old pages.
-        if(!ordered){m_vertexPage={};m_indexPage={};}
+        if(!ordered){m_vertexPage={};m_indexPage={};m_openTails={};}
     }
     static uint32_t ChangedChannels(const AuthoredMeshInputs& before,const AuthoredMeshInputs& after){
         // The output expansion map changes every packed channel even when its

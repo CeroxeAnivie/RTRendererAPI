@@ -12,6 +12,7 @@ public final class NativeLightingStyleSelfTest {
     }
     public static void main(String[] args) {
         hostResponse();
+        vertexResponse();
         var style=NativeLightingStyle.defaults();
         near(style.directGain(0,.5f,1,1,0,.5f,0,0,1,0,1),1);
         near(style.directGain(0,.5f,1,1,0,0,0,0,1,0,1),.625f);
@@ -44,6 +45,26 @@ public final class NativeLightingStyleSelfTest {
         require(maxGainRelative<.011&&maxGainAbsolute<=1/256f+1e-6&&maxGiAbsolute<.004,"Declared compact quantization bounds");
         System.out.println("NATIVE_LIGHTING_STYLE_CPU PASS samples=100001 neutral=128 gainAbsolute="+maxGainAbsolute+
             " gainRelative="+maxGainRelative+" giAbsolute="+maxGiAbsolute);
+    }
+    private static void vertexResponse(){
+        float[] nonlinear=new float[NativeLightingHostResponse.SAMPLES];
+        for(int sky=0;sky<16;sky++)for(int local=0;local<16;local++)for(int c=0;c<3;c++)
+            nonlinear[(sky*16+local)*3+c]=.01f+.7f*(float)Math.pow(local/15f,2+c)+.2f*sky/15f;
+        var response=new NativeLightingHostResponse(nonlinear);
+        // Independent vertex-shader oracle: lookup each authored endpoint first.
+        for(int channel=0;channel<3;channel++){
+            float a=nonlinear[(2*16+1)*3+channel],b=nonlinear[(7*16+8)*3+channel],c=nonlinear[(14*16+15)*3+channel];
+            for(int i=0;i<=32;i++)for(int j=0;j<=32-i;j++){
+                float wa=i/32f,wb=j/32f,wc=1-wa-wb;
+                near(response.sampleTriangle(channel,1/15f,2/15f,8/15f,7/15f,1,14/15f,wa,wb,wc),a*wa+b*wb+c*wc);
+            }
+        }
+        require(Math.abs(response.sampleTriangle(0,0,0,1,0,0,0,.5f,.5f,0)-response.sample(0,.5f,0))>.1,
+            "Nonlinear host response must not interpolate coordinates before sampling");
+        var vertex=NativeLightingStyle.defaults().withAdditionMode(NativeLightingStyle.AdditionMode.HOST_VERTEX_RESPONSE_PARTIAL_SKY_V1);
+        boolean rejected=false;try{vertex.directGain(0,0,0,1,0,0,0,0,1,0,1);}catch(IllegalStateException expected){rejected=true;}
+        require(rejected,"Vertex-response mode requires an authored host table");
+        System.out.println("HOST_VERTEX_RESPONSE_CPU PASS triangleSamples=1683 nonlinearOrder=true");
     }
     private static void hostResponse(){
         var style=new NativeLightingStyle(NativeLightingStyle.AdditionMode.HOST_RESPONSE_RATIO_V1,.75f,12,.55f,.18f,.8f,.9f,1,0,255,1);

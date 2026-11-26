@@ -551,6 +551,8 @@ public:
         if (!m_scene || m_scene->GetSceneGraph()->GetMeshInstances().empty()) {
             if (lighting.direct) commands->clearTextureFloat(lighting.direct, nvrhi::AllSubresources, nvrhi::Color(1,1,1,0));
             if (lighting.indirect) commands->clearTextureFloat(lighting.indirect, nvrhi::AllSubresources, nvrhi::Color(0));
+            if (lighting.directionalSpecular) commands->clearTextureFloat(lighting.directionalSpecular, nvrhi::AllSubresources, nvrhi::Color(0));
+            if (lighting.sunPenumbra) commands->clearTextureFloat(lighting.sunPenumbra, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.geometry) commands->clearTextureFloat(lighting.geometry, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.identity) commands->clearTextureUInt(lighting.identity, nvrhi::AllSubresources, 0);
             lighting.EncodeOutputs(GetDevice(), commands);
@@ -714,6 +716,35 @@ public:
         if(changed.pendingTopologyRefresh)m_pendingDirectPreparation.push_back(std::move(changed));
     }
 
+    void PrepareNewDirectMeshes() {
+        static const bool enabled=[] {
+            const char* value=std::getenv("RTR_RTXPT_EARLY_MESH_PREPARATION");
+            return value&&std::string_view(value)=="1";
+        }();
+        if(!enabled||m_pendingDirectPreparation.empty()||m_pendingDirectGraphRefresh||!m_topLevelAS
+            ||!m_blasPool||!CanRenderNativeLightingLean(nullptr)||m_lastFrameAsyncPrefix)return;
+        Resources::Changes preparation;
+        std::unordered_set<donut::engine::MeshInfo*> seen;
+        for(const auto& change:m_pendingDirectPreparation){
+            for(const auto& mesh:change.buildMeshes){
+                if(!mesh->accelStruct&&PendingMeshInputs(*mesh)&&m_resources.IsLiveMesh(mesh)
+                    &&!mesh->isSkinPrototype&&!bvh::IsSkinnedMesh(*mesh)&&seen.insert(mesh.get()).second)
+                    preparation.buildMeshes.push_back(mesh);
+            }
+        }
+        if(preparation.buildMeshes.empty())return;
+        // Prepare fresh geometry on the owner timeline while the caller assembles
+        // the frame suffix. Scene tables, transforms and TLAS still publish in Render.
+        auto commands=OpenResourceCommands();
+        const auto timing=RtrGpuProfile::Begin(commands,"NativeEarlyMeshPreparation",-1);
+        static_cast<ManagedScene&>(*m_scene).UploadDirectPreparation(commands,preparation.buildMeshes);
+        BuildDirectMeshes(preparation,commands,false);
+        RtrGpuProfile::End(commands,timing);
+        commands->close();
+        const auto submitted=GetDevice()->executeCommandList(commands);
+        GetDevice()->queueWaitForCommandList(nvrhi::CommandQueue::Compute,nvrhi::CommandQueue::Graphics,submitted);
+    }
+
     std::unique_ptr<SampleUI> CreateUI(donut::app::DeviceManager* manager,
         SampleBaseApp& app, SampleUIData& data, bool ser,
         const CommandLineOptions&) override {
@@ -851,17 +882,20 @@ private:
         // No view-dependent culling or OMM can enter this lean path. Camera,
         // lighting and metadata-only changes do not alter the native TLAS.
         // Keep the original builder for every real geometry/pose/policy change.
-        const uint32_t tlasPolicy=(m_ui.AS.GPUTLASBuild?1u:0u)|(m_ui.AS.ForceOpaque?2u:0u);
+        const uint32_t tlasPolicy=(m_ui.AS.GPUTLASBuild?1u:0u)|(m_ui.AS.ForceOpaque?2u:0u)|(retainedDirectInputs?4u:0u);
         const bool buildTlas=m_directTlasDirty||sceneTlasChanged||m_directTlasIdentity!=m_topLevelAS.Get()
-            ||m_directTlasPolicy!=tlasPolicy;
+            ||m_directTlasPolicy!=tlasPolicy||(retainedDirectInputs&&!lighting.traversalMaskChanges.empty());
         {RtrDiagnostics::Scope tlasScope(RtrDiagnostics::TlasBuild,buildTlas?1:0);
             tlasScope.event[11]|=buildTlas?RtrDiagnostics::CacheMiss:RtrDiagnostics::CacheHit;
             const auto tlasTiming=buildTlas?RtrGpuProfile::Begin(m_commandList,"NativeTlas",-1):RtrGpuProfile::Token{};
             if(buildTlas){
                 if(retainedDirectInputs)m_directFrameInputs.Build(GetDevice(),m_commandList,m_topLevelAS,*graph,m_ui.AS.ForceOpaque,
                     static_cast<ManagedScene&>(*m_scene).RowChanges(),m_directBlasRevision,
-                    [](const auto& instance,float* transform){ManagedScene::CopyPublishedCurrentPose(instance,transform);});
-                else UpdateTLAS(m_commandList);
+                    [](const auto& instance,float* transform){ManagedScene::CopyPublishedCurrentPose(instance,transform);},
+                    [&](const auto& name){return m_resources.FindMeshInstance(name);},
+                    [&](const auto& instance){return lighting.traversalDisabled.empty()||!lighting.traversalDisabled.contains(instance->GetNode()->GetName())?1u:0u;},
+                    lighting.traversalMaskChanges);
+                else {UpdateTLAS(m_commandList);m_directFrameInputs.Reset();}
             }
             RtrGpuProfile::End(m_commandList,tlasTiming);}
         // Dispatch binds the live Scene buffers and its descriptor table itself;
@@ -878,6 +912,7 @@ private:
             m_lastGraphicsSubmit=GetDevice()->executeCommandList(m_commandList);}
         if(m_leanSignalArmed&&m_publishLeanSignal){m_publishLeanSignal();m_leanSignalPublished=true;m_leanSignalArmed=false;}
         m_directTlasDirty=false;m_directTlasIdentity=m_topLevelAS.Get();m_directTlasPolicy=tlasPolicy;
+        if(retainedDirectInputs)lighting.traversalMaskChanges.clear();
         m_lastFrameAsyncPrefix=false;
         GetDeviceManager()->SetVsyncEnabled(m_ui.ActualEnableVsync());
         {RtrDiagnostics::Scope phase(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-post-update"));PostUpdatePathTracing();}

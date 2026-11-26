@@ -13,7 +13,7 @@ param(
     [string]$DxcExecutable='build/upstream-rtxpt/source/External/dxc/build/native/bin/x64/dxc.exe',
     [string]$RuntimeDirectory='build/upstream-rtxpt/runtime/rtxpt_v.1.9.0_binaries/bin',
     [string]$ShaderName='',
-    [ValidateRange(1,16)][int]$Jobs=4,
+    [ValidateRange(1,16)][int]$Jobs=12,
     [ValidateRange(1,10)][double]$MemoryLimitGB=10,
     [switch]$CheckPaths
 )
