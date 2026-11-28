@@ -34,6 +34,7 @@ struct RtrNativeConstants
     float4 skyOcclusion; // diffuse obscurance strength, finite reach, reserved
     float4 wetFilmResponse; // roughness transition start/end, wet-film reflection scale
     uint4 cameraMediumSlots; // 0 = unspecified; UINT_MAX = no volume; otherwise instance index + 1
+    uint4 opticalViewport; // exact viewport width/height, allocated refinement jobs, reserved
 };
 ConstantBuffer<RtrNativeConstants> g : register(b0);
 RaytracingAccelerationStructure t_Scene : register(t0);
@@ -615,11 +616,18 @@ void RtrEvaluateSource(RtrReceiver receiver,uint slot,bool separateDynamic,inout
     uint visibilityMode=(uint(source.identity.w)>>2)&3;bool centerSupport=visibilityMode!=0;
     float3 centerDelta=source.position.xyz-receiver.position;
     float visibilityRadius=(uint(source.identity.w)&16)!=0?source.cone.x:source.extent.x;
-    bool insideSupport=centerSupport&&(visibilityMode==2?length(centerDelta)<=visibilityRadius+.005:all(abs(centerDelta)<=source.extent.xyz+.005));
+    // A receiver outside a box must keep the hemisphere and occlusion tests.
+    // Inflating the box turns adjacent, non-emissive faces into full-bright contacts.
+    bool insideSupport=centerSupport&&(visibilityMode==2?length(centerDelta)<=visibilityRadius+.005:all(abs(centerDelta)<=source.extent.xyz));
     float3 visibilityDelta=centerSupport?source.position.xyz-receiver.position:delta;
     float visibilityDistance=length(visibilityDelta);
     float3 direction=visibilityDistance>1e-5?visibilityDelta/visibilityDistance:receiver.normal;
     bool outsideHemisphere=!insideSupport&&dot(receiver.normal,direction)<=(centerSupport?.0001:0);
+#ifdef RTR_TERMINAL_PROBE
+    if(rtrProbeSelected&&centerSupport&&all(abs(centerDelta)<=source.extent.xyz+.02))
+        RTR_TERMINAL_PROBE(28,slot,float4(abs(centerDelta)-source.extent.xyz,
+            float((insideSupport?1:0)|(outsideHemisphere?2:0))));
+#endif
     if(!needStaticCoverage&&outsideHemisphere)return;
     [branch] if(!isLinear)attenuation=RtrFalloff(saturate(1-distance/source.direction.w),source.extent.w)/max(distance*distance,1);
     if(source.position.w==2){float cosine=dot(source.direction.xyz,-direction);
@@ -934,7 +942,7 @@ void RtrStoreDirectionalSpecular(uint2 pixel,bool valid,float opacity)
     }
 }
 
-float3 RtrReflectedSurface(RtrReceiver hit,bool resolveLighting)
+float3 RtrReflectedLight(RtrReceiver hit,bool resolveLighting)
 {
     if(g.style.moonAndMode.w>=2){
         // Native terrain color and the reflection must use the same host light
@@ -947,15 +955,25 @@ float3 RtrReflectedSurface(RtrReceiver hit,bool resolveLighting)
             float3 sunVisibility=1,moonVisibility=1;
             if(g.sun.w>0&&dot(hit.normal,g.sun.xyz)>0) sunVisibility=RtrShadow(hit,g.sun.xyz,1e20);
             if(g.moon.w>0&&dot(hit.normal,g.moon.xyz)>0) moonVisibility=RtrShadow(hit,g.moon.xyz,1e20);
+#ifdef RTR_TERMINAL_PROBE
+            RTR_TERMINAL_PROBE(29,covered?1:0,float4(local,hit.baseline.x));
+            RTR_TERMINAL_PROBE(30,0,float4(dynamic,hit.baseline.y));
+            RTR_TERMINAL_PROBE(31,0,float4(sunVisibility,g.sun.w));
+            RTR_TERMINAL_PROBE(32,0,float4(moonVisibility,g.moon.w));
+#endif
             response=RtrHostLitResponse(hit,local,dynamic,covered,sunVisibility,moonVisibility,0);
         }
-        float3 linearResponse=lerp(response/12.92,pow((response+.055)/1.055,2.4),step(.04045,response));
-        return hit.albedo*linearResponse;
+        return lerp(response/12.92,pow((response+.055)/1.055,2.4),step(.04045,response));
     }
     float local=hit.baseline.x*hit.baseline.x;
     float3 incident=hit.baseline.y*g.fogControl.w+local;
     if(resolveLighting) incident=hit.baseline.y*g.fogControl.w+RtrIncident(hit);
-    return hit.albedo*incident;
+    return incident;
+}
+
+float3 RtrReflectedSurface(RtrReceiver hit,bool resolveLighting)
+{
+    return hit.albedo*RtrReflectedLight(hit,resolveLighting);
 }
 
 float3 RtrFilmScene(float3 origin,float3 direction,float reach,float sky,bool resolveLighting)

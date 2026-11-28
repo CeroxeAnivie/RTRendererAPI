@@ -7,9 +7,9 @@
 
 // HDR/AOV packets have a separate descriptor and ownership protocol from the
 // legacy SDR SharedFrameProducer. All planes in a packet share one fence pair.
-inline constexpr size_t RtrLightingSignalCount=7;
+inline constexpr size_t RtrLightingSignalCount=8;
 
-template<size_t PlaneCount=4>
+template<size_t PlaneCount,bool LightingPacket>
 class RtrSignalFrameRing {
     struct Slot {
         std::array<nvrhi::TextureHandle,PlaneCount> textures;
@@ -73,7 +73,7 @@ public:
             std::array<jlong,PlaneCount> handles{};std::array<int,PlaneCount> formats{};
             for(unsigned i=0;i<PlaneCount;i++)if(sources[i]){
                 auto desc=sources[i]->getDesc();desc.isUAV=false;desc.isShaderResource=true;
-                if constexpr(PlaneCount==RtrLightingSignalCount){
+                if constexpr(LightingPacket){
                     // Toggling a signal in an available slot must not reallocate unrelated planes.
                     if(slot.width==width&&slot.height==height&&slot.textures[i]&&slot.textures[i]->getDesc().format==desc.format){
                         prepared[i]=slot.textures[i];sizes[i]=slot.allocation[i];handles[i]=slot.handles[i];formats[i]=slot.formats[i];
@@ -152,8 +152,8 @@ public:
         for(unsigned i=0;i<PlaneCount;i++)if(slot.textures[i]){
             result.insert(result.end(),{jlong(i),slot.formats[i],jlong(slot.allocation[i]),slot.handles[i]});++result[15];
         }
-        if constexpr(PlaneCount==RtrLightingSignalCount){result[0]=2;result.push_back(slot.encoding);result.push_back(slot.maximumGiBits);}
-        if constexpr(PlaneCount==8)result.insert(result.end(),slot.provenance.begin(),slot.provenance.end());
+        if constexpr(LightingPacket){result[0]=2;result.push_back(slot.encoding);result.push_back(slot.maximumGiBits);}
+        else result.insert(result.end(),slot.provenance.begin(),slot.provenance.end());
         slot.leased=true;RtrProtocolTrace::Record(5,adapter,0,latest,slot.generation,slot.sequence,slot.revision,slot.completion-1,slot.completion,0,3);return result;
     }
     void Release(nvrhi::IDevice* device,int index,uint64_t generation,uint64_t sequence,bool imported){
@@ -170,5 +170,5 @@ public:
     void Clear(bool deviceRemoved=false){std::lock_guard lock(mutex);if(!deviceRemoved)RequireRetiredLocked();for(auto& slot:slots){slot.textures={};slot.published=slot.leased=slot.returned=false;slot.width=slot.height=slot.mask=0;slot.completion=0;slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=recording=-1;}
 };
 
-using RtrSignalFrames=RtrSignalFrameRing<RtrLightingSignalCount>;
-using RtrSurfaceSignalFrames=RtrSignalFrameRing<8>;
+using RtrSignalFrames=RtrSignalFrameRing<RtrLightingSignalCount,true>;
+using RtrSurfaceSignalFrames=RtrSignalFrameRing<8,false>;

@@ -40,6 +40,20 @@ set_target_properties(rtr_frame_batch_selftest PROPERTIES
 set_target_properties(rtr_resource_protocol_selftest PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/adapter-tests"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/adapter-tests")
+
+set(rtr_optical_test_dir "${CMAKE_CURRENT_LIST_DIR}/../../test/cpp")
+add_custom_target(rtr_optical_cpu_check)
+foreach(test IN ITEMS RtrDielectricProbeProjectionSelfTest RtrDirectionalFluxGridSelfTest RtrFiniteOpticalEmissionSelfTest)
+    add_executable(${test} EXCLUDE_FROM_ALL "${rtr_optical_test_dir}/${test}.cpp")
+    target_compile_features(${test} PRIVATE cxx_std_20)
+    target_compile_definitions(${test} PRIVATE NOMINMAX)
+    set_target_properties(${test} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/adapter-tests"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/adapter-tests")
+    add_custom_target(${test}_check COMMAND "$<TARGET_FILE:${test}>" DEPENDS ${test} VERBATIM)
+    add_dependencies(rtr_optical_cpu_check ${test}_check)
+endforeach()
+
 if(RTXPT_D3D_AGILITY_SDK_VERSION)
     target_compile_definitions(rtrenderer_jvm_host PRIVATE
         RTXPT_D3D_AGILITY_SDK_VERSION=${RTXPT_D3D_AGILITY_SDK_VERSION})

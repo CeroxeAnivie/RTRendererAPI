@@ -23,7 +23,7 @@ final class RtxptLightingFrameLease implements LightingFrameLease {
             planeMask|=1<<ordinal;
             var signal=SIGNALS[ordinal];
             var format=switch(Math.toIntExact(data[i+1])){case 1->Format.RGBA16_FLOAT;case 2->Format.RGBA32_UINT;case 3->Format.RGBA32_FLOAT;case 4->Format.RGBA8_UNORM;default->throw new IllegalStateException("Unknown signal format");};
-            if(signal==NativeLightingPlan.Signal.DIELECTRIC_RADIANCE&&format!=Format.RGBA32_FLOAT)
+            if((signal==NativeLightingPlan.Signal.DIELECTRIC_RADIANCE||signal==NativeLightingPlan.Signal.DIELECTRIC_REFINEMENT)&&format!=Format.RGBA32_FLOAT)
                 throw new IllegalStateException("Dielectric radiance requires an RGBA32_FLOAT plane");
             planes.add(new Plane(signal,format,data[i+2],data[i+3]));
         }

@@ -14,7 +14,9 @@ public record NativeLightingPlan(int width,int height,Set<Signal> signals,int gi
          * BA is the unit screen-space normal toward light times (signed grid distance + 4*R). RGBA16_FLOAT. */
         SUN_SHADOW_PENUMBRA,
         /** RGBA32_FLOAT: scene-linear radiance in RGB, first dielectric hit distance along the camera ray in A (world units; zero means invalid). */
-        DIELECTRIC_RADIANCE
+        DIELECTRIC_RADIANCE,
+        /** Sparse exact-pixel supplement to DIELECTRIC_RADIANCE; see {@link LightingFrameLease}. */
+        DIELECTRIC_REFINEMENT
     }
     public enum DirectAlphaMode {
         /** Alpha is receiver opacity, zero for a missing receiver. */
@@ -68,6 +70,8 @@ public record NativeLightingPlan(int width,int height,Set<Signal> signals,int gi
         if(encoding==Encoding.COMPACT_RESPONSE_UNORM8&&style.maximumGain()>255)
             throw new IllegalArgumentException("Compact response gain supports a declared maximum of 255");
         if(signals.isEmpty())throw new IllegalArgumentException("Request at least one lighting signal");
+        if(signals.contains(Signal.DIELECTRIC_REFINEMENT)&&!signals.contains(Signal.DIELECTRIC_RADIANCE))
+            throw new IllegalArgumentException("Dielectric refinement supplements DIELECTRIC_RADIANCE");
         if(signals.contains(Signal.DIRECTIONAL_SPECULAR)&&!signals.contains(Signal.DIRECT_GAIN))
             throw new IllegalArgumentException("Directional specular reuses the visibility queries of DIRECT_GAIN");
         if(signals.contains(Signal.SUN_SHADOW_PENUMBRA)&&!signals.contains(Signal.DIRECT_GAIN))

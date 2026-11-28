@@ -1,5 +1,6 @@
 #pragma once
 #include "rtxpt_cached_bindings.h"
+#include "rtxpt_directional_flux_grid.h"
 #include "rtxpt_optical_triangle_emitters.h"
 
 // Bridge-only transport. Receivers and the acceleration structure are borrowed
@@ -14,13 +15,18 @@ class RtrDirectionalFlux {
         dm::float4 scale,inverseScale;
         std::array<Job,2> jobs{};
         std::array<uint32_t,4> finite{}; // source count, sample grid width
+        std::array<uint32_t,4> grid{}; // bin extent, receiver-guide phase
     };
-    static_assert(sizeof(Job)==96&&sizeof(Parameters)==304);
+    static_assert(sizeof(Job)==96&&sizeof(Parameters)==320);
     static constexpr uint32_t BinSlot=16,EmitterSlot=16,ConstantSlot=1,IndirectSlot=1,SampleBudget=65536,MaxAxis=512;
+    static constexpr uint32_t FluxSlices=3,GuideSlices=11;
+    enum Pass : size_t { Directional,Finite,ReceiverGuide,PassCount };
     nvrhi::BindingLayoutHandle layout;
     nvrhi::ComputePipelineHandle deposit,resolve;
-    nvrhi::BufferHandle constants,emptyEmitterBuffer,emitterBuffer;
-    std::array<RtrCachedBindings,2> bindings;
+    std::array<nvrhi::BufferHandle,PassCount> constants;
+    nvrhi::BufferHandle emptyEmitterBuffer,emitterBuffer;
+    nvrhi::TextureHandle directionalBins;
+    std::array<RtrCachedBindings,PassCount> bindings;
 
     static nvrhi::BufferHandle MakeEmitterBuffer(nvrhi::IDevice* device,size_t rows){
         nvrhi::BufferDesc desc;
@@ -95,8 +101,11 @@ public:
         auto nextResolve=pipeline("app/ProcessingPasses/RtrNativeFluxResolve.hlsl");
         nvrhi::BufferDesc cb;cb.byteSize=sizeof(Parameters);cb.isConstantBuffer=true;
         cb.initialState=nvrhi::ResourceStates::ConstantBuffer;cb.keepInitialState=true;cb.debugName="Directional flux parameters";
-        auto nextConstants=device->createBuffer(cb);
-        if(!nextConstants)throw std::runtime_error("Could not allocate directional flux constants");
+        std::array<nvrhi::BufferHandle,PassCount> nextConstants;
+        for(auto& parameters:nextConstants){
+            parameters=device->createBuffer(cb);
+            if(!parameters)throw std::runtime_error("Could not allocate directional flux constants");
+        }
         emptyEmitterBuffer=MakeEmitterBuffer(device,1);
         layout=std::move(nextLayout);deposit=std::move(nextDeposit);resolve=std::move(nextResolve);
         constants=std::move(nextConstants);
@@ -130,6 +139,10 @@ public:
             add(words+44,words+48,0x45d9f3bu);add(words+52,words+64,0x9e3779b9u);
         }
         if(!count)return;
+        const auto grid=finite?rtr::optical::DirectionalFluxGrid{width,height}:
+            rtr::optical::DirectionalIrradianceGrid(width,height,SampleBudget);
+        const bool reconstruct=grid.width!=width||grid.height!=height;
+        params.grid={grid.width,grid.height,0,0};
         dm::float4x4 inverseClip,cameraToWorld;
         std::memcpy(&inverseClip,words,64);std::memcpy(&cameraToWorld,words+16,64);
         params.worldToClip=dm::inverse(cameraToWorld*inverseClip);
@@ -141,12 +154,17 @@ public:
             if(totalFlux[c]*std::ldexp(1.,shift)>1073741824.)return;
             params.scale[c]=std::ldexp(1.f,shift);params.inverseScale[c]=std::ldexp(1.f,-shift);
         }
-        if(!bins){
-            auto desc=nvrhi::TextureDesc().setDimension(nvrhi::TextureDimension::Texture2DArray).setArraySize(3)
-                .setWidth(width).setHeight(height).setFormat(nvrhi::Format::R32_UINT).setIsUAV(true)
+        // Only directional flux uses the bounded irradiance grid. Finite
+        // sources retain their independent receiver-bin extent and lifetime.
+        auto& passBins=finite?bins:directionalBins;
+        const uint32_t slices=reconstruct?GuideSlices:FluxSlices;
+        if(!passBins||passBins->getDesc().width!=grid.width||passBins->getDesc().height!=grid.height||passBins->getDesc().arraySize!=slices){
+            auto desc=nvrhi::TextureDesc().setDimension(nvrhi::TextureDimension::Texture2DArray).setArraySize(slices)
+                .setWidth(grid.width).setHeight(grid.height).setFormat(nvrhi::Format::R32_UINT).setIsUAV(true)
                 .setInitialState(nvrhi::ResourceStates::UnorderedAccess).setKeepInitialState(true);
-            desc.debugName="Optical flux RGB bins";bins=device->createTexture(desc);
-            if(!bins)throw std::runtime_error("Could not allocate optical flux bins");
+            desc.debugName=finite?"Finite optical flux bins":"Directional optical flux bins";
+            passBins=device->createTexture(desc);
+            if(!passBins)throw std::runtime_error("Could not allocate optical flux bins");
         }
         auto desc=frameBindings;
         if(finite){
@@ -162,19 +180,30 @@ public:
                 item=nvrhi::BindingSetItem::Texture_UAV(IndirectSlot,finiteOutput);break;
             }
         }
-        desc.bindings.push_back(nvrhi::BindingSetItem::ConstantBuffer(ConstantSlot,constants));
-        desc.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(BinSlot,bins));
+        const size_t constantIndex=desc.bindings.size();
+        const auto pass=finite?Finite:Directional;
+        desc.bindings.push_back(nvrhi::BindingSetItem::ConstantBuffer(ConstantSlot,constants[pass]));
+        desc.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(BinSlot,passBins));
         desc.bindings.push_back(nvrhi::BindingSetItem::StructuredBuffer_SRV(EmitterSlot,finite?emitterBuffer:emptyEmitterBuffer));
-        auto set=bindings[finite].Get(device,desc,layout);
+        auto set=bindings[pass].Get(device,desc,layout);
         const auto scope=RtrGpuProfile::Begin(command,finite?"FiniteOpticalFlux":"DirectionalOpticalFlux",-1);
-        command->writeBuffer(constants,&params,sizeof(params));
-        command->clearTextureUInt(bins,nvrhi::AllSubresources,0);
+        command->writeBuffer(constants[pass],&params,sizeof(params));
+        command->clearTextureUInt(passBins,nvrhi::TextureSubresourceSet(0,1,0,FluxSlices),0);
+        if(reconstruct){
+            params.grid[2]=1;
+            command->writeBuffer(constants[ReceiverGuide],&params,sizeof(params));
+            desc.bindings[constantIndex]=nvrhi::BindingSetItem::ConstantBuffer(ConstantSlot,constants[ReceiverGuide]);
+            auto guide=bindings[ReceiverGuide].Get(device,desc,layout);
+            nvrhi::ComputeState state;state.pipeline=resolve;state.bindings={guide,sceneTable};
+            command->setTextureState(passBins,nvrhi::AllSubresources,nvrhi::ResourceStates::UnorderedAccess);
+            command->setComputeState(state);command->dispatch((grid.width+7)/8,(grid.height+7)/8);
+        }
         nvrhi::ComputeState state;state.pipeline=deposit;state.bindings={set,sceneTable};
-        command->setTextureState(bins,nvrhi::AllSubresources,nvrhi::ResourceStates::UnorderedAccess);
+        command->setTextureState(passBins,nvrhi::AllSubresources,nvrhi::ResourceStates::UnorderedAccess);
         command->setComputeState(state);command->dispatch((nx+7)/8,(ny+7)/8,count);
         // The two passes share a binding set, but the resolve reads other
         // workgroups' atomic writes. Order the bins even when bindings are cached.
-        command->setTextureState(bins,nvrhi::AllSubresources,nvrhi::ResourceStates::UnorderedAccess);
+        command->setTextureState(passBins,nvrhi::AllSubresources,nvrhi::ResourceStates::UnorderedAccess);
         if(finite)command->setTextureState(finiteOutput,nvrhi::AllSubresources,nvrhi::ResourceStates::UnorderedAccess);
         state.pipeline=resolve;command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);
         RtrGpuProfile::End(command,scope);

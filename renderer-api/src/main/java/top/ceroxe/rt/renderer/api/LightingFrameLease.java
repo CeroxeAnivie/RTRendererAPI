@@ -17,6 +17,18 @@ import java.util.List;
  * negated distance to a straight-ray opaque receiver in the camera medium;
  * RGB is then linear transmittance for that segment, to multiply only the
  * matching receiver's radiance. Zero alpha means no valid result.
+ * DIELECTRIC_REFINEMENT, when published, is a row-major RGBA32_FLOAT atlas at the
+ * packet extent, keyed by the submitted exact projection's viewport pixels. The
+ * first ceil(gridWidth*gridHeight/4) texels store one numeric pointer per grid
+ * cell in RGBA order. Zero means no refinement; otherwise subtract one to get
+ * the payload index. For each axis, the grid cell containing viewport pixel p
+ * is floor((p+0.5)*grid/viewport), and its first pixel is
+ * ceil(cell*viewport/grid-0.5). Each payload has ceil(viewportWidth/gridWidth)
+ * by ceil(viewportHeight/gridHeight) texels, in row-major order, starting after
+ * the pointer table. Valid pixels carry the same RGBA as DIELECTRIC_RADIANCE;
+ * skip padding outside the cell. Zero alpha is unresolved. Use the coarse
+ * signal when no usable refined sample matches the receiver. The adapter may
+ * omit this plane without an exact viewport or outside its supersampling budget.
  */
 public interface LightingFrameLease extends AutoCloseable {
     enum Format { RGBA16_FLOAT, RGBA32_UINT, RGBA32_FLOAT,RGBA8_UNORM }

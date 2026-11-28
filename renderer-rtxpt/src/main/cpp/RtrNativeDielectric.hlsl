@@ -1,23 +1,12 @@
 #define RTR_NATIVE_LIGHTING_LIBRARY
 #define RTR_WORK_STATISTICS 0
-#include "RtrNativeLighting.hlsl"
 
-RWTexture2D<float4> u_Dielectric : register(u15);
-
-#include "RtrNativeOpticalQueries.hlsli"
-
-static const uint RtrPathLimit = 24u;
-static const uint RtrWorkLimit = 48u;
-static const uint RtrDeferredLimit = 2u;
-// Don't launch a secondary branch carrying less than 0.2% of incident power.
-static const float RtrMinSecondaryPower = 1.f / 512.f;
-
-Texture2D<float4> t_DielectricSky : register(t15);
-
-#if RTR_DIELECTRIC_PROBE
+#if RTR_DIELECTRIC_PASS == 1
+#define RTR_DIELECTRIC_PROBE 1
 RWByteAddressBuffer u_OpticalProbe : register(u16);
 static bool rtrProbeSelected;
 static uint rtrProbeCount;
+static uint2 rtrTerminalProbePath;
 
 void RtrWriteProbe(uint kind,uint3 detail,float4 value){
     if(!rtrProbeSelected)return;
@@ -29,9 +18,22 @@ void RtrWriteProbe(uint kind,uint3 detail,float4 value){
     u_OpticalProbe.Store(8,rtrProbeCount);
 }
 #define RTR_PROBE(kind,detail,value) RtrWriteProbe(kind,detail,value)
+#define RTR_TERMINAL_PROBE(kind,detail,value) RtrWriteProbe(kind,uint3(rtrTerminalProbePath,detail),value)
 #else
 #define RTR_PROBE(kind,detail,value)
 #endif
+
+#include "RtrNativeLighting.hlsl"
+#include "RtrNativeOpticalQueries.hlsli"
+
+RWTexture2D<float4> u_Dielectric : register(u15);
+Texture2D<float4> t_DielectricSky : register(t15);
+
+static const uint RtrPathLimit = 24u;
+static const uint RtrWorkLimit = 48u;
+static const uint RtrDeferredLimit = 2u;
+// Don't launch a secondary branch carrying less than 0.2% of incident power.
+static const float RtrMinSecondaryPower = 1.f / 512.f;
 
 void RtrWriteOpticalSignal(uint2 pixel,float4 signal){
     RTR_PROBE(16,uint3(pixel,0),signal);
@@ -59,10 +61,35 @@ float3 RtrOpticalTerminal(RayDesc ray,RtrOpticalHit hit,uint path,uint depth)
     float3 emission=material.emissiveColor;
     if((material.flags&MaterialFlags_UseEmissiveTexture)!=0)
         emission*=RtrSampleTexture(material.emissiveTextureIndex,receiver.uv,mapping.emissivePolicy).rgb;
-    float3 lighting=RtrReflectedSurface(receiver,true)*receiver.diffuseWeight;
+#if RTR_DIELECTRIC_PROBE
+    rtrTerminalProbePath=uint2(path,depth);
+#endif
+    float3 incident=RtrReflectedLight(receiver,true);
+    float3 lighting=(receiver.albedo*incident)*receiver.diffuseWeight;
+    RTR_PROBE(20,uint3(path,depth,hit.primitive),float4(receiver.position,hit.distance));
+    RTR_PROBE(21,uint3(path,depth,mapping.basePolicy),float4(receiver.uv,0,0));
+    RTR_PROBE(22,uint3(path,depth,index),float4(receiver.albedo,receiver.diffuseWeight));
+    RTR_PROBE(23,uint3(path,depth,index),float4(incident,0));
+#if RTR_DIELECTRIC_PROBE
+    if(rtrProbeSelected&&(material.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0){
+        // Compare both filters at the exact same UV and preserve the address mode.
+        uint address=mapping.basePolicy&3u;
+        RTR_PROBE(26,uint3(path,depth,address|4u),RtrSampleTexture(material.baseOrDiffuseTextureIndex,receiver.uv,address|4u));
+        RTR_PROBE(27,uint3(path,depth,address),RtrSampleTexture(material.baseOrDiffuseTextureIndex,receiver.uv,address));
+    }
+#endif
     RTR_PROBE(10,uint3(path,depth,index),float4(lighting,receiver.diffuseWeight));
     RTR_PROBE(11,uint3(path,depth,material.flags),float4(emission,0));
     return lighting+emission;
+}
+
+float3 RtrOpticalAttenuate(RtrDielectricMedium medium,float distance,uint path,uint depth,float3 power)
+{
+    float3 transmittance=RtrDielectricBeerLambert(medium,distance);
+    RTR_PROBE(24,uint3(path,depth,0),float4(transmittance,distance));
+    power*=transmittance;
+    RTR_PROBE(25,uint3(path,depth,0),float4(power,medium.ior));
+    return power;
 }
 
 struct RtrDeferredOpticalRay {
@@ -75,16 +102,10 @@ struct RtrDeferredOpticalRay {
 #endif
 };
 
-[numthreads(8,8,1)]
-void main(uint2 pixel:SV_DispatchThreadID)
+float4 RtrTraceDielectric(uint2 pixel,uint2 extent)
 {
-    if(any(pixel>=g.grid.xy))return;
-#if RTR_DIELECTRIC_PROBE
-    rtrProbeSelected=all(pixel==u_OpticalProbe.Load2(0));
-    rtrProbeCount=0;
-#endif
     RtrSetSourcePixel(pixel);
-    float2 ndc=(float2(pixel)+.5)/float2(g.grid.xy)*float2(2,-2)+float2(-1,1)+g.farJitter.yz;
+    float2 ndc=(float2(pixel)+.5)/float2(extent)*float2(2,-2)+float2(-1,1)+g.farJitter.yz;
     float4 nearView=mul(g.inverseClip,float4(ndc,g.cameraNear.w,1)),farView=mul(g.inverseClip,float4(ndc,g.farJitter.x,1));
     RayDesc ray;
     ray.Origin=g.cameraNear.xyz;
@@ -103,7 +124,7 @@ void main(uint2 pixel:SV_DispatchThreadID)
             if(surface==0||t_SurfaceMaterials[surface-1].mediumPriorityPlusOne==0||
                 !RtrOpticalApply(stack,uint2(surface,instance),true)){
                 RTR_PROBE(14,uint3(0,0,1),float4(0,0,0,0));
-                RtrWriteOpticalSignal(pixel,0);return;
+                return 0;
             }
         }
     }
@@ -111,19 +132,19 @@ void main(uint2 pixel:SV_DispatchThreadID)
     [branch]if(immersed){
         if(!RtrFindOpticalHit(ray,RtrReceiverRole|RtrMediumRole,hit)){
             RTR_PROBE(14,uint3(0,0,2),float4(0,0,0,0));
-            RtrWriteOpticalSignal(pixel,0);return;
+            return 0;
         }
     }else{
         // Dedicated hardware mask lets ordinary pixels leave without traversing receiver geometry.
         if(!RtrFindOpticalHit(ray,RtrMediumRole,hit)||hit.surface==0||t_SurfaceMaterials[hit.surface-1].mediumPriorityPlusOne==0){
             RTR_PROBE(14,uint3(0,0,3),float4(0,0,0,0));
-            RtrWriteOpticalSignal(pixel,0);return;
+            return 0;
         }
         RayDesc front=ray;front.TMax=hit.distance+RtrOpticalContactTolerance(hit.distance);
         RtrOpticalHit blocker;
         if(RtrFindOpticalHit(front,RtrReceiverRole,blocker)){
             RTR_PROBE(17,uint3(blocker.instance,blocker.geometry,blocker.primitive),float4(blocker.distance,hit.distance,0,0));
-            RtrWriteOpticalSignal(pixel,0);return;
+            return 0;
         }
     }
 
@@ -176,9 +197,9 @@ void main(uint2 pixel:SV_DispatchThreadID)
                 }
             }
             if(!boundary){
-                power*=RtrDielectricBeerLambert(incident,hit.distance);
+                power=RtrOpticalAttenuate(incident,hit.distance,path,depth,power);
                 if(firstDistance==0){
-                    RtrWriteOpticalSignal(pixel,float4(power,-(straightDistance+hit.distance)));return;
+                    return float4(power,-(straightDistance+hit.distance));
                 }
                 float3 contribution=power*(eta*eta)*RtrOpticalTerminal(ray,hit,path,depth);
                 RTR_PROBE(12,uint3(path,depth,0),float4(contribution,eta));
@@ -197,7 +218,7 @@ void main(uint2 pixel:SV_DispatchThreadID)
                 incident=RtrDielectricActiveMedium(stack);
                 cameraIor=incident.ior;
             }
-            power*=RtrDielectricBeerLambert(incident,hit.distance);
+            power=RtrOpticalAttenuate(incident,hit.distance,path,depth,power);
             RtrDielectricStack crossed;
             if(!RtrOpticalCross(stack,event,crossed)){
                 RTR_PROBE(14,uint3(path,depth,7),float4(power,stack.count));
@@ -273,5 +294,81 @@ void main(uint2 pixel:SV_DispatchThreadID)
         RTR_PROBE(14,uint3(path,depth,8),float4(power,work));
     }
     // If none of the paths resolved, leave the host's raster color intact.
-    RtrWriteOpticalSignal(pixel,resolved?float4(radiance,firstDistance):0);
+    return resolved?float4(radiance,firstDistance):0;
 }
+
+#if RTR_DIELECTRIC_PASS < 2
+[numthreads(8,8,1)]
+void main(uint2 pixel:SV_DispatchThreadID)
+{
+    if(any(pixel>=g.grid.xy))return;
+#if RTR_DIELECTRIC_PROBE
+    rtrProbeSelected=all(pixel==u_OpticalProbe.Load2(0));
+    rtrProbeCount=0;
+#endif
+    RtrWriteOpticalSignal(pixel,RtrTraceDielectric(pixel,g.grid.xy));
+}
+#else
+RWTexture2D<float4> u_Refinement : register(u17);
+uint2 RtrAtlasPosition(uint index){return uint2(index%g.grid.x,index/g.grid.x);}
+uint2 RtrRefinementStride(){return (g.opticalViewport.xy+g.grid.xy-1)/g.grid.xy;}
+uint2 RtrViewportCellBegin(uint2 cell){return (2*cell*g.opticalViewport.xy+g.grid.xy-1)/(2*g.grid.xy);}
+uint RtrMetadataTexels(){return (g.grid.x*g.grid.y+3)/4;}
+
+#if RTR_DIELECTRIC_PASS == 2
+Texture2D<float4> t_CoarseDielectric : register(t17);
+RWByteAddressBuffer u_RefinementJobs : register(u18);
+
+float3 RtrEdgeMetric(float3 radiance){return sqrt(max(radiance,0)/(1+max(radiance,0)));}
+bool RtrNeedsRefinement(uint2 cell,float4 center){
+    if(center.a<0)return false; // Straight opaque receivers have a separate resolve.
+    float3 reference=RtrEdgeMetric(center.rgb);
+    [loop]for(int dy=-1;dy<=1;++dy){
+        [unroll]for(int dx=-1;dx<=1;++dx){
+            if(dx==0&&dy==0)continue;
+            int2 neighbor=int2(cell)+int2(dx,dy);
+            if(any(neighbor<0)||any(neighbor>=int2(g.grid.xy)))continue;
+            float4 other=t_CoarseDielectric.Load(int3(neighbor,0));
+            if((center.a>0)!=(other.a>0))return true;
+            if(center.a>0&&any(abs(reference-RtrEdgeMetric(other.rgb))>0.035))return true;
+        }
+    }
+    return false;
+}
+
+[numthreads(64,1,1)]
+void main(uint2 thread:SV_DispatchThreadID){
+    uint header=thread.x+thread.y*65536u;
+    if(header>=RtrMetadataTexels())return;
+    float4 pointers=0;
+    [unroll]for(uint lane=0;lane<4;++lane){
+        uint index=header*4+lane;
+        if(index>=g.grid.x*g.grid.y)break;
+        uint2 cell=RtrAtlasPosition(index);
+        if(!RtrNeedsRefinement(cell,t_CoarseDielectric.Load(int3(cell,0))))continue;
+        uint job;
+        u_RefinementJobs.InterlockedAdd(0,1,job);
+        if(job>=g.opticalViewport.z)continue;
+        u_RefinementJobs.Store(4*(job+1),index);
+        pointers[lane]=float(job+1);
+    }
+    u_Refinement[RtrAtlasPosition(header)]=pointers;
+}
+#else
+ByteAddressBuffer t_RefinementJobs : register(t16);
+
+[numthreads(64,1,1)]
+void main(uint thread:SV_DispatchThreadID){
+    uint2 stride=RtrRefinementStride();
+    uint samples=stride.x*stride.y;
+    uint job=thread/samples;
+    if(job>=min(t_RefinementJobs.Load(0),g.opticalViewport.z))return;
+    uint sample=thread%samples;
+    uint2 cell=RtrAtlasPosition(t_RefinementJobs.Load(4*(job+1)));
+    uint2 pixel=RtrViewportCellBegin(cell)+uint2(sample%stride.x,sample/stride.x);
+    if(any(pixel>=RtrViewportCellBegin(cell+1)))return;
+    uint atlasIndex=RtrMetadataTexels()+thread;
+    u_Refinement[RtrAtlasPosition(atlasIndex)]=RtrTraceDielectric(pixel,g.opticalViewport.xy);
+}
+#endif
+#endif

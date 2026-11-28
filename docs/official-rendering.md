@@ -78,6 +78,12 @@ IntroSample 是教学入口，官方明确不以性能与最终画质为目标�
 
 独立 `DIELECTRIC_RADIANCE` 信号追踪相机侧的闭合介质。宿主知道相机所在介质时，调用 `RenderFrameRequest.Builder.cameraMediumInstanceIds(...)`，传入包含相机的常驻场景实例 ID，并将 `minimumSceneRevision` 设为用于判断包含关系的确切场景版本。空列表表示相机确定在外部；不设置表示未提供。信号的 alpha 为正时，`RGB` 是界面后的线性辐亮度，alpha 是首界面距离；alpha 为负时，`RGB` 是到不透明命中的线性透射率，宿主只应在其深度匹配 `-alpha` 时乘到已有颜色。两种距离均沿归一化的相机射线，以世界单位计；alpha 为零表示没有有效结果。
 
+排查移动时的介质闪烁，在启动渲染进程前设置 `RTR_DIELECTRIC_PROBE_MOTION=x,y,z,firstSequence,count`。坐标使用光追场景的世界坐标，允许负数和小数；`count` 为 1–64。从首个 `sequence >= firstSequence` 且启用介质信号的帧开始，每个渲染器采集接下来的 `count` 个不同帧序号。每帧用该帧相机、抖动和介质纹理尺寸重投影世界点，再追踪覆盖它的 texel 中心射线。
+
+在标准错误中筛选 `RTXPT_DIELECTRIC_PROBE output`，按 `sequence` 和 `revision` 与宿主日志对齐。每帧一条，包含世界坐标 `worldX/worldY/worldZ`、纹理坐标 `x/y`、`status`、写入介质纹理的 `r/g/b/a` 和详情溢出标志 `overflow`。点在视野外时 `x=y=-1`；`status=empty-scene` 表示纹理被清零，`status=ok` 也可能带有表示无有效介质结果的 `a=0`。其他状态的 RGBA 不作为有效采样。它记录的是桥接层输出，不包括宿主后续采样或合成。
+
+旧的 `RTR_DIELECTRIC_PROBE=normalizedX,normalizedY,firstSequence` 仍可选固定屏幕位置抓一帧。两者同时设置时，有效的运动模式优先。
+
 向 `RenderFrameRequest.environment(...)` 传入带 `EnvironmentMap` 的环境后，介质射线离开最后一个界面且未命中场景时，会用折射或反射后的世界方向采样这张线性 HDR 图。贴图经度横向环绕、纬度纵向钳制；不乘 `ambientIntensity`，也不混入独立太阳。清除贴图就恢复常量 `skyRadiance`。启用介质信号且场景包含介质边界时才上传；相机、太阳和其他灯光的变化不会重传同一张图。
 
 显式 GPU 回归入口为 `:renderer-rtxpt:rtxptLightingResetNativeSelfTest` 和 `:renderer-rtxpt:rtxptLightingReentryNativeSelfTest`。前者覆盖多次重置和同名同布局复用，后者覆盖帧图元撤出、密集槽复用和重新进入。它们不会随普通 CPU `check` 自动启动。

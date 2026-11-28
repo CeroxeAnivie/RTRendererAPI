@@ -49,6 +49,13 @@ jobs:
             '--dependency-verification=strict','--no-daemon','--no-parallel','--max-workers=1','--console=plain'
           ) -TimeoutSeconds 5400
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify optical math contracts
+        shell: pwsh
+        run: |
+          ./tools/Invoke-BoundedBuild.ps1 -FilePath $env:RTRENDERER_CMAKE_EXECUTABLE -ArgumentList @(
+            '--build','build/upstream-rtxpt/native','--config','Release','--parallel','1','--target','rtr_optical_cpu_check'
+          ) -TimeoutSeconds 120
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Verify native rendering contracts serially
         shell: pwsh
         run: |

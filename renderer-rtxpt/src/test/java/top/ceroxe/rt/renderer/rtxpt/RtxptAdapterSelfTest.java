@@ -122,13 +122,13 @@ public final class RtxptAdapterSelfTest {
         rejected(()->RtxptInputContract.validateFrame(frame),"Beauty cannot silently accept frame-local signal fog");
         RtxptInputContract.validateFrame(frame,true);
         var words=RtxptNativeLightingParameters.pack(coverage,frame);
-        require(words.length==96&&words[71]==2&&words[80]==5&&words[81]==10&&words[82]==8&&words[83]==20&&words[84]==.75f,
+        require(words.length==98&&words[71]==2&&words[80]==5&&words[81]==10&&words[82]==8&&words[83]==20&&words[84]==.75f,
             "Coverage flags and both distance-fog ranges reach the extended shader ABI");
         require(RtxptNativeLightingParameters.pack(original,frame(0))[71]==0,"Default plan retains its original fast-path flag");
         var sky=coverage.withSkyOcclusion(.28f,16).withEncoding(NativeLightingPlan.Encoding.HDR_FLOAT16)
             .withSurfaceWetness(.6f);
         var skyWords=RtxptNativeLightingParameters.pack(sky,frame);
-        require(skyWords.length==96&&skyWords[71]==2&&skyWords[84]==.75f&&skyWords[88]==.28f&&skyWords[89]==16,
+        require(skyWords.length==98&&skyWords[71]==2&&skyWords[84]==.75f&&skyWords[88]==.28f&&skyWords[89]==16,
             "Diffuse sky obscurance and host-selected material response share the native lighting ABI");
         require(RtxptNativeLightingParameters.pack(sky.withSkyOcclusion(0,16),frame)[89]==1,
             "Disabled sky obscurance publishes a valid neutral reach");

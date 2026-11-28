@@ -1,17 +1,34 @@
 #ifndef RTR_OPTICAL_FLUX_BINS_HLSLI
 #define RTR_OPTICAL_FLUX_BINS_HLSLI
 
-// Bind one R32_UINT UAV with three array slices (R, G, B at 0, 1, 2).
-// The caller clears all slices and orders the clear, deposits and resolve with
+float RtrFluxFootprintHalfWidth(float emissionArea,float projectedReceiverArea)
+{
+    return projectedReceiverArea>0.f?min(1.5f,max(.5f,.5f*sqrt(emissionArea/projectedReceiverArea))):.5f;
+}
+
+// Overlap of a unit pixel interval and the footprint. Divide the product of
+// the two axis overlaps by the square's area to conserve the sample's power.
+float RtrFluxPixelWeight(int texel,float center,float halfWidth)
+{
+    const float offset=float(texel)-center;
+    return max(0.f,min(offset+1.f,halfWidth)-max(offset,-halfWidth));
+}
+
+bool RtrFluxMatchesPlane(float normalCosine,float planeError,float tolerance)
+{
+    return normalCosine>.99999f&&abs(planeError)<=tolerance;
+}
+
+#ifdef __HLSL_VERSION
+// Bind one R32_UINT UAV with RGB in the first three array slices.
+// The caller clears those slices and orders the clear, deposits and resolve with
 // UAV barriers. This include owns no bindings or scene/receiver resources.
 //
 // A texel is an already validated receiver in this grid's mip 0. Project the
-// photon terminal hit with the receiver grid's current-frame view and jitter:
-// require finite coordinates in [0,width) x [0,height), then floor to uint2.
-// Require the same frame, instance/geometry/primitive and geometric face side
-// as the visible receiver, and abs(dot(hit - receiver, unitGeometricNormal))
-// within the caller's world-space plane-distance tolerance. Reject mismatches;
-// never clamp coordinates, search neighboring texels, or splat across texels.
+// photon terminal hit with the receiver grid's current-frame view and jitter.
+// A footprint may touch several texels, but every deposit must validate the
+// visible receiver and total weights must not exceed one. Reject off-grid or
+// occluded parts of the footprint instead of redirecting their energy.
 
 static const float RtrOpticalFluxMaxScaled = 2147483648.0f; // 2^31, exact in FP32.
 
@@ -42,14 +59,18 @@ void RtrOpticalFluxDeposit(RWTexture2DArray<uint> bins, uint2 texel,
 // screen area or photon count. An invalid area has no irradiance. The caller
 // supplies a valid in-bounds texel and keeps dequantized flux and irradiance
 // within FP32 range; the resolve itself is subject to FP32 rounding.
-float3 RtrOpticalFluxResolve(RWTexture2DArray<uint> bins, uint2 texel,
-    float3 inverseScale, float receiverWorldArea)
+uint3 RtrOpticalFluxLoad(RWTexture2DArray<uint> bins,uint2 texel)
+{
+    return uint3(bins[uint3(texel,0u)],bins[uint3(texel,1u)],bins[uint3(texel,2u)]);
+}
+
+float3 RtrOpticalFluxResolve(uint3 total,float3 inverseScale,float receiverWorldArea)
 {
     if (!(receiverWorldArea > 0.0f && isfinite(receiverWorldArea)))
         return 0.0f;
 
-    uint3 total = uint3(bins[uint3(texel, 0u)], bins[uint3(texel, 1u)], bins[uint3(texel, 2u)]);
     return (float3(total) * inverseScale) / receiverWorldArea;
 }
 
+#endif
 #endif

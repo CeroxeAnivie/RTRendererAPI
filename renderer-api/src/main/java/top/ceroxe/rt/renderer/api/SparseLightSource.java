@@ -24,10 +24,10 @@ public record SparseLightSource(long id,Shape shape,double x,double y,double z,
     /** Finite inverse-square field, or intensity * max(1 - L1(nearest-point delta)/range, 0). */
     public enum Attenuation { INVERSE_SQUARE_FINITE, MANHATTAN_LINEAR }
     /** Opt-in center visibility fields, with attenuation still measured to the
-     * nearest AABB point. V1 uses world-unit tolerances: support +.005, endpoint
-     * inset .004, shading-normal origin offset .003, ray minimum .001, hemisphere
-     * cutoff .0001. BOX stops at the center ray's near AABB boundary and treats
-     * points in its expanded AABB as visible. SPHERE treats the common half extent
+     * nearest AABB point. Center rays use a world-unit endpoint inset of .004,
+     * shading-normal origin offset of .003, ray minimum of .001, and hemisphere
+     * cutoff of .0001. BOX stops at the center ray's near AABB boundary and treats
+     * only points on or inside the actual AABB as visible. SPHERE treats the common half extent
      * as radius, uses distance-radius-.004 (at least .002) and direct visibility
      * at {@code distance <= radius + .005}. No instance/occluder is globally excluded.
      * An explicit visibilityRadius overrides only the SPHERE radius; the emitting

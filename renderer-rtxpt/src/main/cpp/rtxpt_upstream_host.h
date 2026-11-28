@@ -558,7 +558,12 @@ public:
             if (lighting.indirect) commands->clearTextureFloat(lighting.indirect, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.directionalSpecular) commands->clearTextureFloat(lighting.directionalSpecular, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.sunPenumbra) commands->clearTextureFloat(lighting.sunPenumbra, nvrhi::AllSubresources, nvrhi::Color(0));
-            if (lighting.dielectricRadiance) commands->clearTextureFloat(lighting.dielectricRadiance, nvrhi::AllSubresources, nvrhi::Color(0));
+            if (lighting.dielectricRadiance) {
+                commands->clearTextureFloat(lighting.dielectricRadiance, nvrhi::AllSubresources, nvrhi::Color(0));
+                if(lighting.dielectricRefinement) commands->clearTextureFloat(lighting.dielectricRefinement,nvrhi::AllSubresources,nvrhi::Color(0));
+                lighting.dielectricProbe.Select(lighting.sequence,lighting.sceneRevision,lighting.width,lighting.height,
+                    lighting.constants.words.data(),true);
+            }
             if (lighting.geometry) commands->clearTextureFloat(lighting.geometry, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.identity) commands->clearTextureUInt(lighting.identity, nvrhi::AllSubresources, 0);
             lighting.EncodeOutputs(GetDevice(), commands);

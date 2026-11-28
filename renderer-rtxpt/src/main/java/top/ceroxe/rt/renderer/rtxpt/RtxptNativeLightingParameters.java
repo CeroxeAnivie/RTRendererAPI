@@ -7,9 +7,12 @@ final class RtxptNativeLightingParameters {
     static float[] pack(NativeLightingPlan plan,RenderFrameRequest frame) {
         var sky=plan.skyOcclusion();
         boolean skyActive=sky!=null&&sky.strength()>0;
-        float[] values=new float[96];var camera=frame.camera();
+        float[] values=new float[98];var camera=frame.camera();
         if(camera.hasExactProjection()) {
             var exact=camera.exactProjection();
+            if(plan.signals().contains(NativeLightingPlan.Signal.DIELECTRIC_REFINEMENT)){
+                values[96]=exact.viewportWidth();values[97]=exact.viewportHeight();
+            }
             if(!exact.hasPerspectiveProjection())
                 throw new IllegalArgumentException("Native lighting currently requires a perspective exact projection");
             var inverse=exact.inverseClipFromView();var toWorld=exact.cameraToWorld();

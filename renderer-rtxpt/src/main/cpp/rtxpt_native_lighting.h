@@ -27,14 +27,16 @@ public:
     static constexpr uint32_t AbiVersion=1;
     static constexpr unsigned DielectricSignal=6;
     static constexpr uint32_t DielectricMask=1u<<DielectricSignal,LegacySignalMask=DielectricMask-1;
+    static constexpr uint32_t RefinementMask=DielectricMask<<1;
     static constexpr uint32_t DielectricUav=15,DielectricSkySrv=15,DielectricSkyFlag=1u<<7;
-    struct alignas(16) Constants {std::array<float,96> words{};std::array<uint32_t,4> cameraSlots{};};
+    static constexpr uint32_t RefinementUav=17,CoarseDielectricSrv=17,RefinementJobsUav=18,RefinementJobsSrv=16;
+    struct alignas(16) Constants {std::array<float,96> words{};std::array<uint32_t,4> cameraSlots{},opticalViewport{};};
     std::optional<std::vector<std::string>> cameraVolumes;
     struct InstanceAttributes {float4 rolesVisibility={23,1,0,0};float4 baseline={1,1,0,0};std::array<float4,3> explicitPrevious{};float4 surfaceVisibility={1,0,0,0};};
     struct GeometryAttributes {uint32_t offset=0,triangles=0;std::array<uint32_t,4> texturePolicies{};float maskedOpacity=1.f;uint32_t surfaceSelector=0;};
     using VertexAttributes=rtr::upstream::ReceiverVertex;
     static_assert(sizeof(VertexAttributes)==16);
-    static_assert(sizeof(Constants)==400&&sizeof(InstanceAttributes)==96&&sizeof(GeometryAttributes)==32);
+    static_assert(sizeof(Constants)==416&&sizeof(InstanceAttributes)==96&&sizeof(GeometryAttributes)==32);
     std::function<std::array<uint32_t,4>(const std::string&)> texturePolicies;
     std::function<rtr::upstream::MeshSurfaceSlots(const std::string&)> surfaceSlots;
     std::function<void(std::vector<rtr::upstream::SurfaceMaterialRow>&,std::vector<uint32_t>&)> surfaceUpdates;
@@ -64,6 +66,7 @@ public:
     nvrhi::BufferHandle deepReceivers;
     std::array<nvrhi::BufferHandle,3> deepConstants;
     RtrCachedBindings dispatchBindings,encodeBindings,penumbraDispatchBindings,dielectricDispatchBindings;
+    RtrCachedBindings dielectricClassifyBindings,dielectricRefineBindings;
     std::array<RtrCachedBindings,2> sourceHistoryBindings;
     nvrhi::BindingLayoutHandle sourceHistoryLayout;
     std::array<nvrhi::TextureHandle,2> sourceHistory;
@@ -108,10 +111,15 @@ public:
     nvrhi::BindingLayoutHandle penumbraLayout;
     nvrhi::ComputePipelineHandle penumbraPipeline;
     nvrhi::TextureHandle dielectricRadiance;
+    nvrhi::TextureHandle dielectricRefinement;
+    nvrhi::BufferHandle dielectricRefinementJobs;
+    uint32_t refinementCapacity=0;
     nvrhi::TextureHandle dielectricSky;
     std::vector<float> pendingDielectricSky;
     nvrhi::BindingLayoutHandle dielectricLayout;
     nvrhi::ComputePipelineHandle dielectricPipeline;
+    nvrhi::BindingLayoutHandle dielectricClassifyLayout,dielectricRefineLayout;
+    nvrhi::ComputePipelineHandle dielectricClassifyPipeline,dielectricRefinePipeline;
     RtrDielectricProbe dielectricProbe;
     RtrDirectionalFlux directionalFlux;
     bool compactEncoding=false;
@@ -538,11 +546,12 @@ public:
         }
     }
     void Configure(const std::vector<float>& parameters){
-        if(parameters.size()!=96)throw std::invalid_argument("Native-lighting parameters require 96 words");
+        if(parameters.size()!=98)throw std::invalid_argument("Native-lighting parameters require 98 words");
         for(auto v:parameters)if(!std::isfinite(v))throw std::invalid_argument("Non-finite native-lighting parameter");
         auto integer=[&](size_t i,uint32_t minimum,uint32_t maximum){float value=parameters[i];
             if(value<float(minimum)||value>float(maximum)||float(uint32_t(value))!=value)throw std::invalid_argument("Invalid native-lighting integer parameter");return uint32_t(value);};
-        uint32_t w=integer(40,1,16384),h=integer(41,1,16384),outputs=integer(42,1,DielectricMask|LegacySignalMask),samples=integer(43,0,8);
+        uint32_t w=integer(40,1,16384),h=integer(41,1,16384),outputs=integer(42,1,RefinementMask|DielectricMask|LegacySignalMask),samples=integer(43,0,8);
+        if((outputs&RefinementMask)&&!(outputs&DielectricMask))throw std::invalid_argument("Dielectric refinement requires its coarse plane");
         if((outputs&48)&&!(outputs&1))throw std::invalid_argument("Directional lighting evidence requires direct gain");
         if(parameters[85]<0)throw std::invalid_argument("Invalid directional source angular radius");
         if(parameters[88]<0||parameters[88]>1||parameters[89]<=0)
@@ -553,7 +562,18 @@ public:
             throw std::invalid_argument("Invalid native-lighting GI budget or offset");
         if(parameters[47]<0||parameters[47]>1||parameters[55]<0||parameters[55]>1)
             throw std::invalid_argument("Style directional weights must be in [0,1]");
-        Constants prepared;std::copy(parameters.begin(),parameters.end(),prepared.words.begin());
+        Constants prepared;std::copy_n(parameters.begin(),prepared.words.size(),prepared.words.begin());
+        if(outputs&RefinementMask){
+            const uint32_t vw=integer(96,0,16384),vh=integer(97,0,16384);
+            if(vw>=w&&vh>=h&&vw<=4*w&&vh<=4*h&&(vw>w||vh>h)){
+                const uint32_t rays=((vw+w-1)/w)*((vh+h-1)/h);
+                const uint32_t atlasTexels=w*h-(w*h+3)/4;
+                // Bound work independently of the number of discontinuities and the display size.
+                const uint32_t jobs=std::min({atlasTexels/rays,vw*vh/(32*rays),16384u});
+                if(jobs)prepared.opticalViewport={vw,vh,jobs,0};
+            }
+            if(!prepared.opticalViewport[2])outputs&=~RefinementMask;
+        }
         auto* integers=reinterpret_cast<uint32_t*>(prepared.words.data());integers[40]=w;integers[41]=h;integers[42]=outputs;integers[43]=samples;
         // Counter enable is not a float identity payload. The caller updates it
         // from the actual diagnostic setting, separately from required state.
@@ -584,6 +604,7 @@ public:
         };
         retireBindings(dispatchBindings);retireBindings(encodeBindings);retireBindings(penumbraDispatchBindings);
         retireBindings(dielectricDispatchBindings);
+        retireBindings(dielectricClassifyBindings);retireBindings(dielectricRefineBindings);
         for(const auto& buffer:old.buffers)if(buffer)directionalFlux.RetireBindingFor(buffer,nullptr,old.bindings);
         for(const auto& texture:old.textures)if(texture)directionalFlux.RetireBindingFor(nullptr,texture,old.bindings);
         for(auto& cache:sourceHistoryBindings)retireBindings(cache);
@@ -684,6 +705,26 @@ public:
             if(dielectricRadiance)Retire(device,{}, {dielectricRadiance});
             dielectricRadiance=std::move(next);
         }
+        if(extentChanged||((mask^integers[42])&RefinementMask)){
+            nvrhi::TextureHandle next;
+            if(integers[42]&RefinementMask){
+                auto desc=dielectricRadiance->getDesc();desc.debugName="Sparse exact-pixel dielectric radiance";
+                next=device->createTexture(desc);
+                if(!next)throw std::runtime_error("Could not allocate dielectric refinement atlas");
+            }
+            if(dielectricRefinement)Retire(device,{}, {dielectricRefinement});
+            dielectricRefinement=std::move(next);
+        }
+        if(dielectricRefinement&&refinementCapacity<constants.opticalViewport[2]){
+            nvrhi::BufferDesc desc;desc.byteSize=(1+constants.opticalViewport[2])*sizeof(uint32_t);
+            desc.canHaveUAVs=true;desc.canHaveRawViews=true;
+            desc.initialState=nvrhi::ResourceStates::UnorderedAccess;desc.keepInitialState=true;
+            desc.debugName="Dielectric refinement job queue";
+            auto next=device->createBuffer(desc);
+            if(!next)throw std::runtime_error("Could not allocate dielectric refinement jobs");
+            if(dielectricRefinementJobs)Retire(device,{dielectricRefinementJobs});
+            dielectricRefinementJobs=std::move(next);refinementCapacity=constants.opticalViewport[2];
+        }
         if(extentChanged||mask!=integers[42])retainedSignals=false;
         width=integers[40];height=integers[41];mask=integers[42];
         if(directionalFlux.bins&&(extentChanged||!indirect||!mediumTraversalCount)){
@@ -698,7 +739,7 @@ public:
             auto nextLayout=device->createBindingLayout(desc);
             if(!nextLayout)throw std::runtime_error("Could not prepare dielectric radiance bindings");
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={nextLayout,bindlessLayout};
-            std::vector<donut::engine::ShaderMacro> macros{{"RTR_DIELECTRIC_PROBE","0"}};
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_DIELECTRIC_PASS","0"}};
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeDielectric.hlsl","main",&macros,nvrhi::ShaderType::Compute);
             auto nextPipeline=CreateLightingPipeline(device,pso,"dielectric-radiance");
             if(!nextPipeline)throw std::runtime_error("Could not prepare dielectric radiance pipeline");
@@ -710,11 +751,39 @@ public:
             auto nextLayout=device->createBindingLayout(desc);
             if(!nextLayout)throw std::runtime_error("Could not prepare dielectric probe bindings");
             nvrhi::ComputePipelineDesc pso;pso.bindingLayouts={nextLayout,bindlessLayout};
-            std::vector<donut::engine::ShaderMacro> macros{{"RTR_DIELECTRIC_PROBE","1"}};
+            std::vector<donut::engine::ShaderMacro> macros{{"RTR_DIELECTRIC_PASS","1"}};
             pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeDielectric.hlsl","main",&macros,nvrhi::ShaderType::Compute);
             auto nextPipeline=CreateLightingPipeline(device,pso,"dielectric-probe");
             if(!nextPipeline)throw std::runtime_error("Could not prepare dielectric probe pipeline");
             dielectricProbe.layout=nextLayout;dielectricProbe.pipeline=nextPipeline;
+        }
+        if(dielectricRefinement&&!dielectricRefinePipeline){
+            nvrhi::BindingLayoutDesc classify;classify.visibility=nvrhi::ShaderType::Compute;
+            classify.bindings={nvrhi::BindingLayoutItem::ConstantBuffer(0),nvrhi::BindingLayoutItem::Texture_SRV(CoarseDielectricSrv),
+                nvrhi::BindingLayoutItem::Texture_UAV(RefinementUav),nvrhi::BindingLayoutItem::RawBuffer_UAV(RefinementJobsUav)};
+            auto classifyLayout=device->createBindingLayout(classify);
+            auto refine=*dielectricLayout->getDesc();
+            refine.bindings.erase(std::remove_if(refine.bindings.begin(),refine.bindings.end(),[](const auto& item){
+                return item.slot==DielectricUav&&item.type==nvrhi::ResourceType::Texture_UAV;
+            }),refine.bindings.end());
+            refine.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(RefinementUav));
+            refine.bindings.push_back(nvrhi::BindingLayoutItem::RawBuffer_SRV(RefinementJobsSrv));
+            auto refineLayout=device->createBindingLayout(refine);
+            if(!classifyLayout||!refineLayout)throw std::runtime_error("Could not prepare dielectric refinement bindings");
+            auto create=[&](const char* pass,const char* name,bool trace){
+                nvrhi::ComputePipelineDesc pso;
+                if(trace)pso.bindingLayouts={refineLayout,bindlessLayout};
+                else pso.bindingLayouts={classifyLayout};
+                std::vector<donut::engine::ShaderMacro> macros{{"RTR_DIELECTRIC_PASS",pass}};
+                pso.CS=factory.CreateShader("app/ProcessingPasses/RtrNativeDielectric.hlsl","main",&macros,nvrhi::ShaderType::Compute);
+                auto pipeline=CreateLightingPipeline(device,pso,name);
+                if(!pipeline)throw std::runtime_error(std::string("Could not prepare ")+name);
+                return pipeline;
+            };
+            auto classifyPipeline=create("2","dielectric-classify",false);
+            auto refinePipeline=create("3","dielectric-refine",true);
+            dielectricClassifyLayout=classifyLayout;dielectricRefineLayout=refineLayout;
+            dielectricClassifyPipeline=classifyPipeline;dielectricRefinePipeline=refinePipeline;
         }
         if(sunPenumbra&&!penumbraPipeline){
             auto desc=*layout->getDesc();
@@ -826,8 +895,8 @@ public:
         reconstruction.Prepare(device,factory,layout,bindlessLayout,sourceHistoryLayout,width,height,groupVariant,maximum,allDynamic,channelMaximum);
     }
     float maximumGi()const{return constants.words[70];}
-    std::array<nvrhi::TextureHandle,DielectricSignal+1> Outputs()const{
-        return {compactEncoding?compactDirect:direct,compactEncoding?compactIndirect:(reconstruction.requested&&reconstruction.valid?reconstruction.result:indirect),geometry,identity,directionalSpecular,sunPenumbra,dielectricRadiance};
+    std::array<nvrhi::TextureHandle,DielectricSignal+2> Outputs()const{
+        return {compactEncoding?compactDirect:direct,compactEncoding?compactIndirect:(reconstruction.requested&&reconstruction.valid?reconstruction.result:indirect),geometry,identity,directionalSpecular,sunPenumbra,dielectricRadiance,dielectricRefinement};
     }
     void PrepareCompact(nvrhi::IDevice* device,donut::engine::ShaderFactory& factory){
         if(!compactEncoding||!(mask&3)){
@@ -1285,7 +1354,7 @@ public:
         const char* disableReuse=std::getenv("RTR_RTXPT_DISABLE_SIGNAL_REUSE");
         const bool retain=retainSignalsAllowed&&!workStatisticsEnabled&&!diagnosticDecomposition
             &&(!disableReuse||std::string(disableReuse)!="1");
-        const bool probeFrame=dielectricRadiance&&dielectricProbe.Pending(sequence);
+        const bool probeFrame=dielectricRadiance&&dielectricProbe.Select(sequence,sceneRevision,width,height,constants.words.data());
         const bool runFiniteFlux=indirect&&mediumTraversalCount&&directionalFlux.Prepared()&&!directionalFlux.triangles.Empty();
         // RR rewrites its result every evaluation. In this case the finite
         // pass must composite again, without entering the RR history.
@@ -1296,6 +1365,7 @@ public:
             &&std::memcmp(constants.words.data(),retainedConstants.words.data(),72*sizeof(float))==0
             &&std::memcmp(constants.words.data()+80,retainedConstants.words.data()+80,16*sizeof(float))==0
             &&constants.cameraSlots==retainedConstants.cameraSlots
+            &&constants.opticalViewport==retainedConstants.opticalViewport
             &&(words[75]&~16u)==(reinterpret_cast<const uint32_t*>(retainedConstants.words.data())[75]&~16u);
         if(reuse){
             RtrGpuProfile::End(command,uploadScope);
@@ -1338,8 +1408,23 @@ public:
         nvrhi::BindingSetDesc fluxBindings;
         if(runDirectionalFlux||runFiniteFlux)fluxBindings=bindings;
         nvrhi::IBindingSet* dielectricBinding=nullptr;
+        nvrhi::IBindingSet* classifyBinding=nullptr;
+        nvrhi::IBindingSet* refineBinding=nullptr;
         nvrhi::BindingSetHandle probeBinding;
         if(dielectricRadiance){
+            if(dielectricRefinement){
+                nvrhi::BindingSetDesc classify;
+                classify.bindings={nvrhi::BindingSetItem::ConstantBuffer(0,constantBuffer),
+                    nvrhi::BindingSetItem::Texture_SRV(CoarseDielectricSrv,dielectricRadiance),
+                    nvrhi::BindingSetItem::Texture_UAV(RefinementUav,dielectricRefinement),
+                    nvrhi::BindingSetItem::RawBuffer_UAV(RefinementJobsUav,dielectricRefinementJobs)};
+                classifyBinding=dielectricClassifyBindings.Get(device,classify,dielectricClassifyLayout);
+                auto refine=bindings;
+                refine.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(DielectricSkySrv,mappedSky?dielectricSky.Get():fallbackSky));
+                refine.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(RefinementUav,dielectricRefinement));
+                refine.bindings.push_back(nvrhi::BindingSetItem::RawBuffer_SRV(RefinementJobsSrv,dielectricRefinementJobs));
+                refineBinding=dielectricRefineBindings.Get(device,refine,dielectricRefineLayout);
+            }
             bindings.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(DielectricUav,dielectricRadiance));
             bindings.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(DielectricSkySrv,mappedSky?dielectricSky.Get():fallbackSky));
             if(probeFrame){
@@ -1354,13 +1439,27 @@ public:
             bindings.bindings.pop_back();
         }
         auto dispatchDielectric=[&]{
-            if(probeFrame)dielectricProbe.Begin(command,sequence,sceneRevision,width,height);
+            if(probeFrame)dielectricProbe.Begin(command);
             const auto scope=RtrGpuProfile::Begin(command,"DielectricRadiance",-1);
             nvrhi::ComputeState state;state.pipeline=probeFrame?dielectricProbe.pipeline:dielectricPipeline;
             state.bindings={dielectricBinding,scene->GetDescriptorTable()};
             command->setComputeState(state);command->dispatch((width+7)/8,(height+7)/8);
             RtrGpuProfile::End(command,scope);
             if(probeFrame)dielectricProbe.End(command);
+            if(refineBinding){
+                const auto refineScope=RtrGpuProfile::Begin(command,"DielectricRefinement",-1);
+                command->clearBufferUInt(dielectricRefinementJobs,0);
+                const uint32_t headers=(width*height+3)/4;
+                const uint32_t strideX=(constants.opticalViewport[0]+width-1)/width;
+                const uint32_t strideY=(constants.opticalViewport[1]+height-1)/height;
+                nvrhi::ComputeState classify;classify.pipeline=dielectricClassifyPipeline;classify.bindings={classifyBinding};
+                command->setComputeState(classify);
+                command->dispatch(std::min((headers+63)/64,1024u),(headers+65535)/65536);
+                state.pipeline=dielectricRefinePipeline;state.bindings={refineBinding,scene->GetDescriptorTable()};
+                command->setComputeState(state);
+                command->dispatch((constants.opticalViewport[2]*strideX*strideY+63)/64);
+                RtrGpuProfile::End(command,refineScope);
+            }
         };
         auto rememberSignals=[&]{
             if(retain){retainedConstants=constants;retainedReconstruction=reconstruction.requested;retainedInputGeneration=inputGeneration;
