@@ -9,7 +9,12 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Java owns the direct packet and pins it while the native owner consumes it. */
 final class RtxptMemoryResources {
+    private static final long MAX_PACKET_BYTES=512L*1024*1024;
     static final int PROTOCOL=0x5244525d; // Native generation of missing flat normals from canonical indexed input.
+    static void validatePacketSizes(long packetBytes,long transferBytes){
+        if(packetBytes<=0||packetBytes>MAX_PACKET_BYTES)throw new IllegalArgumentException("Resource packet exceeds 512 MiB capacity");
+        if(transferBytes<0||transferBytes>MAX_PACKET_BYTES)throw new IllegalArgumentException("Mesh input transfers exceed 512 MiB capacity");
+    }
     static final class PacketPool implements AutoCloseable {
         private Arena arena;
         private ByteBuffer buffer;
@@ -197,8 +202,10 @@ final class RtxptMemoryResources {
             if(!sizes.isEmpty())transferSizes=sizes.stream().mapToInt(Integer::intValue).toArray();else transferIndices=null;
         }
         var size=new Writer(null);write(size,transfers,materialTransfers,geometry,nodeTransfers,removedNames,coverageNames,removedTextures,removedMaterialNames,removedMeshNames,receiverBaselines!=null,transferIndices);
-        long total=size.offset;if(transferSizes!=null)for(int bytes:transferSizes)total+=bytes;
-        if(total>512L*1024*1024)throw new IllegalArgumentException("Dynamic resource packet exceeds 512 MiB staging capacity; split the transaction");
+        long transferBytes=0;if(transferSizes!=null)for(int bytes:transferSizes)transferBytes=Math.addExact(transferBytes,bytes);
+        // JNI owns these in separate allocations: the direct metadata packet
+        // and native mesh-input blocks each have their own 512 MiB bound.
+        validatePacketSizes(size.offset,transferBytes);
         var packet=pool.acquire(Math.toIntExact(size.offset));long ticket=0;
         try{
             if(transferSizes!=null){

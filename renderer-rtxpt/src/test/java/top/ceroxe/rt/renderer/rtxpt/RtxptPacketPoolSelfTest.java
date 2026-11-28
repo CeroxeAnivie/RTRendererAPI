@@ -15,6 +15,11 @@ public final class RtxptPacketPoolSelfTest {
     public static void main(String[] args)throws Exception{
         var pool=new RtxptMemoryResources.PacketPool();pool.diagnostics(false);
         try{
+            RtxptMemoryResources.validatePacketSizes(400L<<20,400L<<20);
+            RtxptMemoryResources.validatePacketSizes(512L<<20,0);
+            rejects(()->RtxptMemoryResources.validatePacketSizes((512L<<20)+1,0));
+            rejects(()->RtxptMemoryResources.validatePacketSizes(1,(512L<<20)+1));
+            rejects(()->RtxptMemoryResources.validatePacketSizes(0,0));
             require(RtxptMemoryResources.PacketPool.storageCapacity((257<<20)+1)==(257<<20)+65536,"Large packet slack bounded by 64 KiB");
             require(RtxptMemoryResources.PacketPool.storageCapacity(512<<20)==512<<20,"Maximum accepted without overflow");
             rejects(()->pool.acquire(Integer.MAX_VALUE));
