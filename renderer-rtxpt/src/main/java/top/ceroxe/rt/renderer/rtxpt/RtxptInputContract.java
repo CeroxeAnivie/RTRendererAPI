@@ -15,6 +15,8 @@ final class RtxptInputContract {
         if ((!nativeLighting&&frame.camera().hasExactProjection())
                 || (!nativeLighting&&frame.fog().opacity() > 0))
             throw new IllegalArgumentException("Exact projections and screen fog require the independent native-lighting output contract");
+        if (!nativeLighting && !frame.opticalTriangleEmitters().isEmpty())
+            throw new IllegalArgumentException("Optical emitters require independent native lighting");
 
 
     }

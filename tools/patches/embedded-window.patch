@@ -1,0 +1,9 @@
+--- a/External/Donut/src/app/DeviceManager.cpp
++++ b/External/Donut/src/app/DeviceManager.cpp
+@@ -50,0 +51 @@
++#include "rtxpt_embedded_startup.h"
+@@ -467,0 +469,2 @@
++    if (!rtr::upstream::embeddedStartup || !rtr::upstream::embeddedStartup->externalPresentation)
++    {
+@@ -473,0 +477 @@
++    }

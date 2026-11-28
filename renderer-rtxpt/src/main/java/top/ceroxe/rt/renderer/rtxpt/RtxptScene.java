@@ -71,47 +71,97 @@ final class RtxptScene {
         retain(tx,true);
     }
     void retain(SceneTransaction tx,boolean nativeContract) {
-        if(tx.reset()){meshMaterials.clear();textureUsers.clear();materialUsers.clear();meshUsers.clear();textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();sparseSources.clear();itemTable.clear();itemStructure=new Object();residentItems=null;geometryBytes=textureBytes=0;}
-        var r=tx.removals();var u=tx.upserts();
-        for(var t:u.textures())t.validateReplacementOf(textures.get(t.id()));
-        // An exact immutable republish is not a resource change. Retain the
-        // resident value and its dependency paths, as with the original stable
-        // scene slots. Texture generations are still validated above and only
-        // the identical texture object is a no-op; a new generation is real.
-        // A remove+upsert transaction must continue to execute both operations.
-        var textureUpserts=changedUpserts(u.textures(),textures,TextureAsset::id,r.textureIds().hasRemaining(),true);
-        var materialUpserts=changedUpserts(u.materials(),materials,MaterialAsset::id,r.materialIds().hasRemaining(),false);
-        var meshUpserts=changedUpserts(u.meshes(),meshes,MeshAsset::id,r.meshIds().hasRemaining(),false);
-        var instanceUpserts=changedUpserts(u.instances(),instances,SceneInstance::id,r.instanceIds().hasRemaining(),false);
-        var lightUpserts=changedUpserts(u.lights(),lights,SceneLight::id,r.lightIds().hasRemaining(),false);
-        if(tx.reset()||!lightUpserts.isEmpty()||r.lightIds().hasRemaining())sortedLights=null;
-        // Reverse dependencies are immutable sets in persistent maps. Only changed paths are copied.
-        var changedMaterials=new HashSet<Long>();materialUpserts.forEach(m->changedMaterials.add(m.id()));collectIds(r.materialIds(),changedMaterials);
-        var changedMeshes=new HashSet<Long>();meshUpserts.forEach(m->changedMeshes.add(m.id()));collectIds(r.meshIds(),changedMeshes);
-        var changedInstances=new HashSet<Long>();instanceUpserts.forEach(i->changedInstances.add(i.id()));collectIds(r.instanceIds(),changedInstances);
-        var changedTextures=new HashSet<Long>();textureUpserts.forEach(t->changedTextures.add(t.id()));collectIds(r.textureIds(),changedTextures);
-        for(long id:changedMeshes){var old=meshes.get(id);if(old!=null)geometryBytes=Math.subtractExact(geometryBytes,RendererResourceOptions.meshBytes(old));}
-        for(long id:changedTextures){var old=textures.get(id);if(old!=null)textureBytes=Math.subtractExact(textureBytes,old.rgba8().remaining());}
-        for(long id:changedMaterials){var old=materials.get(id);if(old!=null)for(long texture:textureIds(old))dependency(textureUsers,texture,id,false);}
-        for(long id:changedMeshes){var old=meshes.get(id);if(old!=null)for(long material:materialIds(old))dependency(materialUsers,material,id,false);}
-        for(long id:changedInstances){var old=instances.get(id);if(old!=null)dependency(meshUsers,old.meshAssetId(),id,false);}
-        remove(textures,r.textureIds());remove(materials,r.materialIds());remove(meshes,r.meshIds());remove(instances,r.instanceIds());remove(lights,r.lightIds());
-        textureUpserts.forEach(t->textures.put(t.id(),t));materialUpserts.forEach(m->materials.put(m.id(),m));
-        meshUpserts.forEach(m->meshes.put(m.id(),m));instanceUpserts.forEach(i->instances.put(i.id(),i));lightUpserts.forEach(l->lights.put(l.id(),l));
-        var removedMeshMaterials=r.meshIds();while(removedMeshMaterials.hasRemaining())meshMaterials.remove(removedMeshMaterials.get());
-        for(long id:changedMeshes){var value=meshes.get(id);if(value!=null)geometryBytes=Math.addExact(geometryBytes,RendererResourceOptions.meshBytes(value));}
-        for(long id:changedTextures){var value=textures.get(id);if(value!=null)textureBytes=Math.addExact(textureBytes,value.rgba8().remaining());}
-        for(var m:materialUpserts)for(long t:textureIds(m))if(t>=0){++referenceChecks;if(!textures.containsKey(t))throw new IllegalArgumentException("Missing texture "+t);dependency(textureUsers,t,m.id(),true);}
-        for(var m:meshUpserts)for(long id:materialIds(m)){++referenceChecks;if(!materials.containsKey(id))throw new IllegalArgumentException("Missing triangle material");dependency(materialUsers,id,m.id(),true);}
-        for(var i:instanceUpserts){++referenceChecks;if(!meshes.containsKey(i.meshAssetId()))throw new IllegalArgumentException("Missing mesh "+i.meshAssetId());dependency(meshUsers,i.meshAssetId(),i.id(),true);}
-        rejectReferencedRemoval(textures,textureUsers,r.textureIds(),"texture");rejectReferencedRemoval(materials,materialUsers,r.materialIds(),"material");rejectReferencedRemoval(meshes,meshUsers,r.meshIds(),"mesh");
-        if(nativeContract){var check=new HashSet<>(changedInstances);for(var instance:u.instances())check.add(instance.id());for(long id:changedMeshes){var users=meshUsers.get(id);if(users!=null)check.addAll(users.keySet());}
-            for(long id:check){var i=instances.get(id);if(i!=null)validateInstance(i.meshAssetId(),i.transform(),i.mediumBoundary().orElse(null),i.castsShadow(),i.visibilityMask());}}
-        for(long id:changedInstances){var instance=instances.get(id);var before=itemTable.get(id);
-            var after=instance==null?null:new Item("i"+id,instance.meshAssetId(),instance.transform(),instance.mediumBoundary().orElse(null),nativeLighting?1:instance.surfaceVisibility());
+        if(tx.reset())resetRetainedState();
+        var changes=changes(tx);
+        removePreviousDependencies(changes);
+        applyResourceChanges(changes);
+        registerNewDependencies(changes);
+        rejectRemovedDependencies(changes.removals());
+        if(nativeContract)validateNativeContract(changes);
+        updateResidentItems(changes.changedInstances());
+    }
+    private record RetainChanges(SceneTransaction.Removals removals,
+            List<TextureAsset> textures,List<MaterialAsset> materials,List<MeshAsset> meshes,
+            List<SceneInstance> instances,List<SceneLight> lights,
+            Set<Long> changedMaterials,Set<Long> changedMeshes,Set<Long> changedInstances,Set<Long> changedTextures) { }
+    private void resetRetainedState(){
+        meshMaterials.clear();textureUsers.clear();materialUsers.clear();meshUsers.clear();
+        textures.clear();materials.clear();meshes.clear();instances.clear();lights.clear();sparseSources.clear();itemTable.clear();
+        itemStructure=new Object();residentItems=null;geometryBytes=textureBytes=0;
+    }
+    private RetainChanges changes(SceneTransaction tx){
+        var removals=tx.removals();var upserts=tx.upserts();
+        for(var texture:upserts.textures())texture.validateReplacementOf(textures.get(texture.id()));
+        // Exact immutable republishing is a no-op. A remove+upsert still executes both operations.
+        var textureUpserts=changedUpserts(upserts.textures(),textures,TextureAsset::id,removals.textureIds().hasRemaining(),true);
+        var materialUpserts=changedUpserts(upserts.materials(),materials,MaterialAsset::id,removals.materialIds().hasRemaining(),false);
+        var meshUpserts=changedUpserts(upserts.meshes(),meshes,MeshAsset::id,removals.meshIds().hasRemaining(),false);
+        var instanceUpserts=changedUpserts(upserts.instances(),instances,SceneInstance::id,removals.instanceIds().hasRemaining(),false);
+        var lightUpserts=changedUpserts(upserts.lights(),lights,SceneLight::id,removals.lightIds().hasRemaining(),false);
+        if(tx.reset()||!lightUpserts.isEmpty()||removals.lightIds().hasRemaining())sortedLights=null;
+        var changedMaterials=changedIds(materialUpserts,MaterialAsset::id,removals.materialIds());
+        var changedMeshes=changedIds(meshUpserts,MeshAsset::id,removals.meshIds());
+        var changedInstances=changedIds(instanceUpserts,SceneInstance::id,removals.instanceIds());
+        var changedTextures=changedIds(textureUpserts,TextureAsset::id,removals.textureIds());
+        return new RetainChanges(removals,textureUpserts,materialUpserts,meshUpserts,instanceUpserts,lightUpserts,
+            changedMaterials,changedMeshes,changedInstances,changedTextures);
+    }
+    private static <T> Set<Long> changedIds(List<T> upserts,java.util.function.ToLongFunction<T> identity,LongBuffer removals){
+        var changed=new HashSet<Long>();upserts.forEach(value->changed.add(identity.applyAsLong(value)));collectIds(removals,changed);return changed;
+    }
+    private void removePreviousDependencies(RetainChanges changes){
+        for(long id:changes.changedMaterials()){var old=materials.get(id);if(old!=null)for(long texture:textureIds(old))dependency(textureUsers,texture,id,false);}
+        for(long id:changes.changedMeshes()){var old=meshes.get(id);if(old!=null)for(long material:materialIds(old))dependency(materialUsers,material,id,false);}
+        for(long id:changes.changedInstances()){var old=instances.get(id);if(old!=null)dependency(meshUsers,old.meshAssetId(),id,false);}
+    }
+    private void applyResourceChanges(RetainChanges changes){
+        for(long id:changes.changedMeshes()){var old=meshes.get(id);if(old!=null)geometryBytes=Math.subtractExact(geometryBytes,RendererResourceOptions.meshBytes(old));}
+        for(long id:changes.changedTextures()){var old=textures.get(id);if(old!=null)textureBytes=Math.subtractExact(textureBytes,old.rgba8().remaining());}
+        var removals=changes.removals();
+        remove(textures,removals.textureIds());remove(materials,removals.materialIds());remove(meshes,removals.meshIds());
+        remove(instances,removals.instanceIds());remove(lights,removals.lightIds());
+        changes.textures().forEach(value->textures.put(value.id(),value));changes.materials().forEach(value->materials.put(value.id(),value));
+        changes.meshes().forEach(value->meshes.put(value.id(),value));changes.instances().forEach(value->instances.put(value.id(),value));
+        changes.lights().forEach(value->lights.put(value.id(),value));
+        var removedMeshes=removals.meshIds();while(removedMeshes.hasRemaining())meshMaterials.remove(removedMeshes.get());
+        for(long id:changes.changedMeshes()){var value=meshes.get(id);if(value!=null)geometryBytes=Math.addExact(geometryBytes,RendererResourceOptions.meshBytes(value));}
+        for(long id:changes.changedTextures()){var value=textures.get(id);if(value!=null)textureBytes=Math.addExact(textureBytes,value.rgba8().remaining());}
+    }
+    private void registerNewDependencies(RetainChanges changes){
+        for(var material:changes.materials())for(long texture:textureIds(material))if(texture>=0){
+            ++referenceChecks;if(!textures.containsKey(texture))throw new IllegalArgumentException("Missing texture "+texture);
+            dependency(textureUsers,texture,material.id(),true);
+        }
+        for(var mesh:changes.meshes())for(long material:materialIds(mesh)){
+            ++referenceChecks;if(!materials.containsKey(material))throw new IllegalArgumentException("Missing triangle material");
+            dependency(materialUsers,material,mesh.id(),true);
+        }
+        for(var instance:changes.instances()){
+            ++referenceChecks;if(!meshes.containsKey(instance.meshAssetId()))throw new IllegalArgumentException("Missing mesh "+instance.meshAssetId());
+            dependency(meshUsers,instance.meshAssetId(),instance.id(),true);
+        }
+    }
+    private void rejectRemovedDependencies(SceneTransaction.Removals removals){
+        rejectReferencedRemoval(textures,textureUsers,removals.textureIds(),"texture");
+        rejectReferencedRemoval(materials,materialUsers,removals.materialIds(),"material");
+        rejectReferencedRemoval(meshes,meshUsers,removals.meshIds(),"mesh");
+    }
+    private void validateNativeContract(RetainChanges changes){
+        var check=new HashSet<>(changes.changedInstances());
+        for(var instance:changes.instances())check.add(instance.id());
+        for(long id:changes.changedMeshes()){var users=meshUsers.get(id);if(users!=null)check.addAll(users.keySet());}
+        for(long id:check){var instance=instances.get(id);if(instance!=null)validateInstance(instance.meshAssetId(),instance.transform(),
+            instance.mediumBoundary().orElse(null),instance.castsShadow(),instance.visibilityMask());}
+    }
+    private void updateResidentItems(Set<Long> changedInstances){
+        for(long id:changedInstances){
+            var instance=instances.get(id);var before=itemTable.get(id);
+            var after=instance==null?null:new Item("i"+id,instance.meshAssetId(),instance.transform(),instance.mediumBoundary().orElse(null),
+                nativeLighting?1:instance.surfaceVisibility());
             if(Objects.equals(before,after))continue;
             if(!sameStructure(before,after))itemStructure=new Object();
-            if(after==null)itemTable.remove(id);else itemTable.put(id,after);residentItems=null;
+            if(after==null)itemTable.remove(id);else itemTable.put(id,after);
+            residentItems=null;
         }
     }
     void retireResourceSnapshots() {
@@ -157,8 +207,10 @@ final class RtxptScene {
         if(b!=null && !m.isClosedManifold())throw new IllegalArgumentException("Medium requires a closed outward-wound manifold mesh");
         if(!nativeLighting&&(!shadow||mask!=255))
             throw new IllegalArgumentException("Custom ray masks and no-shadow instances require the native-lighting output contract");
-        if(nativeLighting&&mask!=255&&(mask&~7)!=0)
-            throw new IllegalArgumentException("Native lighting supports receiver=1, shadow=2 and bounce=4 ray roles");
+        if(nativeLighting&&mask!=255&&(mask&~RtxptLightingRoles.TRAVERSAL)!=0)
+            throw new IllegalArgumentException("Native lighting supports receiver=1, shadow=2, bounce=4 and dielectric=32 ray roles");
+        if(nativeLighting&&mask!=255&&(mask&NativeLightingPublication.Instance.DIELECTRIC_BOUNDARY)!=0&&b==null)
+            throw new IllegalArgumentException("A dielectric ray mask requires a medium boundary");
         // AffineTransform already enforces finite, invertible input. The native
         // adapter composes two original TRS nodes when a shear needs both.
     }

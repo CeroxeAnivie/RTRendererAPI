@@ -1,4 +1,6 @@
 #pragma once
+#include "rtxpt_embedded_startup.h"
+#include "rtxpt_startup_progress.h"
 
 #include <functional>
 #include <chrono>
@@ -87,8 +89,8 @@ private:
 class PathTracer final : public AdvancedPathTracer {
 public:
     PathTracer(donut::app::DeviceManager& manager, const CommandLineOptions& options,
-        bool managedScene) : AdvancedPathTracer(manager, options),
-        m_adapterOptions(options), m_managedScene(managedScene) {
+        bool managedScene, std::filesystem::path runtimeBin) : AdvancedPathTracer(manager, options),
+        m_adapterOptions(options), m_managedScene(managedScene), m_runtimeBin(std::move(runtimeBin)) {
         // Sample::Init selects an empty name when no bundled demos exist. Its
         // same-name shortcut would then skip the public LoadScene hook entirely.
         // Make the first selection enter that lifecycle for API-managed scenes
@@ -295,15 +297,15 @@ public:
                 permutation->UniqueMaterialName="RtrStandard";
             }
         }
-        m_precompiledGlobals.Check(macros);
+        m_precompiledGlobals.Check(macros, m_runtimeBin);
     }
 
     void ApplyLights(const std::vector<int64_t>& ids,const std::vector<float>& records,
-        const std::vector<int64_t>& removals,const std::vector<float>& sun,const std::vector<float>& sky) {
+        const std::vector<int64_t>& removals,const std::vector<float>& sun,std::vector<float> sky) {
         if(!m_scene||!m_managedScene||(!sky.empty()&&sky.size()<4))throw std::invalid_argument("Lighting requires the managed scene");
         if(!sky.empty()&&sky.size()!=4){
-            if(lighting.active)throw std::invalid_argument("Environment maps require native beauty rendering");
-            if(sky.size()<6||sky[4]<2||sky[4]>8192||sky[5]<1||sky[5]>4096
+            if(sky.size()<6||!std::isfinite(sky[4])||!std::isfinite(sky[5])
+                ||sky[4]<2||sky[4]>8192||sky[5]<1||sky[5]>4096
                 ||sky[4]!=std::floor(sky[4])||sky[5]!=std::floor(sky[5])
                 ||sky.size()!=6+size_t(sky[4])*size_t(sky[5])*3)
                 throw std::invalid_argument("Invalid equirectangular environment dimensions");
@@ -311,6 +313,7 @@ public:
         for(auto value:sky)if(!std::isfinite(value)||value<0)throw std::invalid_argument("Invalid sky color");
         const bool adapterLighting=lighting.active||(m_qualityConfigured&&m_quality.beautyTransport==1);
         const bool structural=analytic.Apply(ids,records,removals,sun,*m_scene,adapterLighting);
+        if(lighting.active&&!sky.empty())lighting.SetDielectricSky(std::move(sky));
         if(lighting.active&&!m_ommBaker){
             // Analytic leaves participate in the same final native graph walk as
             // resource leaves; a lighting action must not consume poses early.
@@ -318,7 +321,7 @@ public:
         }else{
             FlushPendingDirectPreparation();m_resources.ApplyPendingTransforms(*m_scene);
             auto commands=GetDevice()->createCommandList();commands->open();
-            if(!sky.empty()) ConfigureSky(sky,commands);
+            if(!lighting.active&&!sky.empty()) ConfigureSky(sky,commands);
             m_scene->Refresh(commands,GetFrameIndex());SyncManagedSceneRows();commands->close();GetDevice()->executeCommandList(commands);
         }
         m_lights=m_scene->GetSceneGraph()->GetLights();
@@ -407,6 +410,7 @@ public:
     bool FinishLeanSignal(){m_leanSignalArmed=false;return m_leanSignalPublished;}
     void Render(nvrhi::IFramebuffer* framebuffer) override {
         m_leanSignalPublished=false;
+        lighting.roleMaskTraversal=false;
         RtrDiagnostics::Scope renderScope(RtrDiagnostics::Preparation,1,0,1,0,HostDiagnosticIdentity("native-render"));
         // Finalize this Frame's resource packets after Animate and before any
         // renderer reads. The single native graph refresh sees the final pose.
@@ -549,10 +553,12 @@ public:
         lighting.Prepare(GetDevice(), *m_adapterShaders, m_bindlessLayout, &sparse);
         analytic.Upload(GetDevice(),commands);
         if (!m_scene || m_scene->GetSceneGraph()->GetMeshInstances().empty()) {
+            lighting.retainedSignals=false;
             if (lighting.direct) commands->clearTextureFloat(lighting.direct, nvrhi::AllSubresources, nvrhi::Color(1,1,1,0));
             if (lighting.indirect) commands->clearTextureFloat(lighting.indirect, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.directionalSpecular) commands->clearTextureFloat(lighting.directionalSpecular, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.sunPenumbra) commands->clearTextureFloat(lighting.sunPenumbra, nvrhi::AllSubresources, nvrhi::Color(0));
+            if (lighting.dielectricRadiance) commands->clearTextureFloat(lighting.dielectricRadiance, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.geometry) commands->clearTextureFloat(lighting.geometry, nvrhi::AllSubresources, nvrhi::Color(0));
             if (lighting.identity) commands->clearTextureUInt(lighting.identity, nvrhi::AllSubresources, 0);
             lighting.EncodeOutputs(GetDevice(), commands);
@@ -562,7 +568,7 @@ public:
             const auto& rows=LightingRowChanges();
             lighting.Dispatch(GetDevice(), commands, m_scene, rows, m_topLevelAS, sparse,
                 m_CommonPasses->m_LinearWrapSampler, analytic.buffer, uint32_t(analytic.records.size()),
-                analytic.tree.root==rtr::RetainedLightTree::None?0:analytic.tree.root,analytic.treeBase);
+                analytic.tree.root==rtr::RetainedLightTree::None?0:analytic.tree.root,analytic.treeBase,m_CommonPasses->m_BlackTexture.Get());
             AcknowledgeLightingRows();
         }
         // Compact adapter signals are separate resources. Initialized direct
@@ -834,6 +840,7 @@ private:
         RAII_SCOPE(;,m_commandList=m_graphicsCommandList;);
         m_commandList=m_directGraphicsCommands;
         const bool retainedDirectInputs=m_managedScene&&m_scene->GetSceneGraph()->GetSkinnedMeshInstances().empty();
+        lighting.roleMaskTraversal=retainedDirectInputs;
         // A managed direct frame records its final resource generation, BLAS,
         // TLAS and shading on one native list, matching 5.0's frame recorder.
         // Lifecycle/beauty boundaries retain their separate original submission.
@@ -893,7 +900,7 @@ private:
                     static_cast<ManagedScene&>(*m_scene).RowChanges(),m_directBlasRevision,
                     [](const auto& instance,float* transform){ManagedScene::CopyPublishedCurrentPose(instance,transform);},
                     [&](const auto& name){return m_resources.FindMeshInstance(name);},
-                    [&](const auto& instance){return lighting.traversalDisabled.empty()||!lighting.traversalDisabled.contains(instance->GetNode()->GetName())?1u:0u;},
+                    [&](const auto& instance){return lighting.TraversalRoles(instance->GetNode()->GetName());},
                     lighting.traversalMaskChanges);
                 else {UpdateTLAS(m_commandList);m_directFrameInputs.Reset();}
             }
@@ -1378,6 +1385,7 @@ private:
     }
     CommandLineOptions m_adapterOptions;
     PrecompiledGlobals m_precompiledGlobals;
+    std::filesystem::path m_runtimeBin;
     bool m_managedScene = false, m_firstScene = true;
     bool m_completeMaterialBakeDirty=false;
     bool m_beautyOmmPrimed=false,m_beautyOmmAdmissionPending=false;
@@ -1411,8 +1419,9 @@ class Application final : public SampleBaseApp {
 public:
     using FrameCallback = std::function<void(donut::app::DeviceManager&, uint32_t)>;
 
-    Application(const std::vector<std::string>& options, bool managedScene, bool requiresStreamline)
-        : m_managedScene(managedScene), m_requiresStreamline(requiresStreamline) {
+    Application(const std::vector<std::string>& options, bool managedScene, bool requiresStreamline,
+        std::filesystem::path runtimeBin)
+        : m_managedScene(managedScene), m_requiresStreamline(requiresStreamline), m_runtimeBin(std::move(runtimeBin)) {
         std::vector<const char*> argv;
         for (const auto& option : options) argv.push_back(option.c_str());
         if (!m_options.InitFromCommandLine(static_cast<int>(argv.size()), argv.data()))
@@ -1465,13 +1474,25 @@ public:
 
 private:
     static int SelectDefaultHardwareAdapter(D3D_FEATURE_LEVEL featureLevel) {
+        startup::setStage("selecting-hardware-adapter");
         using Microsoft::WRL::ComPtr;
         ComPtr<IDXGIFactory1> factory;
         if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(factory.GetAddressOf()))))
             throw std::runtime_error("Cannot enumerate graphics adapters for native lighting");
         auto supported = [featureLevel](IDXGIAdapter1* adapter, DXGI_ADAPTER_DESC1& desc) {
-            return SUCCEEDED(adapter->GetDesc1(&desc)) && !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-                && SUCCEEDED(D3D12CreateDevice(adapter, featureLevel, __uuidof(ID3D12Device), nullptr));
+            if (FAILED(adapter->GetDesc1(&desc)) || (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) return false;
+            ComPtr<ID3D12Device> device;
+            if (FAILED(embeddedStartup->deviceFactory->CreateDevice(adapter, featureLevel,
+                IID_PPV_ARGS(device.GetAddressOf())))) return false;
+            D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_9};
+            D3D12_FEATURE_DATA_D3D12_OPTIONS5 rayTracing{};
+            D3D12_FEATURE_DATA_D3D12_OPTIONS binding{};
+            return SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model)))
+                && model.HighestShaderModel >= D3D_SHADER_MODEL_6_9
+                && SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &rayTracing, sizeof(rayTracing)))
+                && rayTracing.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1
+                && SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &binding, sizeof(binding)))
+                && binding.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3;
         };
         auto ordinaryIndex = [&](const DXGI_ADAPTER_DESC1& selected) {
             for (UINT index = 0;; ++index) {
@@ -1511,13 +1532,14 @@ private:
                 found = true;
             }
         }
-        if (!found) throw std::runtime_error("No hardware graphics adapter supports the required D3D12 feature level");
+        if (!found) throw std::runtime_error("RTXPT requires a hardware D3D12 adapter with Shader Model 6.9, DXR 1.1, and Resource Binding Tier 3");
         return ordinaryIndex(selected);
     }
 
     std::unique_ptr<Sample> CreateMainRenderPass(donut::app::DeviceManager& manager,
         const CommandLineOptions&) override {
-        auto renderer = std::make_unique<PathTracer>(manager, m_options, m_managedScene);
+        startup::setStage("creating-path-tracer");
+        auto renderer = std::make_unique<PathTracer>(manager, m_options, m_managedScene, m_runtimeBin);
         m_deviceManager = &manager;
         m_renderer = renderer.get();
         return renderer;
@@ -1529,10 +1551,10 @@ private:
         parameters.backBufferHeight = m_options.height;
         parameters.startMaximized = false;
         parameters.resizeWindowWithDisplayScale = false;
-        parameters.startFullscreen = m_options.fullscreen;
-        parameters.startBorderless = m_options.borderless;
+        parameters.startFullscreen = !embeddedStartup->externalPresentation && m_options.fullscreen;
+        parameters.startBorderless = embeddedStartup->externalPresentation || m_options.borderless;
         parameters.adapterIndex = m_options.adapterIndex;
-        if (!m_requiresStreamline && parameters.adapterIndex < 0)
+        if (parameters.adapterIndex < 0)
             parameters.adapterIndex = SelectDefaultHardwareAdapter(parameters.featureLevel);
         parameters.vsyncEnabled = false;
     }
@@ -1543,6 +1565,7 @@ private:
     bool m_managedScene = false;
     bool m_requiresStreamline = true;
     bool m_observing = false;
+    std::filesystem::path m_runtimeBin;
 };
 
 } // namespace rtr::upstream

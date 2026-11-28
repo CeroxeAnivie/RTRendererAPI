@@ -47,7 +47,7 @@ tasks.withType<Test>().configureEach {
     failOnNoDiscoveredTests = false
 }
 
-listOf("NativeLightingApplicationPatchSelfTest").forEach { name ->
+listOf("NativeLightingApplicationPatchSelfTest", "OpticalTriangleEmitterSelfTest").forEach { name ->
     val contract = tasks.register<JavaExec>(name.replaceFirstChar { it.lowercase() }) {
         group = "verification"; dependsOn(tasks.testClasses)
         classpath = sourceSets.test.get().output + sourceSets.main.get().output
@@ -275,4 +275,4 @@ tasks.named("check") {
     dependsOn("meshTopologySelfTest", "verifyRendererApiBoundary", "verifyRendererApiAbi")
 }
 
-sourceSets.named("test") { java.setIncludes(setOf("**/NativeLightingApplicationPatchSelfTest.java", "**/MeshTopologySelfTest.java")) }
+sourceSets.named("test") { java.setIncludes(setOf("**/NativeLightingApplicationPatchSelfTest.java", "**/MeshTopologySelfTest.java", "**/OpticalTriangleEmitterSelfTest.java")) }

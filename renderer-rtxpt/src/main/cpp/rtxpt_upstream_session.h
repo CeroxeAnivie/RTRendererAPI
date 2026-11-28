@@ -1,7 +1,9 @@
 #pragma once
 #include "rtxpt_upstream_host.h"
+#include "rtxpt_agility.h"
 #include "rtxpt_shutdown.h"
 #include "rtxpt_network_policy.h"
+#include "rtxpt_startup_progress.h"
 #include <optional>
 #include <chrono>
 #include <condition_variable>
@@ -18,7 +20,8 @@ namespace rtr::upstream {
 // All upstream objects stay on one native owner thread. The upstream message
 // loop remains responsible for BeginFrame/Animate/Render/Present and shutdown.
 // Requests are consumed at its public beforeFrame callback; no private stepping
-// function, fabricated DeviceManager cast, or source modification is needed.
+// function or fabricated DeviceManager cast is needed. The official export is
+// unchanged; its build-side path variant only accepts this runtime directory.
 class Session final {
 public:
     using Action = std::function<void(Application&)>;
@@ -33,9 +36,14 @@ public:
         bool vsyncEnabled = false;
     };
 
-    explicit Session(std::vector<std::string> options, bool managedScene = false, bool requiresStreamline = true) {
+    explicit Session(std::vector<std::string> options, std::filesystem::path runtimeBin,
+        std::filesystem::path pipelineCacheRoot,
+        bool managedScene, bool requiresStreamline, bool externalPresentation) {
         if (options.empty()) options.emplace_back("rtrenderer-upstream");
-        m_thread = std::thread([this, options = std::move(options), managedScene, requiresStreamline] { Run(options, managedScene, requiresStreamline); });
+        m_thread = std::thread([this, options = std::move(options), runtimeBin = std::move(runtimeBin),
+            pipelineCacheRoot = std::move(pipelineCacheRoot), managedScene, requiresStreamline, externalPresentation] {
+            Run(options, runtimeBin, pipelineCacheRoot, managedScene, requiresStreamline, externalPresentation);
+        });
         std::unique_lock lock(m_mutex);
         m_condition.wait(lock, [this] { return m_initialized || m_stopped; });
         if (m_failure) {
@@ -156,8 +164,12 @@ private:
         if (m_stop || m_stopped) std::rethrow_exception(m_closedFailure);
     }
 
-    void Run(const std::vector<std::string>& options, bool managedScene, bool requiresStreamline) noexcept {
+    void Run(const std::vector<std::string>& options, const std::filesystem::path& runtimeBin,
+        const std::filesystem::path& pipelineCacheRoot,
+        bool managedScene, bool requiresStreamline, bool externalPresentation) noexcept {
         try {
+            startup::beginSession();
+            startup::setStage("acquiring-renderer-lifecycle");
             // The original sample owns process-global UI and logging state. It
             // does not offer isolated concurrent application instances.
             std::unique_lock lifecycleLock(s_lifecycleMutex, std::try_to_lock);
@@ -170,15 +182,29 @@ private:
             // Public Donut logging configuration keeps the embedding API free
             // of blocking native message boxes and preserves real error text.
             donut::log::ConsoleApplicationMode();
+            bool initializing = true;
+            donut::log::SetCallback([previous = logCallbackGuard.previous, &initializing](auto severity, const char* message) {
+                if (severity == donut::log::Severity::Fatal && embeddedStartup && initializing)
+                    throw std::runtime_error(message);
+                previous(severity, message);
+            });
             HelpersSetNonInteractive();
-            InstallPrecompiledShaders(donut::app::GetDirectoryWithExecutable());
+            startup::setStage("loading-packaged-shaders");
+            InstallPrecompiledShaders(runtimeBin);
             std::vector<const char*> argv;
             for (const auto& option : options) argv.push_back(option.c_str());
             // The guard outlives Application, whose original destructor calls
             // DeviceManager::Shutdown and drains Streamline destruction callbacks.
             StreamlineSessionPolicy streamlinePolicy(requiresStreamline);
             std::optional<ShutdownModuleReference> retainedModules;
-            Application application(options, managedScene, requiresStreamline);
+            startup::setStage("initializing-device-factory");
+            const auto deviceFactory = OpenAgilityFactory(runtimeBin);
+            const EmbeddedStartup startup{runtimeBin, pipelineCacheRoot, deviceFactory.Get(), externalPresentation};
+            struct StartupGuard {
+                explicit StartupGuard(const EmbeddedStartup& state) { embeddedStartup = &state; }
+                ~StartupGuard() { embeddedStartup = nullptr; }
+            } startupGuard(startup);
+            Application application(options, managedScene, requiresStreamline, runtimeBin);
             // The pinned sample reads the CRT arguments instead of Init's parameters.
             // Scope the embedding arguments to its synchronous initialization and restore
             // the host immediately. The lifecycle mutex above excludes another sample.
@@ -196,12 +222,19 @@ private:
                     }
                     ~CrtArguments() { __argc = previousCount; __argv = previousValues; }
                 } arguments(options);
+                startup::setStage("initializing-rtxpt-session");
                 return application.Init(static_cast<int>(argv.size()), argv.data());
             };
-            const auto status = initialize();
-            if (status != SampleBaseApp::InitReturnCodes::Success)
-                throw std::runtime_error("Original RTXPT initialization failed: "
-                    + std::to_string(static_cast<int>(status)));
+            try {
+                const auto status = initialize();
+                if (status != SampleBaseApp::InitReturnCodes::Success)
+                    throw std::runtime_error("Original RTXPT initialization failed: "
+                        + std::to_string(static_cast<int>(status)));
+            } catch (...) {
+                application.End();
+                throw;
+            }
+            initializing = false;
             // Official DeviceManager applies this requested public setting before
             // the next render. There is no extra frame-rate timer in the adapter.
             if (requiresStreamline) retainedModules.emplace();
@@ -306,6 +339,7 @@ private:
             {
                 std::lock_guard lock(m_mutex);
                 m_initialized = true;
+                startup::finishSession(startup::State::Ready);
                 m_condition.notify_all();
             }
             try {
@@ -318,6 +352,7 @@ private:
             RtrGpuProfile::Shutdown();
             application.End();
         } catch (...) {
+            startup::finishSession(startup::State::Failed);
             std::lock_guard lock(m_mutex);
             m_failure = std::current_exception();
         }

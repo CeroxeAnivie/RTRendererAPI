@@ -4,6 +4,7 @@
 #include RTR_RTXPT_ADVANCED_SOURCE
 #include <jni.h>
 #include "rtxpt_upstream_session.h"
+#include "rtxpt_startup_progress.h"
 #include "rtxpt_signal_frames.h"
 #include <donut/engine/TextureCache.h>
 #include <filesystem>
@@ -127,7 +128,7 @@ template<size_t Count> jfloatArray FloatArray(JNIEnv* env,const std::array<float
 
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptUpstreamProof_runNative(
-    JNIEnv* env, jclass, jobjectArray arguments, jstring captureFile, jint frames) {
+    JNIEnv* env, jclass, jstring runtime, jobjectArray arguments, jstring captureFile, jint frames) {
     try {
         if (frames < 1 || frames > 10000) throw std::invalid_argument("frames must be 1..10000");
         std::vector<std::string> storage{"rtrenderer-upstream"};
@@ -140,7 +141,11 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptUpstreamProof_runNative(
             }
         }
         const auto capture = String(env, captureFile);
-        rtr::upstream::Session session(std::move(storage));
+        const auto runtimeBin = std::filesystem::u8path(String(env, runtime)).lexically_normal();
+        if (!std::filesystem::is_directory(runtimeBin))
+            throw std::invalid_argument("Missing original RTXPT runtime directory");
+        rtr::upstream::Session session(std::move(storage), runtimeBin,
+            runtimeBin.parent_path().parent_path().parent_path(), false, true, false);
         jlong readyFrames = 0;
         jlong width = 0, height = 0;
         bool captured = false;
@@ -176,7 +181,30 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptUpstreamProof_runNative(
 
 extern "C" JNIEXPORT jint JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_bridgeAbiVersion(JNIEnv*, jclass) {
-    return 9;
+    return 10;
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_startupProgress(JNIEnv* env, jclass) {
+    try {
+        const auto progress = rtr::upstream::startup::snapshot();
+        const std::array<std::string, 6> values{
+            progress.stage, progress.activePso, std::to_string(progress.elapsedMs),
+            std::to_string(progress.cacheHits), std::to_string(progress.cacheMisses),
+            progress.terminalState};
+        auto result = env->NewObjectArray(jsize(values.size()), env->FindClass("java/lang/String"), nullptr);
+        if (!result) return nullptr;
+        for (jsize index = 0; index < jsize(values.size()); ++index) {
+            auto value = env->NewStringUTF(values[size_t(index)].c_str());
+            if (!value) return nullptr;
+            env->SetObjectArrayElement(result, index, value);
+            env->DeleteLocalRef(value);
+        }
+        return result;
+    } catch (const std::exception& error) {
+        Throw(env, error);
+        return nullptr;
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -229,12 +257,17 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_progressWindowProof(JNIEnv* env,jc
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_createSession(JNIEnv* env, jclass, jstring runtime,
-    jstring scene, jint width, jint height, jboolean externalPresentation, jboolean requiresStreamline, jobjectArray options) {
+    jstring cacheRoot, jstring scene, jint width, jint height, jboolean externalPresentation,
+    jboolean requiresStreamline, jobjectArray options) {
     try {
         if (width < 1 || height < 1 || width > 16384 || height > 16384)
             throw std::invalid_argument("Invalid render extent");
-        if (!std::filesystem::is_directory(std::filesystem::u8path(String(env, runtime))))
+        const auto runtimeBin = std::filesystem::u8path(String(env, runtime)).lexically_normal();
+        if (!std::filesystem::is_directory(runtimeBin))
             throw std::invalid_argument("Missing original RTXPT runtime directory");
+        const auto pipelineCacheRoot = cacheRoot
+            ? std::filesystem::u8path(String(env, cacheRoot)).lexically_normal()
+            : std::filesystem::path{};
         std::vector<std::string> arguments{"rtrenderer-upstream"};
         auto requested = Strings(env, options);
         arguments.insert(arguments.end(), requested.begin(), requested.end());
@@ -244,13 +277,10 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_createSession(JNIEnv* env, jclass,
         if (!scenePath.empty()) arguments.push_back("--scene=" + scenePath);
         RtrDiagnostics::Reset();
         auto renderer = std::make_shared<Renderer>();
-        renderer->session = std::make_unique<rtr::upstream::Session>(std::move(arguments), scenePath.empty(), requiresStreamline == JNI_TRUE);
-        renderer->session->Invoke([width, height, externalPresentation, owner=renderer.get()](auto& app) {
+        renderer->session = std::make_unique<rtr::upstream::Session>(std::move(arguments), runtimeBin, pipelineCacheRoot,
+            scenePath.empty(), requiresStreamline == JNI_TRUE, externalPresentation == JNI_TRUE);
+        renderer->session->Invoke([width, height, owner=renderer.get()](auto& app) {
             auto* window = app.DeviceManager().GetWindow();
-            if (externalPresentation) {
-                glfwHideWindow(window);
-                glfwSetWindowAttrib(window, GLFW_DECORATED, GLFW_FALSE);
-            }
             SetWindowExtent(window, width, height);
             auto* path=&app.Renderer();auto* device=app.DeviceManager().GetDevice();
             path->SetLeanSignalPublisher([owner,path,device](nvrhi::ICommandList* commands){
@@ -270,7 +300,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_createSession(JNIEnv* env, jclass,
 extern "C" JNIEXPORT jlong JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_create(JNIEnv* env, jclass type, jstring runtime,
     jstring scene, jint width, jint height, jboolean externalPresentation, jobjectArray options) {
-    return Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_createSession(env,type,runtime,scene,width,height,
+    return Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_createSession(env,type,runtime,nullptr,scene,width,height,
         externalPresentation,JNI_TRUE,options);
 }
 
@@ -481,6 +511,32 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLighting(JNIEnv* env, jclass
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingContainment(JNIEnv* env, jclass, jlong handle,
+    jfloatArray parameters, jobjectArray instances) {
+    try {
+        auto values=Floats(env,parameters);auto volumes=Strings(env,instances);
+        if(volumes.size()>4)throw std::invalid_argument("Camera containment exceeds four volumes");
+        Get(handle)->session->Enqueue([values=std::move(values),volumes=std::move(volumes)](auto& app) {
+            auto& renderer=app.Renderer();renderer.ConfigureLighting(values);
+            renderer.lighting.cameraVolumes=volumes;
+        });
+    } catch (const std::exception& error) { Throw(env, error); }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeOpticalTriangleEmitters(JNIEnv* env, jclass, jlong handle,
+    jfloatArray records, jlongArray volumes) {
+    try {
+        auto values=Floats(env,records);auto ids=Longs(env,volumes);
+        if(values.size()%13||ids.size()!=values.size()/13*4)
+            throw std::invalid_argument("Invalid optical triangle emitter publication");
+        Get(handle)->session->Enqueue([values=std::move(values),ids=std::move(ids)](auto& app) mutable {
+            app.Renderer().lighting.SetOpticalTriangleEmitters(std::move(values),std::move(ids));
+        });
+    } catch (const std::exception& error) { Throw(env, error); }
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributes(JNIEnv* env, jclass, jlong handle, jlong generation,
     jobjectArray names, jfloatArray attributes, jfloatArray lookup, jbyteArray application) {
     try {
@@ -499,7 +555,8 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingAttributes(JNIEnv* e
             for(size_t i=0;i<keys.size();++i) {
                 if(!seen.insert(keys[i]).second || !renderer.HasInstance(keys[i])) throw std::invalid_argument("Unknown or duplicate instance attribute");
                 const auto* words=values.data()+i*stride;
-                if(words[0]<0 || words[0]>31 || words[0]!=float(uint32_t(words[0])) || words[1]<0 || words[1]>1 || words[2]<0 || words[2]>1)
+                constexpr uint32_t knownRoles=RtrNativeLightingPass::AllTraversalRoles|8u|16u;
+                if(!std::isfinite(words[0]) || words[0]<0 || words[0]>knownRoles || words[0]!=float(uint32_t(words[0])) || words[1]<0 || words[1]>1 || words[2]<0 || words[2]>1)
                     throw std::invalid_argument("Invalid role or visibility attribute");
                 if(words[3]<0||words[3]>3||words[3]!=float(uint32_t(words[3]))||(stride==8&&(uint32_t(words[3])&2)!=0))
                     throw std::invalid_argument("Invalid explicit previous-transform flags");
@@ -656,8 +713,8 @@ extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_lightingPatch(JNIEnv* env,jclass,jlong handle,jlongArray ids,jfloatArray records,
     jlongArray removals,jfloatArray sun,jfloatArray sky) {
     try {auto changed=Longs(env,ids);auto values=Floats(env,records);auto removed=Longs(env,removals);auto daylight=Floats(env,sun);auto background=Floats(env,sky);
-        Get(handle)->session->Enqueue([changed=std::move(changed),values=std::move(values),removed=std::move(removed),daylight=std::move(daylight),background=std::move(background)](auto& app){
-            app.Renderer().ApplyLights(changed,values,removed,daylight,background);
+        Get(handle)->session->Enqueue([changed=std::move(changed),values=std::move(values),removed=std::move(removed),daylight=std::move(daylight),background=std::move(background)](auto& app) mutable {
+            app.Renderer().ApplyLights(changed,values,removed,daylight,std::move(background));
         });
     }catch(const std::exception& error){Throw(env,error);}
 }
@@ -855,7 +912,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_instanceTransformState(JNIEnv* env
 }
 extern "C" JNIEXPORT void JNICALL
 Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCapture(JNIEnv* env,jclass,jlong handle,jstring path,jint signal) {
-    try {const auto filename=String(env,path);if(signal<0||signal>22)throw std::invalid_argument("Unknown lighting capture signal");
+    try {const auto filename=String(env,path);if(signal<0||signal>24)throw std::invalid_argument("Unknown lighting capture signal");
         Get(handle)->session->Invoke([filename,signal](auto& app){
             auto& pass=app.Renderer().lighting;auto& rr=pass.reconstruction;
             auto source=signal==0?pass.direct:signal==1?(rr.requested&&rr.valid?rr.result:pass.indirect):pass.geometry;
@@ -870,6 +927,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCapture(JNIEnv* env,
             if(signal==20)source=app.Renderer().Output(rtr::upstream::Signal::Depth);
             if(signal==21)source=app.Renderer().Output(rtr::upstream::Signal::RawRadiance);
             if(signal==22)source=app.Renderer().Output(rtr::upstream::Signal::LinearColor);
+            if(signal==23||signal==24)source=pass.dielectricRadiance;
             if(!source)throw std::logic_error("The requested lighting signal is not allocated");
             const auto desc=source->getDesc();
             const unsigned channels=desc.format==nvrhi::Format::RG16_FLOAT?2:desc.format==nvrhi::Format::R32_FLOAT?1:4;
@@ -884,7 +942,7 @@ Java_top_ceroxe_rt_renderer_rtxpt_RtxptNative_nativeLightingCapture(JNIEnv* env,
             struct Unmap{nvrhi::IDevice* device;nvrhi::IStagingTexture* texture;~Unmap(){device->unmapStagingTexture(texture);}} unmap{device,staging};
             std::ofstream output(std::filesystem::u8path(filename),std::ios::binary);output<<"PF\n"<<desc.width<<" "<<desc.height<<"\n-1.0\n";
             for(int y=int(desc.height)-1;y>=0;--y)for(uint32_t x=0;x<desc.width;++x)for(unsigned c=0;c<3;++c){
-                const auto component=(signal==15||signal==16)?3:std::min(c,channels-1);float value;
+                const auto component=(signal==15||signal==16||signal==24)?3:std::min(c,channels-1);float value;
                 if(float32)std::memcpy(&value,data+size_t(y)*pitch+(x*channels+component)*4,4);
                 else {uint16_t half;std::memcpy(&half,data+size_t(y)*pitch+(x*channels+component)*2,2);const auto exponent=(half>>10)&31,mantissa=half&1023;
                     value=exponent==31?(mantissa?NAN:INFINITY):std::ldexp(float(exponent?mantissa+1024:mantissa),exponent?exponent-25:-24);if(half&0x8000)value=-value;}

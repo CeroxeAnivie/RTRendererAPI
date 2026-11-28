@@ -7,6 +7,8 @@
 
 // HDR/AOV packets have a separate descriptor and ownership protocol from the
 // legacy SDR SharedFrameProducer. All planes in a packet share one fence pair.
+inline constexpr size_t RtrLightingSignalCount=7;
+
 template<size_t PlaneCount=4>
 class RtrSignalFrameRing {
     struct Slot {
@@ -71,6 +73,13 @@ public:
             std::array<jlong,PlaneCount> handles{};std::array<int,PlaneCount> formats{};
             for(unsigned i=0;i<PlaneCount;i++)if(sources[i]){
                 auto desc=sources[i]->getDesc();desc.isUAV=false;desc.isShaderResource=true;
+                if constexpr(PlaneCount==RtrLightingSignalCount){
+                    // Toggling a signal in an available slot must not reallocate unrelated planes.
+                    if(slot.width==width&&slot.height==height&&slot.textures[i]&&slot.textures[i]->getDesc().format==desc.format){
+                        prepared[i]=slot.textures[i];sizes[i]=slot.allocation[i];handles[i]=slot.handles[i];formats[i]=slot.formats[i];
+                        continue;
+                    }
+                }
                 desc.sharedResourceFlags=nvrhi::SharedResourceFlags::Shared;desc.initialState=nvrhi::ResourceStates::Common;desc.keepInitialState=true;
                 desc.debugName="Shared HDR lighting signal";prepared[i]=device->createTexture(desc);
                 if(!prepared[i])throw std::runtime_error("Could not allocate shared HDR signal");
@@ -132,7 +141,7 @@ public:
         SignalSubmitted(device);
     }
     // [abi,slot,generation,sequence,revision,LUID,width,height,mask,fence,ready,done,
-    //  attributes,time,delta,count,{signal,format(1=RGBA16F/2=RGBA32UI),allocation,resource}...]
+    //  attributes,time,delta,count,{signal,format(1=RGBA16F/2=RGBA32UI/3=RGBA32F/4=RGBA8),allocation,resource}...]
     std::vector<jlong> Acquire(){
         std::lock_guard lock(mutex);
         RtrRequireHealthy();
@@ -143,7 +152,7 @@ public:
         for(unsigned i=0;i<PlaneCount;i++)if(slot.textures[i]){
             result.insert(result.end(),{jlong(i),slot.formats[i],jlong(slot.allocation[i]),slot.handles[i]});++result[15];
         }
-        if constexpr(PlaneCount==6){result[0]=2;result.push_back(slot.encoding);result.push_back(slot.maximumGiBits);}
+        if constexpr(PlaneCount==RtrLightingSignalCount){result[0]=2;result.push_back(slot.encoding);result.push_back(slot.maximumGiBits);}
         if constexpr(PlaneCount==8)result.insert(result.end(),slot.provenance.begin(),slot.provenance.end());
         slot.leased=true;RtrProtocolTrace::Record(5,adapter,0,latest,slot.generation,slot.sequence,slot.revision,slot.completion-1,slot.completion,0,3);return result;
     }
@@ -161,5 +170,5 @@ public:
     void Clear(bool deviceRemoved=false){std::lock_guard lock(mutex);if(!deviceRemoved)RequireRetiredLocked();for(auto& slot:slots){slot.textures={};slot.published=slot.leased=slot.returned=false;slot.width=slot.height=slot.mask=0;slot.completion=0;slot.fence.Reset();if(slot.fenceHandle)CloseHandle(slot.fenceHandle);slot.fenceHandle=nullptr;}copy=nullptr;latest=recording=-1;}
 };
 
-using RtrSignalFrames=RtrSignalFrameRing<6>;
+using RtrSignalFrames=RtrSignalFrameRing<RtrLightingSignalCount>;
 using RtrSurfaceSignalFrames=RtrSignalFrameRing<8>;

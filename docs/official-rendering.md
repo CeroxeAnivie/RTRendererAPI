@@ -72,4 +72,12 @@ IntroSample 是教学入口，官方明确不以性能与最终画质为目标�
 
 `openNativeLighting` 的材质编号和密集 GPU 行属于当前原生场景发布。资源重置后，即使网格逻辑名称和三角数相同，也必须重绑本代材质表；网格暂时离开场景后重新进入，即使回到原来的行编号，也不能沿用已被其他网格覆盖的 GPU 元数据。桥接层消费原生行变化列表，仅重发受影响的实例、几何和表面映射；完整表发布则重发相应完整元数据。
 
+独立光照的透光遮挡用线性材质颜色为阴影染色。对于折射率大于 1 的透光表面，还会按光线与几何法线夹角扣除介电反射。`MaterialAsset.transmission` 填材质本身的透射比例，不再预乘正入射反射损失；折射率为 1 时不扣除界面反射。直接可见性查询仍沿直线连接固定端点。闭合介质的折射与按光程吸收走单独的光路。
+
+`INDIRECT_DIFFUSE` 包含方向光透过闭合介质后落到接收面的漫反射。要加入局部光源，在 `RenderFrameRequest.Builder.opticalTriangleEmitters(...)` 传入该帧全部单面发光三角形。三角形两条边的叉积决定正面，颜色用线性 RGB 辐亮度，`reach` 是世界距离上限。体积内的三角形需给出发光侧包含它的常驻介质实例 ID，并指定确切的 `minimumSceneRevision`；跨界三角形须先拆分。空列表立即停止局部光源的贡献。不透过介质的路径不进入此信号；直接光仍由调用方另行配置。
+
+独立 `DIELECTRIC_RADIANCE` 信号追踪相机侧的闭合介质。宿主知道相机所在介质时，调用 `RenderFrameRequest.Builder.cameraMediumInstanceIds(...)`，传入包含相机的常驻场景实例 ID，并将 `minimumSceneRevision` 设为用于判断包含关系的确切场景版本。空列表表示相机确定在外部；不设置表示未提供。信号的 alpha 为正时，`RGB` 是界面后的线性辐亮度，alpha 是首界面距离；alpha 为负时，`RGB` 是到不透明命中的线性透射率，宿主只应在其深度匹配 `-alpha` 时乘到已有颜色。两种距离均沿归一化的相机射线，以世界单位计；alpha 为零表示没有有效结果。
+
+向 `RenderFrameRequest.environment(...)` 传入带 `EnvironmentMap` 的环境后，介质射线离开最后一个界面且未命中场景时，会用折射或反射后的世界方向采样这张线性 HDR 图。贴图经度横向环绕、纬度纵向钳制；不乘 `ambientIntensity`，也不混入独立太阳。清除贴图就恢复常量 `skyRadiance`。启用介质信号且场景包含介质边界时才上传；相机、太阳和其他灯光的变化不会重传同一张图。
+
 显式 GPU 回归入口为 `:renderer-rtxpt:rtxptLightingResetNativeSelfTest` 和 `:renderer-rtxpt:rtxptLightingReentryNativeSelfTest`。前者覆盖多次重置和同名同布局复用，后者覆盖帧图元撤出、密集槽复用和重新进入。它们不会随普通 CPU `check` 自动启动。

@@ -1,11 +1,20 @@
 #pragma once
 #include "rtxpt_process_policy.h"
 #include "SampleCommon/ShaderCompilerUtils.h"
+#include <atomic>
+#include <cerrno>
 #include <fstream>
 #include <set>
 #include <sstream>
 
 namespace rtr::upstream {
+inline std::filesystem::path PrecompiledInstallPath(const std::filesystem::path& directory) {
+    // A shader's hashed filename can already be close to the Windows path limit.
+    // Keep the temporary sibling short and unique across sessions in this process.
+    static std::atomic_uint32_t sequence{0};
+    return directory / (".rtr-" + std::to_string(GetCurrentProcessId()) + "-" +
+        std::to_string(sequence.fetch_add(1, std::memory_order_relaxed)) + ".tmp");
+}
 inline std::string ReadPrecompiledFile(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input) throw std::runtime_error("Missing precompiled runtime input: " + path.string());
@@ -77,12 +86,25 @@ inline void InstallPrecompiledShaders(const std::filesystem::path& bin) {
         std::filesystem::create_directories(target.parent_path());
         // Never promote an unknown or corrupted existing cache binary.
         if(!std::filesystem::exists(target)||ReadPrecompiledFile(target)!=payload){
-            auto temporary=target;temporary+="."+std::to_string(GetCurrentProcessId())+".install";
-            {std::ofstream output(temporary,std::ios::binary|std::ios::trunc);
+            const auto temporary=PrecompiledInstallPath(target.parent_path());
+            {
+                std::ofstream output(temporary,std::ios::binary|std::ios::trunc);
+                if(!output)throw std::runtime_error("Cannot open temporary precompiled shader; errno="+
+                    std::to_string(errno)+": "+temporary.string());
                 output.write(payload.data(),payload.size());
-                if(!output)throw std::runtime_error("Cannot install precompiled shader: "+target.string());}
+                output.close();
+                if(!output){
+                    const auto error=errno;
+                    std::error_code ignored;
+                    std::filesystem::remove(temporary,ignored);
+                    throw std::runtime_error("Cannot write temporary precompiled shader; errno="+
+                        std::to_string(error)+": "+temporary.string());
+                }
+            }
             if(!MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)) {
-                const auto error=GetLastError();std::filesystem::remove(temporary);
+                const auto error=GetLastError();
+                std::error_code ignored;
+                std::filesystem::remove(temporary,ignored);
                 throw std::runtime_error("Cannot publish precompiled shader; Win32="+std::to_string(error));
             }
         }
@@ -95,9 +117,9 @@ inline void InstallPrecompiledShaders(const std::filesystem::path& bin) {
 
 class PrecompiledGlobals {
 public:
-    void Check(const std::vector<donut::engine::ShaderMacro>& macros) {
+    void Check(const std::vector<donut::engine::ShaderMacro>& macros, const std::filesystem::path& bin) {
         if(m_names.empty()) {
-            std::istringstream input(ReadPrecompiledText(donut::app::GetDirectoryWithExecutable()/"PrecompiledShaders/globals.txt"));
+            std::istringstream input(ReadPrecompiledText(bin/"PrecompiledShaders/globals.txt"));
             std::string line;
             if(!std::getline(input,line)||line!="rtr-precompiled-globals-v1"||!std::getline(input,line))
                 throw std::runtime_error("Invalid precompiled global profile catalogue");

@@ -83,10 +83,22 @@ public final class RtxptEnvironmentMapSelfTest {
         }
         require(Arrays.equals(legacy.sun(), lighting.sun()) && Arrays.equals(legacy.records(), lighting.records()), "Environment map leaves independent sun and other light records unchanged");
         sky[6] = 10000f; require(lighting.sky()[6] == radiance[0], "Encoded payload is independent of immutable map storage");
+
+        require(Arrays.equals(lighting.skyPatch(null), lighting.sky()), "First publication sends the complete map");
+        require(lighting.skyPatch(equal).length == 0, "Separate content-equal maps do not transfer again");
+        var relit = equal.toBuilder().sunIntensity(.25f).skyRadiance(1, 2, 3).ambientIntensity(5).build();
+        require(RtxptLighting.of(relit, List.of()).skyPatch(mapped).length == 0,
+                "Sun and unused fallback changes must not send the map again");
+        radiance[2] = 4f;
+        var changed = mapped.toBuilder().environmentMap(new EnvironmentMap(2, 2, radiance)).build();
+        require(RtxptLighting.of(changed, List.of()).skyPatch(mapped)[8] == 4f, "Changed radiance replaces the resident map");
+        require(Arrays.equals(legacy.skyPatch(mapped), legacy.sky()), "Leaving mapped mode explicitly clears the resident map");
+        require(legacy.skyPatch(constant.toBuilder().sunIntensity(.25f).build()).length == 0,
+                "Sun-only changes skip the constant payload too");
     }
 
     public static void main(String[] args) {
         bounds(); ownership(); payload();
-        System.out.println("ENVIRONMENT_MAP_CPU PASS bounds=true defensiveCopies=true hdr=true equality=true copy=true clear=true constantUnchanged=true mapPayload=true noAmbientScale=true sunIndependent=true");
+        System.out.println("ENVIRONMENT_MAP_CPU PASS bounds=true defensiveCopies=true hdr=true equality=true copy=true clear=true constantUnchanged=true mapPayload=true noAmbientScale=true sunIndependent=true skipUnchangedSky=true");
     }
 }

@@ -92,6 +92,14 @@ def build(runtime, sdk, compiler, output, plan_only=False):
     output.mkdir(parents=True, exist_ok=True)
     debug = output/'metadata'
     debug.mkdir(exist_ok=True)
+    compiled = output/'compiled'
+    catalogue = runtime/'PrecompiledShaders'
+    blobs = catalogue/'blobs'
+    if not plan_only:
+        import shutil
+        shutil.rmtree(compiled, ignore_errors=True)
+        shutil.rmtree(blobs, ignore_errors=True)
+        blobs.mkdir(parents=True, exist_ok=True)
     names = global_names(sdk)
     entries, globals_, skipped, plans = {}, set(), [], {}
     candidates = sorted(cache.rglob('*.bin'))
@@ -125,10 +133,10 @@ def build(runtime, sdk, compiler, output, plan_only=False):
                     label = defs['RTXPT_MATERIAL_PERMUTATION_NAME'].split('_', 1)[0] + '_RtrStandard'
                     raw = raw.replace('RTXPT_MATERIAL_PERMUTATION_NAME='+defs['RTXPT_MATERIAL_PERMUTATION_NAME'],
                                       'RTXPT_MATERIAL_PERMUTATION_NAME='+label)
-            key = sha(raw.encode())[:24]
+            key = sha((raw+'\0-Qstrip_debug').encode())[:24]
             relative = binary.relative_to(cache)
             prefix = relative.as_posix().rsplit('_', 1)[0]
-            alias = output/'compiled'/(prefix+'_'+key+'.bin')
+            alias = compiled/(prefix+'_'+key+'.bin')
             if all(name in defs for name in names):
                 signature = ''.join(name+'='+defs[name]+'\n' for name in names)
                 globals_.add(sha(signature.encode()))
@@ -149,7 +157,7 @@ def build(runtime, sdk, compiler, output, plan_only=False):
                 finally:
                     kernel.LocalFree(ctypes.cast(argv, ctypes.c_void_p))
                 alias.parent.mkdir(parents=True, exist_ok=True)
-                subprocess.run([str(compiler), *values, '-Fo', str(alias)], check=True)
+                subprocess.run([str(compiler), *values, '-Qstrip_debug', '-Fo', str(alias)], check=True)
             template = raw.replace(str(runtime), '${BIN}')
             if '${BIN}' not in template or old_root in template and old_root != str(runtime):
                 raise ValueError('Non-relocatable command')
@@ -211,6 +219,8 @@ def build_plan(runtime, compiler, output, checked_plan, plan_only):
     blobs = catalogue/'blobs'
     compiled = output/'checked-compiled'
     if not plan_only:
+        shutil.rmtree(compiled, ignore_errors=True)
+        shutil.rmtree(blobs, ignore_errors=True)
         compiled.mkdir(parents=True, exist_ok=True)
         blobs.mkdir(parents=True, exist_ok=True)
     lines = ['rtr-precompiled-runtime-v1']
@@ -219,7 +229,9 @@ def build_plan(runtime, compiler, output, checked_plan, plan_only):
         if not re.fullmatch(r'[A-Za-z0-9_/]+', prefix) or '${BIN}' not in template:
             raise ValueError('Invalid checked precompiled command')
         raw = template.replace('${BIN}', str(runtime))
-        key = sha((raw+source_stamp+plan['compiler_sha256']).encode())
+        # The checked official commands include -Zi/-Qembed_debug. Strip both
+        # compiler debug data and source text from redistributable DXIL.
+        key = sha((raw+source_stamp+plan['compiler_sha256']+'\0-no-debug').encode())
         target = compiled/(key+'.bin')
         if not target.exists() and not plan_only:
             count = ctypes.c_int()
@@ -230,7 +242,8 @@ def build_plan(runtime, compiler, output, checked_plan, plan_only):
                 values = [argv[i] for i in range(1, count.value)]
             finally:
                 kernel.LocalFree(ctypes.cast(argv, ctypes.c_void_p))
-            subprocess.run([str(compiler), *values, '-Fo', str(target)], check=True)
+            values = [value for value in values if value not in ('-Zi', '-Qembed_debug')]
+            subprocess.run([str(compiler), *values, '-Qstrip_debug', '-Fo', str(target)], check=True)
         if not plan_only:
             digest = sha(target.read_bytes())
             blob = blobs/(digest+'.bin')

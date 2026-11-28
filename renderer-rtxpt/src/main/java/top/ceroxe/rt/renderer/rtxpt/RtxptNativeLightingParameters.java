@@ -55,6 +55,10 @@ final class RtxptNativeLightingParameters {
         values[88]=skyActive?sky.strength():0;values[89]=skyActive?sky.reach():1;
         var response=plan.wetFilmRoughnessResponse();
         values[92]=response.start();values[93]=response.end();values[94]=response.scale();
+        if(plan.signals().contains(NativeLightingPlan.Signal.DIELECTRIC_RADIANCE)){
+            // Spare scalar lanes in the native lighting constants carry linear optical sky RGB.
+            values[90]=environment.skyRed();values[91]=environment.skyGreen();values[95]=environment.skyBlue();
+        }
         return values;
     }
 }

@@ -22,6 +22,7 @@ public final class RtxptNativeLightingCompactContractSelfTest {
         require(new RtxptLightingFrameLease(0,response).frame().encoding()==NativeLightingPlan.Encoding.COMPACT_RESPONSE_UNORM8,"Response encoding retains its exact packet identity");
         var invalid=v2.clone();invalid[20]=3;reject(()->new RtxptLightingFrameLease(0,invalid));
         reject(()->new RtxptLightingFrameLease(0,Arrays.copyOf(v2,21)));
+        checkDielectricPacket(v2);
         var lease=new RtxptLightingFrameLease(0,v2);
         Thread initialOwner=Thread.currentThread();
         var failure=new java.util.concurrent.atomic.AtomicReference<Throwable>();
@@ -40,6 +41,30 @@ public final class RtxptNativeLightingCompactContractSelfTest {
         require(lease.frame().sequence()==12,"Ownership can be explicitly returned before import");
         lease.markImported();reject(()->lease.transferTo(consumer));
         // The synthetic handle is intentionally never released through JNI.
-        System.out.println("NATIVE_LIGHTING_COMPACT_CONTRACT PASS legacyHDR=true v1=true v2=true maxGi=2.5 format=RGBA8_UNORM");
+        System.out.println("NATIVE_LIGHTING_COMPACT_CONTRACT PASS legacyHDR=true v1=true v2=true maxGi=2.5 dielectric=true");
+    }
+
+    private static void checkDielectricPacket(long[] compact){
+        var signal=NativeLightingPlan.Signal.DIELECTRIC_RADIANCE;
+        var plan=new NativeLightingPlan(48,32,Set.of(signal),0,1,0,NativeLightingStyle.defaults());
+        require(signal.ordinal()==6&&plan.signalMask()==64,"Dielectric ordinal and wire bit");
+        var dielectricOnly=compact.clone();dielectricOnly[8]=64;
+        dielectricOnly[16]=6;dielectricOnly[17]=3;dielectricOnly[18]=48*32*16;
+        var only=new RtxptLightingFrameLease(0,dielectricOnly).frame();
+        require(only.planes().equals(List.of(new LightingFrameLease.Plane(signal,LightingFrameLease.Format.RGBA32_FLOAT,48*32*16,1000))),
+            "Dielectric-only packet retains float radiance, distance and the resource handle under compact encoding");
+        int[] formats={4,4,3,2,1,1,3};
+        var packet=Arrays.copyOf(compact,18+4*formats.length);packet[8]=127;packet[15]=formats.length;
+        for(int ordinal=0;ordinal<formats.length;ordinal++){
+            int at=16+ordinal*4;
+            packet[at]=ordinal;packet[at+1]=formats[ordinal];packet[at+2]=65536;packet[at+3]=1000+ordinal;
+        }
+        packet[packet.length-2]=compact[20];packet[packet.length-1]=compact[21];
+        var all=new RtxptLightingFrameLease(0,packet).frame();
+        require(all.planes().size()==7&&all.planes().getLast().signal()==signal&&all.planes().getLast().memoryHandle()==1006,
+            "All seven planes decode in one packet");
+        require(all.fenceHandle()==100&&all.readyValue()==1&&all.completionValue()==2,"Dielectric plane uses the atomic packet fence");
+        dielectricOnly[17]=1;reject(()->new RtxptLightingFrameLease(0,dielectricOnly));
+        packet[40]=5;reject(()->new RtxptLightingFrameLease(0,packet));
     }
 }

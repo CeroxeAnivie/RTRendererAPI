@@ -1,0 +1,15 @@
+{
+  "format": "rtr-authorized-embedded-variant-v1",
+  "source": "External/Donut/src/app/ApplicationBase.cpp",
+  "officialSha256": "f0c32e67aa3ec7c263a0d0248581a0213e0e47a9be9edcc57bc0721cd55bb9fb",
+  "operations": [
+    {
+      "anchor": "#include <donut/app/ApplicationBase.h>\n",
+      "insertion": "#include \"rtxpt_embedded_startup.h\"\n"
+    },
+    {
+      "anchor": "std::filesystem::path donut::app::GetDirectoryWithExecutable()\n{\n",
+      "insertion": "    if (const auto* startup = rtr::upstream::embeddedStartup)\n        return startup->runtimeBin;\n"
+    }
+  ]
+}

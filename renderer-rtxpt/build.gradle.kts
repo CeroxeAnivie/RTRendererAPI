@@ -74,11 +74,23 @@ listOf("RtxptLightingResetNativeSelfTest", "RtxptLightingReentryNativeSelfTest")
             "-MainClass", "top.ceroxe.rt.renderer.rtxpt.$name")
     }
 }
+tasks.register<Exec>("rtxptOpticalTriangleEmitterNativeSelfTest") {
+    group = "verification"
+    description = "Verify finite optical flux, source replacement, blocker coverage and removal on the GPU"
+    dependsOn("rtxptReleaseValidationClasspath")
+    workingDir(rootProject.projectDir)
+    environment("RTR_RTXPT_BACKGROUND_WINDOW", "1")
+    environment("RTR_RTXPT_REQUIRE_PRECOMPILED", "1")
+    commandLine("pwsh", "-NoProfile", "-File", "tools/Invoke-RtxptHost.ps1",
+        "-MainClass", "top.ceroxe.rt.renderer.rtxpt.RtxptOpticalTriangleEmitterNativeSelfTest",
+        "-ApplicationArguments", layout.buildDirectory.dir("reports/optical-triangle-emitter").get().asFile.absolutePath)
+}
 val runtimeRoot = rootProject.layout.buildDirectory.dir("upstream-rtxpt/runtime/rtxpt_v.1.9.0_binaries")
 val buildBridge = tasks.register<Exec>("buildRtxptBridge") {
     group = "build"
     workingDir(rootProject.projectDir)
-    inputs.files(rootProject.fileTree("renderer-rtxpt/src/main/cpp") { include("**/*.cpp", "**/*.h", "**/*.manifest", "CMakeLists.txt") }, rootProject.file("tools/Build-RtxptBridge.ps1"), rootProject.file("tools/Build-RtxptUpstream.ps1"), rootProject.file("tools/RtxptBridgeProject.cmake"), rootProject.file("tools/RtxptProgressPatch.cmake"), rootProject.file("tools/patches/progress-noninteractive.patch"), rootProject.file("tools/RtxptOfflinePatch.cmake"), rootProject.file("tools/patches/streamline-offline-preferences.patch"), rootProject.file("tools/Assert-RtxptAuthorizedPatches.ps1"))
+    inputs.files(rootProject.fileTree("renderer-rtxpt/src/main/cpp") { include("**/*.cpp", "**/*.h", "**/*.manifest", "CMakeLists.txt") }, rootProject.file("tools/Build-RtxptBridge.ps1"), rootProject.file("tools/Build-RtxptUpstream.ps1"), rootProject.file("tools/RtxptBridgeProject.cmake"), rootProject.file("tools/RtxptProgressPatch.cmake"), rootProject.file("tools/patches/progress-noninteractive.patch"), rootProject.file("tools/RtxptOfflinePatch.cmake"), rootProject.file("tools/RtxptPipelineCachePatch.cmake"), rootProject.file("tools/patches/streamline-offline-preferences.patch"), rootProject.file("tools/patches/runtime-root-lookup.patch"), rootProject.file("tools/patches/runtime-root-lookup.json"), rootProject.file("tools/patches/embedded-window.json"), rootProject.file("tools/patches/embedded-window.patch"), rootProject.file("tools/Assert-RtxptAuthorizedPatches.ps1"))
+    inputs.property("releaseDxilDebug", "stripped")
     outputs.files(runtimeRoot.map { it.file("bin/rtrenderer_rtxpt.dll") }, runtimeRoot.map { it.file("bin/rtrenderer_jvm_host.exe") })
     inputs.file(rootProject.file("tools/patches/streamline-offline-preferences.json"))
     inputs.files(rootProject.file("tools/patches/streamline-offline-device.patch"), rootProject.file("tools/patches/streamline-offline-device.json"))
@@ -93,6 +105,7 @@ val buildAdapterShaders = tasks.register<Exec>("buildAdapterShaders") {
     inputs.files(rootProject.fileTree("renderer-rtxpt/src/main/cpp") {
         include("**/*.hlsl", "**/*.hlsli", "AdapterShaders.cfg")
     }, rootProject.file("tools/Build-AdapterShaders.ps1"))
+    inputs.property("releaseDxilDebug", "stripped")
     inputs.file(rootProject.layout.buildDirectory.file("upstream-rtxpt/source-manifest.json"))
     outputs.dir(runtimeRoot.map { it.dir("bin/AdapterShaders") })
     commandLine("pwsh", "-NoProfile", "-File", "tools/Build-AdapterShaders.ps1")
@@ -102,6 +115,7 @@ val buildPrecompiledRuntime = tasks.register<Exec>("buildPrecompiledRuntime") {
     dependsOn(buildAdapterShaders)
     workingDir(rootProject.projectDir)
     inputs.file(rootProject.file("tools/Build-PrecompiledRuntime.py"))
+    inputs.property("releaseDxilDebug", "stripped")
     inputs.file(rootProject.file("tools/rtxpt-precompiled-commands.json"))
     inputs.file(rootProject.layout.buildDirectory.file("upstream-rtxpt/source-manifest.json"))
     outputs.dir(runtimeRoot.map { it.dir("bin/PrecompiledShaders") })
@@ -154,7 +168,7 @@ val runtimeArchive = tasks.register<Zip>("packageRtxptRuntime") {
     destinationDirectory.set(layout.buildDirectory.dir("native-package"))
     from(runtimeRoot) {
         (coreRuntimeFiles + coreRuntimeAssets).forEach { include(it) }
-        exclude("**/*.pdb", "bin/Rtxpt.exe", "bin/IntroSample.exe", "bin/ShaderDynamic/Bin/**")
+        exclude("**/*.pdb", "**/*.signature", "bin/Rtxpt.exe", "bin/IntroSample.exe", "bin/ShaderDynamic/Bin/**")
     }
     from(coreRuntimeLayout) { includeEmptyDirs = true }
     doFirst {
@@ -218,7 +232,8 @@ val runtimeDigest = tasks.register("hashRtxptRuntime") {
     dependsOn(runtimeArchive)
     val archive = runtimeArchive.flatMap { it.archiveFile }
     val output = layout.buildDirectory.file("native-package/rtxpt-runtime.sha256")
-    inputs.file(archive); outputs.file(output)
+    val manifest = layout.buildDirectory.file("native-package/rtxpt-runtime.files.sha256")
+    inputs.file(archive); outputs.files(output, manifest)
     doLast {
         val digest = MessageDigest.getInstance("SHA-256")
         archive.get().asFile.inputStream().use { stream ->
@@ -226,6 +241,17 @@ val runtimeDigest = tasks.register("hashRtxptRuntime") {
             while (true) { val count = stream.read(bytes); if (count < 0) break; digest.update(bytes, 0, count) }
         }
         output.get().asFile.writeText(HexFormat.of().formatHex(digest.digest()) + "\n", Charsets.US_ASCII)
+        val lines = ZipFile(archive.get().asFile).use { zip ->
+            zip.entries().asSequence().filterNot { it.isDirectory }.map { entry ->
+                val hash = MessageDigest.getInstance("SHA-256")
+                zip.getInputStream(entry).use { input ->
+                    val buffer = ByteArray(65536)
+                    while (true) { val count = input.read(buffer); if (count < 0) break; if (count > 0) hash.update(buffer, 0, count) }
+                }
+                HexFormat.of().formatHex(hash.digest()) + "  " + entry.name
+            }.sorted().joinToString("\n", postfix = "\n")
+        }
+        manifest.get().asFile.writeText(lines, Charsets.US_ASCII)
     }
 }
 tasks.named<Jar>("jar") {
@@ -233,7 +259,7 @@ tasks.named<Jar>("jar") {
     entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
     dependsOn(runtimeDigest)
     from(layout.buildDirectory.dir("native-package")) {
-        include("rtxpt-runtime.zip", "rtxpt-runtime.sha256")
+        include("rtxpt-runtime.zip", "rtxpt-runtime.sha256", "rtxpt-runtime.files.sha256")
         into("META-INF/native/windows-x86_64")
     }
 }

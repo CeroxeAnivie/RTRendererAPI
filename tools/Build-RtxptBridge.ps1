@@ -2,8 +2,9 @@
 .SYNOPSIS
 Build the external API adapter against the verified, unmodified RTXPT release.
 .DESCRIPTION
-8.0 permits the audited noninteractive progress guard and network-only preferences.
-No upstream rendering/shader patches, source overlays, or shader injection.
+8.0 permits audited integration variants for noninteractive startup, network policy,
+embedded runtime/window behavior, and bounded D3D12 compute PSO persistence.
+No shader source injection or rendering/lighting algorithm changes are made.
 Legacy overlay build arguments are intentionally unsupported.
 #>
 param(

@@ -11,6 +11,8 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private final Thread owner=Thread.currentThread();
     private final boolean externalPresentation;
     private final boolean officialOnly;
+    private final Path runtimeCacheRoot;
+    private final Path runtimeBin;
     private final RendererResourceOptions resources;
     private final RtxptOptions options;
     private final RendererFeatureProfile featureProfile;
@@ -28,6 +30,8 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
     private final Map<Long,Map<String,RtxptScene.Item>> memoryMeshVariants=new HashMap<>();
     private RtxptScene scene=new RtxptScene(),residentScene=new RtxptScene();
     private List<RtxptScene.Item> previous=List.of();
+    private List<OpticalTriangleEmitter> appliedOpticalEmitters=List.of();
+    private RtxptOpticalEmitterPacket appliedOpticalEmitterPacket=RtxptOpticalEmitterPacket.pack(List.of());
     private long handle,revision,submitted=-1,completed=-1;
     private boolean closed,scenePublished,fullReset=true,windowClosed;
     private boolean sessionRequiresStreamline;
@@ -55,15 +59,18 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
 
     RtxptRenderer(RendererConfig config){this(config,false);}
     RtxptRenderer(RendererConfig config,boolean externalPresentation){this(config,externalPresentation,false);}
-    RtxptRenderer(RendererConfig config,boolean externalPresentation,boolean officialOnly){
+    RtxptRenderer(RendererConfig config,boolean externalPresentation,boolean officialOnly){this(config,externalPresentation,officialOnly,null);}
+    RtxptRenderer(RendererConfig config,boolean externalPresentation,boolean officialOnly,Path runtimeCacheRoot){
         this.externalPresentation=externalPresentation;
         this.officialOnly=officialOnly;
+        this.runtimeCacheRoot=runtimeCacheRoot;
+        runtimeBin=RtxptRuntime.binDirectory(runtimeCacheRoot);
         if(officialOnly)RtxptOptions.requireOfficial(config);
         resources=config.resources();
         featureProfile=RtxptOptions.profile(config);
         options=RtxptOptions.resolve(featureProfile);
         exposureOffset=options.quality().postProcessing().exposureOffset();
-        RtxptNative.load();
+        RtxptNative.load(runtimeBin);
     }
     private void ready(){
         if(closed)throw new IllegalStateException("RTXPT renderer closed");
@@ -128,6 +135,15 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         RtxptInputContract.validateFrame(frame,nativeLightingPlan!=null);
         if(frame.sequence()<=submitted||frame.minimumSceneRevision()>revision)throw new IllegalArgumentException("Frame sequence or resident revision mismatch");
         if(frame.width()>16384||frame.height()>16384)throw new IllegalArgumentException("Output extent exceeds the D3D12 limit");
+        var opticalEmitters=nativeLightingPlan!=null&&nativeLightingPlan.signals().contains(NativeLightingPlan.Signal.INDIRECT_DIFFUSE)
+                ?frame.opticalTriangleEmitters():List.<OpticalTriangleEmitter>of();
+        boolean opticalChanged=opticalEmitters!=appliedOpticalEmitters;
+        var opticalPacket=opticalChanged?RtxptOpticalEmitterPacket.pack(opticalEmitters):appliedOpticalEmitterPacket;
+        if(opticalPacket.containsMedia()){
+            if(frame.minimumSceneRevision()!=revision)
+                throw new IllegalArgumentException("Optical emitter containment does not describe the current scene revision");
+            if(opticalChanged||scene!=residentScene)opticalPacket.validateVolumes(scene);
+        }
         if(nativeLightingPlan!=null&&nativeLightingPlan.style().additionMode().ordinal()>=NativeLightingStyle.AdditionMode.HOST_RESPONSE_RATIO_V1.ordinal()&&lightingHostResponse==null)
             throw new IllegalStateException("Publish the host response before HOST_RESPONSE_RATIO_V1");
         // trySubmit already checked this renderer-thread admission. No other
@@ -146,7 +162,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         try{
             if(first){
                 sessionRequiresStreamline=nativeLightingPlan==null||lightingReconstruction==NativeLightingReconstruction.DLSS_RR;
-                handle=RtxptNative.createSession(RtxptNative.runtime().toString(),nativeScene==null?null:nativeScene.toString(),nativeWidth,nativeHeight,externalPresentation,sessionRequiresStreamline,options.arguments());
+                handle=RtxptNative.createSession(runtimeBin.toString(),runtimeCacheRoot==null?null:runtimeCacheRoot.toAbsolutePath().normalize().toString(),nativeScene==null?null:nativeScene.toString(),nativeWidth,nativeHeight,externalPresentation,sessionRequiresStreamline,options.arguments());
                 if(officialOnly)RtxptNative.officialMode(handle);
                 RtxptNative.diagnosticLevel(handle,recorder.level().ordinal());
                 RtxptNative.presentation(handle,options.maxBounces(),options.diffuseBounces(),options.reflex(),options.generatedFrames());
@@ -162,7 +178,24 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             RtxptNative.frameContext(handle,frame.sequence(),revision);
             if(extentChanged&&!first){RtxptNative.resize(handle,nativeWidth,nativeHeight);width=nativeWidth;height=nativeHeight;}
             // Select the external direct pass before importing materials with explicit sampler policies.
-            if(nativeLightingPlan!=null)RtxptNative.nativeLighting(handle,RtxptNativeLightingParameters.pack(nativeLightingPlan,frame));
+            if(nativeLightingPlan!=null){
+                var parameters=RtxptNativeLightingParameters.pack(nativeLightingPlan,frame);
+                var containment=frame.cameraMediumInstanceIds();
+                if(containment.isEmpty()||!nativeLightingPlan.signals().contains(NativeLightingPlan.Signal.DIELECTRIC_RADIANCE))
+                    RtxptNative.nativeLighting(handle,parameters);
+                else{
+                    if(frame.minimumSceneRevision()!=revision)throw new IllegalArgumentException("Camera containment does not describe the current scene revision");
+                    var ids=containment.orElseThrow();
+                    var volumes=new String[ids.size()];
+                    for(int i=0;i<volumes.length;i++){
+                        long id=ids.get(i);var instance=scene.instances.get(id);
+                        if(instance==null||instance.mediumBoundary().isEmpty())
+                            throw new IllegalArgumentException("Unknown camera medium instance: "+id);
+                        volumes[i]="i"+id;
+                    }
+                    RtxptNative.nativeLightingContainment(handle,parameters,volumes);
+                }
+            }
             var before=reset?new RtxptScene():residentScene;
             RtxptDelta.Prepared pendingMeshImport=null;
             var items=nativeScene==null?scene.items(frame):List.<RtxptScene.Item>of();
@@ -210,6 +243,8 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
             long attributeItems=lightingAttributeReset?lightingInstances.size()+scene.meshes.size():pendingLightingInstances.size()+pendingLightingBaselines.size()+pendingLightingColors.size()+pendingGeometryVariants.size();
             try{prepareNativeLighting(frame,items);failed=false;}
             finally{recorder.add(frame.sequence(),revision,RtxptDiagnostics.Stage.ATTRIBUTES,begin,attributeItems,0,failed);}
+            if(opticalChanged||(reset&&!opticalEmitters.isEmpty()))
+                RtxptNative.nativeOpticalTriangleEmitters(handle,opticalPacket.records(),opticalPacket.volumes());
             if(!frame.temporalHistoryResets().isEmpty())RtxptNative.resetHistory(handle);
             begin=recorder.clock();failed=true;
             try{
@@ -222,6 +257,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
                 RtxptOptions.validateRequired(featureProfile,renderingState(),presentationState());
             if(pendingMeshImport!=null)RtxptDelta.commitMeshVariants(memoryMeshVariants,pendingMeshImport);
             if(reset)resourcePackets.clear();
+            appliedOpticalEmitters=opticalEmitters;appliedOpticalEmitterPacket=opticalPacket;
             submitted=completed=frame.sequence();residentScene=scene;previous=items;fullReset=false;scene.retireResourceSnapshots();
             var reasons=EnumSet.noneOf(HistoryInvalidationReason.class);
             if(first)reasons.add(HistoryInvalidationReason.FIRST_FRAME);
@@ -238,13 +274,19 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         }
     }
     private void publishLights(RtxptScene before,EnvironmentState nextEnvironment,boolean reset){
-        boolean environmentChanged=reset||!Objects.equals(environment,nextEnvironment);
+        boolean nativeLighting=nativeLightingPlan!=null;
+        boolean firstNativeLighting=nativeLighting&&appliedLightingPlan==null;
+        boolean environmentChanged=reset||firstNativeLighting||!Objects.equals(environment,nextEnvironment);
         if(!reset&&scene.lights.sameSnapshot(before.lights)&&scene.sparseSources.sameSnapshot(before.sparseSources)&&!environmentChanged)return;
         var lights=new ArrayList<SceneLight>();var removedLights=new ArrayList<Long>();
         scene.lights.forEachChanged(before.lights,(id,value)->{if(value==null)removedLights.add(id);else lights.add(value);});
         if(reset||!lights.isEmpty()||!removedLights.isEmpty()||environmentChanged){
             var packet=RtxptLighting.of(nextEnvironment,lights);var all=packet.records();
-            RtxptNative.lightingPatch(handle,lights.stream().mapToLong(SceneLight::id).toArray(),Arrays.copyOfRange(all,16,all.length),removedLights.stream().mapToLong(Long::longValue).toArray(),packet.sun(),environmentChanged?packet.sky():new float[0]);
+            // Independent lighting keeps the map across scene resets and ignores
+            // the unused constant fallback while a map is set. Keep beauty's sky
+            // publication unchanged; its analytic mode also reads the header.
+            var sky=!nativeLighting&&environmentChanged?packet.sky():packet.skyPatch(firstNativeLighting?null:environment);
+            RtxptNative.lightingPatch(handle,lights.stream().mapToLong(SceneLight::id).toArray(),Arrays.copyOfRange(all,16,all.length),removedLights.stream().mapToLong(Long::longValue).toArray(),packet.sun(),sky);
         }
         var sources=new ArrayList<SparseLightSource>();var removed=new ArrayList<Long>();
         scene.sparseSources.forEachChanged(before.sparseSources,(id,value)->{if(value==null)removed.add(id);else sources.add(value);});
@@ -459,6 +501,7 @@ final class RtxptRenderer implements Renderer, RtxptAccess,
         if(handle!=0&&nativeLightingPlan!=null&&!RtxptNative.nativeLightingConsumersRetired(handle))throw new IllegalStateException("Complete imported lighting consumers before closing");
         if(handle!=0)RtxptNative.close(handle);
         handle=0;closed=true;recorder.close();scene=new RtxptScene();residentScene=new RtxptScene();previous=List.of();memoryTextures.clear();memoryMaterialVariants.clear();memoryMeshVariants.clear();resourcePackets.close();
+        appliedOpticalEmitters=List.of();appliedOpticalEmitterPacket=RtxptOpticalEmitterPacket.pack(List.of());
         lightingInstances.clear();lightingBaselines.clear();pendingLightingInstances.clear();pendingLightingBaselines.clear();pendingLightingColors.clear();pendingGeometryVariants=List.of();
         pendingBaselineLookup=null;lightingBaselineLookup=null;lightingHostResponse=null;applicationData.clear();
     }

@@ -22,7 +22,7 @@ float NearestOpaqueBlocker(float3 position,float3 normal,float3 lightDirection)
 {
     RayDesc ray;
     ray.Origin=position+normal*g.gi.z;ray.Direction=lightDirection;ray.TMin=g.gi.z;ray.TMax=1e20;
-    RayQuery<RAY_FLAG_NONE> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),1,ray);
+    RayQuery<RAY_FLAG_NONE> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),RtrQueryMask(2),ray);
     while(query.Proceed())if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE){
         uint instance=query.CandidateInstanceIndex(),primitive=query.CandidatePrimitiveIndex();
         RtrInstance data=t_InstanceAttributes[instance];uint roles=uint(data.rolesVisibility.x);
@@ -31,7 +31,7 @@ float NearestOpaqueBlocker(float3 position,float3 normal,float3 lightDirection)
         GeometryData geometry=t_Geometry[index];RtrGeometryAttributes mapping=t_GeometryBaselines[index];
         MaterialConstants material=RtrMaterial(geometry,primitive,mapping);
         float3 transmission;bool opaque;
-        if(RtrAcceptCandidateSurface(data,primitive,query.CandidateTriangleBarycentrics(),2,geometry,mapping,material,transmission,opaque)&&opaque)
+        if(RtrAcceptCandidateSurface(data,primitive,query.CandidateTriangleBarycentrics(),2,geometry,mapping,material,1,0,0,transmission,opaque)&&opaque)
             query.CommitNonOpaqueTriangleHit();
     }
     return query.CommittedStatus()==COMMITTED_TRIANGLE_HIT?max(0,query.CommittedRayT()-g.gi.z):0;

@@ -1,9 +1,7 @@
 --- a/External/Donut/src/app/dx12/DeviceManager_DX12.cpp
 +++ b/External/Donut/src/app/dx12/DeviceManager_DX12.cpp
-@@ -67,6 +67,53 @@
- using namespace donut::app;
- 
- #define HR_RETURN(hr) if(FAILED(hr)) return false;
+@@ -69,0 +70,55 @@
++#include "rtxpt_embedded_startup.h"
 +#if DONUT_WITH_STREAMLINE
 +namespace donut::app { bool RtrStreamlineSessionEnabled(); }
 +
@@ -32,6 +30,11 @@
 +}
 +static HRESULT RtrNetworkD3D12GetDebugInterface(REFIID iid, void** debug)
 +{
++    if (const auto* startup = rtr::upstream::embeddedStartup)
++    {
++        constexpr GUID debugClsid{0xf2352aeb, 0xdd84, 0x49fe, {0xb9, 0x7b, 0xa9, 0xdc, 0xfd, 0xcc, 0x1b, 0x4f}};
++        return startup->deviceFactory->GetConfigurationInterface(debugClsid, iid, debug);
++    }
 +    if (donut::app::RtrStreamlineSessionEnabled())
 +        return D3D12GetDebugInterface(iid, debug);
 +    auto function = reinterpret_cast<decltype(&D3D12GetDebugInterface)>(RtrNativeSystemEntryPoint(false, "D3D12GetDebugInterface"));
@@ -39,6 +42,8 @@
 +}
 +static HRESULT RtrNetworkD3D12CreateDevice(IUnknown* adapter, D3D_FEATURE_LEVEL level, REFIID iid, void** device)
 +{
++    if (const auto* startup = rtr::upstream::embeddedStartup)
++        return startup->deviceFactory->CreateDevice(adapter, level, iid, device);
 +    if (donut::app::RtrStreamlineSessionEnabled())
 +        return D3D12CreateDevice(adapter, level, iid, device);
 +    auto function = reinterpret_cast<decltype(&D3D12CreateDevice)>(RtrNativeSystemEntryPoint(false, "D3D12CreateDevice"));
@@ -51,6 +56,3 @@
 +#define D3D12CreateDevice RtrNetworkD3D12CreateDevice
 +#endif
 +
- 
- 
- 

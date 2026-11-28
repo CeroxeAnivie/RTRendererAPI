@@ -14,9 +14,21 @@ public final class RtxptRuntime {
      * @return absolute runtime bin directory, with official Assets beside it
      */
     public static Path binDirectory() {
+        return binDirectory(null);
+    }
+
+    /**
+     * Returns the verified native runtime bin directory, using a consumer-owned
+     * cache root for the packaged runtime. The {@code top.ceroxe.rt.rtxpt.runtime}
+     * override takes precedence when set.
+     *
+     * @param cacheRoot packaged runtime cache root, or {@code null} to use the default
+     * @return absolute runtime bin directory, with official Assets beside it
+     */
+    public static Path binDirectory(Path cacheRoot) {
         String override = System.getProperty("top.ceroxe.rt.rtxpt.runtime");
         Path bin = override != null ? Path.of(override) : RtxptRuntimeBundle.packaged()
-            ? RtxptRuntimeBundle.extract()
+            ? RtxptRuntimeBundle.extract(cacheRoot)
             : Path.of("build/upstream-rtxpt/runtime/rtxpt_v.1.9.0_binaries/bin");
         bin = bin.toAbsolutePath().normalize();
         try {

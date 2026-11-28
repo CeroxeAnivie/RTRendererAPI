@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /** A bounded real upstream initialization/capture proof; not a renderer capability claim. */
 public final class RtxptUpstreamProof {
-    private static native long[] runNative(String[] options, String captureFile, int frames);
+    private static native long[] runNative(String runtime, String[] options, String captureFile, int frames);
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3) throw new IllegalArgumentException(
@@ -17,7 +17,7 @@ public final class RtxptUpstreamProof {
         for (String dependency : new String[]{"sl.interposer.dll", "NRD.dll", "omm-lib.dll"})
             System.load(runtime.resolve(dependency).toString());
         System.load(runtime.resolve("rtrenderer_rtxpt.dll").toString());
-        long[] result = runNative(Arrays.copyOfRange(args, 3, args.length), capture.toString(),
+        long[] result = runNative(runtime.toString(), Arrays.copyOfRange(args, 3, args.length), capture.toString(),
                 Integer.parseInt(args[2]));
         if (result == null || result.length != 4 || result[3] != 1 || !Files.isRegularFile(capture))
             throw new IllegalStateException("Upstream proof did not produce a captured frame");

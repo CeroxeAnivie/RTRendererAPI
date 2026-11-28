@@ -11,6 +11,12 @@ import java.util.List;
  * Half-float lighting is clamped to [0,65504]; nonfinite extension output becomes
  * neutral gain or zero indirect. NORMAL_DISTANCE uses RGBA32_FLOAT, with world
  * normal in xyz and ray distance in w. Identity is only valid when its w is 1.
+ * DIELECTRIC_RADIANCE is RGBA32_FLOAT regardless of the frame encoding. Its
+ * Positive alpha is the first dielectric interface's camera-ray distance in
+ * world units; RGB is then scene-linear radiance. Negative alpha encodes the
+ * negated distance to a straight-ray opaque receiver in the camera medium;
+ * RGB is then linear transmittance for that segment, to multiply only the
+ * matching receiver's radiance. Zero alpha means no valid result.
  */
 public interface LightingFrameLease extends AutoCloseable {
     enum Format { RGBA16_FLOAT, RGBA32_UINT, RGBA32_FLOAT,RGBA8_UNORM }

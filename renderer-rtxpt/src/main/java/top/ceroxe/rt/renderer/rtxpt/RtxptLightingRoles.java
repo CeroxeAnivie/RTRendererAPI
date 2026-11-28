@@ -4,12 +4,14 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Native finite-signal ray roles, independent of the host's instance identity. */
 final class RtxptLightingRoles {
+    static final int LEGACY_TRAVERSAL=7;
+    static final int TRAVERSAL=LEGACY_TRAVERSAL|NativeLightingPublication.Instance.DIELECTRIC_BOUNDARY;
     private RtxptLightingRoles() { }
     static int restrict(int requested,int mask,boolean castsShadow) {
-        if(mask!=255&&(mask&~7)!=0)throw new IllegalArgumentException("Unsupported native lighting ray mask");
-        int allowed=mask==255?7:mask;
+        if(mask!=255&&(mask&~TRAVERSAL)!=0)throw new IllegalArgumentException("Unsupported native lighting ray mask");
+        int allowed=mask==255?TRAVERSAL:mask;
         if(!castsShadow)allowed&=~2;
-        return (requested&~7)|(requested&allowed&7);
+        return requested&(allowed|~TRAVERSAL);
     }
     static boolean same(PrimitiveInstance a,PrimitiveInstance b) {
         return a==b||a.visibilityMask()==b.visibilityMask()&&a.castsShadow()==b.castsShadow()

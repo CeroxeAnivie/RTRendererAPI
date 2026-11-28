@@ -12,7 +12,9 @@ public record NativeLightingPlan(int width,int height,Set<Signal> signals,int gi
         DIRECTIONAL_SPECULAR,
         /** Dominant directional light: R=-1 blocked/+1 visible/0 unclassified; G=half-width in grid texels, zero without reliable evidence.
          * BA is the unit screen-space normal toward light times (signed grid distance + 4*R). RGBA16_FLOAT. */
-        SUN_SHADOW_PENUMBRA
+        SUN_SHADOW_PENUMBRA,
+        /** RGBA32_FLOAT: scene-linear radiance in RGB, first dielectric hit distance along the camera ray in A (world units; zero means invalid). */
+        DIELECTRIC_RADIANCE
     }
     public enum DirectAlphaMode {
         /** Alpha is receiver opacity, zero for a missing receiver. */

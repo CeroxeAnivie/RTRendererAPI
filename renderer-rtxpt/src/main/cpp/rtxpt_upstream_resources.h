@@ -44,7 +44,10 @@ struct SurfaceMaterialRow {
     MaterialConstants material{};
     std::array<uint32_t,4> policies{};
     float maskedOpacity=1.f;
-    uint32_t active=0;
+    // Zero also marks an unreferenced row. Valid material indices start at one.
+    float indexOfRefraction=0.f;
+    std::array<float,3> extinction{};
+    uint32_t mediumPriorityPlusOne=0;
 };
 // Immutable canonical channels survive until their final mesh generation.
 // They never retain unrelated transaction, texture, material or node bytes.
@@ -880,7 +883,12 @@ public:
                 const auto& entry=m_materials.at(name);
                 scene.PackSurfaceMaterial(*entry.material,next.material);
                 next.policies=TextureSamplingPolicies(name);next.maskedOpacity=entry.material->opacity;
-                const auto users=m_materialMeshes.find(name);next.active=users!=m_materialMeshes.end()&&!users->second.empty();
+                const auto users=m_materialMeshes.find(name);
+                if(users!=m_materialMeshes.end()&&!users->second.empty())next.indexOfRefraction=entry.ior;
+                if(entry.boundary){
+                    next.extinction={entry.absorption.x,entry.absorption.y,entry.absorption.z};
+                    next.mediumPriorityPlusOne=uint32_t(entry.priority)+1;
+                }
             }
             if(std::memcmp(&row,&next,sizeof(row))!=0){row=next;dirty.push_back(slot);}
         }

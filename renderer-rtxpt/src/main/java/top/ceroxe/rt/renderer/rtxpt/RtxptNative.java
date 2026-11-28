@@ -9,21 +9,24 @@ final class RtxptNative {
     static Path runtime(){return RtxptRuntime.binDirectory();}
     static Path bridge(){return Path.of(System.getProperty("top.ceroxe.rt.rtxpt.bridge",runtime().resolve("rtrenderer_rtxpt.dll").toString())).toAbsolutePath().normalize();}
     private static boolean loaded;
-    static synchronized void load(){
+    static synchronized boolean loaded(){return loaded;}
+    static synchronized void load(){ load(RtxptRuntime.binDirectory()); }
+    static synchronized void load(Path runtimeBin){
         if(loaded)return;
-        var root=runtime();var dll=bridge();
+        var root=runtimeBin.toAbsolutePath().normalize();var dll=Path.of(System.getProperty("top.ceroxe.rt.rtxpt.bridge",root.resolve("rtrenderer_rtxpt.dll").toString())).toAbsolutePath().normalize();
         if(!Files.isRegularFile(dll))throw new IllegalStateException("Build the external bridge with tools/Build-RtxptBridge.ps1");
         for(String dependency:new String[]{"NRD.dll","omm-lib.dll"})System.load(root.resolve(dependency).toString());
         System.load(dll.toString());
-        try{if(bridgeAbiVersion()!=9)throw new IllegalStateException("External RTXPT bridge ABI mismatch: "+dll);}
+        try{if(bridgeAbiVersion()!=10)throw new IllegalStateException("External RTXPT bridge ABI mismatch: "+dll);}
         catch(UnsatisfiedLinkError legacy){throw new IllegalStateException("The DLL is not the external RTXPT 8 bridge: "+dll,legacy);}
         loaded=true;
     }
     private static native int bridgeAbiVersion();
+    static native String[] startupProgress();
     /** Test-only: fresh process, before creating any renderer; observes the public upstream progress API. */
     static native long[] progressWindowProof();
     static native long create(String runtime,String scene,int width,int height,boolean externalPresentation,String[] options);
-    static native long createSession(String runtime,String scene,int width,int height,boolean externalPresentation,boolean requiresStreamline,String[] options);
+    static native long createSession(String runtime,String cacheRoot,String scene,int width,int height,boolean externalPresentation,boolean requiresStreamline,String[] options);
     static native void officialMode(long handle);
     static native long[] executionState(long handle);
     static native void diagnosticLevel(long handle,int level);
@@ -53,6 +56,8 @@ final class RtxptNative {
     static native void sparseLighting(long handle,long[] ids,float[] records,long[] removals,boolean reset);
     static native long[] sparseLightingTelemetry(long handle);
     static native void nativeLighting(long handle,float[] parameters);
+    static native void nativeLightingContainment(long handle,float[] parameters,String[] volumes);
+    static native void nativeOpticalTriangleEmitters(long handle,float[] records,long[] volumes);
     static native void nativeLightingClock(long handle,long timeNanos,long deltaNanos);
     static native void nativeLightingEncoding(long handle,int encoding);
     static native void nativeLightingReconstruction(long handle,boolean enabled,boolean reset);

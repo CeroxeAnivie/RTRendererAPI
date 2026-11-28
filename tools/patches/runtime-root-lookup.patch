@@ -1,0 +1,7 @@
+--- a/External/Donut/src/app/ApplicationBase.cpp
++++ b/External/Donut/src/app/ApplicationBase.cpp
+@@ -23,0 +24 @@
++#include "rtxpt_embedded_startup.h"
+@@ -231,0 +233,2 @@
++    if (const auto* startup = rtr::upstream::embeddedStartup)
++        return startup->runtimeBin;

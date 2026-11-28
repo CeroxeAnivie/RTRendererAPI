@@ -2,7 +2,9 @@ package top.ceroxe.rt.renderer.api;
 
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -18,6 +20,8 @@ public final class RenderFrameRequest {
     private final EnvironmentState environment;
     private final DistanceFogState fog;
     private final FramePrimitiveBatch primitiveBatch;
+    private final List<Long> cameraMediumInstanceIds;
+    private final List<OpticalTriangleEmitter> opticalTriangleEmitters;
     private final Set<HistoryResetReason> temporalHistoryResets;
 
     private RenderFrameRequest(Builder builder) {
@@ -40,6 +44,8 @@ public final class RenderFrameRequest {
         environment = Objects.requireNonNull(builder.environment, "environment");
         fog = Objects.requireNonNull(builder.fog, "fog");
         primitiveBatch = Objects.requireNonNull(builder.primitiveBatch, "primitiveBatch");
+        cameraMediumInstanceIds = builder.cameraMediumInstanceIds;
+        opticalTriangleEmitters = builder.opticalTriangleEmitters;
         temporalHistoryResets = immutableEnumSet(builder.temporalHistoryResets);
     }
 
@@ -161,6 +167,21 @@ public final class RenderFrameRequest {
     }
 
     /**
+     * Stable retained scene instance IDs of the closed volumes containing the camera origin.
+     * An empty optional leaves containment unspecified; a present empty list confirms an exterior
+     * origin. The values describe the exact scene revision given by {@link #minimumSceneRevision()}.
+     * Ordering is immaterial: medium priorities determine which volume is active at an overlap.
+     */
+    public Optional<List<Long>> cameraMediumInstanceIds() {
+        return Optional.ofNullable(cameraMediumInstanceIds);
+    }
+
+    /** Complete finite-source snapshot for the independent indirect lighting output. */
+    public List<OpticalTriangleEmitter> opticalTriangleEmitters() {
+        return opticalTriangleEmitters;
+    }
+
+    /**
      * Returns an immutable, deduplicated set of caller-known temporal discontinuities.
      *
      * @return immutable, possibly empty reset-reason set
@@ -182,6 +203,8 @@ public final class RenderFrameRequest {
                 && environment.equals(request.environment)
                 && fog.equals(request.fog)
                 && primitiveBatch.equals(request.primitiveBatch)
+                && Objects.equals(cameraMediumInstanceIds, request.cameraMediumInstanceIds)
+                && opticalTriangleEmitters.equals(request.opticalTriangleEmitters)
                 && temporalHistoryResets.equals(request.temporalHistoryResets);
     }
 
@@ -189,7 +212,7 @@ public final class RenderFrameRequest {
     public int hashCode() {
         return Objects.hash(
                 sequence, minimumSceneRevision, width, height, clock, camera, environment,
-                fog, primitiveBatch,
+                fog, primitiveBatch, cameraMediumInstanceIds, opticalTriangleEmitters,
                 temporalHistoryResets
         );
     }
@@ -205,6 +228,8 @@ public final class RenderFrameRequest {
                 + ", environment=" + environment
                 + ", fog=" + fog
                 + ", primitiveBatch=" + primitiveBatch
+                + ", cameraMediumInstanceIds=" + cameraMediumInstanceIds
+                + ", opticalTriangleEmitterCount=" + opticalTriangleEmitters.size()
                 + ", temporalHistoryResets=" + temporalHistoryResets + ']';
     }
 
@@ -223,6 +248,8 @@ public final class RenderFrameRequest {
         private EnvironmentState environment = EnvironmentState.neutral();
         private DistanceFogState fog = DistanceFogState.disabled();
         private FramePrimitiveBatch primitiveBatch = FramePrimitiveBatch.empty();
+        private List<Long> cameraMediumInstanceIds;
+        private List<OpticalTriangleEmitter> opticalTriangleEmitters = List.of();
 
         private Builder(long sequence, int width, int height, CameraState camera) {
             this.sequence = sequence;
@@ -241,6 +268,8 @@ public final class RenderFrameRequest {
             environment = source.environment;
             fog = source.fog;
             primitiveBatch = source.primitiveBatch;
+            cameraMediumInstanceIds = source.cameraMediumInstanceIds;
+            opticalTriangleEmitters = source.opticalTriangleEmitters;
             temporalHistoryResets.addAll(source.temporalHistoryResets);
         }
 
@@ -252,6 +281,28 @@ public final class RenderFrameRequest {
          */
         public Builder minimumSceneRevision(long value) {
             minimumSceneRevision = value;
+            return this;
+        }
+
+        /** Confirms exact camera containment for up to four distinct retained volumes. */
+        public Builder cameraMediumInstanceIds(List<Long> ids) {
+            if (ids.size() > 4) throw new IllegalArgumentException("Camera containment exceeds four volumes");
+            if (ids.isEmpty()) {
+                cameraMediumInstanceIds = List.of();
+                return this;
+            }
+            var ordered = ids.stream().sorted().toList();
+            for (int i = 0; i < ordered.size(); ++i) {
+                if (ordered.get(i) < 0 || (i > 0 && ordered.get(i).equals(ordered.get(i - 1))))
+                    throw new IllegalArgumentException("Invalid or duplicate camera medium instance ID");
+            }
+            cameraMediumInstanceIds = ordered;
+            return this;
+        }
+
+        /** Replaces the complete optical source snapshot. An empty list clears the sources. */
+        public Builder opticalTriangleEmitters(List<OpticalTriangleEmitter> emitters) {
+            opticalTriangleEmitters = List.copyOf(emitters);
             return this;
         }
 

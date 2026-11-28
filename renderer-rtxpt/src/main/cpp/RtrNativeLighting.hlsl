@@ -5,6 +5,7 @@
 #pragma pack_matrix(row_major)
 #include <donut/shaders/bindless.h>
 #include <donut/shaders/packing.hlsli>
+#include "PathTracer/BSDFs/Fresnel.hlsli"
 #include "RtrNativeLightingStyle.hlsli"
 
 struct RtrSource {float4 position,direction,color,extent,cone,identity;};
@@ -12,7 +13,7 @@ struct RtrNode {float4 lower,left,upper,right;};
 struct RtrInstance {float4 rolesVisibility;float4 baseline;row_major float3x4 explicitPrevious;float4 surfaceVisibility;};
 struct RtrVertexAttributes {float2 baseline;uint color;uint reserved;};
 struct RtrGeometryAttributes {uint offset,triangles,basePolicy,normalPolicy,ormPolicy,emissivePolicy;float maskedOpacity;uint surfaceSelector;};
-struct RtrSurfaceMaterial {MaterialConstants material;uint4 policies;float maskedOpacity;uint active;};
+struct RtrSurfaceMaterial {MaterialConstants material;uint4 policies;float maskedOpacity,indexOfRefraction;float3 extinction;uint mediumPriorityPlusOne;};
 struct RtrAnalytic {float4 position,direction,color,cone;};
 struct RtrNativeConstants
 {
@@ -32,6 +33,7 @@ struct RtrNativeConstants
     float4 fogControl; // opacity, tangent of sun angular radius, surface wetness, sky luminance
     float4 skyOcclusion; // diffuse obscurance strength, finite reach, reserved
     float4 wetFilmResponse; // roughness transition start/end, wet-film reflection scale
+    uint4 cameraMediumSlots; // 0 = unspecified; UINT_MAX = no volume; otherwise instance index + 1
 };
 ConstantBuffer<RtrNativeConstants> g : register(b0);
 RaytracingAccelerationStructure t_Scene : register(t0);
@@ -147,6 +149,7 @@ void RtrFlushWork(){
 #endif
 }
 uint RtrQueryFlags(){return g.style.limits.w>=2||(g.publication.w&32)!=0?RAY_FLAG_FORCE_NON_OPAQUE:((g.publication.w&4)!=0?RAY_FLAG_NONE:((g.publication.w&2)!=0||g.style.limits.w!=0?RAY_FLAG_FORCE_NON_OPAQUE:RAY_FLAG_NONE));}
+uint RtrQueryMask(uint role){return (g.publication.w&64)!=0?role:1;}
 float3 RtrPosition(ByteAddressBuffer vertices,GeometryData geometry,uint i){return asfloat(vertices.Load3(geometry.positionOffset+i*12));}
 float2 RtrUv(ByteAddressBuffer vertices,GeometryData geometry,uint i)
 {return geometry.texCoord1Offset==0xffffffff?0:asfloat(vertices.Load2(geometry.texCoord1Offset+i*8));}
@@ -157,15 +160,21 @@ uint RtrSurfaceIndex(RtrGeometryAttributes attributes,uint primitive){
     if((selector&RtrMixedSurfaceBit)!=0)return t_SurfaceIndices[(selector&~RtrMixedSurfaceBit)+primitive];
     return selector;
 }
-MaterialConstants RtrMaterial(GeometryData geometry,uint primitive,inout RtrGeometryAttributes attributes){
+MaterialConstants RtrMaterial(GeometryData geometry,uint primitive,inout RtrGeometryAttributes attributes,out float ior){
+    ior=1;
     uint surface=primitive<attributes.triangles?RtrSurfaceIndex(attributes,primitive):0;
     if(surface!=0){
         RtrSurfaceMaterial row=t_SurfaceMaterials[surface-1];
         attributes.basePolicy=row.policies.x;attributes.normalPolicy=row.policies.y;
         attributes.ormPolicy=row.policies.z;attributes.emissivePolicy=row.policies.w;attributes.maskedOpacity=row.maskedOpacity;
+        ior=row.indexOfRefraction;
         return row.material;
     }
     return t_Materials[geometry.materialIndex];
+}
+MaterialConstants RtrMaterial(GeometryData geometry,uint primitive,inout RtrGeometryAttributes attributes){
+    float unusedIor;
+    return RtrMaterial(geometry,primitive,attributes,unusedIor);
 }
 RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes,float3 origin,float3 direction,float distance,float3x4 worldToObject)
 {
@@ -280,7 +289,7 @@ RtrReceiver RtrLoad(uint instance,uint geometry,uint primitive,float2 attributes
 // lookups for every candidate they visit.
 bool RtrAcceptCandidateSurface(RtrInstance instance,uint primitive,float2 attributes,uint role,
     GeometryData geom,RtrGeometryAttributes geometryAttributes,MaterialConstants mat,
-    out float3 transmission,out bool opaque)
+    float ior,float3 direction,float3x4 objectToWorld,out float3 transmission,out bool opaque)
 {
     transmission=1;opaque=false;
     // Per-instance coverage classification is part of the same attribute commit.
@@ -291,10 +300,15 @@ bool RtrAcceptCandidateSurface(RtrInstance instance,uint primitive,float2 attrib
     float4 base=float4(mat.baseOrDiffuseColor,(masked?geometryAttributes.maskedOpacity:mat.opacity)*instance.surfaceVisibility.x);
     float3 bary=float3(1-attributes.x-attributes.y,attributes);float2 uv=0;
     const uint textureMask=MaterialFlags_UseBaseOrDiffuseTexture|MaterialFlags_UseOpacityTexture|MaterialFlags_UseTransmissionTexture;
-    if((mat.flags&textureMask)!=0){
+    bool hasTextures=(mat.flags&textureMask)!=0;
+    bool angleDependent=role==2&&mat.domain>=MaterialDomain_Transmissive&&ior>1;
+    uint3 tri=0;
+    if(hasTextures||angleDependent){
         ByteAddressBuffer indices=t_Buffers[NonUniformResourceIndex(geom.indexBufferIndex)];
+        tri=indices.Load3(geom.indexOffset+primitive*12);
+    }
+    if(hasTextures){
         ByteAddressBuffer vertices=t_Buffers[NonUniformResourceIndex(geom.vertexBufferIndex)];
-        uint3 tri=indices.Load3(geom.indexOffset+primitive*12);
         uv=RtrUv(vertices,geom,tri.x)*bary.x+RtrUv(vertices,geom,tri.y)*bary.y+RtrUv(vertices,geom,tri.z)*bary.z;
         if((mat.flags&MaterialFlags_UseBaseOrDiffuseTexture)!=0)base*=RtrSampleTexture(mat.baseOrDiffuseTextureIndex,uv,geometryAttributes.basePolicy);
         if((mat.flags&MaterialFlags_UseOpacityTexture)!=0)base.a*=t_Textures[NonUniformResourceIndex(mat.opacityTextureIndex)].SampleLevel(s_Material,uv,0).r;
@@ -308,6 +322,16 @@ bool RtrAcceptCandidateSurface(RtrInstance instance,uint primitive,float2 attrib
         if(mat.domain>=MaterialDomain_Transmissive){
             float amount=mat.transmissionFactor;
             if((mat.flags&MaterialFlags_UseTransmissionTexture)!=0)amount*=t_Textures[NonUniformResourceIndex(mat.transmissionTextureIndex)].SampleLevel(s_Material,uv,0).r;
+            if(angleDependent){
+                ByteAddressBuffer vertices=t_Buffers[NonUniformResourceIndex(geom.vertexBufferIndex)];
+                float3 a=RtrPosition(vertices,geom,tri.x);
+                float3 edge0=mul((float3x3)objectToWorld,RtrPosition(vertices,geom,tri.y)-a);
+                float3 edge1=mul((float3x3)objectToWorld,RtrPosition(vertices,geom,tri.z)-a);
+                float cosExterior=saturate(abs(dot(RtrNormalize(cross(edge0,edge1)),direction)));
+                // Visibility connects fixed endpoints; it does not bend the ray.
+                // Use the exterior angle on either side of a thin dielectric.
+                amount*=1-evalFresnelDielectric(rcp(ior),cosExterior);
+            }
             transmission=saturate(amount)*saturate(max(base.rgb,0));
             if(mat.domain==MaterialDomain_TransmissiveAlphaBlended)transmission=lerp(float3(1,1,1),transmission,opacity);
         }else if(mat.domain==MaterialDomain_AlphaBlended)transmission=1-opacity;
@@ -323,13 +347,13 @@ bool RtrAcceptCandidate(uint instance,uint geometry,uint primitive,float2 attrib
     GeometryData geom=t_Geometry[index];RtrGeometryAttributes mapping=t_GeometryBaselines[index];
     MaterialConstants material=RtrMaterial(geom,primitive,mapping);
     float3 transmission;bool opaque;
-    return RtrAcceptCandidateSurface(data,primitive,attributes,role,geom,mapping,material,transmission,opaque);
+    return RtrAcceptCandidateSurface(data,primitive,attributes,role,geom,mapping,material,1,0,0,transmission,opaque);
 }
 #include "RtrNativeCoverage.hlsli"
 bool RtrTrace(float3 origin,float3 direction,float distance,uint role,out RtrReceiver receiver)
 {
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=g.gi.z;ray.TMax=distance;
-    RayQuery<RAY_FLAG_NONE> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),1,ray);
+    RayQuery<RAY_FLAG_NONE> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),RtrQueryMask(role),ray);
     while(query.Proceed())if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE)
     {
         if(RtrAcceptCandidate(query.CandidateInstanceIndex(),query.CandidateGeometryIndex(),query.CandidatePrimitiveIndex(),
@@ -343,7 +367,7 @@ bool RtrTrace(float3 origin,float3 direction,float distance,uint role,out RtrRec
 float3 RtrShadowRaySample(RayDesc ray,float lightDistance,bool filtering,out uint partialCount)
 {
     RtrCount(2);
-    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),1,ray);float3 visibility=1;
+    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;query.TraceRayInline(t_Scene,RtrQueryFlags(),RtrQueryMask(2),ray);float3 visibility=1;
     partialCount=0;float partialCoverage=0;
     while(query.Proceed())if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE)
     {
@@ -352,7 +376,8 @@ float3 RtrShadowRaySample(RayDesc ray,float lightDistance,bool filtering,out uin
         if((roles&2)==0||((roles&16)==0&&!query.CandidateTriangleFrontFace()))continue;
         InstanceData instance=t_Instances[instanceIndex];uint index=instance.firstGeometryIndex+query.CandidateGeometryIndex();
         GeometryData geometry=t_Geometry[index];RtrGeometryAttributes mapping=t_GeometryBaselines[index];
-        MaterialConstants material=RtrMaterial(geometry,primitive,mapping);
+        float ior;
+        MaterialConstants material=RtrMaterial(geometry,primitive,mapping,ior);
         float2 bary=query.CandidateTriangleBarycentrics();
         // A visited surface has one resolved material for footprint sampling,
         // center opacity/transmission, and the moving coverage classification.
@@ -367,7 +392,7 @@ float3 RtrShadowRaySample(RayDesc ray,float lightDistance,bool filtering,out uin
             }
         }
         float3 transmission;bool opaque;
-        if(!RtrAcceptCandidateSurface(data,primitive,bary,2,geometry,mapping,material,transmission,opaque))continue;
+        if(!RtrAcceptCandidateSurface(data,primitive,bary,2,geometry,mapping,material,ior,ray.Direction,instance.transform,transmission,opaque))continue;
         if(rtrCoverageFiltering)rtrMovingCoverage|=data.rolesVisibility.w!=0
             ||material.domain==MaterialDomain_AlphaTested||material.domain==MaterialDomain_TransmissiveAlphaTested;
         if(opaque){visibility=0;query.Abort();}else visibility*=transmission;

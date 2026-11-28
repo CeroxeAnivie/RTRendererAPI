@@ -3,7 +3,8 @@
 Build official RTXPT targets without modifying upstream sources.
 .DESCRIPTION
 This entry point never changes the verified official source export or shaders.
-WithBridge selects two authorized build-side UI/network source variants;
+WithBridge selects hash-locked build-side integration variants, including an
+independently audited bounded D3D12 compute PSO cache integration;
 their exact sources, single insertions and hashes are independently audited.
 Run -CheckPaths for the source identity check without configuring or building.
 The JNI adapter is attached separately through CMake's documented project hook.
@@ -67,13 +68,19 @@ $configurationInputs=@($PSCommandPath,
     (Join-Path $PSScriptRoot 'RtxptBridgeProject.cmake'),
     (Join-Path $PSScriptRoot 'RtxptProgressPatch.cmake'),
     (Join-Path $PSScriptRoot 'RtxptOfflinePatch.cmake'),
+    (Join-Path $PSScriptRoot 'RtxptPipelineCachePatch.cmake'),
     (Join-Path $PSScriptRoot 'Assert-RtxptAuthorizedPatches.ps1'),
     (Join-Path $PSScriptRoot 'patches/progress-noninteractive.patch'),
     (Join-Path $PSScriptRoot 'patches/streamline-offline-preferences.patch'),
     (Join-Path $PSScriptRoot 'patches/streamline-offline-preferences.json'),
     (Join-Path $PSScriptRoot 'patches/streamline-offline-device.patch'),
     (Join-Path $PSScriptRoot 'patches/streamline-offline-device.json'),
+    (Join-Path $PSScriptRoot 'patches/runtime-root-lookup.patch'),
+    (Join-Path $PSScriptRoot 'patches/runtime-root-lookup.json'),
+    (Join-Path $PSScriptRoot 'patches/embedded-window.patch'),
+    (Join-Path $PSScriptRoot 'patches/embedded-window.json'),
     (Join-Path $repo 'renderer-rtxpt/src/main/cpp/CMakeLists.txt'))
+$configurationInputs+=@((Join-Path $repo 'renderer-rtxpt/src/main/cpp/rtxpt_d3d12_pipeline_cache.h'))
 $fingerprintParts=@($expectedCache.Keys|Sort-Object|ForEach-Object {$_+'='+[string]$expectedCache[$_]})
 $fingerprintParts+=@($configurationInputs|ForEach-Object {$_+'='+(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash})
 $configurationFingerprint=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(

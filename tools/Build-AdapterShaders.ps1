@@ -58,6 +58,7 @@ if($shaderLines.Count -eq 0){throw 'The adapter shader config has no shaders.'}
 if($ShaderName -and !$shaderLines.Contains($ShaderName)){throw ('Unknown adapter shader: '+$ShaderName)}
 $commonArguments=@('--out',$output,'--platform','DXIL',
     '--binaryBlob','--outputExt','.bin','--compiler',$compiler,'--shaderModel','6_9',
+    '--compilerOptions=-Qstrip_debug',
     '--hlsl2021','--matrixRowMajor','--jobs',([string]$Jobs),'--retryCount','0',
     '--project','AdapterShaders','-D','TARGET_D3D12','-D','ENABLE_DEBUG_PRINT')
 foreach($include in $includes){$commonArguments+=@('-I',$include)}

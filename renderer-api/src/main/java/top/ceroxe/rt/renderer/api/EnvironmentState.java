@@ -129,7 +129,9 @@ public final class EnvironmentState {
     /**
      * Returns final equirectangular linear environment radiance, or null for constant sky.
      * The map replaces sky RGB and ambient intensity without additional sRGB conversion
-     * or ambient multiplication. Sun properties remain independent.
+     * or ambient multiplication. The dielectric camera signal samples it in the outgoing
+     * world-space direction after the last interface; without a map it uses sky RGB
+     * directly. Sun properties remain independent and are not baked into this radiance.
      * @return immutable environment map, or null
      */
     public EnvironmentMap environmentMap() {

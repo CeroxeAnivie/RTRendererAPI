@@ -40,13 +40,14 @@ public final class RtxptRuntimeBundleSelfTest {
             System.setProperty("os.name", "Windows 11");
             System.setProperty("os.arch", "amd64");
             coldAndHot(root.resolve("cold-hot"));
+            explicitCacheRoot(root.resolve("explicit-cache-root"));
             requiredPaths(root.resolve("required-paths"));
             digestMismatch(root.resolve("digest"));
             zipBoundaries(root.resolve("zip-boundaries"));
             flatRejected(root.resolve("flat"));
             explicitOverride(root.resolve("override"));
             invalidCacheRebuilt(root.resolve("rebuild"));
-            System.out.println("RTXPT_RUNTIME_BUNDLE_SELFTEST PASS cases=7 CPU_EXTRACTION_ONLY mockNativeFiles=true nativeLoaded=false");
+            System.out.println("RTXPT_RUNTIME_BUNDLE_SELFTEST PASS CPU_EXTRACTION_ONLY mockNativeFiles=true nativeLoaded=false");
         } finally {
             for (var entry : saved.entrySet()) {
                 if (entry.getValue() == null) System.clearProperty(entry.getKey());
@@ -75,7 +76,7 @@ public final class RtxptRuntimeBundleSelfTest {
             require(Files.getLastModifiedTime(bin.resolve(PRECOMPILED.substring(4))).equals(ARCHIVE_TIME), "Precompiled shader timestamp changed on extraction");
             require(!Files.exists(bin.resolve("ShaderDynamic/Bin/dxil/bundle.json")), "Fixture unexpectedly depends on the removed private shader manifest");
             require(call(loader, "RtxptRuntime", "jvmHostExecutable").equals(bin.resolve("rtrenderer_jvm_host.exe")), "Public host path must be inside returned bin");
-            Path sentinel = bin.getParent().resolve("hot-cache-sentinel");
+            Path sentinel = fixture.cache().resolve("hot-cache-sentinel");
             Files.writeString(sentinel, "preserve a valid cache");
             Files.delete(fixture.archiveResource());
             require(bin(loader).equals(bin), "Hot cache changed its returned path");
@@ -114,6 +115,49 @@ public final class RtxptRuntimeBundleSelfTest {
         passed("fixed-shader-path-sibling-assets-and-empty-environment-directory");
     }
 
+    private static void explicitCacheRoot(Path root) throws Exception {
+        var fixture = fixture(root, runtimeEntries(), null);
+        Path oldRuntime = Files.createDirectories(fixture.cache().resolve("RTXPT-1.9.0-" + "a".repeat(20)));
+        Files.writeString(oldRuntime.resolve("old.dll"), "old runtime");
+        Path staleStage = Files.createDirectories(fixture.cache().resolve(".stage-123"));
+        Path unrelated = fixture.cache().resolve("keep.txt");
+        Files.writeString(unrelated, "outside managed runtime");
+        Path pipelineCache = Files.createDirectories(fixture.cache().resolve("D3D12PipelineCache"));
+        Path pipelineCacheSentinel = Files.writeString(pipelineCache.resolve("pipeline-library.bin"), "managed by NVRHI");
+        Path external = Files.createDirectories(root.resolve("outside-cache"));
+        Path sentinel = Files.writeString(external.resolve("preserve.txt"), "outside cache");
+        Path junction = fixture.cache().resolve("RTXPT-1.9.0-" + "b".repeat(20));
+        Path nestedJunction = oldRuntime.resolve("junction");
+        try (var loader = fixture.open()) {
+            if (java.io.File.separatorChar == '\\') {
+                createJunction(junction, external);
+                createJunction(nestedJunction, external);
+            }
+            var method = Class.forName(PACKAGE + "RtxptRuntime", true, loader).getDeclaredMethod("binDirectory", Path.class);
+            method.setAccessible(true);
+            Path bin = (Path) method.invoke(null, fixture.cache());
+            require(bin.startsWith(fixture.cache()) && bin.getParent().getFileName().toString().startsWith("RTXPT-1.9.0-"),
+                "Explicit runtime cache escaped its consumer-owned root");
+            require(!Files.exists(oldRuntime) && !Files.exists(staleStage) && Files.exists(unrelated),
+                "Reinstall must remove old managed runtimes and preserve unrelated consumer files");
+            require(Files.readString(pipelineCacheSentinel).equals("managed by NVRHI"),
+                "Runtime extraction and cleanup must not inspect or replace the separate D3D12 pipeline cache");
+            require(!Files.exists(junction) && Files.readString(sentinel).equals("outside cache"),
+                "Reinstall followed a junction outside the cache");
+        } finally {
+            Files.deleteIfExists(nestedJunction);
+            Files.deleteIfExists(junction);
+        }
+        passed("explicit-cache-root-confined-runtime-cleanup-and-pipeline-cache-preservation");
+    }
+
+    private static void createJunction(Path entry, Path target) throws Exception {
+        var command = new ProcessBuilder("cmd.exe", "/d", "/c", "mklink", "/J", entry.toString(), target.toString())
+            .redirectErrorStream(true).start();
+        byte[] output = command.getInputStream().readAllBytes();
+        require(command.waitFor() == 0, "Cannot create runtime cleanup test junction: " + new String(output));
+    }
+
     private static void digestMismatch(Path root) throws Exception {
         var fixture = fixture(root, runtimeEntries(), "0".repeat(64));
         System.setProperty(CACHE, fixture.cache().toString());
@@ -132,7 +176,7 @@ public final class RtxptRuntimeBundleSelfTest {
             var fixture = fixture(root.resolve("entry-" + index++), entries, null);
             System.setProperty(CACHE, fixture.cache().toString());
             try (var loader = fixture.open()) {
-                rejected(loader, "Invalid RTXPT archive entry");
+                rejected(loader, dangerous.startsWith("..") ? "Invalid RTXPT runtime manifest path" : "Invalid RTXPT archive entry");
                 noInstall(fixture.cache());
                 try (var files = Files.walk(root)) {
                     require(files.noneMatch(p -> p.getFileName().toString().equals("escaped.txt")), "ZIP traversal wrote outside staging");
@@ -197,26 +241,45 @@ public final class RtxptRuntimeBundleSelfTest {
     private static void invalidCacheRebuilt(Path root) throws Exception {
         var fixture = fixture(root, runtimeEntries(), null);
         System.setProperty(CACHE, fixture.cache().toString());
-        try (var loader = fixture.open()) {
-            Path bin = bin(loader);
+        Path bin;
+        try (var loader = fixture.open()) { bin = bin(loader); }
+        {
+            Path managedCache = bin.getParent().getParent();
+            Path staleVersion = Files.createDirectories(managedCache.resolve("RTXPT-1.9.0-" + "c".repeat(20)));
+            Path staleStage = Files.createDirectories(managedCache.resolve(".stage-456"));
             Path shader = bin.resolve(SOURCE.substring(4));
             Path sentinel = bin.getParent().resolve("stale-cache-sentinel");
             Files.writeString(sentinel, "must disappear on rebuild");
             Files.delete(shader);
-            require(bin(loader).equals(bin) && Files.isRegularFile(shader), "Missing required shader did not rebuild the cache");
+            require(bin(fixture).equals(bin) && Files.isRegularFile(shader), "Missing required shader did not rebuild the cache");
             require(!Files.exists(sentinel), "Incomplete cache contents survived replacement");
+            require(!Files.exists(staleVersion) && !Files.exists(staleStage), "Rebuild left stale managed runtime entries");
             Path adapter = bin.resolve("AdapterShaders/app/ProcessingPasses/RtrNativeLighting.bin");
             Files.write(adapter, new byte[0]);
-            require(bin(loader).equals(bin) && Files.size(adapter) > 0,
+            require(bin(fixture).equals(bin) && Files.size(adapter) > 0,
                     "Empty compiled adapter shader did not rebuild the cache");
             Files.writeString(sentinel, "bad-marker rebuild");
             Files.writeString(bin.getParent().resolve(".complete"), "wrong archive identity");
-            require(bin(loader).equals(bin), "Marker repair changed the cache target");
+            require(bin(fixture).equals(bin), "Marker repair changed the cache target");
             require(Files.readString(bin.getParent().resolve(".complete")).equals(fixture.digest()), "Invalid completion marker was not repaired");
             require(!Files.exists(sentinel), "Invalid-marker cache contents survived replacement");
+            byte[] originalShader = Files.readAllBytes(shader);
+            byte[] corruptedShader = originalShader.clone();
+            corruptedShader[0] ^= 1;
+            Files.write(shader, corruptedShader);
+            require(bin(fixture).equals(bin) && java.util.Arrays.equals(Files.readAllBytes(shader), originalShader),
+                "Same-count corruption was not detected by SHA-256");
+            Files.writeString(sentinel, "extra file");
+            Files.writeString(bin.resolve("unexpected.txt"), "extra");
+            require(bin(fixture).equals(bin) && !Files.exists(sentinel) && !Files.exists(bin.resolve("unexpected.txt")),
+                "Unexpected file did not trigger a confined cache rebuild");
             noStages(fixture.cache());
         }
         passed("missing-file-and-invalid-marker-cache-rebuilt");
+    }
+
+    private static Path bin(Fixture fixture) throws Exception {
+        try (var loader = fixture.open()) { return bin(loader); }
     }
 
     private record Fixture(Path classes, Path cache, Path archiveResource, String digest) {
@@ -246,6 +309,14 @@ public final class RtxptRuntimeBundleSelfTest {
         Path resource = resources.resolve("rtxpt-runtime.zip");
         Files.write(resource, archive);
         Files.writeString(resources.resolve("rtxpt-runtime.sha256"), digest + "\n", StandardCharsets.US_ASCII);
+        var manifest = new StringBuilder();
+        entries.entrySet().stream().filter(entry -> !entry.getKey().endsWith("/")).sorted(Map.Entry.comparingByKey())
+            .forEach(entry -> {
+                try { manifest.append(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(entry.getValue())))
+                    .append("  ").append(entry.getKey()).append('\n'); }
+                catch (Exception failure) { throw new IllegalStateException(failure); }
+            });
+        Files.writeString(resources.resolve("rtxpt-runtime.files.sha256"), manifest, StandardCharsets.US_ASCII);
         return new Fixture(classes, Files.createDirectories(root.resolve("cache")), resource, digest);
     }
 
@@ -270,7 +341,7 @@ public final class RtxptRuntimeBundleSelfTest {
         entries.put("Assets/EnvironmentMaps/", new byte[0]);
         for (var shader : new String[]{"RtrNativeLighting", "RtrNativeDirectLighting", "RtrNativeLightingReconstruct",
                 "RtrNativeDynamicLighting", "RtrNativeDynamicLightingReconstruct",
-                "RtrNativeLightingDeep", "RtrNativeLightingEncode", "RtrNativeLightingResolve",
+                "RtrNativeLightingDeep", "RtrNativeLightingEncode", "RtrNativeLightingResolve", "RtrNativeDielectric",
                 "RtrNativeGiReduce", "RtrNativeGiUpsample"})
             entries.put("bin/AdapterShaders/app/ProcessingPasses/" + shader + ".bin", bytes("compiled adapter fixture"));
         return entries;

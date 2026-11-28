@@ -1,0 +1,19 @@
+{
+  "format": "rtr-authorized-embedded-variant-v1",
+  "source": "External/Donut/src/app/DeviceManager.cpp",
+  "officialSha256": "2c80c3a189c077be6a48e429e84702b16ebf09f008f44904aa81869ed88805e6",
+  "operations": [
+    {
+      "anchor": "#include <donut/app/DeviceManager.h>\n",
+      "insertion": "#include \"rtxpt_embedded_startup.h\"\n"
+    },
+    {
+      "anchor": "    if (!CreateSwapChain())\n        return false;\n\n",
+      "insertion": "    if (!rtr::upstream::embeddedStartup || !rtr::upstream::embeddedStartup->externalPresentation)\n    {\n"
+    },
+    {
+      "anchor": "        glfwMaximizeWindow(m_Window);\n    }\n",
+      "insertion": "    }\n"
+    }
+  ]
+}

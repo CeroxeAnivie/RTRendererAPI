@@ -5,8 +5,10 @@ import java.util.Objects;
 
 /**
  * Immutable equirectangular HDR environment radiance in row-major linear RGB order.
- * Rows run from +Y at the top to -Y at the bottom. Channels are finite and
- * non-negative and may exceed one. No sRGB conversion or ambient multiplier is applied.
+ * Rows run from +Y at the top to -Y at the bottom. The world-space equirectangular
+ * projection centers -Z at u=0.5, places +X at u=0.75 and wraps at +Z.
+ * Channels are finite and non-negative and may exceed one. No sRGB conversion
+ * or ambient multiplier is applied.
  * An environment map replaces constant sky radiance and its ambient multiplier;
  * the separate sun remains independent.
  */

@@ -13,10 +13,12 @@ public record NativeLightingPublication(long generation,List<Instance> instances
             float[] baselineLookup,ByteBuffer applicationData) {
         this(generation,instances,baselines,baselineLookup,applicationData,null);
     }
-    /** Roles: receiver=1, shadow=2, bounce=4, cull receiver backfaces=8, double-sided shadow=16. */
+    /** Roles: receiver=1, shadow=2, bounce=4, cull receiver backfaces=8, double-sided shadow=16, dielectric boundary=32.
+     * Dielectric boundary instances participate in optical queries and must carry a closed medium boundary. */
     public record Instance(long id,int roles,float visibility,float fog,float localScale,float skyScale,float localBias,float skyBias) {
+        public static final int DIELECTRIC_BOUNDARY=32;
         public Instance {
-            if(id<0||roles<0||roles>31)throw new IllegalArgumentException("Invalid instance identity or lighting roles");
+            if(id<0||roles<0||roles>63)throw new IllegalArgumentException("Invalid instance identity or lighting roles");
             for(float v:new float[]{visibility,fog})if(!Float.isFinite(v)||v<0||v>1)throw new IllegalArgumentException("Visibility and fog must be in [0,1]");
             for(float v:new float[]{localScale,skyScale,localBias,skyBias})if(!Float.isFinite(v))throw new IllegalArgumentException("Nonfinite baseline transform");
         }

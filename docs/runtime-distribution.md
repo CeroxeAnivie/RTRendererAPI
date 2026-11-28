@@ -35,9 +35,11 @@ bin 中的原版依赖及资源与 Assets 同源；自有 bridge、宿主和 Ada
 默认核心包只携带运行时所需的 Fonts、loading_splash.png、许可说明，以及物理天空使用的 5 张固定查找表／云层／噪声贴图；不携带官方示例模型、示例场景、示例材质覆盖文件、大型 HDR 环境示例或 SampleGame。StandaloneTextures 仅允许这 5 个明确文件，不通配收录。Assets/Materials 中的预置覆盖随可选示例包提供；没有覆盖文件时，官方 MaterialsBaker 从实际场景材质导入，不依赖该目录。消费者自己的网格、纹理和环境仍由公开 API 提供，预编译着色器、降噪、DLSS 和画质功能保持完整。构建会检查核心包内容，禁止示例资产重新混入。
 原版初始化会枚举 EnvironmentMaps，因此核心包保留该空目录。ShaderDynamic/Source 用于预编译源码摘要校验；原版初始化仍检查真实 dxc.exe 路径，因此保留该可执行文件，但不携带仅供构建期编译的 dxcompiler.dll／dxil.dll。宿主禁止创建编译器子进程，发行包没有运行时编译回退。
 
+嵌入 Minecraft 等消费者时，当前进程 EXE 是 Java，而不是 RTXPT runtime。API 会话将 runtime bin 以 UTF-8 临时传给上游资源定位入口；构建通过哈希锁定的单点生成变体提供此入口，官方导出文件保持原样。变量仅在原生会话期间设置并于关闭时恢复；查找只发生在初始化和资源路径解析，不在渲染帧循环中，也不增加 runtime 文件。
+
 需要运行官方示例时，显式执行 `:renderer-rtxpt:packageRtxptExampleAssets`，将生成的 `renderer-rtxpt/build/example-package/rtxpt-example-assets.zip` 解压到外部运行时根目录，使其 Assets 与 bin 同级；再通过 `top.ceroxe.rt.rtxpt.runtime` 指向该外部 bin。此可选任务不属于默认 jar 或 Maven 发布依赖。
 
-运行时不调用源码编译器。`PrecompiledShaders` 包含构建期二进制、真实命令模板、配置摘要和源文件摘要；ZIP 排除机器运行产生的 `ShaderDynamic/Bin` 缓存。首次渲染仅校验并复制二进制，按原版公开哈希函数重建安装路径对应的缓存键。所有源文件和二进制摘要必须匹配。
+运行时不调用源码编译器。`PrecompiledShaders` 包含构建期二进制、真实命令模板、配置摘要和源文件摘要；DXIL 在构建时剥离调试路径，ZIP 排除 ShaderMake 签名缓存和机器运行产生的 `ShaderDynamic/Bin` 缓存。PE 调试目录只记录 PDB 文件名，发行包不携带 PDB。首次渲染仅校验并复制二进制，按原版公开哈希函数重建安装路径对应的缓存键。所有源文件和二进制摘要必须匹配。
 
 专用宿主和 native 会话启用 Windows `ProcessChildProcessPolicy.NoChildProcessCreation`，由操作系统禁止 DXC 等子进程启动。该进程也不能启动其它子进程；需要外部程序的消费方须在渲染进程之外启动它们。此策略没有修改或拦截上游代码、没有伪造编译成功，也不依赖环境开关。驱动加载二进制／创建 GPU pipeline 和 JVM 自身 JIT 不是离线 HLSL/native 源码编译。
 
@@ -45,9 +47,11 @@ bin 中的原版依赖及资源与 Assets 同源；自有 bridge、宿主和 Ada
 
 JAR 中的 runtime ZIP 与 SHA-256 位于 META-INF/native/windows-x86_64。RtxptRuntime.binDirectory() 校验并返回 bin，RtxptRuntime.jvmHostExecutable() 返回宿主 EXE；两者不创建设备。打包提取保留摘要校验、进程间锁、安全路径检查和原子 staging；热缓存只复用完整内容。显式 top.ceroxe.rt.rtxpt.runtime 指向 bin，不完整就失败，不回退到旧 build/rtxpt-sdk。
 
+嵌入式 D3D12 compute PSO 缓存在消费者传入的 runtime cache root 下独立写入 `D3D12PipelineCache/pipeline-library.bin`，不会放进 runtime 版本目录、runtime ZIP 或文件摘要清单。每个 cache root 只保留一个总大小不超过 64 MiB 的 GPU pipeline library；文件带格式、GPU 身份和 SHA-256 校验，D3D12 驱动还会验证 library 与当前驱动/runtime 是否兼容。身份不符、损坏、驱动拒绝或显卡不支持 pipeline library 时会丢弃/停用缓存并走原生 PSO 创建；无法保存或超过大小上限只会失去下次启动复用，不影响本次渲染。缓存命中不做 shader 源码编译。首次冷启动仍需驱动生成 PSO；缓存建立后的同机启动才可复用。
+
 ## JVM 宿主启动契约
 
-原版 ShaderCompiler、shader 和资产定位依赖真实进程 EXE 目录。rtrenderer_jvm_host.exe 位于官方 bin，使用公开 JNI_CreateJavaVM；不 hook CRT、不改上游路径，不依赖 Java launcher 私有接口或 IPC 服务。
+原版 ShaderCompiler、shader 和资产定位依赖 runtime EXE 目录。独立宿主的 EXE 已位于官方 bin；嵌入式 API 会话通过上述构建侧 runtime-root 入口提供同一目录。宿主使用公开 JNI_CreateJavaVM，不 hook CRT、不依赖 Java launcher 私有接口或 IPC 服务。
 
 只在子进程环境中设置：
 

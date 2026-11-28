@@ -37,6 +37,8 @@ public:
     std::unordered_map<uint32_t,std::vector<Cell>> overflowByHome;
     std::vector<uint32_t> hashHoles;
     std::vector<uint32_t> publishRoots;
+    std::vector<Cell> coverageScratch;
+    std::vector<uint32_t> cellSlotsScratch;
     struct CellChange {Cell key;CellEntry* entry;};
     std::vector<CellChange> changedCells;
     uint64_t linkRemovals=0;
@@ -54,7 +56,7 @@ public:
     // bounded hash-probe overflows, uploaded bytes.
     std::array<uint64_t,9> work{};
     size_t CpuBytes()const{
-        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity())*4+changedCells.capacity()*sizeof(CellChange)+freeNodes.capacity()*sizeof(FreeListNode)+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity()+oldRootEpochs.capacity())*8;
+        size_t bytes=packed.capacity()*sizeof(rtr::LightTreeNode)+(global.capacity()+dirtyNodes.capacity()+owners.capacity()+hashHoles.capacity()+publishRoots.capacity()+cellSlotsScratch.capacity())*4+coverageScratch.capacity()*sizeof(Cell)+changedCells.capacity()*sizeof(CellChange)+freeNodes.capacity()*sizeof(FreeListNode)+queuedNodes.capacity()+shapes.capacity()*sizeof(Shape)+(affectedEpochs.capacity()+topologyEpochs.capacity()+oldRootEpochs.capacity())*8;
         for(const auto& [id,r]:roots)bytes+=sizeof(Root)+r.cells.capacity()*sizeof(Cell)+(r.members.capacity()+r.cellSlots.capacity())*4;
         for(const auto& [cell,e]:cells)bytes+=sizeof(CellEntry)+(e.roots.capacity()+e.rootCellIndices.capacity())*4;
         return bytes; // tracked payload capacity; unordered-map allocator metadata is excluded
@@ -75,15 +77,28 @@ public:
             lo[a]=int(lower);hi[a]=int(upper);total*=size_t(hi[a]-lo[a]+1);if(total>RootCellBudget)return false;
         }return true;
     }
-    static std::vector<Cell> Coverage(const std::array<float,7>& b){
-        std::array<int,3> lo{},hi{};double radius;if(!CoverageBox(b,lo,hi,radius))return {};
-        std::vector<Cell> result;result.reserve(size_t(hi[0]-lo[0]+1)*(hi[1]-lo[1]+1)*(hi[2]-lo[2]+1));
-        for(int z=lo[2];z<=hi[2];z++)for(int y=lo[1];y<=hi[1];y++)for(int x=lo[0];x<=hi[0];x++){
-            const int xyz[3]={x,y,z};double squared=0;
-            for(int a=0;a<3;a++){double lower=double(xyz[a])*CellSize,upper=lower+CellSize;
-                double d=std::max({double(b[a])-upper,lower-double(b[a+3]),0.});squared+=d*d;}
-            if(squared<=radius*radius)result.push_back({x,y,z});
-        }return result;
+    static void Coverage(const std::array<float,7>& b,std::vector<Cell>& result){
+        result.clear();
+        std::array<int,3> lo{},hi{};double radius;if(!CoverageBox(b,lo,hi,radius))return;
+        result.reserve(size_t(hi[0]-lo[0]+1)*(hi[1]-lo[1]+1)*(hi[2]-lo[2]+1));
+        const auto distanceSquared=[&](int axis,int cell){
+            const double lower=double(cell)*CellSize;
+            const double d=std::max({double(b[axis])-(lower+CellSize),lower-double(b[axis+3]),0.});
+            return d*d;
+        };
+        // The exact same support test is separable by axis. Evaluate the X
+        // distances once and keep the XYZ sum and the published cell order.
+        std::array<double,RootCellBudget> xSquared;
+        for(int x=lo[0];x<=hi[0];++x)xSquared[x-lo[0]]=distanceSquared(0,x);
+        const double radiusSquared=radius*radius;
+        for(int z=lo[2];z<=hi[2];++z){
+            const double dz=distanceSquared(2,z);
+            for(int y=lo[1];y<=hi[1];++y){
+                const double dy=distanceSquared(1,y);
+                for(int x=lo[0];x<=hi[0];++x)
+                    if((xSquared[x-lo[0]]+dy)+dz<=radiusSquared)result.push_back({x,y,z});
+            }
+        }
     }
 private:
     friend struct RtrSparseRegionsTestAccess;
@@ -150,7 +165,7 @@ private:
             }
         }
         if(old!=roots.end()&&old->second.bounds==bound)return;
-        auto coverage=Coverage(bound);
+        auto& coverage=coverageScratch;Coverage(bound,coverage);
         if(old!=roots.end()){
             if(!old->second.global&&old->second.cells==coverage){old->second.bounds=bound;return;}
             // Most moving supports retain nearly all receiver cells. Patch the
@@ -158,20 +173,24 @@ private:
             // cell/list shared by the old and new coverage.
             if(!old->second.global&&!coverage.empty()&&links-old->second.cells.size()+coverage.size()<=LinkBudget&&FitsCells(coverage)){
                 auto less=[](Cell a,Cell b){return a.z!=b.z?a.z<b.z:a.y!=b.y?a.y<b.y:a.x<b.x;};
-                std::vector<uint32_t> nextSlots(coverage.size());size_t a=0,b=0;
+                auto& nextSlots=cellSlotsScratch;nextSlots.resize(coverage.size());size_t a=0,b=0;
                 while(a<old->second.cells.size()||b<coverage.size()){
                     if(a<old->second.cells.size()&&(b==coverage.size()||less(old->second.cells[a],coverage[b]))){
                         Unlink(id,old->second,a++,changed);
                     }else if(b<coverage.size()&&(a==old->second.cells.size()||less(coverage[b],old->second.cells[a]))){
                         nextSlots[b]=Link(id,coverage[b],uint32_t(b),changed);++b;
-                    }else{nextSlots[b]=old->second.cellSlots[a];cells.at(coverage[b]).rootCellIndices.at(nextSlots[b])=uint32_t(b);++a;++b;}
+                    }else{
+                        nextSlots[b]=old->second.cellSlots[a];
+                        if(a!=b)cells.at(coverage[b]).rootCellIndices.at(nextSlots[b])=uint32_t(b);
+                        ++a;++b;
+                    }
                 }
-                old->second.bounds=bound;old->second.cells=std::move(coverage);old->second.cellSlots=std::move(nextSlots);++work[1];return;
+                old->second.bounds=bound;old->second.cells.swap(coverage);old->second.cellSlots.swap(nextSlots);++work[1];return;
             }
             if(members.empty())members=old->second.members;
             RemoveRoot(id,changed);
         }
-        Root root;root.bounds=bound;root.members=std::move(members);root.cells=std::move(coverage);
+        Root root;root.bounds=bound;root.members=std::move(members);root.cells.assign(coverage.begin(),coverage.end());
         if(root.cells.empty()||links+root.cells.size()>LinkBudget||!FitsCells(root.cells)){root.cells.clear();root.global=true;root.globalSlot=uint32_t(global.size());global.push_back(id);}
         else{root.cellSlots.resize(root.cells.size());for(uint32_t index=0;index<root.cells.size();++index)root.cellSlots[index]=Link(id,root.cells[index],index,changed);}
         for(auto member:root.members)owners[member]=id;roots.emplace(id,std::move(root));++work[1];

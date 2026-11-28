@@ -6,6 +6,9 @@ import top.ceroxe.rt.renderer.spi.RendererBackendProvider;
 
 /** Provider for the original RTXPT execution chain and external API adapters. */
 public final class RtxptBackendProvider implements RendererBackendProvider {
+    /** Creates the RTXPT provider. */
+    public RtxptBackendProvider() { }
+
     @Override public Descriptor descriptor(){return Descriptor.builder("rtxpt").priority(-100).build();}
     @Override public ProbeResult probe(RendererConfig config){
         if(!System.getProperty("os.name","").startsWith("Windows"))return ProbeResult.unsupported("RTXPT managed D3D12 requires Windows");

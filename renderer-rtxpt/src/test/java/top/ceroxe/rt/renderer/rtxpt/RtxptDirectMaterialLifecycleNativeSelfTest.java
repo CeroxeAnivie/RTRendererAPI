@@ -174,7 +174,7 @@ public final class RtxptDirectMaterialLifecycleNativeSelfTest {
     }
     private static MaterialAsset transmissive(int rgba,float transmission){
         return MaterialAsset.builder(3).blendMode(MaterialAsset.BlendMode.TRANSLUCENT).baseColorRgba8(rgba)
-                .baseColorTextureId(8).transmission(transmission).roughness(.4f).doubleSided(true).build();
+                .baseColorTextureId(8).transmission(transmission).indexOfRefraction(1f).roughness(.4f).doubleSided(true).build();
     }
     private static TextureAsset texture(long id,int alpha){
         return TextureAsset.builder(id,1,1).colorSpace(TextureAsset.ColorSpace.LINEAR)

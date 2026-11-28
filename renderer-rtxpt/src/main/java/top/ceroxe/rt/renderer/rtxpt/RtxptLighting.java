@@ -5,6 +5,7 @@ import top.ceroxe.rt.renderer.api.*;
 
 /** Complete immutable CPU generation; one native commit consumes the same layout as scene export. */
 final class RtxptLighting {
+    private static final float[] NO_SKY_PATCH=new float[0];
     final EnvironmentState environment;
     final List<SceneLight> lights;
     private RtxptLighting(EnvironmentState environment,Collection<SceneLight> lights) {
@@ -14,6 +15,16 @@ final class RtxptLighting {
     static RtxptLighting of(EnvironmentState environment,Collection<SceneLight> lights) {return new RtxptLighting(environment,lights);}
     static RtxptLighting sorted(EnvironmentState environment,List<SceneLight> lights){return new RtxptLighting(environment,lights);}
     long[] ids() {var ids=new long[lights.size()+1];ids[0]=-1;for(int i=0;i<lights.size();i++)ids[i+1]=lights.get(i).id();return ids;}
+    float[] skyPatch(EnvironmentState previous) {
+        var map=environment.environmentMap();
+        if(previous!=null){
+            if(map!=null){if(map.equals(previous.environmentMap()))return NO_SKY_PATCH;}
+            else if(previous.environmentMap()==null&&environment.skyRed()==previous.skyRed()
+                    &&environment.skyGreen()==previous.skyGreen()&&environment.skyBlue()==previous.skyBlue()
+                    &&environment.ambientIntensity()==previous.ambientIntensity())return NO_SKY_PATCH;
+        }
+        return sky();
+    }
     float[] sky() {
         var e=environment;var map=e.environmentMap();
         if(map==null)return new float[]{e.skyRed(),e.skyGreen(),e.skyBlue(),e.ambientIntensity()};
